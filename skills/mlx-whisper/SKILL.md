@@ -1,6 +1,6 @@
 ---
 
-## name: mlx-whisper
+name: mlx-whisper
 description: >
   音频/视频转录工具，使用 MLX-Whisper 将视频或音频文件转录为字幕。
   Apple Silicon 原生加速。当用户要转录、转文字、提取字幕、语音识别、
