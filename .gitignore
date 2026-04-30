@@ -1,0 +1,9 @@
+# 用户生成的 config 不入库
+skills/llm-refine/config.json
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store

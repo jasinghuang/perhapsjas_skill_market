@@ -1,0 +1,11 @@
+{
+  "model": "qwen3.5-plus",
+  "api_key": "YOUR_API_KEY_HERE",
+  "base_url": "https://api.openai.com/v1",
+  "temperature": 0.3,
+  "max_tokens": 4000,
+  "batch_max_tokens": 8000,
+  "batch_size": 45,
+  "translate": false,
+  "parallel_batches": 3
+}

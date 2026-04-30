@@ -1,0 +1,24 @@
+{
+  "name": "claude-media-toolkit",
+  "owner": {
+    "name": "jasing",
+    "email": ""
+  },
+  "metadata": {
+    "description": "B站视频下载、Whisper转录、LLM校准——一站式视频字幕工作流",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "media-toolkit",
+      "description": "视频字幕一站式工具：bili-download (B站下载) + whisper-transcribe (音频转录) + llm-refine (LLM校准翻译)",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/bili-download",
+        "./skills/whisper-transcribe",
+        "./skills/llm-refine"
+      ]
+    }
+  ]
+}

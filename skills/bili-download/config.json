@@ -1,0 +1,8 @@
+{
+  "download": {
+    "output_dir": "~/Downloads",
+    "quality": "best",
+    "use_aria2": false,
+    "quicktime": false
+  }
+}
