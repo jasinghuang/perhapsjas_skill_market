@@ -8,7 +8,6 @@ import sys
 import argparse
 import json
 import subprocess
-import re
 from pathlib import Path
 from typing import List, Optional
 
@@ -120,35 +119,30 @@ def download_video(
 
     cmd.append(url)
 
+    before = set(output_dir.iterdir())
+
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, text=True)
 
         if result.returncode == 0:
-            for line in result.stderr.split('\n'):
-                if '[download] Destination:' in line or '[Merger]' in line:
-                    match = re.search(r'(?:Destination:|Merging into)\s*["\']?(.+?)["\']?\s*$', line)
-                    if match:
-                        video_path = Path(match.group(1).strip())
-                        if video_path.exists():
-                            print(f"✅ 下载完成: {video_path}")
-                            print(f"   文件大小: {video_path.stat().st_size / 1024 / 1024:.1f} MB")
-                            return video_path
-
-            ext = "m4a" if audio_only else "mp4"
-            files = list(output_dir.glob(f"*.{ext}"))
-            if files:
-                video_path = max(files, key=lambda p: p.stat().st_mtime)
-                print(f"✅ 下载完成: {video_path}")
+            after = set(output_dir.iterdir())
+            new_files = after - before
+            if new_files:
+                video_path = max(new_files, key=lambda p: p.stat().st_mtime)
+                size_mb = video_path.stat().st_size / 1024 / 1024
+                print(f"\n✅ 下载完成: {video_path.name}")
+                print(f"   文件大小: {size_mb:.1f} MB")
                 return video_path
 
-        print(f"❌ 下载失败")
-        if result.stderr:
-            print(f"   {result.stderr.strip()[-200:]}")
+        print(f"\n❌ 下载失败")
+        print(f"   💡 如遇 YouTube 403 错误，请尝试：")
+        print(f"      导出浏览器 Cookie 到 ~/video-cookies.txt 后重试")
+        print(f"      或升级 yt-dlp: python3 -m pip install -U 'yt-dlp[default]'")
         return None
 
     except FileNotFoundError:
         print("❌ yt-dlp 未安装!")
-        print("   安装: pip install yt-dlp")
+        print("   安装: python3 -m pip install -U 'yt-dlp[default]'")
         print("   或者: brew install yt-dlp")
         return None
     except Exception as e:
@@ -201,11 +195,9 @@ def main():
 
     if not check_yt_dlp():
         print("❌ yt-dlp 未安装!")
-        print("   安装: pip install yt-dlp")
+        print("   安装: python3 -m pip install -U 'yt-dlp[default]'")
         print("   或者: brew install yt-dlp")
         sys.exit(1)
-
-    update_yt_dlp()
 
     urls = args.urls or []
     if args.file:

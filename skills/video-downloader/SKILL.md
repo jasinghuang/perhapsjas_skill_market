@@ -18,7 +18,7 @@ description: >
 
 ```bash
 # 必需
-pip install yt-dlp    # 或 brew install yt-dlp
+python3 -m pip install -U "yt-dlp[default]"    # 或 brew install yt-dlp
 
 # 可选（加速下载）
 brew install aria2
@@ -30,26 +30,26 @@ brew install aria2
 
 ```bash
 # 下载单个视频（默认最高画质）
-python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py "URL"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py "URL"
 
 # 批量下载
-python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py "URL1" "URL2" "URL3"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py "URL1" "URL2" "URL3"
 
 # 从文件读取 URL 列表
-python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --file urls.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --file urls.txt
 
 # 只下载音频（适合转录场景）
-python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --audio-only "URL"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --audio-only "URL"
 
 # 指定画质
-python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --quality high "URL"
-python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --resolution 720 "URL"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --quality high "URL"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --resolution 720 "URL"
 
 # 使用 Cookie 下载会员视频
-python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --cookies ~/video-cookies.txt "URL"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --cookies ~/video-cookies.txt "URL"
 
 # aria2 加速
-python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 ```
 
 ## 参数
