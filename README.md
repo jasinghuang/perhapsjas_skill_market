@@ -19,7 +19,7 @@
 /plugin marketplace add jasinghuang/Video_Toolkit
 
 # 安装插件
-/plugin install video-toolkit@Video_Toolkit
+/plugin install jas_Video_Toolkit@Video_Toolkit
 ```
 
 ## 依赖
@@ -109,15 +109,15 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 ### 功能
 
 - Apple Silicon GPU 加速，转录速度显著提升
-- 首次使用引导选择模型
+- 每次使用前询问模型和输出格式
 - 自动语言检测
 - 繁体中文自动转简体中文
-- 多种输出格式（SRT / Markdown / JSON）
-- 时间码可选开关
+- Markdown 输出自动合并为自然段落（非逐句分行）
+- 多种输出格式（Markdown / SRT / Markdown + 时间码）
 
 ### 模型选择
 
-首次运行时自动提示选择模型，保存到 config.json 后不再询问：
+每次转录前会询问选择模型：
 
 | 模型 | 大小 | 速度 | 准确率 | 适合场景 |
 |------|------|------|--------|---------|
@@ -125,7 +125,15 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 | **large-v3-turbo** | **~1.5GB** | **较快** | **优秀** | **推荐，速度与质量平衡** |
 | large-v3 | ~2.9GB | 慢 | 最佳 | 最高准确率 |
 
-通过 `--model` 参数可临时切换模型。
+### 输出格式
+
+每次转录前会询问选择格式：
+
+| 格式 | 说明 |
+|------|------|
+| **Markdown** | 合并为自然段落，适合阅读和 text-refine 校准 |
+| **SRT** | 标准字幕格式，带时间轴，适合播放器加载 |
+| **Markdown + 时间码** | 每段带时间戳，适合回看视频对照 |
 
 ### 示例
 
@@ -186,7 +194,7 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/mlx-whisper/skill_main.py video.mp4 --keep-t
 | Skill | 首次配置 |
 |-------|---------|
 | **video-downloader** | 自动检查 `yt-dlp`，缺少会提示安装命令 |
-| **mlx-whisper** | 首次运行自动引导选择模型并保存配置 |
+| **mlx-whisper** | 每次运行询问模型和输出格式，自动检查依赖 |
 | **text-refine** | 无需配置，直接使用 |
 
 ## 更新

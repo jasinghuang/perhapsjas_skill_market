@@ -166,8 +166,42 @@ def segments_to_srt(segments: List[Dict]) -> str:
     return "\n".join(lines)
 
 
+def merge_segments_to_paragraphs(segments: List[Dict], gap_threshold: float = 2.0) -> List[Dict]:
+    paragraphs = []
+    current_texts = []
+    current_start = None
+    current_end = None
+
+    for seg in segments:
+        if current_end is not None and seg['start'] - current_end >= gap_threshold:
+            paragraphs.append({
+                'start': current_start,
+                'end': current_end,
+                'text': ''.join(current_texts),
+            })
+            current_texts = []
+            current_start = None
+
+        if current_start is None:
+            current_start = seg['start']
+        current_end = seg['end']
+        current_texts.append(seg['text'])
+
+    if current_texts:
+        paragraphs.append({
+            'start': current_start,
+            'end': current_end,
+            'text': ''.join(current_texts),
+        })
+
+    return paragraphs
+
+
 def segments_to_md(segments: List[Dict], title: str, model_size: str, language: str, keep_timestamps: bool) -> str:
     from datetime import datetime
+
+    if not keep_timestamps:
+        segments = merge_segments_to_paragraphs(segments)
 
     md = [f"# {title}\n"]
     md.append("---\n")
