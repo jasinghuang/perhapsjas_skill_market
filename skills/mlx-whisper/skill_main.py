@@ -12,23 +12,15 @@ from typing import List, Dict, Optional
 CONFIG_FILE = Path(__file__).parent / "config.json"
 
 MODEL_REPOS = {
-    "tiny": "mlx-community/whisper-tiny",
-    "base": "mlx-community/whisper-base-mlx",
     "small": "mlx-community/whisper-small-mlx",
-    "medium": "mlx-community/whisper-medium-mlx",
     "large-v3-turbo": "mlx-community/whisper-large-v3-turbo",
     "large-v3": "mlx-community/whisper-large-v3-mlx",
-    "large-v2": "mlx-community/whisper-large-v2-mlx",
 }
 
 MODEL_INFO = [
-    ("tiny", "~71MB", "极快", "一般", "快速试用，官方默认模型"),
-    ("base", "~137MB", "很快", "一般", "快速试用，先看效果"),
     ("small", "~459MB", "快", "良好", "快速预览"),
-    ("medium", "~1.4GB", "较快", "良好", "中等精度"),
     ("large-v3-turbo", "~1.5GB", "较快", "优秀", "【推荐】速度与质量平衡"),
     ("large-v3", "~2.9GB", "慢", "最佳", "最高准确率"),
-    ("large-v2", "~2.9GB", "慢", "很好", "备用"),
 ]
 
 
@@ -46,15 +38,15 @@ def ensure_config() -> dict:
         print(f"  {i}. {name} ({size}) - {speed}/{quality} - {note}")
 
     print()
-    choice = input("请输入编号 [5]: ").strip()
+    choice = input("请输入编号 [2]: ").strip()
     if not choice:
-        idx = 4
+        idx = 1
     else:
         try:
             idx = int(choice) - 1
             idx = max(0, min(idx, len(MODEL_INFO) - 1))
         except ValueError:
-            idx = 4
+            idx = 1
 
     selected = MODEL_INFO[idx][0]
     config = {

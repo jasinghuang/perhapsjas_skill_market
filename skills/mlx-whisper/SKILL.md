@@ -32,15 +32,11 @@ pip install zhconv    # 繁简转换（可选但推荐）
 
 | # | 模型 | 大小 | 速度 | 准确率 | 适合场景 |
 |---|------|------|------|--------|---------|
-| 1 | tiny | ~71MB | 极快 | 一般 | 快速试用，官方默认模型 |
-| 2 | base | ~137MB | 很快 | 一般 | 快速试用，先看效果 |
-| 3 | small | ~459MB | 快 | 良好 | 快速预览，准确率要求不高 |
-| 4 | medium | ~1.4GB | 较快 | 良好 | 中等精度 |
-| 5 | large-v3-turbo | ~1.5GB | 较快 | 优秀 | **推荐**，速度和质量平衡 |
-| 6 | large-v3 | ~2.9GB | 慢 | 最佳 | 最终版，最高准确率 |
-| 7 | large-v2 | ~2.9GB | 慢 | 很好 | 备用，某些场景更稳 |
+| 1 | small | ~459MB | 快 | 良好 | 快速预览，准确率要求不高 |
+| 2 | large-v3-turbo | ~1.5GB | 较快 | 优秀 | **推荐**，速度和质量平衡 |
+| 3 | large-v3 | ~2.9GB | 慢 | 最佳 | 最终版，最高准确率 |
 
-- 默认推荐 `large-v3-turbo`（编号 5）
+- 默认推荐 `large-v3-turbo`（编号 2）
 - 用户选择后保存到 `config.json`，后续不再询问
 - 用户可通过 `--model` 参数临时覆盖
 
@@ -72,7 +68,7 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/mlx-whisper/skill_main.py video.mp4 --keep-t
 |------|------|--------|
 | `input` | 视频/音频文件路径 | 必需 |
 | `--output, -o` | 输出文件路径 | 同目录，同文件名换后缀 |
-| `--model, -m` | 模型（tiny/base/small/medium/large-v3-turbo/large-v3/large-v2） | 读取 config.json |
+| `--model, -m` | 模型（small/large-v3-turbo/large-v3） | 读取 config.json |
 | `--language, -l` | 语言代码（auto/zh/en/ko/ja 等） | auto |
 | `--format, -f` | 输出格式（srt/md/json） | md |
 | `--keep-timestamps, -t` | Markdown 保留时间码 | false |

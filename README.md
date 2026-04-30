@@ -121,13 +121,9 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 
 | 模型 | 大小 | 速度 | 准确率 | 适合场景 |
 |------|------|------|--------|---------|
-| tiny | ~71MB | 极快 | 一般 | 快速试用，官方默认模型 |
-| base | ~137MB | 很快 | 一般 | 快速试用 |
 | small | ~459MB | 快 | 良好 | 快速预览 |
-| medium | ~1.4GB | 较快 | 良好 | 中等精度 |
 | **large-v3-turbo** | **~1.5GB** | **较快** | **优秀** | **推荐，速度与质量平衡** |
 | large-v3 | ~2.9GB | 慢 | 最佳 | 最高准确率 |
-| large-v2 | ~2.9GB | 慢 | 很好 | 备用 |
 
 通过 `--model` 参数可临时切换模型。
 
