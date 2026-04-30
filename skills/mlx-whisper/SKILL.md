@@ -8,6 +8,9 @@ description: >
   输出 SRT 或 Markdown 格式。每次使用会询问模型和输出格式。
   接受 mp4、mp3、wav、m4a 等常见音视频格式。
 
+---
+
+
 # MLX Whisper
 
 使用 MLX-Whisper（Apple Silicon 原生加速）将视频/音频转录为字幕。
