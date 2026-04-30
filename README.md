@@ -1,4 +1,4 @@
-# Claude Media Toolkit
+# Video Toolkit
 
 一站式视频字幕工作流插件：下载 → 转录 → 校准
 
@@ -24,10 +24,10 @@ B站视频 URL
 
 ```bash
 # 添加市场
-/plugin marketplace add your-github-username/claude-media-toolkit
+/plugin marketplace add jasinghuang/Video_Toolkit
 
 # 安装插件
-/plugin install media-toolkit@claude-media-toolkit
+/plugin install video-toolkit@Video_Toolkit
 ```
 
 ## 首次使用
