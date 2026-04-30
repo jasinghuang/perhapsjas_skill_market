@@ -5,19 +5,19 @@
     "email": ""
   },
   "metadata": {
-    "description": "B站视频下载、Whisper转录、LLM校准——一站式视频字幕工作流",
-    "version": "1.0.0"
+    "description": "视频下载、MLX-Whisper转录、Claude文本校准——一站式视频字幕工作流",
+    "version": "2.0.0"
   },
   "plugins": [
     {
       "name": "video-toolkit",
-      "description": "视频字幕一站式工具：bili-download (B站下载) + whisper-transcribe (音频转录) + llm-refine (LLM校准翻译)",
+      "description": "视频字幕一站式工具：video-downloader (Bilibili/YouTube下载) + mlx-whisper (Apple Silicon转录) + text-refine (Claude校准翻译)",
       "source": "./",
       "strict": false,
       "skills": [
-        "./skills/bili-download",
-        "./skills/whisper-transcribe",
-        "./skills/llm-refine"
+        "./skills/video-downloader",
+        "./skills/mlx-whisper",
+        "./skills/text-refine"
       ]
     }
   ]

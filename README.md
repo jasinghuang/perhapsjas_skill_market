@@ -6,17 +6,17 @@
 
 | Skill | 功能 | 命令 |
 |-------|------|------|
-| **bili-download** | B站视频下载，支持批量/会员/QuickTime格式 | `/bili-download` |
-| **whisper-transcribe** | 音频/视频转录为字幕 (SRT/MD/JSON) | `/whisper-transcribe` |
-| **llm-refine** | LLM 文本校准与翻译 | `/llm-refine` |
+| **video-downloader** | Bilibili/YouTube 视频下载，支持批量/Cookie/画质控制 | `/video-downloader` |
+| **mlx-whisper** | Apple Silicon 加速转录，首次引导选择模型 | `/mlx-whisper` |
+| **text-refine** | Claude 直接校准字幕，修正错别字/翻译 | `/text-refine` |
 
 ## 工作流
 
 ```
-B站视频 URL
-  ↓ bili-download    → 下载视频文件
-  ↓ whisper-transcribe → 转录为字幕 (SRT/MD)
-  ↓ llm-refine       → 校准错别字/翻译
+视频 URL
+  ↓ video-downloader → 下载视频文件
+  ↓ mlx-whisper      → 转录为字幕 (SRT/MD)
+  ↓ text-refine      → 校准错别字/翻译
   → 最终字幕文件
 ```
 
@@ -32,25 +32,26 @@ B站视频 URL
 
 ## 首次使用
 
-llm-refine 需要 API 密钥，首次使用前配置：
+**video-downloader**：自动检查 `yt-dlp` 是否安装，缺少会提示。
 
-```bash
-cp skills/llm-refine/config.example.json skills/llm-refine/config.json
-# 编辑 config.json，填入你的 API key
-```
+**mlx-whisper**：首次运行自动引导选择模型（base/small/large-v3-turbo/large-v3/large-v2）。
+
+**text-refine**：无需额外配置，Claude 直接校准。
 
 ## 依赖
 
 ```bash
-# bili-download
+# video-downloader
 pip install yt-dlp
+# 可选：aria2 加速
+brew install aria2
 
-# whisper-transcribe
-pip install openai-whisper zhconv
+# mlx-whisper
+pip install mlx-whisper zhconv
 brew install ffmpeg
 
-# llm-refine
-pip install openai
+# text-refine
+# 无需额外依赖
 ```
 
 ## 更新
