@@ -12,19 +12,19 @@ from typing import List, Dict, Optional
 CONFIG_FILE = Path(__file__).parent / "config.json"
 
 MODEL_REPOS = {
-    "base": "mlx-community/whisper-base",
-    "small": "mlx-community/whisper-small",
+    "base": "mlx-community/whisper-base-mlx",
+    "small": "mlx-community/whisper-small-mlx",
     "large-v3-turbo": "mlx-community/whisper-large-v3-turbo",
-    "large-v3": "mlx-community/whisper-large-v3",
-    "large-v2": "mlx-community/whisper-large-v2",
+    "large-v3": "mlx-community/whisper-large-v3-mlx",
+    "large-v2": "mlx-community/whisper-large-v2-mlx",
 }
 
 MODEL_INFO = [
-    ("base", "74M", "很快", "一般", "快速试用，先看效果"),
-    ("small", "244M", "快", "良好", "快速预览"),
-    ("large-v3-turbo", "809M", "较快", "优秀", "【推荐】速度与质量平衡"),
-    ("large-v3", "1550M", "慢", "最佳", "最高准确率"),
-    ("large-v2", "1550M", "慢", "很好", "备用"),
+    ("base", "~137MB", "很快", "一般", "快速试用，先看效果"),
+    ("small", "~459MB", "快", "良好", "快速预览"),
+    ("large-v3-turbo", "~1.5GB", "较快", "优秀", "【推荐】速度与质量平衡"),
+    ("large-v3", "~2.9GB", "慢", "最佳", "最高准确率"),
+    ("large-v2", "~2.9GB", "慢", "很好", "备用"),
 ]
 
 
