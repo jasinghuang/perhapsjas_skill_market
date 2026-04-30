@@ -82,7 +82,7 @@ def check_mlx_whisper() -> bool:
         import mlx_whisper
         return True
     except ImportError:
-        print("❌ mlx-whisper 未安装。安装: pip install mlx-whisper")
+        print("❌ mlx-whisper 未安装。安装: pip3 install --break-system-packages mlx-whisper")
         return False
 
 

@@ -14,17 +14,19 @@ description: >
 
 ## 首次依赖检查
 
-使用前，检查以下依赖是否已安装。缺少则提示用户安装后重试：
+使用前，检查以下依赖是否已安装。缺少则自动安装（不需要用户干预）：
 
 ```bash
-pip install mlx-whisper
+pip3 install --break-system-packages mlx-whisper
 brew install ffmpeg
-pip install zhconv    # 繁简转换（可选但推荐）
+pip3 install --break-system-packages zhconv    # 繁简转换（可选但推荐）
 ```
 
+> macOS Homebrew Python 有 PEP 668 保护，直接 `pip install` 会报错，需要加 `--break-system-packages`。
+
 检查方法：
-- `python -c "import mlx_whisper"` — 失败则提示 `pip install mlx-whisper`
-- `ffmpeg -version` — 失败则提示 `brew install ffmpeg`
+- `python3 -c "import mlx_whisper"` — 失败则执行 `pip3 install --break-system-packages mlx-whisper`
+- `ffmpeg -version` — 失败则执行 `brew install ffmpeg`
 
 ## 首次模型选择
 

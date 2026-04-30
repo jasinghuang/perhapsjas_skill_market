@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "视频下载、MLX-Whisper转录、Claude文本校准——一站式视频字幕工作流",
-    "version": "2.2.0"
+    "version": "2.3.0"
   },
   "plugins": [
     {

@@ -31,7 +31,7 @@ pip install yt-dlp
 brew install aria2
 
 # mlx-whisper
-pip install mlx-whisper zhconv
+pip3 install --break-system-packages mlx-whisper zhconv
 brew install ffmpeg
 
 # text-refine
