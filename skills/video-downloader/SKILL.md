@@ -14,42 +14,51 @@ description: >
 
 ## 首次依赖检查
 
-使用前，检查以下依赖是否已安装。缺少则提示用户安装后重试：
+脚本自动检测并安装 yt-dlp（包含 yt-dlp-ejs YouTube 支持）。以下为可选依赖：
 
-```bash
-# 必需
-python3 -m pip install -U "yt-dlp[default]"    # 或 brew install yt-dlp
+### 可选：JS runtime（YouTube 等站点需要）
 
-# 可选（加速下载）
-brew install aria2
-```
+YouTube 下载需要 JavaScript runtime，脚本自动检测：
 
-检查方法：运行 `yt-dlp --version`，失败则提示安装。
+- **Node.js** ≥20（推荐）：`winget install OpenJS.NodeJS` 或 https://nodejs.org
+- **Deno**：`winget install DenoLand.Deno` 或 `brew install deno`
+
+安装后无需额外配置，脚本自动检测。
+
+### 可选：ffmpeg（合并音视频）
+
+- Mac: `brew install ffmpeg`
+- Windows: `winget install Gyan.FFmpeg`
+
+### 可选：aria2（加速下载）
+
+- Mac: `brew install aria2`
+- Windows: `winget install aria2.aria2`
 
 ## 使用方法
 
 ```bash
 # 下载单个视频（默认最高画质）
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py "URL"
+python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py "URL"
 
 # 批量下载
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py "URL1" "URL2" "URL3"
+python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py "URL1" "URL2" "URL3"
 
 # 从文件读取 URL 列表
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --file urls.txt
+python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --file urls.txt
 
 # 只下载音频（适合转录场景）
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --audio-only "URL"
+python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --audio-only "URL"
 
 # 指定画质
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --quality high "URL"
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --resolution 720 "URL"
+python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --quality high "URL"
+python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --resolution 720 "URL"
 
 # 使用 Cookie 下载会员视频
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --cookies ~/video-cookies.txt "URL"
+python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --cookies ~/video-cookies.txt "URL"
 
 # aria2 加速
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
+python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 ```
 
 ## 参数
@@ -88,21 +97,6 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL
 1. 浏览器登录 Bilibili 或 YouTube
 2. 使用浏览器扩展导出 Cookie 到 `~/video-cookies.txt`
 3. 使用 `--cookies` 参数指定（或自动检测默认路径）
-
-## 配置文件
-
-配置文件位于 `${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/config.json`：
-
-```json
-{
-  "download": {
-    "output_dir": "~/Downloads",
-    "quality": "best",
-    "codec": "h264",
-    "use_aria2": false
-  }
-}
-```
 
 ## 完整工作流
 
