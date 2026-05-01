@@ -5,15 +5,17 @@ Video Downloader - 视频下载 Skill 入口
 """
 
 import sys
-import os
 import argparse
 import shutil
 import subprocess
 from pathlib import Path
 from typing import List, Optional
 
-sys.stdout.reconfigure(encoding='utf-8')
-sys.stderr.reconfigure(encoding='utf-8')
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except AttributeError:
+    pass
 
 DEFAULT_DOWNLOAD_DIR = Path.home() / "Downloads"
 DEFAULT_COOKIE_FILE = Path.home() / "video-cookies.txt"
