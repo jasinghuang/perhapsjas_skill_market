@@ -66,38 +66,64 @@ pip install faster-whisper zhconv
 
 **每次转录前，必须使用 AskUserQuestion 工具询问以下两个问题。不要静默使用默认值或读取 config.json 跳过询问。**
 
-注意：AskUserQuestion 的每个 question 必须包含 `header` 字段。两个问题的 header 分别为 `"模型选择"` 和 `"输出格式"`。
+每个 question 必须包含 `header` 字段，`options` 中每个选项必须是 `{label, value}` 对象，不能是字符串。
 
-### 1. 模型选择（根据步骤 0 的平台检测结果展示对应选项）
+### 调用示例（Mac）
 
-**Mac 模型选项：**
+```
+AskUserQuestion({
+  questions: [
+    {
+      header: "模型选择",
+      question: "选择转录模型：",
+      options: [
+        {"label": "small (~459MB, 快速预览)", "value": "small"},
+        {"label": "large-v3-turbo (~1.5GB, 推荐)", "value": "large-v3-turbo"},
+        {"label": "large-v3 (~2.9GB, 最高准确率)", "value": "large-v3"}
+      ]
+    },
+    {
+      header: "输出格式",
+      question: "选择输出格式：",
+      options: [
+        {"label": "Markdown (纯文本段落)", "value": "md"},
+        {"label": "SRT (标准字幕)", "value": "srt"},
+        {"label": "Markdown + 时间码", "value": "md-timestamps"}
+      ]
+    }
+  ]
+})
+```
 
-| # | 模型             | 大小     | 速度  | 准确率 | 适合场景           |
-|---|----------------|--------|-----|-----|----------------|
-| 1 | small          | ~459MB | 快   | 良好  | 快速预览，准确率要求不高   |
-| 2 | large-v3-turbo | ~1.5GB | 较快  | 优秀  | **推荐**，速度和质量平衡 |
-| 3 | large-v3       | ~2.9GB | 慢   | 最佳  | 最终版，最高准确率      |
+### 调用示例（Windows）
 
-**Windows 模型选项：**
+```
+AskUserQuestion({
+  questions: [
+    {
+      header: "模型选择",
+      question: "选择转录模型：",
+      options: [
+        {"label": "small (~461MB, 快速预览)", "value": "small"},
+        {"label": "medium (~1.5GB, 推荐)", "value": "medium"},
+        {"label": "large-v3 (~2.9GB, 最高准确率)", "value": "large-v3"}
+      ]
+    },
+    {
+      header: "输出格式",
+      question: "选择输出格式：",
+      options: [
+        {"label": "Markdown (纯文本段落)", "value": "md"},
+        {"label": "SRT (标准字幕)", "value": "srt"},
+        {"label": "Markdown + 时间码", "value": "md-timestamps"}
+      ]
+    }
+  ]
+})
+```
 
-| # | 模型     | 大小     | 速度  | 准确率 | 适合场景         |
-|---|--------|--------|-----|-----|--------------|
-| 1 | small  | ~461MB | 快   | 良好  | 快速预览         |
-| 2 | medium | ~1.5GB | 中等  | 优秀  | **推荐**，速度和质量平衡 |
-| 3 | large-v3 | ~2.9GB | 慢   | 最佳  | 最高准确率        |
-
-用户选择后通过 `--model` 参数传给脚本。
-
-### 2. 输出格式（所有平台通用）
-
-| # | 格式                 | 说明                                        |
-|---|--------------------|-------------------------------------------|
-| 1 | **Markdown**       | 纯文本段落（非逐句分行），合并为自然段落，适合阅读和 text-refine 校准 |
-| 2 | **SRT**            | 标准字幕格式，带时间轴，适合加载到播放器                      |
-| 3 | **Markdown + 时间码** | 每段带时间戳，兼顾可读性和定位，适合回看视频对照                  |
-
-- 用户选择后通过 `--format` 参数传给脚本
-- 选 Markdown + 时间码时传 `--format md --keep-timestamps`
+- 用户选择模型后通过 `--model` 参数传给脚本
+- 输出格式 `srt` → `--format srt`；`md` → `--format md`；`md-timestamps` → `--format md --keep-timestamps`
 - Markdown 格式必须将 Whisper 逐句输出合并为自然段落，不要一行一句
 
 ## 使用方法

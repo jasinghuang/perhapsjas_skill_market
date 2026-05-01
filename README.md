@@ -25,10 +25,14 @@
 ## 依赖
 
 ```bash
-# video-downloader
-pip install yt-dlp
+# video-downloader（自动安装 yt-dlp，无需手动预装）
+# 可选：JS runtime（YouTube 需要）
+#   Node.js ≥20（推荐）: winget install OpenJS.NodeJS
+#   Deno: winget install DenoLand.Deno
+# 可选：ffmpeg 合并音视频
+#   Mac: brew install ffmpeg / Windows: winget install Gyan.FFmpeg
 # 可选：aria2 加速
-brew install aria2
+#   Mac: brew install aria2 / Windows: winget install aria2.aria2
 
 # audio-transcribe (Mac)
 pip3 install --break-system-packages mlx-whisper zhconv
@@ -122,10 +126,20 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 
 每次转录前会询问选择模型：
 
+**Mac（MLX-Whisper）：**
+
 | 模型 | 大小 | 速度 | 准确率 | 适合场景 |
 |------|------|------|--------|---------|
 | small | ~459MB | 快 | 良好 | 快速预览 |
 | **large-v3-turbo** | **~1.5GB** | **较快** | **优秀** | **推荐，速度与质量平衡** |
+| large-v3 | ~2.9GB | 慢 | 最佳 | 最高准确率 |
+
+**Windows（Faster-Whisper）：**
+
+| 模型 | 大小 | 速度 | 准确率 | 适合场景 |
+|------|------|------|--------|---------|
+| small | ~461MB | 快 | 良好 | 快速预览 |
+| **medium** | **~1.5GB** | **中等** | **优秀** | **推荐，速度与质量平衡** |
 | large-v3 | ~2.9GB | 慢 | 最佳 | 最高准确率 |
 
 ### 输出格式
@@ -196,7 +210,7 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4 --k
 
 | Skill | 首次配置 |
 |-------|---------|
-| **video-downloader** | 自动检查 `yt-dlp`，缺少会提示安装命令 |
+| **video-downloader** | 自动检测并安装 yt-dlp（含 yt-dlp-ejs），可选 Node.js/Deno、ffmpeg、aria2 |
 | **audio-transcribe** | 每次运行询问模型和输出格式，自动检查依赖 |
 | **text-refine** | 无需配置，直接使用 |
 
