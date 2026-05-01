@@ -1,8 +1,0 @@
-{
-  "download": {
-    "output_dir": "~/Downloads",
-    "quality": "best",
-    "codec": "h264",
-    "use_aria2": false
-  }
-}
