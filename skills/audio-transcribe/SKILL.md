@@ -1,10 +1,10 @@
 ---
-
 name: audio-transcribe
 description: >
   音频/视频转录工具，自动检测平台选择最优后端。
   Mac 使用 MLX-Whisper（Apple Silicon 原生加速），Windows 使用 Faster-Whisper（CUDA GPU 加速 / CPU 回退）。
-  当用户要转录、转文字、提取字幕、语音识别、whisper转录、音频转文字、视频转字幕、transcribe 时触发。
+  当用户要转录、转文字、提取字幕、语音识别、whisper转录、音频转文字、视频转字幕、
+  录音转文字、语音转文字、转写、听写、把视频变成文字稿、transcribe、speech to text 时触发。
   输出 SRT 或 Markdown 格式。每次使用会询问模型和输出格式。
   接受 mp4、mp3、wav、m4a 等常见音视频格式。
 
@@ -64,7 +64,9 @@ pip install faster-whisper zhconv
 
 ## 每次使用前的选择
 
-**每次转录前，必须使用 AskUserQuestion 工具询问以下两个问题。不要静默使用默认值或读取 config.json 跳过询问。**
+**每次转录前，使用 AskUserQuestion 工具询问以下两个问题。不要静默使用默认值或读取 config.json 跳过询问。**
+
+如果用户在指令中已明确指定了模型和输出格式（如"用 large-v3 转录成 SRT"），可以跳过询问直接使用用户指定的参数。
 
 每个 question 必须包含 `header` 字段，`options` 中每个选项必须是 `{label, value}` 对象，不能是字符串。
 
