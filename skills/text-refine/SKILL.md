@@ -205,8 +205,8 @@ Whisper 在中文音频中常幻觉出英文或无意义内容，尤其在段落
 ## 与其他 skill 配合
 
 ```
-video-downloader → mlx-whisper → text-refine
-    下载视频        转录字幕       校准字幕
+video-downloader → audio-transcribe → text-refine
+    下载视频           转录字幕          校准字幕
 ```
 
 ## 示例

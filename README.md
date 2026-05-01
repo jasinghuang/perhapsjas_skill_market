@@ -7,7 +7,7 @@
 | Skill | 功能 | 命令 |
 |-------|------|------|
 | **video-downloader** | Bilibili / YouTube 视频下载 | `/video-downloader` |
-| **mlx-whisper** | Apple Silicon 加速音频转录 | `/mlx-whisper` |
+| **audio-transcribe** | 跨平台音频转录 (Mac/Win) | `/audio-transcribe` |
 | **text-refine** | Claude 直接校准字幕、翻译 | `/text-refine` |
 
 ---
@@ -30,9 +30,11 @@ pip install yt-dlp
 # 可选：aria2 加速
 brew install aria2
 
-# mlx-whisper
+# audio-transcribe (Mac)
 pip3 install --break-system-packages mlx-whisper zhconv
 brew install ffmpeg
+# audio-transcribe (Windows)
+pip install faster-whisper zhconv
 
 # text-refine
 # 无需额外依赖，Claude 直接处理
@@ -45,7 +47,7 @@ brew install ffmpeg
 ```
 视频 URL
   ↓ video-downloader → 下载视频文件
-  ↓ mlx-whisper      → 转录为字幕 (SRT/MD)
+  ↓ audio-transcribe → 转录为字幕 (SRT/MD)
   ↓ text-refine      → 校准错别字/翻译
   → 最终字幕文件
 ```
@@ -102,13 +104,14 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 
 ---
 
-## mlx-whisper
+## audio-transcribe
 
-音频/视频转录工具，使用 MLX-Whisper（Apple Silicon 原生加速），替代 openai-whisper。
+音频/视频转录工具，自动检测平台选择最优后端：Mac 用 MLX-Whisper，Windows 用 Faster-Whisper + CUDA。
 
 ### 功能
 
-- Apple Silicon GPU 加速，转录速度显著提升
+- 自动检测平台：Mac 用 MLX-Whisper，Windows 用 Faster-Whisper
+- Windows CUDA GPU 加速 / CPU int8 回退
 - 每次使用前询问模型和输出格式
 - 自动语言检测
 - 繁体中文自动转简体中文
@@ -147,11 +150,11 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 ### 命令行
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/skills/mlx-whisper/skill_main.py video.mp4
-python ${CLAUDE_PLUGIN_ROOT}/skills/mlx-whisper/skill_main.py video.mp4 --format srt
-python ${CLAUDE_PLUGIN_ROOT}/skills/mlx-whisper/skill_main.py video.mp4 --model large-v3
-python ${CLAUDE_PLUGIN_ROOT}/skills/mlx-whisper/skill_main.py video.mp4 --language zh
-python ${CLAUDE_PLUGIN_ROOT}/skills/mlx-whisper/skill_main.py video.mp4 --keep-timestamps
+python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4
+python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4 --format srt
+python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4 --model large-v3
+python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4 --language zh
+python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4 --keep-timestamps
 ```
 
 ---
@@ -194,7 +197,7 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/mlx-whisper/skill_main.py video.mp4 --keep-t
 | Skill | 首次配置 |
 |-------|---------|
 | **video-downloader** | 自动检查 `yt-dlp`，缺少会提示安装命令 |
-| **mlx-whisper** | 每次运行询问模型和输出格式，自动检查依赖 |
+| **audio-transcribe** | 每次运行询问模型和输出格式，自动检查依赖 |
 | **text-refine** | 无需配置，直接使用 |
 
 ## 更新

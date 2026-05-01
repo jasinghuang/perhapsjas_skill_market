@@ -5,18 +5,18 @@
     "email": ""
   },
   "metadata": {
-    "description": "视频下载、MLX-Whisper转录、Claude文本校准——一站式视频字幕工作流",
+    "description": "视频下载、跨平台转录、Claude文本校准——一站式视频字幕工作流",
     "version": "2.5.1"
   },
   "plugins": [
     {
       "name": "video-toolkit",
-      "description": "视频字幕一站式工具：video-downloader (Bilibili/YouTube下载) + mlx-whisper (Apple Silicon转录) + text-refine (Claude校准翻译)",
+      "description": "视频字幕一站式工具：video-downloader (Bilibili/YouTube下载) + audio-transcribe (跨平台转录) + text-refine (Claude校准翻译)",
       "source": "./",
       "strict": false,
       "skills": [
         "./skills/video-downloader",
-        "./skills/mlx-whisper",
+        "./skills/audio-transcribe",
         "./skills/text-refine"
       ]
     }

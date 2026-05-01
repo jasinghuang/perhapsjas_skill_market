@@ -5,7 +5,7 @@ description: >
   当用户要下载视频、保存视频、离线观看、批量下载、bilibili下载、youtube下载、
   B站下载、油管下载、bili下载时触发此 skill。
   支持 B站/Bilibili/YouTube/油管链接，支持批量下载、aria2加速、Cookie登录下载。
-  只负责视频下载，字幕转录和校准请使用 mlx-whisper 和 text-refine skill。
+  只负责视频下载，字幕转录和校准请使用 audio-transcribe 和 text-refine skill。
 ---
 
 # Video Downloader
@@ -110,7 +110,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL
 
 ```
 1. video-downloader → 下载视频
-2. mlx-whisper      → 转录为字幕 (SRT/MD)
+2. audio-transcribe → 转录为字幕 (SRT/MD)
 3. text-refine      → 校准/翻译字幕
 ```
 
