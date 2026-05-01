@@ -1,11 +1,16 @@
 ---
 name: video-downloader
 description: >
+  Video downloader for Bilibili and YouTube using yt-dlp.
   视频下载工具，支持 Bilibili 和 YouTube，使用 yt-dlp 下载视频到本地。
+  Trigger this skill when the user wants to: download video, save video offline,
+  batch download videos, download from Bilibili/B站/YouTube/油管, extract audio from video,
+  use yt-dlp, save a video for later viewing, download with cookies, or download video in specific quality.
   当用户要下载视频、保存视频、离线观看、批量下载、bilibili下载、youtube下载、
-  B站下载、油管下载、bili下载时触发此 skill。
+  B站下载、油管下载、提取音频、指定画质下载时触发此 skill。
   支持 B站/Bilibili/YouTube/油管链接，支持批量下载、aria2加速、Cookie登录下载。
   只负责视频下载，字幕转录和校准请使用 audio-transcribe 和 text-refine skill。
+  yt-dlp 会自动安装，无需手动预装。
 ---
 
 # Video Downloader
@@ -14,7 +19,7 @@ description: >
 
 ## 首次依赖检查
 
-脚本自动检测并安装 yt-dlp（包含 yt-dlp-ejs YouTube 支持）。以下为可选依赖：
+脚本自动检测并安装 yt-dlp（包含 yt-dlp-ejs YouTube 支持），无需手动预装。以下为可选依赖：
 
 ### 可选：JS runtime（YouTube 等站点需要）
 
@@ -39,6 +44,7 @@ YouTube 下载需要 JavaScript runtime，脚本自动检测：
 
 ```bash
 # 下载单个视频（默认最高画质）
+# Mac 用户用 python3，Windows 用户用 python
 python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py "URL"
 
 # 批量下载

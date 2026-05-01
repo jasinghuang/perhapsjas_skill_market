@@ -69,7 +69,8 @@ def detect_js_runtimes() -> dict:
 
 def read_urls_from_file(file_path: Path) -> List[str]:
     with open(file_path, 'r', encoding='utf-8') as f:
-        return [line.strip() for line in f if line.strip()]
+        return [line.strip() for line in f
+                if line.strip() and not line.strip().startswith(('#', ';'))]
 
 
 def build_format_string(quality: str, resolution: Optional[int], codec: str,
@@ -174,12 +175,16 @@ def parse_args():
 
 
 def main():
+    if '--help' in sys.argv or '-h' in sys.argv:
+        parse_args()
+        return
+
+    args = parse_args()
+
     if not ensure_yt_dlp():
         sys.exit(1)
 
     runtimes = detect_js_runtimes()
-
-    args = parse_args()
 
     urls = args.urls or []
     if args.file:
