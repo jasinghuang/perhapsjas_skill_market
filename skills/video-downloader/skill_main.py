@@ -55,11 +55,11 @@ def ensure_yt_dlp() -> bool:
             return False
 
 
-def detect_js_runtimes() -> List[str]:
-    runtimes = []
+def detect_js_runtimes() -> dict:
+    runtimes = {}
     for rt in ['deno', 'node']:
         if shutil.which(rt):
-            runtimes.append(rt)
+            runtimes[rt] = {}
     if not runtimes:
         print("⚠ 未检测到 JS runtime (deno/node)")
         print("  YouTube 等站点可能下载失败")
@@ -89,7 +89,7 @@ def build_format_string(quality: str, resolution: Optional[int], codec: str,
 def build_opts(output_dir: Path, quality: str, resolution: Optional[int],
                codec: str, custom_format: Optional[str], audio_only: bool,
                cookie_file: Optional[Path], use_aria2: bool,
-               runtimes: List[str]) -> dict:
+               runtimes: dict) -> dict:
     opts = {
         'outtmpl': str(output_dir / '%(title)s [%(id)s].%(ext)s'),
         'no_warnings': True,
@@ -233,7 +233,7 @@ def main():
     if cookie_file:
         print(f"🍪 Cookie: {cookie_file}")
     if runtimes:
-        print(f"🔧 JS Runtime: {', '.join(runtimes)}")
+        print(f"🔧 JS Runtime: {', '.join(runtimes.keys())}")
 
     ret = download_videos(urls, opts)
 
