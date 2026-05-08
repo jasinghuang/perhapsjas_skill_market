@@ -2,7 +2,7 @@
 
 > 适用于股票、基金、投资策略、资产配置、市场分析等相关主题
 > 框架来源：finance-article-deconstruction-card.md
-> 基于 10 篇示例文章的跨文章模式分析（Nico x2、SOL x4、Luna x2、innomad x1、口播 x1）
+> 基于 13 篇示例文章的跨文章模式分析（Nico x2、SOL x4、Luna x2、innomad x1、口播 x1、罐头无限 x3）
 
 ---
 
