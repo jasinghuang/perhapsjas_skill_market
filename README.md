@@ -1,6 +1,6 @@
 # perhapsjas_skill_market
 
-实用内容创作工具集，一个市场包含两个插件。
+实用内容创作工具集，一个市场包含三个插件。
 
 ## 插件
 
@@ -47,6 +47,13 @@ npx skills add jasinghuang/perhapsjas_skill_market -g
   → 拿到精美图文卡片 HTML
 ```
 
+```
+说出主题
+  ↓ writting-assistant 全自动创作
+  ↓ 需求分析 → 资料研究 → 风格习得 → 文案撰写 → 质量检测
+  → 拿到高质量口播文案
+```
+
 所有 skill 各自独立，也能一口气跑完。
 
 ## 依赖
@@ -71,6 +78,8 @@ pip install faster-whisper zhconv
 
 **xiaohongshu-html-card** — 无需额外依赖。
 
+**writting-assistant** — 无需额外依赖（Python 3 用于存档脚本）。
+
 ---
 
 ## 目录结构
@@ -89,6 +98,12 @@ pip install faster-whisper zhconv
 │           └── xiaohongshu-html-card/
 │               ├── assets/layouts/
 │               └── references/
+│   └── writting-assistant/
+│       └── skills/
+│           └── writting-assistant/
+│               ├── references/
+│               ├── scripts/
+│               └── examples/
 └── README.md
 ```
 
@@ -222,4 +237,23 @@ python skill_main.py video.mp4 --keep-timestamps
 帮我校对一下这段文字
 翻译并校准 audio.srt
 refine 一下这个 md 文件
+```
+
+---
+
+## writting-assistant
+
+小红书金融投教自媒体文案创作助手。说出主题，全自动完成全流程。
+
+- 需求分析 → 资料研究（联网搜索）→ 风格习得 → 文案撰写 → 质量检测 → 存档
+- 内置金融/科技/投资/保险多分类，每类有独立文风标准和爆款参考
+- 人设可配置，支持「分析师」「顾问」「实操者」等不同风格切换
+- 自动生成封面标题、SEO 描述、正文，带合规检测
+
+### 怎么说它就懂
+
+```
+帮我写一篇关于 ETF 定投的小红书文案
+写一篇 AI 工具推荐的小红书
+以这篇文章为参考写一篇小红书文案
 ```

@@ -5,7 +5,7 @@
     "email": ""
   },
   "metadata": {
-    "description": "视频下载转录 + 小红书图文卡片 —— 实用内容创作工具集",
+    "description": "视频下载转录 + 小红书图文卡片 + 文案创作助手 —— 实用内容创作工具集",
     "version": "3.0.0"
   },
   "plugins": [
@@ -27,6 +27,15 @@
       "strict": false,
       "skills": [
         "./skills/xiaohongshu-html-card"
+      ]
+    },
+    {
+      "name": "writting-assistant",
+      "description": "小红书自媒体文案创作助手：需求分析→资料研究→风格习得→文案撰写→质量检测→存档，支持金融投教/科技/投资等多分类",
+      "source": "./plugins/writting-assistant",
+      "strict": false,
+      "skills": [
+        "./skills/writting-assistant"
       ]
     }
   ]
