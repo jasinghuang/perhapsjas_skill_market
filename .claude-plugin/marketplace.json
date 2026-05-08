@@ -10,7 +10,7 @@
   },
   "plugins": [
     {
-      "name": "video-toolkit",
+      "name": "Video_Toolkit",
       "description": "视频字幕一站式工具：video-downloader (Bilibili/YouTube下载) + audio-transcribe (跨平台转录) + text-refine (Claude校准翻译)",
       "source": "./plugins/video-toolkit",
       "strict": false,
