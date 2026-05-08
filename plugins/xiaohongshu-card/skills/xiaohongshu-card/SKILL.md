@@ -1,5 +1,5 @@
 ---
-name: xiaohongshu-html-card
+name: xiaohongshu-card
 description: 将小红书文案转换为精美的 HTML 图文卡片（1242×1660），支持封面/正文/结尾多卡片自动拆分。当用户想将文案转为小红书图文、生成 XHS 卡片、制作图文笔记，或提到"小红书卡片"、"图文卡片"、"XHS card"时使用。
 ---
 
@@ -26,10 +26,10 @@ description: 将小红书文案转换为精美的 HTML 图文卡片（1242×1660
 
 ## 资源文件路径
 
-所有资源文件位于 `${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-html-card/` 下：
+所有资源文件位于 `${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-card/` 下：
 
 ```
-xiaohongshu-html-card/
+xiaohongshu-card/
 ├── SKILL.md                    ← 你正在读
 ├── assets/
 │   └── layouts/                # 按类型分目录的布局模板
@@ -100,9 +100,9 @@ xiaohongshu-html-card/
 ### Step 3 · 选择布局并填充
 
 1. 根据卡片类型读取对应布局 HTML 文件：
-   - 封面：`${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-html-card/assets/layouts/cover/default.html`
-   - 正文：`${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-html-card/assets/layouts/content/default.html`
-   - 结尾：`${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-html-card/assets/layouts/ending/default.html`
+   - 封面：`${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-card/assets/layouts/cover/default.html`
+   - 正文：`${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-card/assets/layouts/content/default.html`
+   - 结尾：`${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-card/assets/layouts/ending/default.html`
 2. 将解析好的内容填入占位符位置
 3. **关键词标记**：将识别出的核心术语用 `<span class="highlight">` 包裹
 
@@ -121,7 +121,7 @@ xiaohongshu-html-card/
 
 ### Step 4 · 自检
 
-读取 `${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-html-card/references/checklist.md`，逐项检查：
+读取 `${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-card/references/checklist.md`，逐项检查：
 
 **P0（必须通过）：**
 - 卡片尺寸 1242×1660
@@ -135,7 +135,7 @@ xiaohongshu-html-card/
 - 关键词标记合理（不过度）
 - 内容无溢出
 
-创建新布局时参考 `${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-html-card/references/design-tokens.md`。
+创建新布局时参考 `${CLAUDE_PLUGIN_ROOT}/skills/xiaohongshu-card/references/design-tokens.md`。
 
 ### Step 5 · 输出
 

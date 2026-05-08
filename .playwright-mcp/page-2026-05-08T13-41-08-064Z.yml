@@ -1,0 +1,376 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - generic:
+      - link "跳到主要内容" [ref=e2] [cursor=pointer]
+      - link "无障碍功能帮助" [ref=e3] [cursor=pointer]:
+        - /url: https://support.google.com/websearch/answer/181196?hl=zh-CN
+      - link "无障碍功能反馈" [ref=e4] [cursor=pointer]
+  - generic [ref=e9]:
+    - search [ref=e10]:
+      - generic [ref=e12]:
+        - link "Google 首页" [ref=e14] [cursor=pointer]:
+          - /url: https://www.google.com/webhp?hl=zh-CN&sa=X&ved=0ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQPAgJ
+          - img [ref=e15]
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - combobox "搜索" [ref=e26]: 核弹公式 爆款标题 小红书 核弹公式 爆款标题 小红书
+            - generic [ref=e27]:
+              - button "清除" [ref=e29] [cursor=pointer]:
+                - img [ref=e31]
+              - generic [ref=e34]:
+                - button "按语音搜索" [ref=e35] [cursor=pointer]:
+                  - img [ref=e36]
+                - button "按图搜索" [ref=e38] [cursor=pointer]:
+                  - img [ref=e39]
+          - button "搜索" [ref=e41] [cursor=pointer]:
+            - img [ref=e44]
+    - generic [ref=e46]:
+      - button "设置" [ref=e48] [cursor=pointer]:
+        - img [ref=e51]
+      - generic [ref=e54]:
+        - button "Google 应用" [ref=e56] [cursor=pointer]:
+          - img [ref=e57]
+        - link "登录" [ref=e61] [cursor=pointer]:
+          - /url: https://accounts.google.com/ServiceLogin?hl=zh-CN&passive=true&continue=https://www.google.com/search%3Fq%3D%25E6%25A0%25B8%25E5%25BC%25B9%25E5%2585%25AC%25E5%25BC%258F%2B%25E7%2588%2586%25E6%25AC%25BE%25E6%25A0%2587%25E9%25A2%2598%2B%25E5%25B0%258F%25E7%25BA%25A2%25E4%25B9%25A6%26sei%3D8Of9aanMB82ivr0Pi4v1iAI&ec=futura_srp_og_si_72236_p
+  - generic [ref=e63]:
+    - navigation [ref=e69]:
+      - generic [ref=e75]:
+        - list [ref=e76]:
+          - listitem [ref=e77]:
+            - link "AI 模式" [ref=e80] [cursor=pointer]:
+              - /url: /search?q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sca_esv=9033de2d4e2ebdf7&udm=50&fbs=ADc_l-Z6XGGbkKmpylZqg2J7ZOuVNvV7jKtLqzLZ63dd2zPtrsojpaijeJRLrp4clUvcwVLqz22G_DDF8uXB52NlEFf5wf7GIq1kUkf2LzqDT3jWEl-0VrzTR6fhHrgXfCBw-vth8zxeOYc8zSTz1oDvTtPw-RK_IU-AltwiP4Xpnt4eywltspSanf7p51sTkZF-LOHg0OGrO-qMLJM3cL3PYr2mxw9fBg&aep=1&ntc=1&sa=X&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ2J8OegQIEBAD
+              - generic [ref=e83]: AI 模式
+          - listitem [ref=e84]:
+            - link "全部" [disabled] [ref=e85]:
+              - generic [ref=e87]: 全部
+          - listitem [ref=e88]:
+            - link "图片" [ref=e89] [cursor=pointer]:
+              - /url: /search?sca_esv=9033de2d4e2ebdf7&udm=2&fbs=ADc_l-Z6XGGbkKmpylZqg2J7ZOuVNvV7jKtLqzLZ63dd2zPtrsojpaijeJRLrp4clUvcwVLqz22G_DDF8uXB52NlEFf5wf7GIq1kUkf2LzqDT3jWEl-0VrzTR6fhHrgXfCBw-vth8zxeOYc8zSTz1oDvTtPw-RK_IU-AltwiP4Xpnt4eywltspSanf7p51sTkZF-LOHg0OGrO-qMLJM3cL3PYr2mxw9fBg&q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sa=X&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQtKgLegQIFBAB
+              - generic [ref=e91]: 图片
+          - listitem [ref=e92]:
+            - link "视频" [ref=e93] [cursor=pointer]:
+              - /url: /search?sca_esv=9033de2d4e2ebdf7&udm=7&fbs=ADc_l-Z6XGGbkKmpylZqg2J7ZOuVNvV7jKtLqzLZ63dd2zPtrsojpaijeJRLrp4clUvcwVLqz22G_DDF8uXB52NlEFf5wf7GIq1kUkf2LzqDT3jWEl-0VrzTR6fhHrgXfCBw-vth8zxeOYc8zSTz1oDvTtPw-RK_IU-AltwiP4Xpnt4eywltspSanf7p51sTkZF-LOHg0OGrO-qMLJM3cL3PYr2mxw9fBg&q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sa=X&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQtKgLegQIFRAB
+              - generic [ref=e95]: 视频
+          - listitem [ref=e96]:
+            - link "购物" [ref=e97] [cursor=pointer]:
+              - /url: /search?sca_esv=9033de2d4e2ebdf7&udm=28&fbs=ADc_l-Z6XGGbkKmpylZqg2J7ZOuVNvV7jKtLqzLZ63dd2zPtrsojpaijeJRLrp4clUvcwVLqz22G_DDF8uXB52NlEFf5wf7GIq1kUkf2LzqDT3jWEl-0VrzTR6fhHrgXfCBw-vth8zxeOYc8zSTz1oDvTtPw-RK_IU-AltwiP4Xpnt4eywltspSanf7p51sTkZF-LOHg0OGrO-qMLJM3cL3PYr2mxw9fBg&q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&ved=1t:220175&ictx=111
+              - generic [ref=e99]: 购物
+          - listitem [ref=e100]:
+            - link "新闻" [ref=e101] [cursor=pointer]:
+              - /url: /search?sca_esv=9033de2d4e2ebdf7&q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&tbm=nws&source=lnms&fbs=ADc_l-Z6XGGbkKmpylZqg2J7ZOuVNvV7jKtLqzLZ63dd2zPtrsojpaijeJRLrp4clUvcwVLqz22G_DDF8uXB52NlEFf5wf7GIq1kUkf2LzqDT3jWEl-0VrzTR6fhHrgXfCBw-vth8zxeOYc8zSTz1oDvTtPw-RK_IU-AltwiP4Xpnt4eywltspSanf7p51sTkZF-LOHg0OGrO-qMLJM3cL3PYr2mxw9fBg&sa=X&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ0pQJegQIFxAB
+              - generic [ref=e103]: 新闻
+          - listitem [ref=e104]:
+            - link "短视频" [ref=e105] [cursor=pointer]:
+              - /url: /search?sca_esv=9033de2d4e2ebdf7&udm=39&fbs=ADc_l-Z6XGGbkKmpylZqg2J7ZOuVNvV7jKtLqzLZ63dd2zPtrsojpaijeJRLrp4clUvcwVLqz22G_DDF8uXB52NlEFf5wf7GIq1kUkf2LzqDT3jWEl-0VrzTR6fhHrgXfCBw-vth8zxeOYc8zSTz1oDvTtPw-RK_IU-AltwiP4Xpnt4eywltspSanf7p51sTkZF-LOHg0OGrO-qMLJM3cL3PYr2mxw9fBg&q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sa=X&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQs6gLegQIGBAB
+              - generic [ref=e107]: 短视频
+          - listitem [ref=e108]:
+            - button "更多过滤条件" [ref=e109] [cursor=pointer]:
+              - generic "更多过滤条件" [ref=e110]:
+                - generic [ref=e111]:
+                  - generic [ref=e112]: 更多
+                  - img [ref=e114]
+        - button "工具" [ref=e117] [cursor=pointer]:
+          - generic [ref=e119]:
+            - generic [ref=e120]: 工具
+            - img [ref=e122]
+    - heading "搜索结果" [level=1] [ref=e124]
+    - generic [ref=e129]:
+      - generic [ref=e148]:
+        - generic [ref=e151]:
+          - generic [ref=e153]:
+            - generic [ref=e155]:
+              - generic [ref=e156]:
+                - img [ref=e157]
+                - heading "AI 概览" [level=2] [ref=e159]
+              - button "关于这条结果的详细信息" [ref=e163]:
+                - img [ref=e165]
+            - generic [ref=e189]:
+              - generic [ref=e190]:
+                - text: 在小红书平台上，打造爆款标题的“核弹公式”
+                - mark [ref=e191]:
+                  - text: 核心在于
+                  - strong [ref=e192]: 情绪共鸣、痛点直击、数字具体化以及利用二极管思维（极致的正面或负面）
+                - text: 。小红书用户追求“省力”和“及时享受”，标题应在20字内快速传递核心价值。
+              - generic [ref=e193]:
+                - text: 以下是基于
+                - link "人人都是产品经理" [ref=e195] [cursor=pointer]:
+                  - /url: https://www.woshipm.com/ai/5978284.html
+                - text: 和知乎实战经验总结的几套核弹级公式：
+              - heading "一、 “核弹”标题公式" [level=3] [ref=e197]
+              - heading "1. 正向刺激公式：产品/方法 + 1秒（短期） + 逆天效果" [level=3] [ref=e199]
+              - list [ref=e201]:
+                - listitem [ref=e202]:
+                  - generic [ref=e203]:
+                    - strong [ref=e204]: 核心：
+                    - text: 制造轻松可得的高收益快感。
+                - listitem [ref=e205]:
+                  - strong [ref=e207]: 示例：
+                  - list [ref=e208]:
+                    - listitem [ref=e209]:
+                      - generic [ref=e210]: 3天瘦5斤！我是怎么做到的？
+                    - listitem [ref=e211]:
+                      - generic [ref=e212]: 大学生寒假做这个，直接开挂！
+                    - listitem [ref=e213]:
+                      - generic [ref=e214]: 只需1秒！让文档导出变快10倍！
+          - progressbar [ref=e220]
+        - button "显示更多 AI 概览" [ref=e244]:
+          - generic [ref=e246] [cursor=pointer]:
+            - generic [ref=e247]: 展开
+            - img [ref=e249]
+      - main [ref=e252]:
+        - generic [ref=e256]:
+          - generic [ref=e259]:
+            - heading "网页搜索结果" [level=2] [ref=e260]
+            - generic [ref=e261]:
+              - generic [ref=e264]:
+                - link "AI+爆款公式，绝对是写文案核武器！ 人人都是产品 https://www.woshipm.com › ..." [ref=e266] [cursor=pointer]:
+                  - /url: https://www.woshipm.com/ai/5978284.html
+                  - heading "AI+爆款公式，绝对是写文案核武器！" [level=3] [ref=e267]
+                  - generic [ref=e272]:
+                    - generic [ref=e274]: 人人都是产品
+                    - generic [ref=e276]: https://www.woshipm.com › ...
+                - button "关于这条结果的详细信息" [ref=e277] [cursor=pointer]:
+                  - img [ref=e280]
+              - generic [ref=e283]:
+                - generic [ref=e284]: 2024年1月17日 —
+                - generic [ref=e285]:
+                  - text: 比如，用来写
+                  - emphasis [ref=e286]: 小红书
+                  - text: 的“二极管
+                  - emphasis [ref=e287]: 标题
+                  - text: "法”。 它的原理是这样的：. ##基本原理 ... ##"
+                  - emphasis [ref=e288]: 标题公式
+                  - text: ：. -正面刺激：产品或方法+只需1秒（短期）+便可开挂（逆 ...
+          - generic [ref=e292]:
+            - generic [ref=e295]:
+              - link "小红书10个可套用的爆款标题技巧 知乎专栏 https://zhuanlan.zhihu.com › ..." [ref=e297] [cursor=pointer]:
+                - /url: https://zhuanlan.zhihu.com/p/32645276084
+                - heading "小红书10个可套用的爆款标题技巧" [level=3] [ref=e298]
+                - generic [ref=e303]:
+                  - generic [ref=e305]: 知乎专栏
+                  - generic [ref=e307]: https://zhuanlan.zhihu.com › ...
+              - button "关于这条结果的详细信息" [ref=e308] [cursor=pointer]:
+                - img [ref=e311]
+            - generic [ref=e314]:
+              - generic [ref=e315]: 2025年3月25日 —
+              - generic [ref=e316]:
+                - text: 以下是
+                - emphasis [ref=e317]: 小红书爆款标题
+                - text: 的10个可套用技巧，结合平台算法逻辑与用户心理需求，提供多角度创作方法论：. 一、简洁性与价值突出. 标题需在20字内直击核心，避免 ...
+          - generic [ref=e321]:
+            - generic [ref=e324]:
+              - link "Deep Seek制作短视频爆款标题公式！速速收藏 腾讯云 https://cloud.tencent.com › developer › news" [ref=e326] [cursor=pointer]:
+                - /url: https://cloud.tencent.com/developer/news/2181425
+                - heading "Deep Seek制作短视频爆款标题公式！速速收藏" [level=3] [ref=e327]
+                - generic [ref=e332]:
+                  - generic [ref=e334]: 腾讯云
+                  - generic [ref=e336]: https://cloud.tencent.com › developer › news
+              - button "关于这条结果的详细信息" [ref=e337] [cursor=pointer]:
+                - img [ref=e340]
+            - generic [ref=e343]:
+              - generic [ref=e344]: 2025年2月16日 —
+              - generic [ref=e345]:
+                - text: 掌握短视频
+                - emphasis [ref=e346]: 爆款标题
+                - text: 类型与平台要求，利用deepseek为搬家公司等定制16字左右悬念标题。快速生成符合行业与地域特色的
+                - emphasis [ref=e347]: 爆款标题
+                - text: ，提升视频曝光率， ...
+          - generic [ref=e351]:
+            - generic [ref=e354]:
+              - link "AI應用｜克里斯| Threads 在4/1 偷偷上線「趨勢話題」功能 ... Instagram · awoo_gw 4周前" [ref=e356] [cursor=pointer]:
+                - /url: https://www.instagram.com/p/DW8srozk-ao/
+                - heading "AI應用｜克里斯| Threads 在4/1 偷偷上線「趨勢話題」功能 ..." [level=3] [ref=e357]
+                - generic [ref=e362]:
+                  - generic [ref=e364]: Instagram · awoo_gw
+                  - generic [ref=e366]: 4周前
+              - button "关于这条结果的详细信息" [ref=e367] [cursor=pointer]:
+                - img [ref=e370]
+            - generic [ref=e374]:
+              - text: 我仔細分析了100+ 支爆文發現它們都遵循同一個
+              - emphasis [ref=e375]: 公式 標題
+              - text: 怎麼寫內容怎麼組織. CTA 怎麼放 用對了，普通內容變
+              - emphasis [ref=e376]: 爆款
+              - text: 用錯了，好內容也無人問津 我的第一支爆文
+          - generic [ref=e380]:
+            - generic [ref=e383]:
+              - link "小红书最新推流机制、爆文封面设计技巧、图文AI获客攻略...... ... 手机网易网 https://www.163.com › article" [ref=e385] [cursor=pointer]:
+                - /url: https://www.163.com/dy/article/KSE7AH0C0511DBV1.html
+                - heading "小红书最新推流机制、爆文封面设计技巧、图文AI获客攻略...... ..." [level=3] [ref=e386]
+                - generic [ref=e391]:
+                  - generic [ref=e393]: 手机网易网
+                  - generic [ref=e395]: https://www.163.com › article
+              - button "关于这条结果的详细信息" [ref=e396] [cursor=pointer]:
+                - img [ref=e399]
+            - generic [ref=e402]:
+              - generic [ref=e403]:
+                - generic [ref=e404]: 3小时前
+                - text: —
+              - generic [ref=e405]:
+                - text: 资料库会员@呱呱分享了8 种爆文封面的底层
+                - emphasis [ref=e406]: 公式
+                - text: ，超详细、超实操，建议收藏反复看，再也不用为封面熬夜！ 1️⃣ 大字报悬念体=
+                - emphasis [ref=e407]: 标题
+                - text: 埋钩子+痛点直给. 2️⃣ 情绪表情包= ...
+          - generic [ref=e411]:
+            - generic [ref=e414]:
+              - link "戰略與評估 國防安全研究院 https://indsr.org.tw › uploads › indsr › files" [ref=e416] [cursor=pointer]:
+                - /url: https://indsr.org.tw/uploads/indsr/files/202512/3c41933a-83b1-4a90-b538-303c3fc70f90.pdf
+                - heading "戰略與評估" [level=3] [ref=e417]
+                - generic [ref=e422]:
+                  - generic [ref=e424]: 國防安全研究院
+                  - generic [ref=e426]: https://indsr.org.tw › uploads › indsr › files
+              - generic [ref=e427]:
+                - generic:
+                  - generic: PDF
+              - button "关于这条结果的详细信息" [ref=e428] [cursor=pointer]:
+                - img [ref=e431]
+            - generic [ref=e433]:
+              - generic [ref=e434]:
+                - generic [ref=e435]: 2025年12月29日 —
+                - text: 該體系不僅包括核力量，還涵蓋了高超音速武器等. 高階常規打擊力量，以及太空、網絡和電磁領域的作戰能力。這種. 理論模糊了核武器與非核戰略武器之間的界限 ...
+              - generic [ref=e436]: 108 页
+          - generic [ref=e440]:
+            - generic [ref=e443]:
+              - link "迪迦奥特曼 - 维基百科 维基百科 https://zh.wikipedia.org › zh-hans › 超人迪加" [ref=e445] [cursor=pointer]:
+                - /url: https://zh.wikipedia.org/zh-hans/%E8%B6%85%E4%BA%BA%E8%BF%AA%E5%8A%A0
+                - heading "迪迦奥特曼 - 维基百科" [level=3] [ref=e446]
+                - generic [ref=e451]:
+                  - generic [ref=e453]: 维基百科
+                  - generic [ref=e455]: https://zh.wikipedia.org › zh-hans › 超人迪加
+              - button "关于这条结果的详细信息" [ref=e456] [cursor=pointer]:
+                - img [ref=e459]
+            - generic [ref=e462]: 迪迦奥特曼 编辑 ; 特摄 · 军事科幻 · 战斗 · 格斗 · 末日及后末日 · 硬科幻 · 圆谷 · 右田昌万（日语：右田昌万） 小中千昭 · 长谷川圭一 宫沢秀则 川上英幸（日语：川上英幸） 武 ...
+          - generic [ref=e466]:
+            - heading "图片" [level=2] [ref=e470]
+            - generic [ref=e474]:
+              - generic [ref=e478] [cursor=pointer]:
+                - link "小红书创作必备的120个爆款标题公式！-凡象品牌管理 推广引流":
+                  - /url: https://www.brandcarecn.com/yingxiao/571.html
+                - button "小红书创作必备的120个爆款标题公式！-凡象品牌管理" [ref=e480]:
+                  - img "小红书创作必备的120个爆款标题公式！-凡象品牌管理" [ref=e482]
+                - generic [ref=e484]:
+                  - generic [ref=e486]: 小红书创作必备的120个爆款标题公式！-凡象品牌管理
+                  - generic [ref=e487]:
+                    - generic [ref=e494]: 推广引流
+                    - button "关于这条结果的详细信息" [ref=e497]:
+                      - img [ref=e500]
+              - generic [ref=e505] [cursor=pointer]:
+                - link "这50 个小红书爆款标题公式，我不允许有人不知道！ - 知乎 知乎专栏":
+                  - /url: https://zhuanlan.zhihu.com/p/719832104
+                - button "这50 个小红书爆款标题公式，我不允许有人不知道！ - 知乎" [ref=e507]:
+                  - img "这50 个小红书爆款标题公式，我不允许有人不知道！ - 知乎" [ref=e509]
+                - generic [ref=e511]:
+                  - generic [ref=e513]: 这50 个小红书爆款标题公式，我不允许有人不知道！ - 知乎
+                  - generic [ref=e514]:
+                    - generic [ref=e521]: 知乎专栏
+                    - button "关于这条结果的详细信息" [ref=e524]:
+                      - img [ref=e527]
+              - generic [ref=e532] [cursor=pointer]:
+                - link "研究100+小红书热门标题，我总结小红书标题的万能公式| 人人都是 ... 人人都是产品经理":
+                  - /url: https://www.woshipm.com/operate/5498171.html
+                - button "研究100+小红书热门标题，我总结小红书标题的万能公式| 人人都是 ..." [ref=e534]:
+                  - img "研究100+小红书热门标题，我总结小红书标题的万能公式| 人人都是 ..." [ref=e536]
+                - generic [ref=e538]:
+                  - generic [ref=e540]: 研究100+小红书热门标题，我总结小红书标题的万能公式| 人人都是 ...
+                  - generic [ref=e541]:
+                    - generic [ref=e548]: 人人都是产品经理
+                    - button "关于这条结果的详细信息" [ref=e551]:
+                      - img [ref=e554]
+            - button "显示更多图片" [ref=e557] [cursor=pointer]:
+              - separator [ref=e558]
+              - generic [ref=e559]:
+                - generic [ref=e560]: 显示更多图片
+                - img [ref=e562]
+          - generic [ref=e566]:
+            - heading "网页搜索结果" [level=2] [ref=e567]
+            - generic [ref=e568]:
+              - generic [ref=e571]:
+                - link "用deepseek API+Python搞副业！自动生成小红书爆款文案 ... 何三笔记 https://www.h3blog.com › article" [ref=e573] [cursor=pointer]:
+                  - /url: https://www.h3blog.com/article/629/
+                  - heading "用deepseek API+Python搞副业！自动生成小红书爆款文案 ..." [level=3] [ref=e574]
+                  - generic [ref=e579]:
+                    - generic [ref=e581]: 何三笔记
+                    - generic [ref=e583]: https://www.h3blog.com › article
+                - button "关于这条结果的详细信息" [ref=e584] [cursor=pointer]:
+                  - img [ref=e587]
+              - generic [ref=e590]:
+                - generic [ref=e591]: 2025年4月10日 —
+                - generic [ref=e592]:
+                  - text: 流量密码：结合
+                  - emphasis [ref=e593]: 爆款标题公式
+                  - text: （如数字法、痛点刺激、情感共鸣），AI能精准捕捉用户兴趣点。 二、实战步骤：从API调用到批量导出. 1. 环境准备. 注册 ...
+          - generic [ref=e597]:
+            - generic [ref=e600]:
+              - link "小红书爆款标题玩法 青瓜传媒 https://www.opp2.com › ..." [ref=e602] [cursor=pointer]:
+                - /url: https://www.opp2.com/369714.html
+                - heading "小红书爆款标题玩法" [level=3] [ref=e603]
+                - generic [ref=e608]:
+                  - generic [ref=e610]: 青瓜传媒
+                  - generic [ref=e612]: https://www.opp2.com › ...
+              - button "关于这条结果的详细信息" [ref=e613] [cursor=pointer]:
+                - img [ref=e616]
+            - generic [ref=e619]:
+              - generic [ref=e620]: 2025年6月18日 —
+              - generic [ref=e621]:
+                - text: 要做好
+                - emphasis [ref=e622]: 小红书
+                - text: ，定位>选题>标题>封面>内容，选题和标题对于一篇内容的重要性不言而喻。 所以，子木单独开了一个
+                - emphasis [ref=e623]: 爆款标题
+                - text: 拆解专题，专门拆解各热门赛道的爆 ...
+        - navigation [ref=e626]:
+          - heading "网页导航" [level=1] [ref=e627]
+          - text: "1"
+          - link "Page 2" [ref=e630] [cursor=pointer]:
+            - /url: /search?q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sca_esv=9033de2d4e2ebdf7&ei=8Of9afbqO6mFvr0PsrviwAo&start=10&sa=N&sstk=Af77f_fyLB7x3_y_sYL7aww4EyJ_bschfI5leV81iwVquDMXwlnqClam8TdBGTuSXpCF_i2kdHx4M0yGTXsJrSxK18BaQ3Tg8qJ9bw&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ8tMDegQIKxAE
+            - text: "2"
+          - link "Page 3" [ref=e632] [cursor=pointer]:
+            - /url: /search?q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sca_esv=9033de2d4e2ebdf7&ei=8Of9afbqO6mFvr0PsrviwAo&start=20&sa=N&sstk=Af77f_fyLB7x3_y_sYL7aww4EyJ_bschfI5leV81iwVquDMXwlnqClam8TdBGTuSXpCF_i2kdHx4M0yGTXsJrSxK18BaQ3Tg8qJ9bw&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ8tMDegQIKxAG
+            - text: "3"
+          - link "Page 4" [ref=e634] [cursor=pointer]:
+            - /url: /search?q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sca_esv=9033de2d4e2ebdf7&ei=8Of9afbqO6mFvr0PsrviwAo&start=30&sa=N&sstk=Af77f_fyLB7x3_y_sYL7aww4EyJ_bschfI5leV81iwVquDMXwlnqClam8TdBGTuSXpCF_i2kdHx4M0yGTXsJrSxK18BaQ3Tg8qJ9bw&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ8tMDegQIKxAI
+            - text: "4"
+          - link "Page 5" [ref=e636] [cursor=pointer]:
+            - /url: /search?q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sca_esv=9033de2d4e2ebdf7&ei=8Of9afbqO6mFvr0PsrviwAo&start=40&sa=N&sstk=Af77f_fyLB7x3_y_sYL7aww4EyJ_bschfI5leV81iwVquDMXwlnqClam8TdBGTuSXpCF_i2kdHx4M0yGTXsJrSxK18BaQ3Tg8qJ9bw&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ8tMDegQIKxAK
+            - text: "5"
+          - link "Page 6" [ref=e638] [cursor=pointer]:
+            - /url: /search?q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sca_esv=9033de2d4e2ebdf7&ei=8Of9afbqO6mFvr0PsrviwAo&start=50&sa=N&sstk=Af77f_fyLB7x3_y_sYL7aww4EyJ_bschfI5leV81iwVquDMXwlnqClam8TdBGTuSXpCF_i2kdHx4M0yGTXsJrSxK18BaQ3Tg8qJ9bw&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ8tMDegQIKxAM
+            - text: "6"
+          - link "Page 7" [ref=e640] [cursor=pointer]:
+            - /url: /search?q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sca_esv=9033de2d4e2ebdf7&ei=8Of9afbqO6mFvr0PsrviwAo&start=60&sa=N&sstk=Af77f_fyLB7x3_y_sYL7aww4EyJ_bschfI5leV81iwVquDMXwlnqClam8TdBGTuSXpCF_i2kdHx4M0yGTXsJrSxK18BaQ3Tg8qJ9bw&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ8tMDegQIKxAO
+            - text: "7"
+          - link "Page 8" [ref=e642] [cursor=pointer]:
+            - /url: /search?q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sca_esv=9033de2d4e2ebdf7&ei=8Of9afbqO6mFvr0PsrviwAo&start=70&sa=N&sstk=Af77f_fyLB7x3_y_sYL7aww4EyJ_bschfI5leV81iwVquDMXwlnqClam8TdBGTuSXpCF_i2kdHx4M0yGTXsJrSxK18BaQ3Tg8qJ9bw&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ8tMDegQIKxAQ
+            - text: "8"
+          - link "Page 9" [ref=e644] [cursor=pointer]:
+            - /url: /search?q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sca_esv=9033de2d4e2ebdf7&ei=8Of9afbqO6mFvr0PsrviwAo&start=80&sa=N&sstk=Af77f_fyLB7x3_y_sYL7aww4EyJ_bschfI5leV81iwVquDMXwlnqClam8TdBGTuSXpCF_i2kdHx4M0yGTXsJrSxK18BaQ3Tg8qJ9bw&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ8tMDegQIKxAS
+            - text: "9"
+          - link "Page 10" [ref=e646] [cursor=pointer]:
+            - /url: /search?q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sca_esv=9033de2d4e2ebdf7&ei=8Of9afbqO6mFvr0PsrviwAo&start=90&sa=N&sstk=Af77f_fyLB7x3_y_sYL7aww4EyJ_bschfI5leV81iwVquDMXwlnqClam8TdBGTuSXpCF_i2kdHx4M0yGTXsJrSxK18BaQ3Tg8qJ9bw&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ8tMDegQIKxAU
+            - text: "10"
+          - heading "下一页" [level=2] [ref=e648]:
+            - link "下一页" [ref=e649] [cursor=pointer]:
+              - /url: /search?q=%E6%A0%B8%E5%BC%B9%E5%85%AC%E5%BC%8F+%E7%88%86%E6%AC%BE%E6%A0%87%E9%A2%98+%E5%B0%8F%E7%BA%A2%E4%B9%A6&sca_esv=9033de2d4e2ebdf7&ei=8Of9afbqO6mFvr0PsrviwAo&start=10&sa=N&sstk=Af77f_fyLB7x3_y_sYL7aww4EyJ_bschfI5leV81iwVquDMXwlnqClam8TdBGTuSXpCF_i2kdHx4M0yGTXsJrSxK18BaQ3Tg8qJ9bw&ved=2ahUKEwj2opPj6KmUAxWpgq8BHbKdGKgQ8NMDegQIKxAW
+              - generic [ref=e651]: 下一页
+        - navigation
+    - contentinfo [ref=e652]:
+      - heading "页脚链接" [level=1] [ref=e653]
+      - generic [ref=e657]:
+        - generic [ref=e659]:
+          - text: 日本
+          - generic [ref=e661]:
+            - button "东京都 - 是根据您的 IP 地址推断出来的" [ref=e663] [cursor=pointer]:
+              - generic [ref=e664]: 东京都
+              - generic [ref=e666]:
+                - text: "-"
+                - generic [ref=e667]: 是根据您的 IP 地址推断出来的
+            - text: "-"
+            - button "更新位置信息" [ref=e669] [cursor=pointer]: 更新位置信息
+        - generic [ref=e672]:
+          - link "帮助" [ref=e673] [cursor=pointer]:
+            - /url: https://support.google.com/websearch/?p=ws_results_help&hl=zh-CN&fg=1
+          - link "发送反馈" [ref=e674] [cursor=pointer]:
+            - /url: "#"
+          - link "隐私权" [ref=e675] [cursor=pointer]:
+            - /url: https://policies.google.com/privacy?hl=zh-CN&fg=1
+          - link "条款" [ref=e676] [cursor=pointer]:
+            - /url: https://policies.google.com/terms?hl=zh-CN&fg=1
