@@ -1,23 +1,32 @@
 {
-  "name": "jas_Video_Toolkit",
+  "name": "perhapsjas_skill_market",
   "owner": {
     "name": "perhapsjas",
     "email": ""
   },
   "metadata": {
-    "description": "视频下载、跨平台转录、Claude文本校准——一站式视频字幕工作流",
-    "version": "2.5.1"
+    "description": "视频下载转录 + 小红书图文卡片 —— 实用内容创作工具集",
+    "version": "3.0.0"
   },
   "plugins": [
     {
       "name": "video-toolkit",
       "description": "视频字幕一站式工具：video-downloader (Bilibili/YouTube下载) + audio-transcribe (跨平台转录) + text-refine (Claude校准翻译)",
-      "source": "./",
+      "source": "./plugins/video-toolkit",
       "strict": false,
       "skills": [
         "./skills/video-downloader",
         "./skills/audio-transcribe",
         "./skills/text-refine"
+      ]
+    },
+    {
+      "name": "xiaohongshu-html-card",
+      "description": "将小红书文案转换为精美的 HTML 图文卡片（1242×1660），支持封面/正文/结尾多卡片自动拆分",
+      "source": "./plugins/xiaohongshu-html-card",
+      "strict": false,
+      "skills": [
+        "./skills/xiaohongshu-html-card"
       ]
     }
   ]

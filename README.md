@@ -1,8 +1,11 @@
-# Video Toolkit
+# perhapsjas_skill_market
 
+实用内容创作工具集，一个市场包含两个插件。
+
+## 插件
+
+### video-toolkit
 粘贴链接，拿到字幕。下载、转录、校准，一条龙。
-
-## 你能做什么
 
 | Skill | 一句话说清 | 命令 |
 |-------|-----------|------|
@@ -10,32 +13,41 @@
 | **audio-transcribe** | 视频/音频丢进来，字幕带时间轴出来，Mac Windows 都行 | `/audio-transcribe` |
 | **text-refine** | 错别字、同音字、外语翻译，说一句就帮你搞定 | `/text-refine` |
 
+### xiaohongshu-html-card
+小红书文案转精美 HTML 图文卡片（1242×1660），支持封面/正文/结尾多卡片自动拆分。
+
+| Skill | 一句话说清 | 命令 |
+|-------|-----------|------|
+| **xiaohongshu-html-card** | 小红书文案自动排版成图文卡片 | `/xiaohongshu-html-card` |
+
 ## 安装
 
-**推荐：**
-
 ```bash
+# 方式一：npx（推荐）
 npx skills add jasinghuang/Video_Toolkit -g
-```
 
-**通过市场安装：**
-
-```bash
+# 方式二：市场安装
 /plugin marketplace add jasinghuang/Video_Toolkit
-/plugin install jas_Video_Toolkit@Video_Toolkit
+/plugin install perhapsjas_skill_market@Video_Toolkit
 ```
 
 ## 怎么串起来
 
 ```
 粘贴视频链接
-  ↓ 下载视频
-  ↓ 转成字幕
-  ↓ 校准 + 翻译
+  ↓ video-downloader 下载视频
+  ↓ audio-transcribe 转成字幕
+  ↓ text-refine 校准 + 翻译
   → 拿到干净的字幕文件
 ```
 
-三个 skill 各自独立，也能一口气跑完。
+```
+写好小红书文案
+  ↓ xiaohongshu-html-card 自动排版
+  → 拿到精美图文卡片 HTML
+```
+
+所有 skill 各自独立，也能一口气跑完。
 
 ## 依赖
 
@@ -56,6 +68,29 @@ pip install faster-whisper zhconv
 ```
 
 **text-refine** — 无需额外依赖。
+
+**xiaohongshu-html-card** — 无需额外依赖。
+
+---
+
+## 目录结构
+
+```
+├── .claude-plugin/
+│   └── marketplace.json
+├── plugins/
+│   ├── video-toolkit/
+│   │   └── skills/
+│   │       ├── video-downloader/
+│   │       ├── audio-transcribe/
+│   │       └── text-refine/
+│   └── xiaohongshu-html-card/
+│       └── skills/
+│           └── xiaohongshu-html-card/
+│               ├── assets/layouts/
+│               └── references/
+└── README.md
+```
 
 ---
 

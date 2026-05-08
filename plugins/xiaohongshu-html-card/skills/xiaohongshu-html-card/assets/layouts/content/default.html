@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小红书正文卡片</title>
+<style>
+  /* ========== Reset ========== */
+  *, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  /* ========== Canvas ========== */
+  body {
+    width: 1242px;
+    height: 1660px;
+    background: #faf3e1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'FZLanTingHeiS-EL-GB', 'FZLanTingHeiS-R-GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ========== White Card ========== */
+  .card {
+    position: relative;
+    width: 1151px;
+    height: 1580px;
+    background: #ffffff;
+    border-radius: 39px;
+    border-bottom: 5px solid #000;
+    padding: 70px 45px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ========== Section ========== */
+  .section {
+    /* Each section block */
+  }
+
+  .section + .section {
+    margin-top: 50px;
+  }
+
+  /* ========== Section Title ========== */
+  .section-title {
+    font-family: 'FZLanTingHeiS-EB-GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    font-size: 64px;
+    font-weight: 800;
+    color: #d22727;
+    letter-spacing: 7.68px;
+    margin-bottom: 30px;
+  }
+
+  /* ========== Body Text ========== */
+  .body-text {
+    font-family: 'FZLanTingHeiS-M-GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    font-size: 40px;
+    font-weight: 500;
+    color: #000000;
+    letter-spacing: 4px;
+    line-height: 1.42;
+    margin-bottom: 15px;
+  }
+
+  .body-text:last-child {
+    margin-bottom: 0;
+  }
+
+  /* ========== Lists ========== */
+  .body-text ol {
+    padding-left: 60px;
+    list-style-type: decimal;
+  }
+
+  .body-text ul {
+    padding-left: 40px;
+    list-style-type: disc;
+  }
+
+  .body-text li {
+    margin-bottom: 16px;
+    letter-spacing: 4px;
+    line-height: 1.42;
+  }
+
+  .body-text li:last-child {
+    margin-bottom: 0;
+  }
+
+  /* ========== Highlight ========== */
+  .highlight {
+    font-family: 'FZLanTingHeiS-EB-GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    font-weight: 800;
+    color: #d22727;
+  }
+
+  /* ========== Spacer (push disclaimer to bottom) ========== */
+  .spacer {
+    flex: 1;
+  }
+
+  /* ========== Disclaimer（固定文案，不可修改） ========== */
+  .disclaimer {
+    position: absolute;
+    top: 1405px;
+    left: 14px;
+    right: 14px;
+    font-family: 'FZLanTingHeiS-R-GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    font-size: 28px;
+    font-weight: 400;
+    color: #2d2727;
+    letter-spacing: 1.4px;
+    line-height: 1.18;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+
+    <!-- ========== Section 1 ========== -->
+    <div class="section">
+      <!-- 第一个段落标题 -->
+      <div class="section-title">{{SECTION_TITLE_1}}</div>
+
+      <!-- 第一段正文 -->
+      <div class="body-text">{{BODY_PARAGRAPH_1}}</div>
+
+      <!-- 第二段正文 -->
+      <div class="body-text">{{BODY_PARAGRAPH_2}}</div>
+    </div>
+
+    <!-- ========== Section 2 ========== -->
+    <div class="section">
+      <!-- 第二个段落标题 -->
+      <div class="section-title">{{SECTION_TITLE_2}}</div>
+
+      <!-- 第三段正文 -->
+      <div class="body-text">{{BODY_PARAGRAPH_3}}</div>
+    </div>
+
+    <!-- 弹性间距，将风险提示推至底部 -->
+    <div class="spacer"></div>
+
+    <!-- ========== 风险提示（固定文案，不可修改） ========== -->
+    <div class="disclaimer">风险提示：投资有风险，入市需谨慎，风险责任由投资者自行承担，以上内容不构成投资建议或收益保证。本材料仅为投资者教育目的而发布，不构成投资建议，投资者不应以本材料取代其独立判断或仅依据本材料作出决策。因依据本材料进行投资而引发或可能引发的损失，广发证券不承担任何法律责任。</div>
+
+  </div>
+</body>
+</html>
