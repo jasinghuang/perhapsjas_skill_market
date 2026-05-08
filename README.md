@@ -24,11 +24,11 @@
 
 ```bash
 # 方式一：npx（推荐）
-npx skills add jasinghuang/Video_Toolkit -g
+npx skills add jasinghuang/perhapsjas_skill_market -g
 
 # 方式二：市场安装
-/plugin marketplace add jasinghuang/Video_Toolkit
-/plugin install perhapsjas_skill_market@Video_Toolkit
+/plugin marketplace add jasinghuang/perhapsjas_skill_market
+/plugin install perhapsjas_skill_market@perhapsjas_skill_market
 ```
 
 ## 怎么串起来
