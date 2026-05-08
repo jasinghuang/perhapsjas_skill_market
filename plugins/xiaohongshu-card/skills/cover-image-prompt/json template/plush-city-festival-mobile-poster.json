@@ -1,0 +1,33 @@
+{
+  "style_name": "Plush City Festival Mobile Poster",
+  "style_summary": "A bright mobile event poster style combining real city landmarks, soft fuzzy mascot characters, rounded app-card UI framing, bold white festival typography, date/location text, and friendly tourism-campaign energy.",
+  "environment_variables": {
+    "EVENT_NAME": "festival, fair, public event, or seasonal campaign name",
+    "CITY_OR_DISTRICT": "city, neighborhood, district, park, harbor, library, plaza, or market area",
+    "PRIMARY_MASCOT": "large plush or fuzzy mascot character",
+    "SECONDARY_MASCOT": "smaller companion mascot, plush animal, toy pet, or childlike character",
+    "MASCOT_ACTION": "running, waving, floating, guiding, dancing, holding a prop, or entering the city scene",
+    "LANDMARKS": "recognizable city buildings, towers, stores, plaza, street, civic architecture, or destination icons",
+    "SKY_AND_WEATHER": "bright blue sky, soft clouds, sunny weather, clear atmosphere",
+    "GROUND_PLANE": "crosswalk, plaza, street, park path, waterfront walkway, or open event ground",
+    "DATE_RANGE": "large event dates",
+    "LOCATION_TEXT": "small location label",
+    "CTA_TEXT": "short mobile call to action",
+    "TOP_MICRO_TEXT": "small top label or festival series text",
+    "APP_UI_ELEMENTS": "back arrow, three-dot menu, bottom sheet, rounded card, handle icon",
+    "COLOR_ACCENTS": "mascot colors, clean sky blue, white typography, dark gray footer, soft civic neutrals",
+    "ASPECT_RATIO": "9:16 vertical mobile poster or 16:9 horizontal event banner"
+  },
+  "composition": {
+    "layout_type": "mobile app event card poster with rounded corners",
+    "main_card": "large rounded top visual card occupying most of the frame",
+    "headline_position": "big centered headline in the upper sky area",
+    "headline_scale": "large enough to read instantly on a phone screen",
+    "mascot_position": "mascots run or float in the lower-middle foreground, overlapping the city street or plaza",
+    "landmark_position": "landmarks sit behind the mascots, arranged like a cheerful city panorama",
+    "date_position": "large date range placed in the lower-right visual area or along the bottom card edge",
+    "location_position": "small location text placed lower-left",
+    "bottom_sheet": "white rounded mobile bottom panel with handle icon and CTA text",
+    "depth_layering": "sky behind headline, landmarks in middle, mascots in foreground, UI text on top"
+  }
+}

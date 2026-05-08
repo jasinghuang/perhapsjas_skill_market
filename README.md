@@ -7,7 +7,7 @@
 | 插件 | 干什么的 | 包含 Skill |
 |------|---------|-----------|
 | **video-toolkit** | 粘贴链接，拿到干净字幕。下载、转录、校准一条龙 | `video-downloader` `audio-transcribe` `text-refine` |
-| **xiaohongshu-card** | 小红书文案一键排版成精美图文卡片 HTML | `xiaohongshu-card` |
+| **xiaohongshu-card** | 小红书图文卡片 + 封面概念图提示词 | `make-html-card` `cover-image-prompt` |
 | **writting-assistant** | 说出主题，全自动写小红书文案（研究→撰写→质检→存档） | `writting-assistant` |
 
 ## 安装
@@ -53,12 +53,19 @@ npx skills add jasinghuang/perhapsjas_skill_market -g --plugin writting-assistan
 
 **串起来用：** 下载视频 → 转录字幕 → 校准翻译，一口气跑完。
 
-### xiaohongshu-card：文案 → 图文卡片
+### xiaohongshu-card：文案 → 图文卡片 + 封面提示词
 
 ```
 把这段文案排版成小红书图文卡片
-/xiaohongshu-card
+/make-html-card
 ```
+
+```
+帮我生成一个封面概念图提示词
+/cover-image-prompt
+```
+
+**联动使用：** 先用 xiaohongshu-card 生成卡片，再用 cover-image-prompt 自动从文案中提取变量生成封面图提示词。
 
 ### writting-assistant：主题 → 完整文案
 
@@ -77,7 +84,8 @@ npx skills add jasinghuang/perhapsjas_skill_market -g --plugin writting-assistan
 | video-downloader | 自动装 yt-dlp；可选：Node.js ≥ 20（YouTube）、ffmpeg、aria2 |
 | audio-transcribe | Mac: `pip3 install mlx-whisper zhconv` + `brew install ffmpeg`；Windows: `pip install faster-whisper zhconv` |
 | text-refine | 无 |
-| xiaohongshu-card | 无 |
+| make-html-card | 无 |
+| cover-image-prompt | 无 |
 | writting-assistant | 无（Python 3 用于存档脚本） |
 
 ## 目录结构
@@ -93,9 +101,10 @@ npx skills add jasinghuang/perhapsjas_skill_market -g --plugin writting-assistan
     │       └── text-refine/
     ├── xiaohongshu-card/
     │   └── skills/
-    │       └── xiaohongshu-card/
-    │           ├── assets/layouts/
-    │           └── references/
+    │       ├── make-html-card/
+    │       │   ├── assets/layouts/
+    │       │   └── references/
+    │       └── cover-image-prompt/
     └── writting-assistant/
         └── skills/
             └── writting-assistant/

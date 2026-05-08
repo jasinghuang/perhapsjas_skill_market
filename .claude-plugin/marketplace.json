@@ -22,11 +22,12 @@
     },
     {
       "name": "xiaohongshu-card",
-      "description": "将小红书文案转换为精美的 HTML 图文卡片（1242×1660），支持封面/正文/结尾多卡片自动拆分",
+      "description": "小红书图文卡片 + 封面概念图提示词：HTML 图文卡片生成 + 1:1 高级概念海报提示词生成（可联动自动提取变量）",
       "source": "./plugins/xiaohongshu-card",
       "strict": false,
       "skills": [
-        "./skills/xiaohongshu-card"
+        "./skills/make-html-card",
+        "./skills/cover-image-prompt"
       ]
     },
     {

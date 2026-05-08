@@ -1,0 +1,97 @@
+{
+  "style_name": "Soft Analog Future Editorial Poster",
+  "folder_name": "soft-analog-future-editorial-poster-style",
+  "style_summary": "A quiet analog-future editorial poster style using warm cream paper, oversized black neo-grotesk typography, strict grid rules, retro technology still life, pale-blue translucent interface panels, botanical foreground accents, and tiny bilingual information design.",
+  "overall_style_category": [
+    "soft editorial technology poster",
+    "analog-future campaign art",
+    "Swiss-inspired magazine cover",
+    "speculative institutional advertisement"
+  ],
+  "environment_variables": {
+    "SUBJECT": "main person, field, discipline, audience, or symbolic focus",
+    "SUBJECT_ACTION": "what the system helps the subject do or understand",
+    "PRODUCT_OR_PROP": "retro-future device, workstation, instrument, archive object, display, console, or product-like prop",
+    "LOCATION": "studio, archive desk, greenhouse lab, civic model room, classroom, clinic, observatory, or quiet workspace",
+    "BACKGROUND_ELEMENTS": "paper texture, thin rules, metadata blocks, issue date, numbered list, botanical details, translucent UI panel, dotted halftone, small crosshair marks",
+    "MAIN_TEXT": "large poster headline",
+    "SECONDARY_TEXT": "small bilingual caption, numbered benefit list, issue/date label, or editorial microcopy",
+    "ACCENT_SYMBOL": "thin line, plus sign, bracketed number, crosshair star, dotted square, or small separator",
+    "WARDROBE_STYLE": "if people appear: quiet utilitarian studio clothing, lab coat, soft workwear, or minimal neutral layers",
+    "ASPECT_RATIO": "9:16 or 16:9"
+  },
+  "composition": {
+    "grid": "strict editorial grid with generous margins, top rule, corner metadata, lower information band, and large negative space",
+    "headline": "oversized black neo-grotesk headline, usually left or upper-left, stacked in short lines",
+    "hero_object": "single tactile retro-future technology object staged in the lower-right or lower half",
+    "interface": "pale-blue translucent panel floating over or near the hero object",
+    "botanical_layer": "delicate blue and green foreground flowers or stems crossing the device edge",
+    "microcopy": "small bilingual labels, issue/date blocks, bracketed numbered lists, and compact captions"
+  },
+  "typography": {
+    "headline": "heavy black neo-grotesk sans-serif, tight and modern, very large relative to the page",
+    "supporting_text": "small editorial sans-serif, sparse, carefully aligned, often bilingual",
+    "graphic_text": "numbered list labels, date blocks, issue marks, plus signs, and section captions",
+    "avoid": "handwriting, decorative display fonts, script, dense paragraphs, logo-like marks"
+  },
+  "color_palette": {
+    "paper_base": [
+      "#f3ecdd",
+      "#efe5d4",
+      "#e7ddcb"
+    ],
+    "main_ink": [
+      "#050505",
+      "#1c1b18",
+      "#34312c"
+    ],
+    "device_material": [
+      "#d8d0bf",
+      "#c7beac",
+      "#9d978c"
+    ],
+    "interface_blue": [
+      "#2f71c7",
+      "#78aee8",
+      "#cfe1f4"
+    ],
+    "botanical": [
+      "#1e64b7",
+      "#3656a9",
+      "#7b86bf",
+      "#6e7f3b",
+      "#c3ae69"
+    ],
+    "rules_and_microcopy": [
+      "#6d675f",
+      "#827b72",
+      "#b9b0a3"
+    ]
+  },
+  "image_treatment": {
+    "medium": "poster-like editorial still life with realistic product depth and illustrated/painted botanical overlay",
+    "texture": "warm paper grain, subtle scan noise, matte plastic, soft shadows, lightly aged print finish",
+    "lighting": "soft diffused daylight with quiet screen glow",
+    "mood": "calm, literate, humane, optimistic, precise, contemplative"
+  },
+  "graphic_elements": [
+    "thin horizontal rules",
+    "corner issue/date metadata",
+    "tiny bilingual captions",
+    "bracketed numbered lists",
+    "small plus signs",
+    "crosshair stars",
+    "dotted halftone blocks",
+    "translucent blue UI panel",
+    "delicate botanical foreground"
+  ],
+  "do": [
+    "Use a strict editorial grid and large quiet margins.",
+    "Anchor the image with one huge black sans-serif headline.",
+    "Stage one retro-future device or workstation as a tactile object.",
+    "Add pale-blue translucent UI details sparingly.",
+    "Use botanical forms to soften the technological subject.",
+    "Keep microcopy precise, tiny, and aligned.",
+    "Use warm paper grain and gentle shadows."
+  ]
+}

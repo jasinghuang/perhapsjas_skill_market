@@ -1,0 +1,61 @@
+{
+  "style_name": "Neon Kinetic Typographic Poster",
+  "style_summary": "A dramatic outdoor editorial poster style combining low-angle lifestyle photography, oversized warped neon typography, film grain, and high-energy youth-culture campaign design.",
+  "environment_variables": {
+    "SUBJECT": "main human figure or object",
+    "SUBJECT_ACTION": "dynamic action performed by the subject",
+    "PRODUCT_OR_PROP": "object held, worn, used, or displayed by the subject",
+    "LOCATION": "outdoor environment or contextual scene",
+    "BACKGROUND_ELEMENTS": "sky, hills, architecture, crowd, stage lights, roads, rocks, grass, clouds, dust, or other secondary scenery",
+    "MAIN_TEXT": "large repeated headline word or phrase",
+    "SECONDARY_TEXT": "small repeating line of text",
+    "ACCENT_SYMBOL": "small separator icon such as diamond, dot, slash, star, or warning mark",
+    "PRIMARY_GRAPHIC_COLOR": "electric neon yellow",
+    "PHOTO_COLOR_TONE": "warm sunlit natural tones with blue sky contrast",
+    "WARDROBE_STYLE": "streetwear, outdoor fashion, sportswear, festival outfit, or editorial styling",
+    "CAMERA_ANGLE": "extreme low-angle wide-angle perspective",
+    "ASPECT_RATIO": "9:16 vertical poster or 16:9 horizontal banner"
+  },
+  "composition": {
+    "layout_type": "poster-like photographic composition with typographic border system",
+    "subject_position": "subject placed in the lower center or slightly off-center, shot from below so the body extends upward into the frame",
+    "typography_position": "massive headline typography placed around the edges and behind the subject, cropped by the canvas boundaries",
+    "text_scale": "headline letters should be extremely large, often too large to fully fit within the image",
+    "text_behavior": "letters may stretch, shear, warp, curve, compress, or bend around the composition",
+    "depth_layering": "photographic subject appears in front of some typography while other text sits behind or around the subject",
+    "negative_space": "open sky or clean background areas should help the neon typography remain readable",
+    "cropping": "aggressive cropping of letters, limbs, props, and background edges is encouraged",
+    "motion_feel": "composition should feel unstable, kinetic, loud, and in motion"
+  },
+  "typography": {
+    "headline_font_style": "ultra-bold condensed display type, custom warped lettering, sharp cuts, italic slant, stretched vertical forms",
+    "secondary_font_style": "thin uppercase sans-serif, geometric, spaced, minimal, repeated horizontally",
+    "headline_treatment": "neon solid fill, no outline, very high contrast against sky or landscape",
+    "secondary_text_treatment": "small repeating uppercase text line separated by accent symbols",
+    "letterform_character": "angular, athletic, distorted, aggressive, poster-scale",
+    "readability_rule": "headline may be partially cropped but must remain visually recognizable as graphic language"
+  },
+  "color_palette": {
+    "primary_graphic": "#F1FF00",
+    "secondary_graphic": "#EFFF00",
+    "sky_blue": "#4BB6E8",
+    "sunlit_skin_or_fabric": "#D98B52",
+    "earth_green": "#4F7F32",
+    "deep_shadow": "#111111",
+    "highlight_white": "#F6F1DA"
+  },
+  "photographic_direction": {
+    "camera": "wide-angle lens, close to the ground, tilted upward",
+    "lighting": "hard natural sunlight, warm highlights, deep shadows, outdoor exposure",
+    "texture": "visible film grain, slight print noise, mild dust, analog editorial finish",
+    "lens_effect": "subtle distortion from wide lens, exaggerated limbs or props near camera",
+    "mood": "raw, confident, youthful, energetic, sun-drenched"
+  },
+  "graphic_elements": {
+    "primary_type": "huge neon headline words",
+    "secondary_type_band": "small repeating uppercase phrase running horizontally",
+    "separator_symbols": "small neon accent symbols between repeated words",
+    "edge_usage": "letters and symbols should extend beyond the canvas edges",
+    "overlay_rule": "graphics can partially cover background, but should not hide the key face, action, or product unless intentionally editorial"
+  }
+}

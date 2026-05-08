@@ -1,0 +1,47 @@
+{
+  "style_name": "Pop Bubble Letter Photo Poster Style",
+  "style_slug": "pop-bubble-letter-photo-poster-style",
+  "style_summary": "A punchy photo-and-illustration poster style built around a central low-angle fashion portrait framed by oversized flat bubble-letter shapes, saturated candy colors, thick black outlines, oval highlights, and crisp sparkle marks.",
+  "environment_variables": {
+    "SUBJECT": "main person, model, performer, maker, athlete, student, traveler, or product ambassador",
+    "SUBJECT_ACTION": "standing still, leaning back, looking upward, closing eyes in sunlight, holding a prop, stepping forward, or posing calmly",
+    "PRODUCT_OR_PROP": "camera, headphones, drink bottle, book, bouquet, transit card, compact mirror, sunglasses, or featured product",
+    "LOCATION": "painted wall, studio set, public plaza, gallery exterior, market stall, campus courtyard, subway entrance, or clean event backdrop",
+    "BACKGROUND_ELEMENTS": "dark green negative-space panel, oversized cropped bubble letters, white sparkle marks, oval shine highlights, candy-colored abstract shapes",
+    "MAIN_TEXT": "short bubble-letter word or graphic headline such as WOW, POP, OPEN, BLOOM, WAVE, or PLAY",
+    "SECONDARY_TEXT": "tiny editorial caption, campaign note, date line, or short supporting phrase",
+    "ACCENT_SYMBOL": "four-point sparkle, oval highlight, curved underline, star separator, or small rounded sticker shape",
+    "WARDROBE_STYLE": "bold striped knit, saturated trousers, color-block streetwear, mod fashion layers, clean editorial styling, or retro pop styling",
+    "ASPECT_RATIO": "9:16 or 16:9"
+  },
+  "visual_deconstruction": {
+    "overall_style_category": [
+      "photo illustration hybrid poster",
+      "pop-art bubble typography collage",
+      "retro mod fashion poster",
+      "social-first editorial campaign visual"
+    ],
+    "composition_and_layout": "A real photographic subject is centered and framed by enormous flat illustrated bubble-letter forms. The illustrated forms crop hard at the image edges, overlap the subject in foreground and background layers, and create a playful typographic border around a dark central negative-space field.",
+    "subject_placement": "The subject sits in the central vertical axis, usually from waist to head, with the face near the upper-middle. Foreground bubble forms can cover parts of the lower body while leaving the face and torso readable.",
+    "camera_angle_or_perspective": "Low-angle or slightly upward editorial portrait photography. The subject feels heroic, sunlit, and calm while the surrounding graphics feel loud and playful.",
+    "typography_style": "Huge inflated bubble letters or abstract letter-like shapes with thick black outlines, rounded lobes, flat fills, minimal internal detail, and small white oval highlights. Text can be partly cropped or semi-abstract but should remain bold and graphic.",
+    "texture_and_finish": "Clean digital poster finish with photographic skin and fabric detail contrasted against flat vector-like illustration. Use smooth color fills, crisp ink outlines, slight print-poster compression, and no heavy grunge.",
+    "lighting": "Bright direct sun or clean studio light on the subject, with warm highlights on skin and wardrobe. Illustrated areas stay flat and evenly colored.",
+    "mood_and_cultural_reference": "Optimistic, bold, fashion-forward, playful, pop-art, retro-mod, youth campaign, candy-colored street poster, and social content cover."
+  },
+  "core_visual_identity": {
+    "composition": "Central low-angle portrait framed by oversized cropped bubble letters and sparkle marks.",
+    "typography": "Rounded bubble-letter forms treated as the main graphic architecture, not as small readable copy.",
+    "palette": {
+      "hot_pink": "#E746A8",
+      "candy_yellow": "#F7D94A",
+      "leaf_green": "#49A657",
+      "deep_evergreen": "#062815",
+      "tangerine_orange": "#F35B34",
+      "tomato_red": "#E43C2D",
+      "powder_blue": "#A9B9D8",
+      "cream_highlight": "#FFF8DE",
+      "ink_outline": "#211C18"
+    }
+  }
+}
