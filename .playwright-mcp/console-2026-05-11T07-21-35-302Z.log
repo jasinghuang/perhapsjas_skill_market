@@ -1,0 +1,3 @@
+[     242ms] TypeError: Cannot read properties of null (reading 'list')
+    at https://www.csindex.com.cn/static/js/app.18dff51f.js:1:135406
+[     300ms] [LOG] [Object, Object] @ https://www.csindex.com.cn/static/js/app.18dff51f.js:0

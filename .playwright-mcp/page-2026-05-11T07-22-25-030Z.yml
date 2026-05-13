@@ -1,0 +1,141 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e20]:
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - link [ref=e24] [cursor=pointer]:
+          - /url: /index.html
+        - link "深圳证券交易所指数机构" [ref=e27] [cursor=pointer]:
+          - /url: http://www.szse.cn/
+          - generic [ref=e28]: 深圳证券交易所指数机构
+      - generic [ref=e29]:
+        - combobox [ref=e32]:
+          - textbox "请输入代码/简称/全称" [ref=e34]
+        - generic [ref=e36] [cursor=pointer]: English
+    - list [ref=e41]:
+      - listitem [ref=e42] [cursor=pointer]:
+        - link "首页" [ref=e43]:
+          - /url: /index.html?act_menu=null
+      - listitem [ref=e44] [cursor=pointer]:
+        - link "指数系列" [ref=e45]:
+          - /url: /zh_indices/sese/index.html?act_menu=null
+      - listitem [ref=e46] [cursor=pointer]:
+        - link "资讯中心" [ref=e47]:
+          - /url: /zh_information/notices_news/index.html?act_menu=null
+      - listitem [ref=e48] [cursor=pointer]:
+        - link "研究分析" [ref=e49]:
+          - /url: /zh_analytics/bond_valuation/index.html?act_menu=null
+      - listitem [ref=e50] [cursor=pointer]:
+        - link "产品服务" [ref=e51]:
+          - /url: /zh_services/index_licensing/index.html?act_menu=null
+      - listitem [ref=e52] [cursor=pointer]:
+        - link "关于我们" [ref=e53]:
+          - /url: /zh_about/company_profile/index.html?act_menu=null
+    - generic [ref=e56]:
+      - generic [ref=e57]:
+        - text: 首页-关于我们-
+        - link "机构介绍" [ref=e58] [cursor=pointer]:
+          - /url: "javascript:"
+      - generic [ref=e59]:
+        - heading "机构介绍" [level=3] [ref=e60]
+        - generic [ref=e62]:
+          - generic [ref=e63]:
+            - paragraph [ref=e64]: 深圳证券信息有限公司（“深证信息”）由深圳证券交易所（“深交所”）全资控股，是国内最早开展（自2002年）指数专业化运营的机构，国际指数行业协会（IIA）成员，联合国负责任投资倡议（PRI）成员，指数业务通过国际证监会组织《金融基准原则》第三方鉴证。
+            - paragraph [ref=e65]: 受深交所委托，深证信息负责深证指数体系的研发、运维和管理，建立以“深证成指、创业板指、深证100”为核心的深市指数体系。同时为服务市场多元化投资需求，深证信息致力于打造覆盖境内外主要市场的国证指数体系。
+            - paragraph [ref=e66]: 截至目前，公司旗下“深证指数”和“国证指数”发布数量超过1000条，开发ETF等指数化产品超过170只，为投资者提供丰富的业绩基准和投资标的。
+          - img "机构介绍" [ref=e68]
+    - generic [ref=e69]:
+      - text: 
+      - generic [ref=e70]:
+        - generic [ref=e72]:
+          - generic [ref=e73]:
+            - generic [ref=e75]:
+              - textbox "请选择" [ref=e76] [cursor=pointer]: 相关链接
+              - generic [ref=e78] [cursor=pointer]: 
+            - generic [ref=e79]: 0755-83202239
+            - generic [ref=e80]: szsi_index.service@szse.cn
+            - generic [ref=e81]:
+              - link [ref=e83] [cursor=pointer]:
+                - /url: https://weibo.com/p/1006062241288784
+              - link [ref=e84] [cursor=pointer]:
+                - /url: https://xueqiu.com/u/3809359347
+          - list [ref=e86]:
+            - listitem [ref=e87]:
+              - paragraph [ref=e88]: 指数系列
+              - generic [ref=e89]:
+                - link "深证指数" [ref=e90] [cursor=pointer]:
+                  - /url: /zh_indices/sese/szzs_gdy/index.html?act_menu=1&index_type=100
+                - link "国证指数" [ref=e91] [cursor=pointer]:
+                  - /url: /zh_indices/cni/gzzs/index.html?act_menu=1&index_type=200
+                - link "央视指数" [ref=e92] [cursor=pointer]:
+                  - /url: /zh_indices/cctv/index.html?act_menu=1&index_type=300
+                - link "中华指数" [ref=e93] [cursor=pointer]:
+                  - /url: /zh_indices/cesc/index.html?act_menu=1&index_type=500
+                - link "全球合作" [ref=e94] [cursor=pointer]:
+                  - /url: /zh_indices/internation/cooperation/?act_menu=1&index_type=401
+            - listitem [ref=e95]:
+              - paragraph [ref=e96]: 资讯中心
+              - generic [ref=e97]:
+                - link "新闻公告" [ref=e98] [cursor=pointer]:
+                  - /url: /zh_information/notices_news/index.html?act_menu=2&act_news=0
+                - link "市场资讯" [ref=e99] [cursor=pointer]:
+                  - /url: /zh_information/market_information/index.html?act_menu=2&act_news=1
+                - link "研究报告" [ref=e100] [cursor=pointer]:
+                  - /url: /zh_information/research_reports/index.html?act_menu=2&act_news=2
+                - link "数据资料" [ref=e101] [cursor=pointer]:
+                  - /url: /zh_information/data_resource/index.html?act_menu=2&act_news=3
+            - listitem [ref=e102]:
+              - paragraph [ref=e103]: 研究分析
+              - generic [ref=e104]:
+                - link "债券估值" [ref=e105] [cursor=pointer]:
+                  - /url: /zh_analytics/bond_valuation/index.html?act_menu=3
+                - link "行业分类标准" [ref=e106] [cursor=pointer]:
+                  - /url: /zh_analytics/standards/index.html?act_menu=3
+                - link "行业市盈率" [ref=e107] [cursor=pointer]:
+                  - /url: /zh_analytics/sector_pe/index.html?act_menu=3
+                - link "国证ESG" [ref=e108] [cursor=pointer]:
+                  - /url: /zh_analytics/esg_ratings/index.html?act_menu=3
+                - link "全球证券市场分类标准" [ref=e109] [cursor=pointer]:
+                  - /url: /zh_analytics/cni_criteria/index.html?act_menu=3
+                - link "国证CDX组合" [ref=e110] [cursor=pointer]:
+                  - /url: /zh_analytics/cni_cdx/index.html?act_menu=3
+            - listitem [ref=e111]:
+              - paragraph [ref=e112]: 产品服务
+              - generic [ref=e113]:
+                - link "指数授权" [ref=e114] [cursor=pointer]:
+                  - /url: /zh_services/index_licensing/index.html?act_menu=4&act_service=0
+                - link "指数定制" [ref=e115] [cursor=pointer]:
+                  - /url: /zh_services/index_customization/index.html?act_menu=4&act_service=1
+                - link "数据服务" [ref=e116] [cursor=pointer]:
+                  - /url: /zh_services/data_services/index.html?act_menu=4&act_service=2
+                - link "信息许可" [ref=e117] [cursor=pointer]:
+                  - /url: /zh_services/data_licensing/index.html?act_menu=4&act_service=3
+                - link "指数代理" [ref=e118] [cursor=pointer]:
+                  - /url: /zh_services/index_agent/index.html?act_menu=4&act_service=4
+            - listitem [ref=e119]:
+              - paragraph [ref=e120]: 关于我们
+              - generic [ref=e121]:
+                - link "机构介绍" [ref=e122] [cursor=pointer]:
+                  - /url: /zh_about/company_profile/index.html?act_menu=5
+                - link "发展历程" [ref=e123] [cursor=pointer]:
+                  - /url: /zh_about/development_history/index.html?act_menu=5
+                - link "专家委员会" [ref=e124] [cursor=pointer]:
+                  - /url: /zh_about/advisory_committee/index.html?act_menu=5
+                - link "合规管理" [ref=e125] [cursor=pointer]:
+                  - /url: /zh_about/compliance_manage/index.html?act_menu=5
+                - link "联系我们" [ref=e126] [cursor=pointer]:
+                  - /url: /zh_about/contact/index.html?act_menu=5
+        - generic [ref=e128]:
+          - generic [ref=e129]:
+            - paragraph [ref=e130]:
+              - text: 免责声明 版权所有：
+              - link "粤B2-20050313号" [ref=e131] [cursor=pointer]:
+                - /url: https://beian.miit.gov.cn
+              - text: 深圳证券信息有限公司|Copyright © Shenzhen Securities Information Co., Ltd. All rights reserved.
+              - link "粤公网安备 44030002001500号" [ref=e132] [cursor=pointer]:
+                - /url: http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=44030002001500
+            - paragraph [ref=e133]: 建议使用IE10.0以上浏览器，1280*800以上分辨率
+          - generic [ref=e134]:
+            - img [ref=e135]
+            - img [ref=e136]
+            - img [ref=e137]
+  - text: 
