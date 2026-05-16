@@ -1,0 +1,84 @@
+{% extends "_base.html.j2" %}
+{% set title = srt_name ~ " — Subtitle Player" %}
+
+{% block extra_css %}
+  .player-wrap {
+    position: relative;
+    max-width: 960px;
+    margin: 0 auto;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    aspect-ratio: 16/9;
+  }
+  video {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .no-video-msg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #555;
+    font-size: 18px;
+  }
+{% endblock %}
+
+{% block content %}
+<div class="player-wrap">
+  <video id="player" src="{{ video_path }}" controls></video>
+  {% if not video_path %}
+  <div class="no-video-msg">No video loaded</div>
+  {% endif %}
+  <div class="sub-wrap">
+    <div class="sub-bar bar-dark" id="subContainer" style="display:none">
+      <span class="kara" id="karaEl">
+        <span class="stroke-layer" id="strokeLayer"></span>
+        <span class="fill-layer" id="fillLayer"></span>
+      </span>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block js_init %}
+const video = document.getElementById("player");
+subContainer = document.getElementById("subContainer");
+strokeLayer = document.getElementById("strokeLayer");
+fillLayer = document.getElementById("fillLayer");
+
+let charEls = [];
+
+function tick() {
+  const t = video.currentTime;
+  const found = findSub(t);
+
+  if (!found) {
+    clearSub();
+  } else if (!activeSub || activeSub.idx !== found.idx) {
+    showSub(found);
+    charEls = fillLayer.querySelectorAll(".c");
+  }
+
+  if (activeSub) {
+    updateHighlight(charEls, charProgress(activeSub, t));
+  }
+
+  requestAnimationFrame(tick);
+}
+
+video.addEventListener("play", () => requestAnimationFrame(tick));
+video.addEventListener("seeked", () => {
+  const t = video.currentTime;
+  const found = findSub(t);
+  if (!found) {
+    clearSub();
+  } else {
+    showSub(found);
+    charEls = fillLayer.querySelectorAll(".c");
+    updateHighlight(charEls, charProgress(found, t));
+  }
+});
+{% endblock %}

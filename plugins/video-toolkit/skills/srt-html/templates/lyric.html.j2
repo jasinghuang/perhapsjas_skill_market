@@ -1,0 +1,164 @@
+{% extends "_base.html.j2" %}
+{% set title = srt_name ~ " — Lyric Animation" %}
+
+{% block extra_css %}
+  .lyric-stage {
+    position: relative;
+    max-width: 960px;
+    margin: 20px auto;
+    background: #000;
+    border-radius: 10px;
+    aspect-ratio: 16/9;
+    overflow: hidden;
+  }
+  .lyric-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 55% 45% at 30% 35%, rgba(35,25,50,0.7), transparent),
+      radial-gradient(ellipse 45% 40% at 72% 60%, rgba(20,30,48,0.6), transparent),
+      linear-gradient(155deg, #08080e, #10101a 45%, #08080e);
+  }
+  .lyric-stage .hint {
+    position: absolute;
+    top: 38%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: rgba(255,255,255,0.04);
+    font-size: 80px;
+    pointer-events: none;
+  }
+  .controls {
+    max-width: 960px;
+    margin: 12px auto;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  .controls button {
+    background: rgba(255,255,255,0.08);
+    color: #ccc;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    padding: 8px 24px;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .controls button:hover {
+    background: rgba(255,255,255,0.15);
+  }
+  .time-display {
+    color: #666;
+    font-size: 13px;
+    line-height: 36px;
+    font-family: "SF Mono", "Fira Code", monospace;
+  }
+{% endblock %}
+
+{% block content %}
+<div class="lyric-stage">
+  <div class="hint">&#x1f3ac;</div>
+  <div class="sub-wrap">
+    <div class="sub-bar bar-dark" id="subContainer" style="display:none">
+      <span class="kara" id="karaEl">
+        <span class="stroke-layer" id="strokeLayer"></span>
+        <span class="fill-layer" id="fillLayer"></span>
+      </span>
+    </div>
+  </div>
+</div>
+<div class="controls">
+  <button id="btnPlay">Play</button>
+  <button id="btnPause">Pause</button>
+  <button id="btnReplay">Replay</button>
+  <span class="time-display" id="timeDisplay">00:00.0 / 00:00.0</span>
+</div>
+{% endblock %}
+
+{% block js_init %}
+subContainer = document.getElementById("subContainer");
+strokeLayer = document.getElementById("strokeLayer");
+fillLayer = document.getElementById("fillLayer");
+
+const btnPlay = document.getElementById("btnPlay");
+const btnPause = document.getElementById("btnPause");
+const btnReplay = document.getElementById("btnReplay");
+const timeDisplay = document.getElementById("timeDisplay");
+
+const totalDuration = subs.length > 0 ? subs[subs.length - 1].end : 0;
+let startTime = null;
+let paused = false;
+let pausedAt = 0;
+let charEls = [];
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return String(m).padStart(2, "0") + ":" + sec.toFixed(1).padStart(4, "0");
+}
+
+function updateTimeDisplay(t) {
+  timeDisplay.textContent = formatTime(t) + " / " + formatTime(totalDuration);
+}
+
+function tick(timestamp) {
+  if (paused) return;
+
+  if (startTime === null) startTime = timestamp - pausedAt * 1000;
+  const elapsed = (timestamp - startTime) / 1000;
+
+  updateTimeDisplay(elapsed);
+
+  if (elapsed >= totalDuration) {
+    clearSub();
+    updateTimeDisplay(totalDuration);
+    return;
+  }
+
+  const found = findSub(elapsed);
+
+  if (!found) {
+    clearSub();
+  } else if (!activeSub || activeSub.idx !== found.idx) {
+    showSub(found);
+    charEls = fillLayer.querySelectorAll(".c");
+  }
+
+  if (activeSub) {
+    updateHighlight(charEls, charProgress(activeSub, elapsed));
+  }
+
+  requestAnimationFrame(tick);
+}
+
+btnPlay.addEventListener("click", () => {
+  if (paused) {
+    paused = false;
+    requestAnimationFrame(tick);
+  } else if (startTime === null) {
+    requestAnimationFrame(tick);
+  }
+});
+
+btnPause.addEventListener("click", () => {
+  if (!paused && startTime !== null) {
+    paused = true;
+    const now = performance.now();
+    pausedAt = (now - startTime) / 1000;
+  }
+});
+
+btnReplay.addEventListener("click", () => {
+  startTime = null;
+  paused = false;
+  pausedAt = 0;
+  clearSub();
+  updateTimeDisplay(0);
+  requestAnimationFrame(tick);
+});
+
+updateTimeDisplay(0);
+{% endblock %}

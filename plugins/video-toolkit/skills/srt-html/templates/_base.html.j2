@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    color: #ccc;
+    font-family: "FZLanTingHei", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+
+  .font-hint {
+    background: rgba(255,128,31,0.12);
+    color: #cc8030;
+    padding: 10px 20px;
+    font-size: 13px;
+    text-align: center;
+  }
+
+  /* Subtitle container */
+  .sub-wrap {
+    position: absolute;
+    bottom: 7%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+    text-align: center;
+    width: 94%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .sub-bar {
+    display: inline-block;
+    border-radius: 6px;
+    padding: 6px 26px;
+  }
+
+  /* Karaoke text: dual-layer stroke */
+  .kara {
+    position: relative;
+    display: inline-block;
+    font-family: "FZLanTingHei", "FZLanTingHei-Medium", "方正兰亭黑", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1.5;
+    letter-spacing: 0.12em;
+  }
+  .kara .stroke-layer {
+    position: absolute;
+    inset: 0;
+    color: transparent;
+    -webkit-text-stroke: 2.5px rgba(0,0,0,0.85);
+    z-index: 1;
+    pointer-events: none;
+  }
+  .kara .fill-layer {
+    position: relative;
+    z-index: 2;
+  }
+  .kara .c {
+    display: inline-block;
+    transition: color 0.06s ease-out;
+  }
+
+  /* Bar variants */
+  .bar-dark {
+    background: rgba(0,0,0,0.50);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .bar-white {
+    background: rgba(255,255,255,0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  {% include "_" ~ style_name ~ ".css.j2" %}
+
+  {% block extra_css %}{% endblock %}
+</style>
+</head>
+<body>
+
+<div class="font-hint">{{ font_hint }}</div>
+
+{% block content %}{% endblock %}
+
+<script>
+const SUBTITLES = {{ subtitles | tojson }};
+
+const subs = SUBTITLES.map(s => ({
+  idx: s.index,
+  start: s.start,
+  end: s.end,
+  text: s.text,
+  chars: s.chars
+}));
+
+let activeSub = null;
+let subContainer = null;
+let strokeLayer = null;
+let fillLayer = null;
+
+function buildCharSpans() {
+  const html = sub.chars.map(c => `<span class="c unhl">${c}</span>`).join("");
+  strokeLayer.innerHTML = html;
+  fillLayer.innerHTML = html;
+  return fillLayer.querySelectorAll(".c");
+}
+
+function clearSub() {
+  if (subContainer) {
+    subContainer.style.display = "none";
+  }
+  activeSub = null;
+}
+
+function showSub(sub) {
+  activeSub = sub;
+  subContainer.style.display = "";
+  buildCharSpans();
+}
+
+function updateHighlight(charEls, progress) {
+  const idx = Math.floor(progress);
+  charEls.forEach((el, i) => {
+    el.className = i < idx ? "c hl" : "c unhl";
+  });
+}
+
+function findSub(t) {
+  for (let i = 0; i < subs.length; i++) {
+    if (t >= subs[i].start && t < subs[i].end) {
+      return subs[i];
+    }
+  }
+  return null;
+}
+
+function charProgress(sub, t) {
+  const elapsed = t - sub.start;
+  const duration = sub.end - sub.start;
+  const total = sub.chars.length;
+  if (total === 0 || duration <= 0) return 0;
+  return Math.min(total, (elapsed / duration) * total);
+}
+
+{% block js_init %}{% endblock %}
+</script>
+</body>
+</html>
