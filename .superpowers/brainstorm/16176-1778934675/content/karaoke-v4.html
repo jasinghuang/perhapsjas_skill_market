@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>字幕动画 v4 — 橙色系配色</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    color: #888;
+    font-family: "FZLanTingHei", "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 28px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  h2 { font-size: 20px; font-weight: 500; color: #e8e8e8; margin-bottom: 6px; }
+  .meta { color: #555; font-size: 13px; margin-bottom: 24px; }
+
+  .scene {
+    position: relative;
+    background: #000;
+    border-radius: 10px;
+    aspect-ratio: 16/9;
+    max-width: 800px;
+    margin: 0 auto 10px;
+    overflow: hidden;
+  }
+  .scene-bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 55% 45% at 30% 35%, rgba(35,25,50,0.7), transparent),
+      radial-gradient(ellipse 45% 40% at 72% 60%, rgba(20,30,48,0.6), transparent),
+      linear-gradient(155deg, #08080e, #10101a 45%, #08080e);
+  }
+  .scene-hint {
+    position: absolute; top: 38%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: rgba(255,255,255,0.05); font-size: 72px; pointer-events: none;
+  }
+
+  .sub-wrap {
+    position: absolute; bottom: 7%; left: 50%;
+    transform: translateX(-50%); z-index: 3;
+    text-align: center; width: 94%;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 6px;
+  }
+
+  .sub-bar {
+    display: inline-block;
+    border-radius: 6px;
+    padding: 6px 26px;
+  }
+  .bar-white {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .bar-dark {
+    background: rgba(0, 0, 0, 0.50);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  .kara {
+    position: relative;
+    display: inline-block;
+    font-family: "FZLanTingHei", "FZLanTingHei-Medium", "方正兰亭黑", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1.5;
+    letter-spacing: 0.12em;
+  }
+  .kara .stroke-layer {
+    position: absolute; inset: 0;
+    color: transparent;
+    -webkit-text-stroke: 2.5px rgba(0,0,0,0.85);
+    z-index: 1; pointer-events: none;
+  }
+  .kara .fill-layer {
+    position: relative; z-index: 2;
+  }
+  .kara .c {
+    display: inline-block;
+    transition: color 0.06s ease-out;
+  }
+
+  /* 1: PostHog 暖黄橙 */
+  .pal-posthog .c.hl  { color: #f7a501; }
+  .pal-posthog .c.unhl { color: #e8e6df; }
+
+  /* 2: Webflow 亮橙 */
+  .pal-webflow .c.hl  { color: #ff6b00; }
+  .pal-webflow .c.unhl { color: #f0f0f0; }
+
+  /* 3: Lamborghini 金黄 */
+  .pal-lambo .c.hl  { color: #FFC000; }
+  .pal-lambo .c.unhl { color: #e0e0e0; }
+
+  /* 4: Resend 暖橙渐变 */
+  .pal-resend .c.hl  { color: #ff801f; }
+  .pal-resend .c.unhl { color: #f0f0f0; }
+
+  /* 5: 原始黄橙渐变 (参考对照) */
+  .pal-original .c.hl  { color: #ff9500; }
+  .pal-original .c.unhl { color: #e8e8e8; }
+
+  .info {
+    max-width: 800px; margin: 0 auto 5px;
+    padding: 10px 18px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    font-size: 13px; color: #666; line-height: 1.6;
+  }
+  .info .lb {
+    display: inline-block; padding: 1px 8px;
+    border-radius: 4px; font-size: 11px;
+    font-weight: 600; margin-right: 6px;
+  }
+  .lb-1 { background: rgba(247,165,1,0.15); color: #f7a501; }
+  .lb-2 { background: rgba(255,107,0,0.15); color: #ff6b00; }
+  .lb-3 { background: rgba(255,192,0,0.15); color: #FFC000; }
+  .lb-4 { background: rgba(255,128,31,0.15); color: #ff801f; }
+  .lb-5 { background: rgba(255,149,0,0.15); color: #ff9500; }
+  .hex { color: #888; font-family: "SF Mono", "Fira Code", monospace; font-size: 12px; }
+  .pick { background: rgba(255,186,51,0.15); color: #ffba33; }
+</style>
+</head>
+<body>
+
+<h2>字幕渲染 v4 — 橙色系配色对比</h2>
+<p class="meta">双层描边 · 方正兰亭黑 · 1.2× 字间距 · 参考 awesome-design-md</p>
+
+<!-- 1: PostHog -->
+<div class="info">
+  <span class="lb lb-1">PostHog</span>
+  暖黄橙 <span class="hex">#f7a501</span> 高亮 · 奶油白 <span class="hex">#e8e6df</span> 未读 · 白底栏
+</div>
+<div class="scene">
+  <div class="scene-bg"></div>
+  <div class="scene-hint">🎬</div>
+  <div class="sub-wrap">
+    <div class="sub-bar bar-white">
+      <span class="kara pal-posthog" id="k1">
+        <span class="stroke-layer" id="k1s"></span>
+        <span class="fill-layer" id="k1f"></span>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- 2: Webflow -->
+<div class="info">
+  <span class="lb lb-2">Webflow</span>
+  亮橙 <span class="hex">#ff6b00</span> 高亮 · 白 <span class="hex">#f0f0f0</span> 未读 · 暗底栏
+</div>
+<div class="scene">
+  <div class="scene-bg"></div>
+  <div class="scene-hint">🎬</div>
+  <div class="sub-wrap">
+    <div class="sub-bar bar-dark">
+      <span class="kara pal-webflow" id="k2">
+        <span class="stroke-layer" id="k2s"></span>
+        <span class="fill-layer" id="k2f"></span>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- 3: Lamborghini -->
+<div class="info">
+  <span class="lb lb-3">Lamborghini</span>
+  金黄 <span class="hex">#FFC000</span> 高亮 · 浅灰 <span class="hex">#e0e0e0</span> 未读 · 白底栏
+</div>
+<div class="scene">
+  <div class="scene-bg"></div>
+  <div class="scene-hint">🎬</div>
+  <div class="sub-wrap">
+    <div class="sub-bar bar-white">
+      <span class="kara pal-lambo" id="k3">
+        <span class="stroke-layer" id="k3s"></span>
+        <span class="fill-layer" id="k3f"></span>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- 4: Resend -->
+<div class="info">
+  <span class="lb lb-4">Resend</span>
+  暖橙 <span class="hex">#ff801f</span> 高亮 · 白 <span class="hex">#f0f0f0</span> 未读 · 暗底栏
+</div>
+<div class="scene">
+  <div class="scene-bg"></div>
+  <div class="scene-hint">🎬</div>
+  <div class="sub-wrap">
+    <div class="sub-bar bar-dark">
+      <span class="kara pal-resend" id="k4">
+        <span class="stroke-layer" id="k4s"></span>
+        <span class="fill-layer" id="k4f"></span>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- 5: 原始黄橙 (对照) -->
+<div class="info">
+  <span class="lb lb-5">原始</span>
+  黄橙 <span class="hex">#ff9500</span> 高亮 · 白 <span class="hex">#e8e8e8</span> 未读 · 白底栏（对照）
+</div>
+<div class="scene">
+  <div class="scene-bg"></div>
+  <div class="scene-hint">🎬</div>
+  <div class="sub-wrap">
+    <div class="sub-bar bar-white">
+      <span class="kara pal-original" id="k5">
+        <span class="stroke-layer" id="k5s"></span>
+        <span class="fill-layer" id="k5f"></span>
+      </span>
+    </div>
+  </div>
+</div>
+
+<script>
+const text = "电影的本质是光与影的艺术";
+const chars = [...text];
+
+function build(sid, fid) {
+  const s = document.getElementById(sid);
+  const f = document.getElementById(fid);
+  const html = chars.map(c => `<span class="c unhl">${c}</span>`).join("");
+  s.innerHTML = html;
+  f.innerHTML = html;
+  return f.querySelectorAll(".c");
+}
+
+const sets = [
+  build("k1s","k1f"), build("k2s","k2f"),
+  build("k3s","k3f"), build("k4s","k4f"),
+  build("k5s","k5f"),
+];
+
+let p = 0, dir = 1, pause = 0;
+function tick() {
+  if (pause > 0) { pause--; requestAnimationFrame(tick); return; }
+  p += 0.45 * dir;
+  const idx = Math.floor(p);
+  sets.forEach(chs => chs.forEach((ch, i) => {
+    ch.className = i < idx ? "c hl" : "c unhl";
+  }));
+  if (p >= chars.length + 1) { dir = -1; pause = 50; }
+  if (p <= -0.5) { dir = 1; pause = 25; }
+  requestAnimationFrame(tick);
+}
+tick();
+</script>
+</body>
+</html>

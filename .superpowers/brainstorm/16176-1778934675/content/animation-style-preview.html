@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>字幕动画风格预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h2 { font-size: 22px; margin-bottom: 8px; color: #fff; }
+  .subtitle { color: #888; margin-bottom: 32px; font-size: 14px; }
+
+  .demo-card {
+    background: #16213e;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    cursor: pointer;
+    transition: all 0.3s;
+    border: 2px solid transparent;
+  }
+  .demo-card:hover { border-color: #4a6fa5; }
+  .demo-card.selected { border-color: #6c63ff; box-shadow: 0 0 20px rgba(108,99,255,0.3); }
+
+  .demo-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .demo-header h3 { font-size: 16px; color: #fff; }
+  .demo-header .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: #2a2a4a;
+    color: #999;
+  }
+
+  /* 视频模拟区域 */
+  .video-mock {
+    position: relative;
+    background: #000;
+    border-radius: 8px;
+    aspect-ratio: 16/9;
+    max-height: 200px;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .video-mock::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%);
+    opacity: 0.8;
+  }
+  .video-mock .landmark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -60%);
+    color: #333;
+    font-size: 48px;
+  }
+
+  /* 字幕通用样式 */
+  .subtitle-line {
+    position: relative;
+    z-index: 2;
+    padding: 8px 24px;
+    margin-bottom: 16px;
+    font-size: 20px;
+    text-align: center;
+    line-height: 1.6;
+    color: #fff;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.9);
+  }
+
+  /* === A: Karaoke 逐字高亮 === */
+  .karaoke-text {
+    display: inline;
+    background: linear-gradient(90deg, #ffdd57 0%, #ffdd57 var(--progress, 0%), #aaa var(--progress, 0%), #aaa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* === B: Fade 淡入淡出 === */
+  .fade-text {
+    animation: fadeInOut 3s ease-in-out infinite;
+  }
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(8px); }
+    15% { opacity: 1; transform: translateY(0); }
+    85% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-8px); }
+  }
+
+  /* === C: Typewriter 打字机 === */
+  .typewriter-text {
+    border-right: 2px solid #fff;
+    animation: typing 3s steps(12) infinite, blink 0.6s step-end infinite;
+    white-space: nowrap;
+    overflow: hidden;
+    display: inline-block;
+    max-width: 100%;
+  }
+  @keyframes typing {
+    0% { width: 0; }
+    50% { width: 100%; }
+    60% { width: 100%; }
+    100% { width: 0; }
+  }
+  @keyframes blink {
+    50% { border-color: transparent; }
+  }
+
+  /* === D: 多风格 === */
+  .multi-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+    padding-bottom: 12px;
+  }
+  .multi-row .sub1 {
+    font-size: 14px; color: #ccc;
+    animation: slideUp 4s ease-in-out infinite;
+  }
+  .multi-row .sub2 {
+    font-size: 16px; color: #fff;
+    animation: slideUp 4s ease-in-out 0.3s infinite;
+  }
+  @keyframes slideUp {
+    0% { opacity: 0; transform: translateY(12px); }
+    15% { opacity: 1; transform: translateY(0); }
+    80% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-8px); }
+  }
+
+  .desc { font-size: 13px; color: #777; margin-top: 12px; }
+
+  .badge {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge-music { background: rgba(255,221,87,0.15); color: #ffdd57; }
+  .badge-speech { background: rgba(108,99,255,0.15); color: #8b83ff; }
+  .badge-tech { background: rgba(0,206,209,0.15); color: #00ced1; }
+  .badge-flex { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+</style>
+</head>
+<body>
+
+<h2>字幕动画风格预览</h2>
+<p class="subtitle">每种风格都有实时动画，点击卡片选择偏好</p>
+
+<!-- A: Karaoke -->
+<div class="demo-card" data-choice="a" onclick="selectCard(this)">
+  <div class="demo-header">
+    <h3>A. 逐字高亮（Karaoke 风格）</h3>
+    <span class="label">实时预览</span>
+  </div>
+  <div class="video-mock">
+    <div class="landmark">🎬</div>
+    <div class="subtitle-line">
+      <span class="karaoke-text" id="karaoke1">电影的本质是光与影的艺术</span>
+    </div>
+  </div>
+  <p class="desc">文字一次全部显示，高亮色逐字扫过。节奏感强，适合音乐、MV、短视频。</p>
+  <span class="badge badge-music">适合音乐/MV</span>
+</div>
+
+<!-- B: Fade -->
+<div class="demo-card" data-choice="b" onclick="selectCard(this)">
+  <div class="demo-header">
+    <h3>B. 淡入淡出（Fade）</h3>
+    <span class="label">实时预览</span>
+  </div>
+  <div class="video-mock">
+    <div class="landmark">🎬</div>
+    <div class="subtitle-line">
+      <span class="fade-text">摄影机是观察世界的眼睛</span>
+    </div>
+  </div>
+  <p class="desc">平滑淡入、持续显示、淡出消失。简洁不抢眼，适合演讲、纪录片、教学。</p>
+  <span class="badge badge-speech">适合演讲/纪录片</span>
+</div>
+
+<!-- C: Typewriter -->
+<div class="demo-card" data-choice="c" onclick="selectCard(this)">
+  <div class="demo-header">
+    <h3>C. 打字机（Typewriter）</h3>
+    <span class="label">实时预览</span>
+  </div>
+  <div class="video-mock">
+    <div class="landmark">🎬</div>
+    <div class="subtitle-line">
+      <span class="typewriter-text">每一帧都是一次选择</span>
+    </div>
+  </div>
+  <p class="desc">文字逐字快速打出，带光标闪烁。科技感强，适合解说、科技类内容。</p>
+  <span class="badge badge-tech">适合科技/解说</span>
+</div>
+
+<!-- D: Multi-style -->
+<div class="demo-card" data-choice="d" onclick="selectCard(this)">
+  <div class="demo-header">
+    <h3>D. 多种风格可选</h3>
+    <span class="label">综合方案</span>
+  </div>
+  <div class="video-mock">
+    <div class="landmark">🎬</div>
+    <div class="multi-row">
+      <span class="sub1">（双语字幕示例）</span>
+      <span class="sub2">Film is the art of light and shadow</span>
+    </div>
+  </div>
+  <p class="desc">提供多种动画风格让用户在生成时选择。灵活但实现更复杂，需维护多套动画模板。</p>
+  <span class="badge badge-flex">灵活多用</span>
+</div>
+
+<script>
+  // Karaoke animation
+  let karaokeProgress = 0;
+  const karaokeEl = document.getElementById('karaoke1');
+  function animateKaraoke() {
+    karaokeProgress += 0.8;
+    if (karaokeProgress > 120) karaokeProgress = 0;
+    karaokeEl.style.setProperty('--progress', karaokeProgress + '%');
+    requestAnimationFrame(animateKaraoke);
+  }
+  animateKaraoke();
+
+  // Selection
+  function selectCard(el) {
+    document.querySelectorAll('.demo-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+</script>
+</body>
+</html>

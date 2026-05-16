@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>字幕动画 v3 — Airbnb 配色 + 方正兰亭黑</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0f0f14;
+    color: #999;
+    font-family: "FZLanTingHei", "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+    padding: 32px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  h2 {
+    font-size: 20px;
+    font-weight: 500;
+    color: #e8e8e8;
+    margin-bottom: 6px;
+  }
+  .meta { color: #555; font-size: 13px; margin-bottom: 28px; }
+
+  /* ---- 场景 ---- */
+  .scene {
+    position: relative;
+    background: #000;
+    border-radius: 10px;
+    aspect-ratio: 16/9;
+    max-width: 800px;
+    margin: 0 auto 12px;
+    overflow: hidden;
+  }
+  .scene-bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 55% 45% at 30% 35%, rgba(35,25,50,0.7), transparent),
+      radial-gradient(ellipse 45% 40% at 72% 60%, rgba(20,30,48,0.6), transparent),
+      linear-gradient(155deg, #08080e, #10101a 45%, #08080e);
+  }
+  .scene-hint {
+    position: absolute;
+    top: 38%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: rgba(255,255,255,0.05);
+    font-size: 72px;
+    pointer-events: none;
+  }
+
+  /* ---- 字幕定位 ---- */
+  .sub-wrap {
+    position: absolute;
+    bottom: 7%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+    text-align: center;
+    width: 94%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ---- 底栏 ---- */
+  .sub-bar {
+    display: inline-block;
+    border-radius: 6px;
+    padding: 6px 26px;
+  }
+  .bar-white {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .bar-dark {
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  /* ---- 方案 C 优化: 双层叠加 ---- */
+  .kara {
+    position: relative;
+    display: inline-block;
+    font-family: "FZLanTingHei", "FZLanTingHei-Medium", "方正兰亭黑", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1.5;
+    letter-spacing: 0.12em; /* 1.2x 字间距 */
+  }
+  .kara .stroke-layer {
+    position: absolute;
+    inset: 0;
+    color: transparent;
+    -webkit-text-stroke: 2.5px rgba(0,0,0,0.85);
+    z-index: 1;
+    pointer-events: none;
+  }
+  .kara .fill-layer {
+    position: relative;
+    z-index: 2;
+  }
+  .kara .c {
+    display: inline-block;
+    transition: color 0.08s ease-out;
+  }
+
+  /* === 配色方案 === */
+
+  /* A: Rausch 风格 — 暖红高亮 */
+  .pal-rausch .c.hl  { color: #ff385c; }
+  .pal-rausch .c.unhl { color: #ffffff; }
+
+  /* B: Rausch 渐变 — 暖红到珊瑚 */
+  .pal-gradient .c.hl  { color: #ff6b6b; }
+  .pal-gradient .c.unhl { color: #f0f0f0; }
+
+  /* C: 柔和暖调 — 珊瑚粉 */
+  .pal-coral .c.hl  { color: #ff8a80; }
+  .pal-coral .c.unhl { color: #e0e0e0; }
+
+  /* ---- 信息条 ---- */
+  .info {
+    max-width: 800px;
+    margin: 0 auto 6px;
+    padding: 12px 18px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    font-size: 13px;
+    color: #666;
+    line-height: 1.7;
+  }
+  .info .label {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .lbl-a { background: rgba(255,56,92,0.15); color: #ff385c; }
+  .lbl-b { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+  .lbl-c { background: rgba(255,138,128,0.15); color: #ff8a80; }
+  .lbl-pick { background: rgba(255,186,51,0.15); color: #ffba33; }
+  .info .hex { color: #999; font-family: "SF Mono", "Fira Code", monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h2>字幕渲染 v3</h2>
+<p class="meta">双层描边 · Airbnb 配色参考 · 方正兰亭黑 · 1.2× 字间距</p>
+
+<!-- Rausch + 白底栏 -->
+<div class="info">
+  <span class="label lbl-a">A</span>
+  <span class="label lbl-pick">推荐</span>
+  Rausch 暖红 <span class="hex">#ff385c</span> 高亮 + 白色 <span class="hex">#ffffff</span> 未读 · 白底栏 72% 透明
+</div>
+<div class="scene">
+  <div class="scene-bg"></div>
+  <div class="scene-hint">🎬</div>
+  <div class="sub-wrap">
+    <div class="sub-bar bar-white">
+      <span class="kara pal-rausch" id="k1">
+        <span class="stroke-layer" id="k1s"></span>
+        <span class="fill-layer" id="k1f"></span>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- Rausch 渐变 + 暗底栏 -->
+<div class="info">
+  <span class="label lbl-b">B</span>
+  珊瑚红 <span class="hex">#ff6b6b</span> 高亮 + 浅灰 <span class="hex">#f0f0f0</span> 未读 · 暗底栏 45% 透明
+</div>
+<div class="scene">
+  <div class="scene-bg"></div>
+  <div class="scene-hint">🎬</div>
+  <div class="sub-wrap">
+    <div class="sub-bar bar-dark">
+      <span class="kara pal-gradient" id="k2">
+        <span class="stroke-layer" id="k2s"></span>
+        <span class="fill-layer" id="k2f"></span>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- 柔和珊瑚 + 无底栏 -->
+<div class="info">
+  <span class="label lbl-c">C</span>
+  柔珊瑚 <span class="hex">#ff8a80</span> 高亮 + 浅灰 <span class="hex">#e0e0e0</span> 未读 · 无底栏纯描边
+</div>
+<div class="scene">
+  <div class="scene-bg"></div>
+  <div class="scene-hint">🎬</div>
+  <div class="sub-wrap">
+    <span class="kara pal-coral" id="k3">
+      <span class="stroke-layer" id="k3s"></span>
+      <span class="fill-layer" id="k3f"></span>
+    </span>
+  </div>
+</div>
+
+<script>
+const text = "电影的本质是光与影的艺术";
+const chars = [...text];
+
+function build(strokeId, fillId) {
+  const s = document.getElementById(strokeId);
+  const f = document.getElementById(fillId);
+  const html = chars.map(c => `<span class="c unhl">${c}</span>`).join("");
+  s.innerHTML = html;
+  f.innerHTML = html;
+  return f.querySelectorAll(".c");
+}
+
+const sets = [
+  build("k1s", "k1f"),
+  build("k2s", "k2f"),
+  build("k3s", "k3f"),
+];
+
+let progress = 0, dir = 1, pause = 0;
+
+function tick() {
+  if (pause > 0) { pause--; requestAnimationFrame(tick); return; }
+
+  progress += 0.45 * dir;
+  const idx = Math.floor(progress);
+
+  sets.forEach(chars => {
+    chars.forEach((ch, i) => {
+      ch.className = i < idx ? "c hl" : "c unhl";
+    });
+  });
+
+  if (progress >= chars.length + 1) { dir = -1; pause = 50; }
+  if (progress <= -0.5) { dir = 1; pause = 25; }
+  requestAnimationFrame(tick);
+}
+tick();
+</script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>字幕动画风格预览 - 优化版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h2 { font-size: 22px; margin-bottom: 8px; color: #fff; }
+  .subtitle { color: #888; margin-bottom: 32px; font-size: 14px; }
+
+  .video-area {
+    position: relative;
+    background: #000;
+    border-radius: 12px;
+    aspect-ratio: 16/9;
+    max-width: 800px;
+    margin: 0 auto 20px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .video-area::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 30% 40%, rgba(45,55,72,0.6) 0%, transparent 60%),
+      radial-gradient(ellipse at 70% 60%, rgba(30,40,60,0.5) 0%, transparent 60%),
+      linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%);
+  }
+  .scene-hint {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: rgba(255,255,255,0.08);
+    font-size: 80px;
+  }
+
+  /* 字幕容器 - 居中偏下 */
+  .subtitle-container {
+    position: absolute;
+    bottom: 8%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    text-align: center;
+    width: 90%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* 白色半透明背景条 */
+  .subtitle-bar {
+    background: rgba(255, 255, 255, 0.75);
+    border-radius: 6px;
+    padding: 6px 24px;
+    display: inline-block;
+    backdrop-filter: blur(4px);
+  }
+
+  /* Karaoke 文字：黑色描边 + 黄橙填充逐字扫过 */
+  .karaoke-text {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.5;
+    background: linear-gradient(
+      90deg,
+      #ff9500 0%,
+      #ffbb33 var(--progress, 0%),
+      #222 var(--progress, 0%),
+      #222 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    /* 用 filter 做描边效果 */
+    filter: drop-shadow(0.5px 0.5px 0 #000)
+            drop-shadow(-0.5px 0.5px 0 #000)
+            drop-shadow(0.5px -0.5px 0 #000)
+            drop-shadow(-0.5px -0.5px 0 #000);
+  }
+
+  .desc-card {
+    background: #16213e;
+    border-radius: 10px;
+    padding: 16px 20px;
+    max-width: 800px;
+    margin: 0 auto;
+    font-size: 13px;
+    color: #888;
+    line-height: 1.8;
+  }
+  .desc-card strong { color: #ffbb33; }
+</style>
+</head>
+<body>
+
+<h2>字幕动画预览 - 优化版</h2>
+<p class="subtitle">黄橙填充 · 黑色描边 · 白色半透明底色 · 逐字高亮</p>
+
+<div class="video-area">
+  <div class="scene-hint">🎬</div>
+  <div class="subtitle-container">
+    <div class="subtitle-bar">
+      <span class="karaoke-text" id="k1">电影的本质是光与影的艺术</span>
+    </div>
+  </div>
+</div>
+
+<div class="desc-card">
+  <strong>视觉参数：</strong>填充色 <strong>#FF9500 → #FFBB33</strong>（黄橙渐变） · 描边 <strong>#000 1px</strong> · 底栏 <strong>rgba(255,255,255,0.75)</strong> + 轻微模糊 · 未读文字 <strong>#222</strong><br>
+  刷新页面可重新播放动画。
+</div>
+
+<script>
+  const el = document.getElementById('k1');
+  let progress = 0;
+  let direction = 1;
+  let pause = 0;
+
+  function animate() {
+    if (pause > 0) {
+      pause--;
+      requestAnimationFrame(animate);
+      return;
+    }
+
+    progress += 0.6 * direction;
+    el.style.setProperty('--progress', progress + '%');
+
+    if (progress >= 105) {
+      direction = -1;
+      pause = 60; // 停顿1秒
+    }
+    if (progress <= -5) {
+      direction = 1;
+      pause = 30; // 停顿0.5秒
+    }
+
+    requestAnimationFrame(animate);
+  }
+  animate();
+</script>
+</body>
+</html>

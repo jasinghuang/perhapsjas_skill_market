@@ -1,0 +1,13 @@
+{"type":"server-started","port":59662,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:59662","screen_dir":"/Users/jasing/Documents/Work/perhapsjas_skill_market/.superpowers/brainstorm/16176-1778934675/content","state_dir":"/Users/jasing/Documents/Work/perhapsjas_skill_market/.superpowers/brainstorm/16176-1778934675/state"}
+{"type":"screen-added","file":"/Users/jasing/Documents/Work/perhapsjas_skill_market/.superpowers/brainstorm/16176-1778934675/content/animation-style.html"}
+{"source":"user-event","type":"click","text":"A\n    \n      经典逐字出现（Karaoke 风格）\n      文字一次全部显示，但颜色/高亮逐字从左到右扫过，类似 KTV 字幕效果。适合音乐、MV 等节奏感强的内容。","choice":"a","id":null,"timestamp":1778935315410}
+{"source":"user-event","type":"click","text":"A\n    \n      经典逐字出现（Karaoke 风格）\n      文字一次全部显示，但颜色/高亮逐字从左到右扫过，类似 KTV 字幕效果。适合音乐、MV 等节奏感强的内容。","choice":"a","id":null,"timestamp":1778935316135}
+{"type":"screen-added","file":"/Users/jasing/Documents/Work/perhapsjas_skill_market/.superpowers/brainstorm/16176-1778934675/content/animation-style-preview.html"}
+{"type":"screen-added","file":"/Users/jasing/Documents/Work/perhapsjas_skill_market/.superpowers/brainstorm/16176-1778934675/content/karaoke-optimized.html"}
+{"type":"screen-added","file":"/Users/jasing/Documents/Work/perhapsjas_skill_market/.superpowers/brainstorm/16176-1778934675/content/karaoke-v2.html"}
+{"type":"screen-updated","file":"/Users/jasing/Documents/Work/perhapsjas_skill_market/.superpowers/brainstorm/16176-1778934675/content/karaoke-v2.html"}
+{"type":"screen-added","file":"/Users/jasing/Documents/Work/perhapsjas_skill_market/.superpowers/brainstorm/16176-1778934675/content/karaoke-v3.html"}
+{"type":"screen-updated","file":"/Users/jasing/Documents/Work/perhapsjas_skill_market/.superpowers/brainstorm/16176-1778934675/content/karaoke-v3.html"}
+{"type":"screen-added","file":"/Users/jasing/Documents/Work/perhapsjas_skill_market/.superpowers/brainstorm/16176-1778934675/content/karaoke-v4.html"}
+{"type":"screen-updated","file":"/Users/jasing/Documents/Work/perhapsjas_skill_market/.superpowers/brainstorm/16176-1778934675/content/karaoke-v4.html"}
+{"type":"server-stopped","reason":"idle timeout"}
