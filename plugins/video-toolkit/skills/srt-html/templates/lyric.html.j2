@@ -2,10 +2,50 @@
 {% set title = srt_name ~ " — Lyric Animation" %}
 
 {% block extra_css %}
+  .layout {
+    display: flex;
+    max-width: 1200px;
+    margin: 20px auto;
+    gap: 16px;
+  }
+  .stage-col { flex: 1; min-width: 0; }
+  .list-col {
+    width: 280px;
+    flex-shrink: 0;
+    background: #111118;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .list-header {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #666;
+    border-bottom: 1px solid #222;
+  }
+  .sub-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .sub-list::-webkit-scrollbar { width: 4px; }
+  .sub-list::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+  .sub-item {
+    padding: 6px 16px;
+    font-size: 14px;
+    color: #888;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sub-item:hover { background: #1a1a22; }
+  .sub-item.active { color: var(--hl-color); background: #1a1a22; }
+
   .lyric-stage {
     position: relative;
-    max-width: 960px;
-    margin: 20px auto;
     background: #000;
     border-radius: 10px;
     aspect-ratio: 16/9;
@@ -29,12 +69,12 @@
     font-size: 80px;
     pointer-events: none;
   }
+
   .controls {
-    max-width: 960px;
-    margin: 12px auto;
+    margin: 12px 0;
     display: flex;
     gap: 10px;
-    justify-content: center;
+    align-items: center;
   }
   .controls button {
     background: rgba(255,255,255,0.08);
@@ -47,34 +87,72 @@
     cursor: pointer;
     transition: background 0.2s;
   }
-  .controls button:hover {
-    background: rgba(255,255,255,0.15);
+  .controls button:hover { background: rgba(255,255,255,0.15); }
+
+  .progress-wrap {
+    flex: 1;
+    height: 6px;
+    background: #222;
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--hl-color);
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.1s linear;
   }
   .time-display {
     color: #666;
     font-size: 13px;
-    line-height: 36px;
     font-family: "SF Mono", "Fira Code", monospace;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 768px) {
+    .layout { flex-direction: column; }
+    .list-col { width: 100%; max-height: 200px; }
   }
 {% endblock %}
 
 {% block content %}
-<div class="lyric-stage">
-  <div class="hint">&#x1f3ac;</div>
-  <div class="sub-wrap">
-    <div class="sub-bar bar-dark" id="subContainer" style="display:none">
-      <span class="kara" id="karaEl">
-        <span class="stroke-layer" id="strokeLayer"></span>
-        <span class="fill-layer" id="fillLayer"></span>
-      </span>
+<div class="layout">
+  <div class="stage-col">
+    <div class="lyric-stage">
+      <div class="hint">&#x1f3ac;</div>
+      <div class="sub-wrap">
+        <div class="sub-bar" id="subContainer" style="display:none">
+          <span class="kara" id="karaEl">
+            <span class="stroke-layer" id="strokeLayer"></span>
+            <span class="fill-layer" id="fillLayer"></span>
+          </span>
+        </div>
+        {% if subtitles2 %}
+        <div class="sub-bar sub-track2" id="subContainer2" style="display:none">
+          <span class="kara" id="karaEl2">
+            <span class="stroke-layer" id="strokeLayer2"></span>
+            <span class="fill-layer" id="fillLayer2"></span>
+          </span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="controls">
+      <button id="btnPlay">Play</button>
+      <button id="btnPause">Pause</button>
+      <button id="btnReplay">Replay</button>
+      <div class="progress-wrap" id="progressBar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <span class="time-display" id="timeDisplay">00:00.0 / 00:00.0</span>
     </div>
   </div>
-</div>
-<div class="controls">
-  <button id="btnPlay">Play</button>
-  <button id="btnPause">Pause</button>
-  <button id="btnReplay">Replay</button>
-  <span class="time-display" id="timeDisplay">00:00.0 / 00:00.0</span>
+  <div class="list-col">
+    <div class="list-header">字幕列表</div>
+    <div class="sub-list" id="subList"></div>
+  </div>
 </div>
 {% endblock %}
 
@@ -82,17 +160,42 @@
 subContainer = document.getElementById("subContainer");
 strokeLayer = document.getElementById("strokeLayer");
 fillLayer = document.getElementById("fillLayer");
+{% if subtitles2 %}
+subContainer2 = document.getElementById("subContainer2");
+strokeLayer2 = document.getElementById("strokeLayer2");
+fillLayer2 = document.getElementById("fillLayer2");
+{% endif %}
 
 const btnPlay = document.getElementById("btnPlay");
 const btnPause = document.getElementById("btnPause");
 const btnReplay = document.getElementById("btnReplay");
 const timeDisplay = document.getElementById("timeDisplay");
+const progressFill = document.getElementById("progressFill");
+const progressBar = document.getElementById("progressBar");
+const subList = document.getElementById("subList");
 
 const totalDuration = subs.length > 0 ? subs[subs.length - 1].end : 0;
 let startTime = null;
 let paused = false;
 let pausedAt = 0;
 let charEls = [];
+
+// Build subtitle list
+subs.forEach((s, i) => {
+  const el = document.createElement("div");
+  el.className = "sub-item";
+  el.textContent = s.text;
+  el.dataset.idx = s.idx;
+  el.addEventListener("click", () => {
+    startTime = null;
+    pausedAt = s.start;
+    paused = false;
+    clearSub();
+    requestAnimationFrame(tick);
+  });
+  subList.appendChild(el);
+});
+const subItems = subList.querySelectorAll(".sub-item");
 
 function formatTime(s) {
   const m = Math.floor(s / 60);
@@ -102,7 +205,32 @@ function formatTime(s) {
 
 function updateTimeDisplay(t) {
   timeDisplay.textContent = formatTime(t) + " / " + formatTime(totalDuration);
+  progressFill.style.width = totalDuration > 0 ? (t / totalDuration * 100) + "%" : "0%";
 }
+
+function highlightListItem(idx) {
+  subItems.forEach(el => el.classList.toggle("active", parseInt(el.dataset.idx) === idx));
+  const active = subList.querySelector(".active");
+  if (active) active.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+// Progress bar click to seek
+progressBar.addEventListener("click", e => {
+  const rect = progressBar.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const seekTo = ratio * totalDuration;
+  pausedAt = seekTo;
+  if (paused) {
+    startTime = null;
+    clearSub();
+  } else {
+    startTime = null;
+    pausedAt = seekTo;
+    paused = false;
+    clearSub();
+    requestAnimationFrame(tick);
+  }
+});
 
 function tick(timestamp) {
   if (paused) return;
@@ -115,6 +243,7 @@ function tick(timestamp) {
   if (elapsed >= totalDuration) {
     clearSub();
     updateTimeDisplay(totalDuration);
+    highlightListItem(-1);
     return;
   }
 
@@ -125,10 +254,15 @@ function tick(timestamp) {
   } else if (!activeSub || activeSub.idx !== found.idx) {
     showSub(found);
     charEls = fillLayer.querySelectorAll(".c");
+    highlightListItem(found.idx);
   }
 
   if (activeSub) {
-    updateHighlight(charEls, charProgress(activeSub, elapsed));
+    applyStyle(charEls, charProgress(activeSub, elapsed), styleFn);
+    if (activeSub2 && fillLayer2) {
+      const charEls2 = fillLayer2.querySelectorAll(".c");
+      applyStyle(charEls2, charProgress(activeSub2, elapsed), styleFn);
+    }
   }
 
   requestAnimationFrame(tick);
@@ -157,6 +291,7 @@ btnReplay.addEventListener("click", () => {
   pausedAt = 0;
   clearSub();
   updateTimeDisplay(0);
+  highlightListItem(-1);
   requestAnimationFrame(tick);
 });
 

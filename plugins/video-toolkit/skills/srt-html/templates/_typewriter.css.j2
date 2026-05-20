@@ -1,0 +1,13 @@
+/* Typewriter style — characters appear one by one with cursor */
+
+.kara .c { color: var(--hl-color); opacity: 0; transition: opacity 0.05s steps(1); }
+.kara .c.hl { opacity: 1; }
+.kara .c.unhl { opacity: 0; }
+
+.kara .c.cursor {
+  border-right: 2px solid var(--hl-color);
+  animation: blink-cursor 0.6s step-end infinite;
+}
+@keyframes blink-cursor {
+  50% { border-color: transparent; }
+}

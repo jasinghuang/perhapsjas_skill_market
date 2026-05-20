@@ -1,0 +1,97 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]: 请在系统中安装FZLanTingHei字体以获得最佳效果
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic: 🎬
+        - generic [ref=e23]:
+          - generic [ref=e25]:
+            - generic:
+              - generic: 闪
+              - generic: 烁
+              - generic: 着
+              - generic: 等
+              - generic: 待
+              - generic: 被
+              - generic: 发
+              - generic: 现
+            - generic [ref=e26]:
+              - generic [ref=e119]: 闪
+              - generic [ref=e120]: 烁
+              - generic [ref=e121]: 着
+              - generic [ref=e122]: 等
+              - generic [ref=e123]: 待
+              - generic [ref=e124]: 被
+              - generic [ref=e125]: 发
+              - generic [ref=e126]: 现
+          - generic [ref=e39]:
+            - generic:
+              - generic: T
+              - generic: w
+              - generic: i
+              - generic: "n"
+              - generic: k
+              - generic: l
+              - generic: i
+              - generic: "n"
+              - generic: g
+              - generic: ","
+              - generic: w
+              - generic: a
+              - generic: i
+              - generic: t
+              - generic: i
+              - generic: "n"
+              - generic: g
+              - generic: t
+              - generic: o
+              - generic: b
+              - generic: e
+              - generic: f
+              - generic: o
+              - generic: u
+              - generic: "n"
+              - generic: d
+            - generic [ref=e40]:
+              - generic [ref=e127]: T
+              - generic [ref=e128]: w
+              - generic [ref=e129]: i
+              - generic [ref=e130]: "n"
+              - generic [ref=e131]: k
+              - generic [ref=e132]: l
+              - generic [ref=e133]: i
+              - generic [ref=e134]: "n"
+              - generic [ref=e135]: g
+              - generic [ref=e136]: ","
+              - generic [ref=e137]: w
+              - generic [ref=e138]: a
+              - generic [ref=e139]: i
+              - generic [ref=e140]: t
+              - generic [ref=e141]: i
+              - generic [ref=e142]: "n"
+              - generic [ref=e143]: g
+              - generic [ref=e144]: t
+              - generic [ref=e145]: o
+              - generic [ref=e146]: b
+              - generic [ref=e147]: e
+              - generic [ref=e148]: f
+              - generic [ref=e149]: o
+              - generic [ref=e150]: u
+              - generic [ref=e151]: "n"
+              - generic [ref=e152]: d
+      - generic [ref=e6]:
+        - button "Play" [ref=e7] [cursor=pointer]
+        - button "Pause" [ref=e8] [cursor=pointer]
+        - button "Replay" [ref=e9] [cursor=pointer]
+        - generic [ref=e11]: 00:21.7 / 00:24.0
+    - generic [ref=e12]:
+      - generic [ref=e13]: 字幕列表
+      - generic [ref=e14]:
+        - generic [ref=e15] [cursor=pointer]: 在深夜的房间里
+        - generic [ref=e16] [cursor=pointer]: 只剩下屏幕的微光
+        - generic [ref=e17] [cursor=pointer]: 键盘声敲击着沉默
+        - generic [ref=e18] [cursor=pointer]: 代码流淌如河流
+        - generic [ref=e19] [cursor=pointer]: 每一个函数都是一个故事
+        - generic [ref=e20] [cursor=pointer]: 每一次提交都是一次冒险
+        - generic [ref=e21] [cursor=pointer]: bug 是夜空中的星星
+        - generic [ref=e22] [cursor=pointer]: 闪烁着等待被发现

@@ -1,0 +1,14 @@
+/* Fade style — whole subtitle fades in/out */
+
+.kara .c { color: var(--unhl-color); transition: opacity 0.3s ease; }
+.kara .c.hl { color: var(--hl-color); opacity: 1; }
+.kara .c.unhl { opacity: 0.3; }
+
+/* Fade: treat all chars as one unit */
+function updateFadeStyle(charEls, progress) {
+  const ratio = Math.min(1, progress / charEls.length);
+  charEls.forEach(el => {
+    el.classList.toggle("hl", ratio > 0.3);
+    el.classList.toggle("unhl", ratio <= 0.3);
+  });
+}

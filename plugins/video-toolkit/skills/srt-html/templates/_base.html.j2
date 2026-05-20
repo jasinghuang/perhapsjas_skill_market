@@ -5,12 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ title }}</title>
 <style>
+  :root {
+    --hl-color: {{ theme.highlight }};
+    --unhl-color: {{ theme.unhighlight }};
+    --bar-bg: {{ theme.bar_bg }};
+    --font-main: "{{ font_family }}", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
     background: #0a0a0f;
     color: #ccc;
-    font-family: "FZLanTingHei", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: var(--font-main);
   }
 
   .font-hint {
@@ -21,7 +28,6 @@
     text-align: center;
   }
 
-  /* Subtitle container */
   .sub-wrap {
     position: absolute;
     bottom: 7%;
@@ -34,19 +40,23 @@
     flex-direction: column;
     align-items: center;
     gap: 6px;
+    cursor: grab;
   }
+  .sub-wrap.dragging { cursor: grabbing; }
 
   .sub-bar {
     display: inline-block;
     border-radius: 6px;
     padding: 6px 26px;
+    background: var(--bar-bg);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
   }
 
-  /* Karaoke text: dual-layer stroke */
   .kara {
     position: relative;
     display: inline-block;
-    font-family: "FZLanTingHei", "FZLanTingHei-Medium", "方正兰亭黑", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: var(--font-main);
     font-size: 26px;
     font-weight: 500;
     line-height: 1.5;
@@ -66,20 +76,15 @@
   }
   .kara .c {
     display: inline-block;
-    transition: color 0.06s ease-out;
   }
 
-  /* Bar variants */
-  .bar-dark {
-    background: rgba(0,0,0,0.50);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+  .sub-track2 {
+    font-size: 18px;
+    font-weight: 400;
+    opacity: 0.7;
+    margin-top: 2px;
   }
-  .bar-white {
-    background: rgba(255,255,255,0.72);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
+  .sub-track2 .kara { font-size: 18px; font-weight: 400; }
 
   {% include "_" ~ style_name ~ ".css.j2" %}
 
@@ -94,52 +99,56 @@
 
 <script>
 const SUBTITLES = {{ subtitles | tojson }};
+{% if subtitles2 %}const SUBTITLES2 = {{ subtitles2 | tojson }};{% endif %}
 
-const subs = SUBTITLES.map(s => ({
-  idx: s.index,
-  start: s.start,
-  end: s.end,
-  text: s.text,
-  chars: s.chars
-}));
+const subs = SUBTITLES.map(s => ({ idx: s.index, start: s.start, end: s.end, text: s.text, chars: s.chars }));
+{% if subtitles2 %}const subs2 = SUBTITLES2.map(s => ({ idx: s.index, start: s.start, end: s.end, text: s.text, chars: s.chars }));{% endif %}
 
 let activeSub = null;
+let activeSub2 = null;
 let subContainer = null;
+let subContainer2 = null;
 let strokeLayer = null;
 let fillLayer = null;
+let strokeLayer2 = null;
+let fillLayer2 = null;
 
-function buildCharSpans() {
-  const html = sub.chars.map(c => `<span class="c unhl">${c}</span>`).join("");
-  strokeLayer.innerHTML = html;
-  fillLayer.innerHTML = html;
-  return fillLayer.querySelectorAll(".c");
+function escapeHtml(t) { const d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+
+function buildCharSpans(sub, sl, fl) {
+  const html = sub.chars.map(c => `<span class="c unhl">${escapeHtml(c)}</span>`).join("");
+  sl.innerHTML = html;
+  fl.innerHTML = html;
+  return fl.querySelectorAll(".c");
 }
 
 function clearSub() {
-  if (subContainer) {
-    subContainer.style.display = "none";
-  }
+  if (subContainer) subContainer.style.display = "none";
   activeSub = null;
+  if (subContainer2) { subContainer2.style.display = "none"; activeSub2 = null; }
 }
 
 function showSub(sub) {
   activeSub = sub;
   subContainer.style.display = "";
-  buildCharSpans();
-}
-
-function updateHighlight(charEls, progress) {
-  const idx = Math.floor(progress);
-  charEls.forEach((el, i) => {
-    el.className = i < idx ? "c hl" : "c unhl";
-  });
+  buildCharSpans(sub, strokeLayer, fillLayer);
+  if (subContainer2) {
+    const s2 = subs2.find(s => s.start === sub.start && s.end === sub.end)
+            || subs2.find(s => Math.abs(s.start - sub.start) < 0.5);
+    if (s2) {
+      activeSub2 = s2;
+      subContainer2.style.display = "";
+      buildCharSpans(s2, strokeLayer2, fillLayer2);
+    } else {
+      subContainer2.style.display = "none";
+      activeSub2 = null;
+    }
+  }
 }
 
 function findSub(t) {
   for (let i = 0; i < subs.length; i++) {
-    if (t >= subs[i].start && t < subs[i].end) {
-      return subs[i];
-    }
+    if (t >= subs[i].start && t < subs[i].end) return subs[i];
   }
   return null;
 }
@@ -149,8 +158,101 @@ function charProgress(sub, t) {
   const duration = sub.end - sub.start;
   const total = sub.chars.length;
   if (total === 0 || duration <= 0) return 0;
-  return Math.min(total, (elapsed / duration) * total);
+  if (elapsed >= duration) return total;
+  const progress = (elapsed / duration) * total;
+  return progress >= total - 0.05 ? total : progress;
 }
+
+// Style dispatch
+const STYLE_NAME = "{{ style_name }}";
+const styleFns = {
+  karaoke(charEls, progress) {
+    charEls.forEach((el, i) => {
+      const p = progress - i;
+      if (p >= 1) {
+        el.className = "c hl";
+        el.style.background = "";
+        el.style.webkitBackgroundClip = "";
+        el.style.webkitTextFillColor = "";
+        el.style.backgroundClip = "";
+      } else if (p <= 0) {
+        el.className = "c unhl";
+        el.style.background = "";
+        el.style.webkitBackgroundClip = "";
+        el.style.webkitTextFillColor = "";
+        el.style.backgroundClip = "";
+      } else {
+        const pct = (p * 100).toFixed(1);
+        el.className = "c";
+        el.style.background = "linear-gradient(90deg, var(--hl-color) " + pct + "%, var(--unhl-color) " + pct + "%)";
+        el.style.webkitBackgroundClip = "text";
+        el.style.webkitTextFillColor = "transparent";
+        el.style.backgroundClip = "text";
+      }
+    });
+  },
+  fade(charEls, progress) {
+    const ratio = Math.min(1, progress / charEls.length);
+    charEls.forEach(el => {
+      el.classList.toggle("hl", ratio > 0.3);
+      el.classList.toggle("unhl", ratio <= 0.3);
+    });
+  },
+  typewriter(charEls, progress) {
+    const idx = Math.floor(progress);
+    charEls.forEach((el, i) => {
+      el.classList.toggle("hl", i <= idx);
+      el.classList.toggle("unhl", i > idx);
+      el.classList.remove("cursor");
+    });
+    if (idx >= 0 && idx < charEls.length) charEls[idx].classList.add("cursor");
+  },
+  "word-karaoke"(charEls, progress) {
+    const words = [];
+    let wordStart = 0;
+    for (let i = 0; i < charEls.length; i++) {
+      if (charEls[i].textContent === " " || i === charEls.length - 1) {
+        words.push({ start: wordStart, end: i });
+        wordStart = i + 1;
+      }
+    }
+    const perWord = charEls.length > 0 ? charEls.length / words.length : 1;
+    const wordIdx = Math.min(words.length, Math.floor(progress / perWord));
+    charEls.forEach((el, i) => {
+      el.className = i < (words[wordIdx] ? words[wordIdx].end + 1 : 0) ? "c hl" : "c unhl";
+    });
+  }
+};
+const styleFn = styleFns[STYLE_NAME] || styleFns.karaoke;
+
+function applyStyle(charEls, progress, fn) { fn(charEls, progress); }
+
+// Draggable subtitle position
+(function initDrag() {
+  let dragging = false, startY, startBottom;
+  document.addEventListener("mousedown", e => {
+    const wrap = e.target.closest(".sub-wrap");
+    if (!wrap) return;
+    dragging = true;
+    wrap.classList.add("dragging");
+    startY = e.clientY;
+    startBottom = parseFloat(getComputedStyle(wrap).bottom);
+    e.preventDefault();
+  });
+  document.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    const wrap = document.querySelector(".sub-wrap");
+    if (!wrap) return;
+    const dy = startY - e.clientY;
+    wrap.style.bottom = Math.max(0, Math.min(90, (startBottom + dy) / window.innerHeight * 100)) + "%";
+  });
+  document.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    const wrap = document.querySelector(".sub-wrap");
+    if (wrap) wrap.classList.remove("dragging");
+  });
+})();
 
 {% block js_init %}{% endblock %}
 </script>

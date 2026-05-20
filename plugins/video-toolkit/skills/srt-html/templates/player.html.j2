@@ -33,12 +33,20 @@
   <div class="no-video-msg">No video loaded</div>
   {% endif %}
   <div class="sub-wrap">
-    <div class="sub-bar bar-dark" id="subContainer" style="display:none">
+    <div class="sub-bar" id="subContainer" style="display:none">
       <span class="kara" id="karaEl">
         <span class="stroke-layer" id="strokeLayer"></span>
         <span class="fill-layer" id="fillLayer"></span>
       </span>
     </div>
+    {% if subtitles2 %}
+    <div class="sub-bar sub-track2" id="subContainer2" style="display:none">
+      <span class="kara" id="karaEl2">
+        <span class="stroke-layer" id="strokeLayer2"></span>
+        <span class="fill-layer" id="fillLayer2"></span>
+      </span>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
@@ -48,6 +56,11 @@ const video = document.getElementById("player");
 subContainer = document.getElementById("subContainer");
 strokeLayer = document.getElementById("strokeLayer");
 fillLayer = document.getElementById("fillLayer");
+{% if subtitles2 %}
+subContainer2 = document.getElementById("subContainer2");
+strokeLayer2 = document.getElementById("strokeLayer2");
+fillLayer2 = document.getElementById("fillLayer2");
+{% endif %}
 
 let charEls = [];
 
@@ -63,7 +76,11 @@ function tick() {
   }
 
   if (activeSub) {
-    updateHighlight(charEls, charProgress(activeSub, t));
+    applyStyle(charEls, charProgress(activeSub, t), styleFn);
+    if (activeSub2 && fillLayer2) {
+      const charEls2 = fillLayer2.querySelectorAll(".c");
+      applyStyle(charEls2, charProgress(activeSub2, t), styleFn);
+    }
   }
 
   requestAnimationFrame(tick);
@@ -78,7 +95,7 @@ video.addEventListener("seeked", () => {
   } else {
     showSub(found);
     charEls = fillLayer.querySelectorAll(".c");
-    updateHighlight(charEls, charProgress(found, t));
+    applyStyle(charEls, charProgress(found, t), styleFn);
   }
 });
 {% endblock %}

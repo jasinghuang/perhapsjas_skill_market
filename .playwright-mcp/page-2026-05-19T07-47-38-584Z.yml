@@ -1,0 +1,150 @@
+- generic [active] [ref=e1]:
+  - heading "srt-html 样式总览" [level=1] [ref=e2]
+  - paragraph [ref=e3]: 4 种动画样式 × 5 种配色预设 — 点击卡片内播放按钮查看动画效果
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - text: Karaoke
+          - generic [ref=e9]: 逐字高亮
+        - generic [ref=e10]: resend
+      - iframe [ref=e12]:
+        - generic [active] [ref=f1e1]:
+          - generic [ref=f1e2]: 请在系统中安装FZLanTingHei字体以获得最佳效果
+          - generic [ref=f1e3]:
+            - generic [ref=f1e4]:
+              - generic [ref=f1e5]:
+                - generic: 🎬
+              - generic [ref=f1e6]:
+                - button "Play" [ref=f1e7] [cursor=pointer]
+                - button "Pause" [ref=f1e8] [cursor=pointer]
+                - button "Replay" [ref=f1e9] [cursor=pointer]
+                - generic [ref=f1e11]: 00:00.0 / 00:24.0
+            - generic [ref=f1e12]:
+              - generic [ref=f1e13]: 字幕列表
+              - generic [ref=f1e14]:
+                - generic [ref=f1e15] [cursor=pointer]: 在深夜的房间里
+                - generic [ref=f1e16] [cursor=pointer]: 只剩下屏幕的微光
+                - generic [ref=f1e17] [cursor=pointer]: 键盘声敲击着沉默
+                - generic [ref=f1e18] [cursor=pointer]: 代码流淌如河流
+                - generic [ref=f1e19] [cursor=pointer]: 每一个函数都是一个故事
+                - generic [ref=f1e20] [cursor=pointer]: 每一次提交都是一次冒险
+                - generic [ref=f1e21] [cursor=pointer]: bug 是夜空中的星星
+                - generic [ref=f1e22] [cursor=pointer]: 闪烁着等待被发现
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - text: Typewriter
+          - generic [ref=e17]: 打字机
+        - generic [ref=e18]: neon
+      - iframe [ref=e20]:
+        - generic [active] [ref=f2e1]:
+          - generic [ref=f2e2]: 请在系统中安装FZLanTingHei字体以获得最佳效果
+          - generic [ref=f2e3]:
+            - generic [ref=f2e4]:
+              - generic [ref=f2e5]:
+                - generic: 🎬
+              - generic [ref=f2e6]:
+                - button "Play" [ref=f2e7] [cursor=pointer]
+                - button "Pause" [ref=f2e8] [cursor=pointer]
+                - button "Replay" [ref=f2e9] [cursor=pointer]
+                - generic [ref=f2e11]: 00:00.0 / 00:24.0
+            - generic [ref=f2e12]:
+              - generic [ref=f2e13]: 字幕列表
+              - generic [ref=f2e14]:
+                - generic [ref=f2e15] [cursor=pointer]: 在深夜的房间里
+                - generic [ref=f2e16] [cursor=pointer]: 只剩下屏幕的微光
+                - generic [ref=f2e17] [cursor=pointer]: 键盘声敲击着沉默
+                - generic [ref=f2e18] [cursor=pointer]: 代码流淌如河流
+                - generic [ref=f2e19] [cursor=pointer]: 每一个函数都是一个故事
+                - generic [ref=f2e20] [cursor=pointer]: 每一次提交都是一次冒险
+                - generic [ref=f2e21] [cursor=pointer]: bug 是夜空中的星星
+                - generic [ref=f2e22] [cursor=pointer]: 闪烁着等待被发现
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - text: Fade
+          - generic [ref=e25]: 淡入淡出
+        - generic [ref=e26]: sakura
+      - iframe [ref=e28]:
+        - generic [active] [ref=f3e1]:
+          - generic [ref=f3e2]: 请在系统中安装FZLanTingHei字体以获得最佳效果
+          - generic [ref=f3e3]:
+            - generic [ref=f3e4]:
+              - generic [ref=f3e5]:
+                - generic: 🎬
+              - generic [ref=f3e6]:
+                - button "Play" [ref=f3e7] [cursor=pointer]
+                - button "Pause" [ref=f3e8] [cursor=pointer]
+                - button "Replay" [ref=f3e9] [cursor=pointer]
+                - generic [ref=f3e11]: 00:00.0 / 00:24.0
+            - generic [ref=f3e12]:
+              - generic [ref=f3e13]: 字幕列表
+              - generic [ref=f3e14]:
+                - generic [ref=f3e15] [cursor=pointer]: 在深夜的房间里
+                - generic [ref=f3e16] [cursor=pointer]: 只剩下屏幕的微光
+                - generic [ref=f3e17] [cursor=pointer]: 键盘声敲击着沉默
+                - generic [ref=f3e18] [cursor=pointer]: 代码流淌如河流
+                - generic [ref=f3e19] [cursor=pointer]: 每一个函数都是一个故事
+                - generic [ref=f3e20] [cursor=pointer]: 每一次提交都是一次冒险
+                - generic [ref=f3e21] [cursor=pointer]: bug 是夜空中的星星
+                - generic [ref=f3e22] [cursor=pointer]: 闪烁着等待被发现
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - text: Word-Karaoke
+          - generic [ref=e33]: 按词高亮
+        - generic [ref=e34]: ocean
+      - iframe [ref=e36]:
+        - generic [active] [ref=f4e1]:
+          - generic [ref=f4e2]: 请在系统中安装FZLanTingHei字体以获得最佳效果
+          - generic [ref=f4e3]:
+            - generic [ref=f4e4]:
+              - generic [ref=f4e5]:
+                - generic: 🎬
+              - generic [ref=f4e6]:
+                - button "Play" [ref=f4e7] [cursor=pointer]
+                - button "Pause" [ref=f4e8] [cursor=pointer]
+                - button "Replay" [ref=f4e9] [cursor=pointer]
+                - generic [ref=f4e11]: 00:00.0 / 00:24.0
+            - generic [ref=f4e12]:
+              - generic [ref=f4e13]: 字幕列表
+              - generic [ref=f4e14]:
+                - generic [ref=f4e15] [cursor=pointer]: 在深夜的房间里
+                - generic [ref=f4e16] [cursor=pointer]: 只剩下屏幕的微光
+                - generic [ref=f4e17] [cursor=pointer]: 键盘声敲击着沉默
+                - generic [ref=f4e18] [cursor=pointer]: 代码流淌如河流
+                - generic [ref=f4e19] [cursor=pointer]: 每一个函数都是一个故事
+                - generic [ref=f4e20] [cursor=pointer]: 每一次提交都是一次冒险
+                - generic [ref=f4e21] [cursor=pointer]: bug 是夜空中的星星
+                - generic [ref=f4e22] [cursor=pointer]: 闪烁着等待被发现
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - text: Karaoke
+          - generic [ref=e41]: 逐字高亮
+          - generic [ref=e42]: "— 自定义 highlight-color: #ffd700"
+        - generic [ref=e43]: fire
+      - iframe [ref=e45]:
+        - generic [active] [ref=f5e1]:
+          - generic [ref=f5e2]: 请在系统中安装FZLanTingHei字体以获得最佳效果
+          - generic [ref=f5e3]:
+            - generic [ref=f5e4]:
+              - generic [ref=f5e5]:
+                - generic: 🎬
+              - generic [ref=f5e6]:
+                - button "Play" [ref=f5e7] [cursor=pointer]
+                - button "Pause" [ref=f5e8] [cursor=pointer]
+                - button "Replay" [ref=f5e9] [cursor=pointer]
+                - generic [ref=f5e11]: 00:00.0 / 00:24.0
+            - generic [ref=f5e12]:
+              - generic [ref=f5e13]: 字幕列表
+              - generic [ref=f5e14]:
+                - generic [ref=f5e15] [cursor=pointer]: 在深夜的房间里
+                - generic [ref=f5e16] [cursor=pointer]: 只剩下屏幕的微光
+                - generic [ref=f5e17] [cursor=pointer]: 键盘声敲击着沉默
+                - generic [ref=f5e18] [cursor=pointer]: 代码流淌如河流
+                - generic [ref=f5e19] [cursor=pointer]: 每一个函数都是一个故事
+                - generic [ref=f5e20] [cursor=pointer]: 每一次提交都是一次冒险
+                - generic [ref=f5e21] [cursor=pointer]: bug 是夜空中的星星
+                - generic [ref=f5e22] [cursor=pointer]: 闪烁着等待被发现
