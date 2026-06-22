@@ -23,13 +23,12 @@
     },
     {
       "name": "xiaohongshu-card",
-      "description": "小红书图文卡片 + 封面概念图提示词 + 罐罐暖萌正文配图：HTML 图文卡片生成 + 1:1 高级概念海报提示词生成（可联动自动提取变量）+ 中文文章罐罐暖萌配图（提示词/MCP/脚本三种出图）",
+      "description": "小红书图文卡片 + 封面概念图提示词：HTML 图文卡片生成 + 1:1 高级概念海报提示词生成（可联动自动提取变量）",
       "source": "./plugins/xiaohongshu-card",
       "strict": false,
       "skills": [
         "./skills/make-html-card",
-        "./skills/cover-image-prompt",
-        "./skills/ian-xiaohei-illustrations"
+        "./skills/cover-image-prompt"
       ]
     },
     {

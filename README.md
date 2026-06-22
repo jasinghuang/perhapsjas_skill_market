@@ -7,7 +7,7 @@
 | 插件 | 干什么的 | 包含 Skill |
 |------|---------|-----------|
 | **video-toolkit** | 下载、转录、校准字幕，再把文章/口播稿做成可录屏的网页视频 | `video-downloader` `audio-transcribe` `text-refine` `web-video-presentation` |
-| **xiaohongshu-card** | 小红书图文卡片 + 封面概念图提示词 + 罐罐暖萌正文配图 | `make-html-card` `cover-image-prompt` `ian-xiaohei-illustrations` |
+| **xiaohongshu-card** | 小红书图文卡片 + 封面概念图提示词 | `make-html-card` `cover-image-prompt`（`ian-xiaohei-illustrations` 即将推出） |
 | **writting-assistant** | 说出主题，全自动写小红书文案（研究→撰写→质检→存档） | `writting-assistant` |
 
 ## 安装
@@ -79,7 +79,7 @@ npx skills add jasinghuang/perhapsjas_skill_market -g --plugin writting-assistan
 
 **联动使用：** 先用 xiaohongshu-card 生成卡片，再用 cover-image-prompt 自动从文案中提取变量生成封面图提示词。
 
-### ian-xiaohei-illustrations：文章 → 罐罐暖萌配图
+### ian-xiaohei-illustrations：文章 → 罐罐暖萌配图（即将推出）
 
 ```
 帮这篇短文配几张罐罐暖萌的正文配图
@@ -109,7 +109,6 @@ npx skills add jasinghuang/perhapsjas_skill_market -g --plugin writting-assistan
 | web-video-presentation | Node.js ≥ 20；合成音频可选 `mmx-cli`（MiniMax）或 `OPENAI_API_KEY`（也可换 ElevenLabs / edge-tts 等） |
 | make-html-card | 无 |
 | cover-image-prompt | 无 |
-| ian-xiaohei-illustrations | 仅提示词：无；直接出图需图像 MCP，或 `pip3 install openai`（ / `google-genai` / `fal-client` / `replicate`）+ 对应 API key |
 | writting-assistant | 无（Python 3 用于存档脚本） |
 
 ## 目录结构
@@ -133,11 +132,7 @@ npx skills add jasinghuang/perhapsjas_skill_market -g --plugin writting-assistan
     │       ├── make-html-card/
     │       │   ├── assets/layouts/
     │       │   └── references/
-    │       ├── cover-image-prompt/
-    │       └── ian-xiaohei-illustrations/
-    │           ├── assets/examples/
-    │           ├── references/
-    │           └── scripts/
+    │       └── cover-image-prompt/
     └── writting-assistant/
         └── skills/
             └── writting-assistant/
