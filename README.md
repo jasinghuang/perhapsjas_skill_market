@@ -6,7 +6,7 @@
 
 | 插件 | 干什么的 | 包含 Skill |
 |------|---------|-----------|
-| **video-toolkit** | 下载、转录、校准字幕，再把文章/口播稿做成可录屏的网页视频 | `video-downloader` `audio-transcribe` `text-refine` `web-video-presentation` |
+| **video-toolkit** | 下载、转录、校准字幕，配音，再把文章/口播稿做成可录屏的网页视频 | `video-downloader` `audio-transcribe` `text-refine` `bailian-tts` `web-video-presentation` |
 | **xiaohongshu-card** | 小红书图文卡片 + 封面概念图提示词 | `make-html-card` `cover-image-prompt`（`ian-xiaohei-illustrations` 即将推出） |
 | **writting-assistant** | 说出主题，全自动写小红书文案（研究→撰写→质检→存档） | `writting-assistant` |
 
@@ -64,6 +64,20 @@ npx skills add jasinghuang/perhapsjas_skill_market -g --plugin writting-assistan
 产出 = Vite + React + TS 项目：16:9 舞台、点击推进节拍、每步独占整屏、内容驱动的动画。流程：文章/口播稿 → 一次产出脚本+开发计划 → 对齐（稿子/计划/主题/素材/模式）→ 逐章开发（24 套主题可选）→ 可选合成口播音频（provider 无关，内置 MiniMax + OpenAI TTS）→ 录屏成片。沉淀的是设计方法论 + 协作流程，不绑定具体样式。
 
 **依赖：** Node.js ≥ 20；合成音频可选 MiniMax `mmx-cli` 或 `OPENAI_API_KEY`（也可换 ElevenLabs / edge-tts 等）。
+
+### bailian-tts：文本/字幕 → AI 配音（阿里云百炼 CosyVoice）
+
+```
+把这段口播稿配成音：大家好，欢迎来到...
+给这个字幕配音 subtitle.srt
+复刻我的声音（用这段样本 sample.wav）
+设计一个沉稳的男播音员音色
+/bailian-tts
+```
+
+能力 = 单段/批量/ SRT 逐条配音 + 64 个系统音色 + 声音复刻（10-20s 样本克隆）+ 声音设计（文本描述生成）+ 自定义音色库 CRUD。合成走 `bl` CLI，音色复刻/设计直连 DashScope API。`bailian.sh` 可复制进 web-video-presentation 的 `tts-providers/`，让网页视频用 CosyVoice 配音（`PRESENTATION_TTS=bailian`）。
+
+**依赖：** [bailian-cli](https://bailian.aliyun.com/cli/install.md)（`npm install -g bailian-cli` + `bl auth login --api-key`）+ Python `requests`。
 
 ### xiaohongshu-card：文案 → 图文卡片 + 封面提示词
 

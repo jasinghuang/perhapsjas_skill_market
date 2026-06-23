@@ -11,13 +11,14 @@
   "plugins": [
     {
       "name": "Video_Toolkit",
-      "description": "视频内容一站工具：video-downloader (Bilibili/YouTube下载) + audio-transcribe (跨平台转录) + text-refine (Claude校准翻译) + web-video-presentation (文章/口播稿→可录屏的网页视频演示)",
+      "description": "视频内容一站工具：video-downloader (Bilibili/YouTube下载) + audio-transcribe (跨平台转录) + text-refine (Claude校准翻译) + bailian-tts (阿里云百炼 CosyVoice 配音/声音复刻) + web-video-presentation (文章/口播稿→可录屏的网页视频演示)",
       "source": "./plugins/video-toolkit",
       "strict": false,
       "skills": [
         "./skills/video-downloader",
         "./skills/audio-transcribe",
         "./skills/text-refine",
+        "./skills/bailian-tts",
         "./skills/web-video-presentation"
       ]
     },
