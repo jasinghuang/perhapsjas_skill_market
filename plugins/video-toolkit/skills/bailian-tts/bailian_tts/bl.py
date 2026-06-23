@@ -43,14 +43,15 @@ def list_system_voices(model: str = "cosyvoice-v3-flash") -> list[dict]:
            or line.startswith("Total:"):
             continue
         parts = re.split(r"\s{2,}", line)
-        if len(parts) < 4:
+        if len(parts) < 2:
             continue
-        voices.append({
-            "id": parts[0],
-            "name": parts[1],
-            "desc": parts[2],
-            "lang": parts[3],
-        })
+        # id 取首列、lang 取末列(最可靠);中间尽力还原 name/desc
+        vid = parts[0]
+        lang = parts[-1]
+        mid = parts[1:-1]
+        name = mid[0] if mid else ""
+        desc = " ".join(mid[1:]) if len(mid) > 1 else ""
+        voices.append({"id": vid, "name": name, "desc": desc, "lang": lang})
     return voices
 
 
