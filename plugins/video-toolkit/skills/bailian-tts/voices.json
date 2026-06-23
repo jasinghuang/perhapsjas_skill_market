@@ -1,7 +1,392 @@
 {
   "version": 1,
   "system_voices": {
-    "cosyvoice-v3-flash": []
+    "cosyvoice-v3-flash": [
+      {
+        "id": "longanyang",
+        "name": "龙安洋",
+        "desc": "阳光大男孩",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longanhuan",
+        "name": "龙安欢",
+        "desc": "欢脱元气女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longantai_v3",
+        "name": "龙安台",
+        "desc": "嗲甜台湾女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longhua_v3",
+        "name": "龙华",
+        "desc": "元气甜美女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longcheng_v3",
+        "name": "龙橙",
+        "desc": "智慧青年男",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longze_v3",
+        "name": "龙泽",
+        "desc": "温暖元气男",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longzhe_v3",
+        "name": "龙哲",
+        "desc": "呆板大暖男",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longyan_v3",
+        "name": "龙颜",
+        "desc": "温暖春风女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longxing_v3",
+        "name": "龙星",
+        "desc": "温婉邻家女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longtian_v3",
+        "name": "龙天",
+        "desc": "磁性理智男",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longwan_v3",
+        "name": "龙婉",
+        "desc": "细腻柔声女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longqiang_v3",
+        "name": "龙嫱",
+        "desc": "浪漫风情女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longfeifei_v3",
+        "name": "龙菲菲",
+        "desc": "甜美娇气女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longhao_v3",
+        "name": "龙浩",
+        "desc": "多情忧郁男",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longanrou_v3",
+        "name": "龙安柔",
+        "desc": "温柔娴静女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longxiaochun_v3",
+        "name": "龙小淳",
+        "desc": "知性积极女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longxiaoxia_v3",
+        "name": "龙小夏",
+        "desc": "沉稳权威女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longyumi_v3",
+        "name": "YUMI",
+        "desc": "正经青年女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longanyun_v3",
+        "name": "龙安昀",
+        "desc": "居家暖男",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longanwen_v3",
+        "name": "龙安温",
+        "desc": "优雅知性女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longanli_v3",
+        "name": "龙安莉",
+        "desc": "利落从容女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longanlang_v3",
+        "name": "龙安朗",
+        "desc": "清爽利落男",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longyingmu_v3",
+        "name": "龙应沐",
+        "desc": "优雅知性女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longyingxun_v3",
+        "name": "龙应询",
+        "desc": "年轻青涩男",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longyingjing_v3",
+        "name": "龙应静",
+        "desc": "低调冷静女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longyingling_v3",
+        "name": "龙应聆",
+        "desc": "温和共情女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longyingtao_v3",
+        "name": "龙应桃",
+        "desc": "温柔淡定女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longyingxiao_v3",
+        "name": "龙应笑",
+        "desc": "清甜推销女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longfei_v3",
+        "name": "龙飞",
+        "desc": "热血磁性男",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longhuhu_v3",
+        "name": "龙呼呼",
+        "desc": "天真烂漫女童",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longpaopao_v3",
+        "name": "龙泡泡",
+        "desc": "飞天泡泡音",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longjielidou_v3",
+        "name": "龙杰力豆",
+        "desc": "阳光顽皮男",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longxian_v3",
+        "name": "龙仙",
+        "desc": "豪放可爱女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longling_v3",
+        "name": "龙铃",
+        "desc": "稚气呆板女",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longshanshan_v3",
+        "name": "龙闪闪",
+        "desc": "戏剧化童声",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longniuniu_v3",
+        "name": "龙牛牛",
+        "desc": "阳光男童声",
+        "lang": "中文/英文"
+      },
+      {
+        "id": "longjiaxin_v3",
+        "name": "龙嘉欣",
+        "desc": "优雅粤语女",
+        "lang": "粤语/英文"
+      },
+      {
+        "id": "longjiayi_v3",
+        "name": "龙嘉怡",
+        "desc": "知性粤语女",
+        "lang": "粤语/英文"
+      },
+      {
+        "id": "longanyue_v3",
+        "name": "龙安粤",
+        "desc": "欢脱粤语男",
+        "lang": "粤语/英文"
+      },
+      {
+        "id": "longlaotie_v3",
+        "name": "龙老铁",
+        "desc": "东北直率男",
+        "lang": "东北话/英文"
+      },
+      {
+        "id": "longshange_v3",
+        "name": "龙陕哥",
+        "desc": "原味陕北男",
+        "lang": "陕西话/英文"
+      },
+      {
+        "id": "longanmin_v3",
+        "name": "龙安闽",
+        "desc": "清纯萝莉女",
+        "lang": "闽南话/英文"
+      },
+      {
+        "id": "loongabby_v3",
+        "name": "loongabby",
+        "desc": "美式英文女",
+        "lang": "美式英语"
+      },
+      {
+        "id": "loongandy_v3",
+        "name": "loongandy",
+        "desc": "美式英文男",
+        "lang": "美式英语"
+      },
+      {
+        "id": "loongannie_v3",
+        "name": "loongannie 美式英文女",
+        "desc": "",
+        "lang": "美式英语"
+      },
+      {
+        "id": "loongava_v3",
+        "name": "loongava",
+        "desc": "美式英文女",
+        "lang": "美式英语"
+      },
+      {
+        "id": "loongbeth_v3",
+        "name": "loongbeth",
+        "desc": "美式英文女",
+        "lang": "美式英语"
+      },
+      {
+        "id": "loongbetty_v3",
+        "name": "loongbetty 美式英文女",
+        "desc": "",
+        "lang": "美式英语"
+      },
+      {
+        "id": "loongcally_v3",
+        "name": "loongcally 美式英文女",
+        "desc": "",
+        "lang": "美式英语"
+      },
+      {
+        "id": "loongcindy_v3",
+        "name": "loongcindy 美式英文女",
+        "desc": "",
+        "lang": "美式英语"
+      },
+      {
+        "id": "loongdavid_v3",
+        "name": "loongdavid 美式英文男",
+        "desc": "",
+        "lang": "美式英语"
+      },
+      {
+        "id": "loongdonna_v3",
+        "name": "loongdonna 美式英文女",
+        "desc": "",
+        "lang": "美式英语"
+      },
+      {
+        "id": "loongemily_v3",
+        "name": "loongemily 英式英文女",
+        "desc": "",
+        "lang": "英式英语"
+      },
+      {
+        "id": "loongeric_v3",
+        "name": "loongeric",
+        "desc": "英式英文男",
+        "lang": "英式英语"
+      },
+      {
+        "id": "loongluna_v3",
+        "name": "loongluna",
+        "desc": "英式英文女",
+        "lang": "英式英语"
+      },
+      {
+        "id": "loongluca_v3",
+        "name": "loongluca",
+        "desc": "英式英文男",
+        "lang": "英式英语"
+      },
+      {
+        "id": "loongriko_v3",
+        "name": "Riko",
+        "desc": "二次元霓虹女",
+        "lang": "日语"
+      },
+      {
+        "id": "loongtomoka_v3",
+        "name": "loongtomoka 日语女",
+        "desc": "",
+        "lang": "日语"
+      },
+      {
+        "id": "loongtomoya_v3",
+        "name": "loongtomoya 日语男",
+        "desc": "",
+        "lang": "日语"
+      },
+      {
+        "id": "loongyuuna_v3",
+        "name": "Yuuna",
+        "desc": "日语女",
+        "lang": "日语"
+      },
+      {
+        "id": "loongyuuma_v3",
+        "name": "Yuuma",
+        "desc": "日语男",
+        "lang": "日语"
+      },
+      {
+        "id": "loongkyong_v3",
+        "name": "loongkyong 韩语女",
+        "desc": "",
+        "lang": "韩语"
+      },
+      {
+        "id": "loongjihun_v3",
+        "name": "Jihun",
+        "desc": "韩语男",
+        "lang": "韩语"
+      },
+      {
+        "id": "loongindah_v3",
+        "name": "loongindah 印尼女",
+        "desc": "",
+        "lang": "印尼语"
+      }
+    ]
   },
   "custom_voices": [],
   "defaults": {
