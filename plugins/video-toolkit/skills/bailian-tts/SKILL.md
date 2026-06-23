@@ -60,12 +60,12 @@ AskUserQuestion({
       ]
     },
     {
-      header: "格式与风格",
-      question: "输出格式和风格?",
+      header: "格式与语速",
+      question: "输出格式和语速?",
       options: [
-        {"label": "mp3,自然", "value": "mp3"},
-        {"label": "mp3,温柔风格", "value": "mp3::用温柔的语气"},
-        {"label": "mp3,沉稳风格", "value": "mp3::用沉稳的语气"},
+        {"label": "mp3,正常语速", "value": "mp3"},
+        {"label": "mp3,慢速", "value": "mp3::0.85"},
+        {"label": "mp3,快速", "value": "mp3::1.2"},
         {"label": "wav(无损)", "value": "wav"}
       ]
     }
@@ -73,7 +73,9 @@ AskUserQuestion({
 })
 ```
 
-风格选项含 `::` 的,拆成 `--format` + `--instruction`。
+语速选项含 `::` 的,拆成 `--format` + `--rate`。
+
+> **关于风格控制(`--instruction`)**:CosyVoice 系统音色(`cosyvoice-v3-flash`)**不支持** `--instruction`,传了会报 `Engine error 428`。系统音色只能用 `--rate`(0.5-2.0)/`--pitch`/`--volume` 控节奏与音调。需要自然语言风格控制("用温柔的语气")请用支持 instruct 的模型(如 `qwen3-tts-instruct-flash`,需另行接入,非本 skill 默认)。
 
 然后执行:
 
