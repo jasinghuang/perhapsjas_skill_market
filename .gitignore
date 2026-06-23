@@ -7,3 +7,8 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# bailian-tts local artifacts
+plugins/video-toolkit/skills/bailian-tts/**/.pytest_cache/
+plugins/video-toolkit/skills/bailian-tts/**/__pycache__/
+plugins/video-toolkit/skills/bailian-tts/*.mp3
