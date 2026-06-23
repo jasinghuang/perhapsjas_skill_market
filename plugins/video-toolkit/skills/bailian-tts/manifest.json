@@ -1,0 +1,7 @@
+{
+  "name": "bailian-tts",
+  "version": "0.1.0",
+  "category": "Audio / TTS",
+  "description": "Aliyun Bailian CosyVoice AI dubbing & voice management: synthesize from text/file/SRT/segments, query system voices, clone/design custom voices, manage custom voice library. Ships a bailian.sh provider compatible with web-video-presentation.",
+  "compat": ["claude-code", "cursor", "codex-cli", "gemini-cli", "opencode"]
+}

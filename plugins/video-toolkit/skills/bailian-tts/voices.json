@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "system_voices": {
+    "cosyvoice-v3-flash": []
+  },
+  "custom_voices": [],
+  "defaults": {
+    "system_voice": "longxiaochun_v3",
+    "target_model_for_custom": "cosyvoice-v3.5-plus"
+  }
+}
