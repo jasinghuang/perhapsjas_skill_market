@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>正文 · 黑天鹅的三大特征</title>
+<style>
+  :root {
+    --xhs-bg-content: #faf3e1; --xhs-card-bg: #ffffff; --xhs-card-border: #000000;
+    --xhs-accent: #d22727; --xhs-text-primary: #000000; --xhs-text-secondary: #2d2727;
+    --xhs-title-size: 64px; --xhs-body-size: 40px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1242px; height: 1660px; background: var(--xhs-bg-content);
+    display: flex; justify-content: center; align-items: center;
+    font-family: 'FZLanTingHeiS-M-GB', 'PingFang SC', sans-serif;
+  }
+  .card {
+    position: relative; width: 1151px; height: 1580px; background: var(--xhs-card-bg);
+    border-radius: 39px; border-bottom: 5px solid var(--xhs-card-border);
+    padding: 70px 45px; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .section-title {
+    font-family: 'FZLanTingHeiS-EB-GB', 'PingFang SC', sans-serif;
+    font-size: var(--xhs-title-size); font-weight: 800; color: var(--xhs-accent);
+    letter-spacing: 7.68px; margin-bottom: 30px;
+  }
+  .body-text {
+    font-size: var(--xhs-body-size); color: var(--xhs-text-primary);
+    letter-spacing: 4px; line-height: 1.42; margin-bottom: 15px;
+  }
+  .feature-card {
+    display: flex; gap: 28px; align-items: flex-start;
+    background: #fff8f8; border-radius: 16px; padding: 28px 32px; margin-top: 20px;
+  }
+  .feature-card .num {
+    background: var(--xhs-accent); color: #fff;
+    font-family: 'FZLanTingHeiS-H-GB', 'PingFang SC', sans-serif;
+    font-size: 52px; font-weight: 900; width: 88px; height: 88px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .feature-card .ft {
+    font-family: 'FZLanTingHeiS-EB-GB', 'PingFang SC', sans-serif;
+    font-size: 48px; font-weight: 800; color: var(--xhs-accent); margin-bottom: 10px; letter-spacing: 3px;
+  }
+  .feature-card .fd { font-size: 36px; color: var(--xhs-text-primary); line-height: 1.42; letter-spacing: 2px; }
+  .key-point {
+    border-left: 8px solid var(--xhs-accent); background: #fff5f5;
+    padding: 26px 30px; border-radius: 0 16px 16px 0; margin-top: 24px;
+  }
+  .key-point .kp-label {
+    font-family: 'FZLanTingHeiS-EB-GB', 'PingFang SC', sans-serif;
+    font-size: 36px; font-weight: 800; color: var(--xhs-accent); margin-bottom: 8px; letter-spacing: 2px;
+  }
+  .key-point .kp-text { font-size: var(--xhs-body-size); color: var(--xhs-text-primary); line-height: 1.42; letter-spacing: 4px; }
+  .spacer { flex: 1; }
+  .disclaimer {
+    position: absolute; top: 1405px; left: 14px; right: 14px;
+    font-family: 'FZLanTingHeiS-R-GB', 'PingFang SC', sans-serif;
+    font-size: 28px; color: var(--xhs-text-secondary); letter-spacing: 1.4px; line-height: 1.18;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="section-title">03 黑天鹅的三大特征</div>
+  <div class="body-text">黑天鹅事件之所以"黑"，在于它同时具备三个特征：</div>
+
+  <div class="feature-card">
+    <div class="num">1</div>
+    <div>
+      <div class="ft">意外性</div>
+      <div class="fd">发生总是出人意料，让人措手不及。它超出我们的认知范围，任何基于过往经验的预测在它面前都会失效。</div>
+    </div>
+  </div>
+  <div class="feature-card">
+    <div class="num">2</div>
+    <div>
+      <div class="ft">重大影响</div>
+      <div class="fd">对社会产生深远的影响，改变原有的发展轨迹。一次黑天鹅，可能重塑整个行业、经济乃至时代。</div>
+    </div>
+  </div>
+  <div class="feature-card">
+    <div class="num">3</div>
+    <div>
+      <div class="ft">事后合理化</div>
+      <div class="fd">尽管黑天鹅事件本身不可预测，但人们往往在事后试图找到解释，认为本应可预见——这是人性难以避免的弱点。</div>
+    </div>
+  </div>
+
+  <div class="key-point">
+    <div class="kp-label">💡 三者俱全，才是黑天鹅</div>
+    <div class="kp-text">意外性（无法预测）+ 重大影响（改变轨迹）+ 事后合理化（人性弱点）。缺一不可。</div>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="disclaimer">风险提示：投资有风险，入市需谨慎，风险责任由投资者自行承担，以上内容不构成投资建议或收益保证。本材料仅为投资者教育目的而发布，不构成投资建议，投资者不应以本材料取代其独立判断或仅依据本材料作出决策。因依据本材料进行投资而引发或可能引发的损失，广发证券不承担任何法律责任。</div>
+</div>
+</body>
+</html>

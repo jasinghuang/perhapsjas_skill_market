@@ -6,7 +6,11 @@ description: 小红书 HTML 图文卡片设计变量参考，从 Figma 设计稿
 # 设计变量参考
 
 > 所有数值从 Figma 设计稿 (fileKey: BdRa400gYkfc11noqbtpR4) 精确提取。
-> 本文件仅供 AI 创建新布局时参考，不作为代码依赖。
+> 本文件是**默认主题 warm-yellow** 的完整 tokens，也是创建新布局时的变量命名参考。
+
+**主题化边界**：颜色 / 字号 / letter-spacing 是主题变量（见 `theme-profiles/warm-yellow.md`
+的 `:root`，其他主题可覆盖）；画布尺寸 / 字体族 / 字重 / 间距 / 封面定位是**所有主题共享的
+规格**，不随主题变。布局模板已用 `--xhs-*` CSS 变量，切换主题 = 替换 `:root` 值。
 
 ## 画布与卡片
 

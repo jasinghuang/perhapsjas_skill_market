@@ -5,6 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>小红书正文卡片</title>
 <style>
+  /* ========== 主题变量（默认：暖黄风 warm-yellow。切换主题 = 替换这组值，见 theme-profiles/） ========== */
+  :root {
+    --xhs-bg-cover: #fff1cc;
+    --xhs-bg-content: #faf3e1;
+    --xhs-card-bg: #ffffff;
+    --xhs-card-border: #000000;
+    --xhs-accent: #d22727;
+    --xhs-text-primary: #000000;
+    --xhs-text-secondary: #2d2727;
+    --xhs-on-accent: #ffffff;
+    --xhs-hero-size: 220px;
+    --xhs-subtitle-zh-size: 80px;
+    --xhs-subtitle-en-size: 45px;
+    --xhs-title-size: 64px;
+    --xhs-body-size: 40px;
+    --xhs-cta-size: 32px;
+    --xhs-disclaimer-size: 28px;
+    --xhs-hero-ls: 17.6px;
+    --xhs-subtitle-zh-ls: 8px;
+    --xhs-subtitle-en-ls: 4.5px;
+    --xhs-title-ls: 7.68px;
+    --xhs-body-ls: 4px;
+    --xhs-cta-ls: 3px;
+    --xhs-disclaimer-ls: 1.4px;
+  }
+
   /* ========== Reset ========== */
   *, *::before, *::after {
     margin: 0;
@@ -16,7 +42,7 @@
   body {
     width: 1242px;
     height: 1660px;
-    background: #faf3e1;
+    background: var(--xhs-bg-content);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -29,9 +55,9 @@
     position: relative;
     width: 1151px;
     height: 1580px;
-    background: #ffffff;
+    background: var(--xhs-card-bg);
     border-radius: 39px;
-    border-bottom: 5px solid #000;
+    border-bottom: 5px solid var(--xhs-card-border);
     padding: 70px 45px;
     display: flex;
     flex-direction: column;
@@ -50,20 +76,20 @@
   /* ========== Section Title ========== */
   .section-title {
     font-family: 'FZLanTingHeiS-EB-GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    font-size: 64px;
+    font-size: var(--xhs-title-size);
     font-weight: 800;
-    color: #d22727;
-    letter-spacing: 7.68px;
+    color: var(--xhs-accent);
+    letter-spacing: var(--xhs-title-ls);
     margin-bottom: 30px;
   }
 
   /* ========== Body Text ========== */
   .body-text {
     font-family: 'FZLanTingHeiS-M-GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    font-size: 40px;
+    font-size: var(--xhs-body-size);
     font-weight: 500;
-    color: #000000;
-    letter-spacing: 4px;
+    color: var(--xhs-text-primary);
+    letter-spacing: var(--xhs-body-ls);
     line-height: 1.42;
     margin-bottom: 15px;
   }
@@ -85,7 +111,7 @@
 
   .body-text li {
     margin-bottom: 16px;
-    letter-spacing: 4px;
+    letter-spacing: var(--xhs-body-ls);
     line-height: 1.42;
   }
 
@@ -97,7 +123,7 @@
   .highlight {
     font-family: 'FZLanTingHeiS-EB-GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     font-weight: 800;
-    color: #d22727;
+    color: var(--xhs-accent);
   }
 
   /* ========== Spacer (push disclaimer to bottom) ========== */
@@ -112,10 +138,10 @@
     left: 14px;
     right: 14px;
     font-family: 'FZLanTingHeiS-R-GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    font-size: 28px;
+    font-size: var(--xhs-disclaimer-size);
     font-weight: 400;
-    color: #2d2727;
-    letter-spacing: 1.4px;
+    color: var(--xhs-text-secondary);
+    letter-spacing: var(--xhs-disclaimer-ls);
     line-height: 1.18;
   }
 </style>
@@ -143,6 +169,19 @@
       <!-- 第三段正文 -->
       <div class="body-text">{{BODY_PARAGRAPH_3}}</div>
     </div>
+
+    <!-- ========== raw 逃生舱（可选） ==========
+         本卡需要特殊视觉（图表 / 图解 / 装饰 / 自定义布局）时，取消注释并在内部填入 HTML/SVG/CSS。
+         硬约束（见 references/component-policy.md）：
+           · 样式必须用 var(--xhs-*) 主题变量，不得野生色值 / 字号；
+           · 不得超出卡片 1151×1580，不得遮挡 .disclaimer（风险提示 absolute 钉底）；
+           · 不得改字体族（兰亭黑系列）、不得改风险提示文案。
+         不需要时整段保持注释，或删掉。 -->
+    <!--
+    <div class="raw-block">
+      {{RAW_BLOCK}}
+    </div>
+    -->
 
     <!-- 弹性间距，将风险提示推至底部 -->
     <div class="spacer"></div>

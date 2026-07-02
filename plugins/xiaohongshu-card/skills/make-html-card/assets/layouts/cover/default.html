@@ -5,6 +5,32 @@
 <meta name="viewport" content="width=1242">
 <title>小红书封面卡片</title>
 <style>
+  /* ========== 主题变量（默认：暖黄风 warm-yellow。切换主题 = 替换这组值，见 theme-profiles/） ========== */
+  :root {
+    --xhs-bg-cover: #fff1cc;
+    --xhs-bg-content: #faf3e1;
+    --xhs-card-bg: #ffffff;
+    --xhs-card-border: #000000;
+    --xhs-accent: #d22727;
+    --xhs-text-primary: #000000;
+    --xhs-text-secondary: #2d2727;
+    --xhs-on-accent: #ffffff;
+    --xhs-hero-size: 220px;
+    --xhs-subtitle-zh-size: 80px;
+    --xhs-subtitle-en-size: 45px;
+    --xhs-title-size: 64px;
+    --xhs-body-size: 40px;
+    --xhs-cta-size: 32px;
+    --xhs-disclaimer-size: 28px;
+    --xhs-hero-ls: 17.6px;
+    --xhs-subtitle-zh-ls: 8px;
+    --xhs-subtitle-en-ls: 4.5px;
+    --xhs-title-ls: 7.68px;
+    --xhs-body-ls: 4px;
+    --xhs-cta-ls: 3px;
+    --xhs-disclaimer-ls: 1.4px;
+  }
+
   * {
     margin: 0;
     padding: 0;
@@ -14,7 +40,7 @@
   body {
     width: 1242px;
     height: 1660px;
-    background: #fff1cc;
+    background: var(--xhs-bg-cover);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -25,9 +51,9 @@
     position: relative;
     width: 1151px;
     height: 1580px;
-    background: #ffffff;
+    background: var(--xhs-card-bg);
     border-radius: 39px;
-    border-bottom: 5px solid #000000;
+    border-bottom: 5px solid var(--xhs-card-border);
     overflow: hidden;
   }
 
@@ -39,10 +65,10 @@
     right: 0;
     text-align: center;
     font-family: "FZLanTingHeiS-B-GB", "PingFang SC", "Microsoft YaHei", sans-serif;
-    font-size: 80px;
+    font-size: var(--xhs-subtitle-zh-size);
     font-weight: 700;
-    color: #000000;
-    letter-spacing: 8px;
+    color: var(--xhs-text-primary);
+    letter-spacing: var(--xhs-subtitle-zh-ls);
   }
 
   /* 英文副标题 */
@@ -53,10 +79,10 @@
     right: 0;
     text-align: center;
     font-family: "FZLanTingHeiS-DB-GB", "PingFang SC", "Microsoft YaHei", sans-serif;
-    font-size: 45px;
+    font-size: var(--xhs-subtitle-en-size);
     font-weight: 600;
-    color: #d22727;
-    letter-spacing: 4.5px;
+    color: var(--xhs-accent);
+    letter-spacing: var(--xhs-subtitle-en-ls);
   }
 
   /* 主题词 */
@@ -67,10 +93,10 @@
     right: 0;
     text-align: center;
     font-family: "FZLanTingHeiS-H-GB", "PingFang SC", "Microsoft YaHei", sans-serif;
-    font-size: 220px;
+    font-size: var(--xhs-hero-size);
     font-weight: 900;
-    color: #d22727;
-    letter-spacing: 17.6px;
+    color: var(--xhs-accent);
+    letter-spacing: var(--xhs-hero-ls);
     white-space: nowrap;
   }
 
@@ -100,10 +126,10 @@
     left: 14px;
     right: 14px;
     font-family: "FZLanTingHeiS-R-GB", "PingFang SC", "Microsoft YaHei", sans-serif;
-    font-size: 28px;
+    font-size: var(--xhs-disclaimer-size);
     font-weight: 400;
-    color: #2d2727;
-    letter-spacing: 1.4px;
+    color: var(--xhs-text-secondary);
+    letter-spacing: var(--xhs-disclaimer-ls);
     line-height: 1.18;
   }
 </style>

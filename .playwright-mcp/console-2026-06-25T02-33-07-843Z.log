@@ -1,0 +1,24 @@
+[ 5178400ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ http://ishare.gf.com.cn/exam/personal-biz/api/v1/userExercise/pri/start/exercise/detail?exerciseLibId=76&subjectId=2056954487146696819:0
+[ 5178403ms] Error: Network Error
+    at e.exports (http://ishare.gf.com.cn/exam/personal/static/js/main.4ed6fd11.js:2:880314)
+    at y.onerror (http://ishare.gf.com.cn/exam/personal/static/js/main.4ed6fd11.js:2:875276)
+[ 6167003ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ http://ishare.gf.com.cn/exam/personal-biz/api/v1/userExercise/pri/start/exercise/detail?exerciseLibId=76&subjectId=2056954756370681958:0
+[ 6167005ms] Error: Network Error
+    at e.exports (http://ishare.gf.com.cn/exam/personal/static/js/main.4ed6fd11.js:2:880314)
+    at y.onerror (http://ishare.gf.com.cn/exam/personal/static/js/main.4ed6fd11.js:2:875276)
+[ 6170789ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://ishare.gf.com.cn/exam/personal-biz/api/v1/userExercise/pri/start/exercise/detail?exerciseLibId=76&subjectId=2056954487146696733:0
+[ 6170790ms] [LOG] 【get /personal-biz/api/v1/userExercise/pri/start/exercise/detail】请求失败，响应数据：%o {data: , status: 502, statusText: Bad Gateway, headers: Object, config: Object} @ http://ishare.gf.com.cn/exam/personal/static/js/main.4ed6fd11.js:1
+[ 6180972ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://ishare.gf.com.cn/exam/personal-biz/api/v1/userExercise/pri/start/exercise/detail?exerciseLibId=76&subjectId=2056954756370681948:0
+[ 6180972ms] [LOG] 【get /personal-biz/api/v1/userExercise/pri/start/exercise/detail】请求失败，响应数据：%o {data: , status: 502, statusText: Bad Gateway, headers: Object, config: Object} @ http://ishare.gf.com.cn/exam/personal/static/js/main.4ed6fd11.js:1
+[ 6189943ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://ishare.gf.com.cn/exam/personal-biz/api/v1/userExercise/pri/start/exercise/detail?exerciseLibId=76&subjectId=2056954756370681956:0
+[ 6189944ms] [LOG] 【get /personal-biz/api/v1/userExercise/pri/start/exercise/detail】请求失败，响应数据：%o {data: , status: 502, statusText: Bad Gateway, headers: Object, config: Object} @ http://ishare.gf.com.cn/exam/personal/static/js/main.4ed6fd11.js:1
+[ 6198913ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://ishare.gf.com.cn/exam/personal-biz/api/v1/userExercise/pri/start/exercise/detail?exerciseLibId=76&subjectId=2056954487146696805:0
+[ 6198913ms] [LOG] 【get /personal-biz/api/v1/userExercise/pri/start/exercise/detail】请求失败，响应数据：%o {data: , status: 502, statusText: Bad Gateway, headers: Object, config: Object} @ http://ishare.gf.com.cn/exam/personal/static/js/main.4ed6fd11.js:1
+[ 6207873ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://ishare.gf.com.cn/exam/personal-biz/api/v1/userExercise/pri/start/exercise/detail?exerciseLibId=76&subjectId=2056954756370681883:0
+[ 6207873ms] [LOG] 【get /personal-biz/api/v1/userExercise/pri/start/exercise/detail】请求失败，响应数据：%o {data: , status: 502, statusText: Bad Gateway, headers: Object, config: Object} @ http://ishare.gf.com.cn/exam/personal/static/js/main.4ed6fd11.js:1
+[ 6590519ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://ishare.gf.com.cn/exam/personal-biz/api/v1/userExercise/pri/submit:0
+[ 6590520ms] Error: Network Error
+    at e.exports (http://ishare.gf.com.cn/exam/personal/static/js/main.4ed6fd11.js:2:880314)
+    at y.onerror (http://ishare.gf.com.cn/exam/personal/static/js/main.4ed6fd11.js:2:875276)
+[ 9190593ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ chrome-error://chromewebdata/:0
+[ 9217434ms] [ERROR] Failed to load resource: the server responded with a status of 502 () @ chrome-error://chromewebdata/:0

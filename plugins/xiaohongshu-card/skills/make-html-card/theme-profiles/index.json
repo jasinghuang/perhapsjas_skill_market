@@ -1,0 +1,11 @@
+{
+  "default": "warm-yellow",
+  "themes": [
+    {
+      "id": "warm-yellow",
+      "label": "暖黄风",
+      "profile": "warm-yellow.md",
+      "description": "暖黄底+白卡+红强调，金融投教默认风格（纯 HTML 模板引擎，open 即看）"
+    }
+  ]
+}

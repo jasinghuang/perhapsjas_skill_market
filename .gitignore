@@ -12,3 +12,5 @@ __pycache__/
 plugins/video-toolkit/skills/bailian-tts/**/.pytest_cache/
 plugins/video-toolkit/skills/bailian-tts/**/__pycache__/
 plugins/video-toolkit/skills/bailian-tts/*.mp3
+.gstack/
+.superpowers/
