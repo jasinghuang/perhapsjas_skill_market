@@ -1,0 +1,59 @@
+<h2>warm-yellow 卡片 · 填满策略</h2>
+<p class="subtitle">黑天鹅卡 02(定义+起源)三种填满方式 — 字号都固定(正文 40px 规范),区别在"怎么让内容占满内容框"。点选你倾向的</p>
+
+<div class="cards">
+  <!-- 策略 1:流式填充 -->
+  <div class="card" data-choice="flow" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#faf3e1;padding:16px;display:flex;justify-content:center;">
+      <div style="background:#fff;border-radius:8px;border-bottom:3px solid #000;width:140px;height:188px;padding:10px 8px;display:flex;flex-direction:column;font-family:sans-serif;">
+        <div style="color:#d22727;font-weight:800;font-size:9px;letter-spacing:1px;margin-bottom:4px;">01 什么是黑天鹅事件</div>
+        <div style="font-size:5.5px;line-height:1.5;color:#000;margin-bottom:6px;">黑天鹅事件,代表着那些我们认为几乎不可能发生,却意外降临的事件,具有不可预测性,会引发连锁反应...</div>
+        <div style="color:#d22727;font-weight:800;font-size:9px;letter-spacing:1px;margin-bottom:4px;">02 黑天鹅的起源</div>
+        <div style="font-size:5.5px;line-height:1.5;color:#000;">17 世纪欧洲人坚信所有天鹅都是白色的,直到在澳大利亚发现黑天鹅,一只就推翻了数万只的证明...</div>
+        <div style="margin-top:auto;font-size:4px;color:#2d2727;line-height:1.2;border-top:1px solid #eee;padding-top:4px;">风险提示:投资有风险,入市需谨慎...</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>① 流式填充规划</h3>
+      <p>每卡内容量匹配内容框(<strong>65-85%</strong>),字号/行距固定,内容<strong>自然连续填满</strong>。靠 Phase 2 拆卡保证内容量,不撑字号。<strong>正道,推荐</strong>。</p>
+    </div>
+  </div>
+
+  <!-- 策略 2:垂直分布 -->
+  <div class="card" data-choice="space" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#faf3e1;padding:16px;display:flex;justify-content:center;">
+      <div style="background:#fff;border-radius:8px;border-bottom:3px solid #000;width:140px;height:188px;padding:10px 8px;display:flex;flex-direction:column;font-family:sans-serif;">
+        <div style="color:#d22727;font-weight:800;font-size:9px;letter-spacing:1px;margin-bottom:4px;">01 什么是黑天鹅事件</div>
+        <div style="font-size:5.5px;line-height:1.5;color:#000;">黑天鹅事件,几乎不可能发生却意外降临,具有不可预测性...</div>
+        <div style="flex:1;border:1px dashed #ddd;margin:8px 0;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:5px;">留白</div>
+        <div style="color:#d22727;font-weight:800;font-size:9px;letter-spacing:1px;margin-bottom:4px;">02 黑天鹅的起源</div>
+        <div style="font-size:5.5px;line-height:1.5;color:#000;">17 世纪欧洲人发现黑天鹅...</div>
+        <div style="margin-top:4px;font-size:4px;color:#2d2727;line-height:1.2;border-top:1px solid #eee;padding-top:4px;">风险提示:投资有风险...</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>② 垂直分布</h3>
+      <p>内容框固定,标题/段落 <code>space-between</code> — 第一个顶、最后一个底,<strong>中间留白</strong>。不论内容量都占满高度,但中间有空白呼吸。</p>
+    </div>
+  </div>
+
+  <!-- 策略 3:加视觉填充 -->
+  <div class="card" data-choice="visual" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#faf3e1;padding:16px;display:flex;justify-content:center;">
+      <div style="background:#fff;border-radius:8px;border-bottom:3px solid #000;width:140px;height:188px;padding:10px 8px;display:flex;flex-direction:column;font-family:sans-serif;">
+        <div style="color:#d22727;font-weight:800;font-size:9px;letter-spacing:1px;margin-bottom:4px;">01 什么是黑天鹅事件</div>
+        <div style="font-size:5.5px;line-height:1.5;color:#000;margin-bottom:5px;">黑天鹅事件,具有不可预测性,会引发连锁反应...</div>
+        <div style="border-left:3px solid #d22727;background:#fff5f5;padding:4px 6px;font-size:5.5px;color:#000;margin-bottom:6px;border-radius:0 4px 4px 0;">💡 <strong>核心</strong>:几乎不可能,却意外降临 — 关键在不可预测。</div>
+        <div style="color:#d22727;font-weight:800;font-size:9px;letter-spacing:1px;margin-bottom:4px;">02 起源</div>
+        <div style="font-size:5.5px;line-height:1.5;color:#000;">17 世纪欧洲人发现黑天鹅...</div>
+        <div style="margin-top:auto;font-size:4px;color:#2d2727;line-height:1.2;border-top:1px solid #eee;padding-top:4px;">风险提示:投资有风险...</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>③ 加视觉填充</h3>
+      <p>内容 + <strong>重点框/引用/小图解</strong>等视觉元素填充。内容少时用视觉补,信息密度高、视觉饱满。<strong>小红书最常见</strong>。</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:24px;">我的推荐:<strong>① + ③ 结合</strong> — ① 靠规划保证内容量大方向填满,③ 在内容偏少的卡上加重点框/引用补足。② 作为兜底(实在内容少时)。点选你倾向的,或在终端说想法。</p>

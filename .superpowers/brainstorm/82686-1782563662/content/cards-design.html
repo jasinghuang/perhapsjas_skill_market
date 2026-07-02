@@ -1,0 +1,108 @@
+<h2>黑天鹅卡片设计 · 5 张(B 方案 + 填满规划)</h2>
+<p class="subtitle">每张 = CardFrame 卡片视觉(warm-yellow) + 独立 reacticle 组件(无 Article)+ 内容深化 + 视觉填充,确保填满 1335px 内容框。缩略示意,点选你有意见的(或在终端说)</p>
+
+<div class="cards">
+
+  <!-- 卡 01 封面 -->
+  <div class="card" data-choice="card01" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fff1cc;padding:14px;display:flex;justify-content:center;">
+      <div style="background:#fff;border-radius:6px;border-bottom:2px solid #000;width:130px;height:175px;padding:8px 6px;display:flex;flex-direction:column;font-family:sans-serif;position:relative;">
+        <div style="text-align:center;font-size:7px;font-weight:700;letter-spacing:0.6px;color:#000;">每天一个金融小知识</div>
+        <div style="text-align:center;font-size:4px;color:#d22727;margin-top:2px;">Black Swan Event</div>
+        <div style="text-align:center;font-size:22px;font-weight:900;color:#d22727;letter-spacing:1.5px;margin-top:18px;">黑天鹅</div>
+        <div style="margin-top:14px;height:60px;border-radius:4px;background:linear-gradient(135deg,#333,#000);display:flex;align-items:center;justify-content:center;color:#666;font-size:5px;">🦢 配图</div>
+        <div style="position:absolute;bottom:4px;left:4px;right:4px;font-size:3px;color:#666;line-height:1.1;">风险提示:投资有风险...</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>① 封面</h3>
+      <p><strong>主题词"黑天鹅"</strong>(220px hero)+ 中文副标题 + 英文 + 配图区。视觉冲击。</p>
+    </div>
+  </div>
+
+  <!-- 卡 02 定义+起源 -->
+  <div class="card" data-choice="card02" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#faf3e1;padding:14px;display:flex;justify-content:center;">
+      <div style="background:#fff;border-radius:6px;border-bottom:2px solid #000;width:130px;height:175px;padding:7px 6px;display:flex;flex-direction:column;font-family:sans-serif;position:relative;gap:3px;">
+        <div style="color:#d22727;font-weight:800;font-size:7px;">01 什么是黑天鹅事件</div>
+        <div style="font-size:4.5px;line-height:1.4;color:#000;">黑天鹅事件,代表那些我们认为几乎不可能发生,却意外降临的事件,具有<strong>不可预测性</strong>,会引发<strong>连锁反应</strong>...</div>
+        <div style="border-left:2px solid #d22727;background:#fff5f5;padding:3px 4px;font-size:4px;border-radius:0 3px 3px 0;">💡 <strong>核心</strong>:几乎不可能 + 不可预测 + 深远影响</div>
+        <div style="color:#d22727;font-weight:800;font-size:7px;margin-top:2px;">02 黑天鹅的起源</div>
+        <div style="font-size:4.5px;line-height:1.4;color:#000;">17 世纪欧洲人坚信天鹅皆白,直到在澳大利亚发现黑天鹅...</div>
+        <div style="background:#faf3e1;padding:3px 4px;font-size:4px;color:#000;border-radius:3px;font-style:italic;">"一只黑天鹅,推翻数万只白天鹅的证明。"</div>
+        <div style="position:absolute;bottom:4px;left:4px;right:4px;font-size:3px;color:#666;line-height:1.1;">风险提示:投资有风险...</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>② 定义 + 起源</h3>
+      <p>两段正文 + <strong>Aside 重点框</strong>(核心)+ <strong>引用框</strong>(一只推翻数万只)。视觉元素补足,填满。</p>
+    </div>
+  </div>
+
+  <!-- 卡 03 三大特征 -->
+  <div class="card" data-choice="card03" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#faf3e1;padding:14px;display:flex;justify-content:center;">
+      <div style="background:#fff;border-radius:6px;border-bottom:2px solid #000;width:130px;height:175px;padding:7px 6px;display:flex;flex-direction:column;font-family:sans-serif;position:relative;gap:4px;">
+        <div style="color:#d22727;font-weight:800;font-size:7px;">03 黑天鹅的三大特征</div>
+        <div style="display:flex;gap:4px;align-items:flex-start;background:#fff8f8;border-radius:3px;padding:3px;">
+          <div style="background:#d22727;color:#fff;font-size:6px;font-weight:800;width:10px;height:10px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">1</div>
+          <div><strong style="font-size:5px;">意外性</strong><div style="font-size:4px;color:#444;">出人意料,措手不及</div></div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:flex-start;background:#fff8f8;border-radius:3px;padding:3px;">
+          <div style="background:#d22727;color:#fff;font-size:6px;font-weight:800;width:10px;height:10px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">2</div>
+          <div><strong style="font-size:5px;">重大影响</strong><div style="font-size:4px;color:#444;">改变原有发展轨迹</div></div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:flex-start;background:#fff8f8;border-radius:3px;padding:3px;">
+          <div style="background:#d22727;color:#fff;font-size:6px;font-weight:800;width:10px;height:10px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">3</div>
+          <div><strong style="font-size:5px;">事后合理化</strong><div style="font-size:4px;color:#444;">事后总想找解释</div></div>
+        </div>
+        <div style="position:absolute;bottom:4px;left:4px;right:4px;font-size:3px;color:#666;line-height:1.1;">风险提示:投资有风险...</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>③ 三大特征</h3>
+      <p>3 个<strong>数字卡片</strong>(意外性/重大影响/事后合理化),每个:红圆数字 + 小标题 + 一句解释。视觉化列表,填满。</p>
+    </div>
+  </div>
+
+  <!-- 卡 04 案例 -->
+  <div class="card" data-choice="card04" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#faf3e1;padding:14px;display:flex;justify-content:center;">
+      <div style="background:#fff;border-radius:6px;border-bottom:2px solid #000;width:130px;height:175px;padding:7px 6px;display:flex;flex-direction:column;font-family:sans-serif;position:relative;gap:3px;">
+        <div style="color:#d22727;font-weight:800;font-size:7px;">04 近年黑天鹅案例</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;">
+          <div style="background:#fff5f5;border-radius:3px;padding:3px;"><strong style="color:#d22727;font-size:6px;">2001</strong><div style="font-size:4px;color:#000;">911 事件</div><div style="font-size:3px;color:#666;">3000+ 罹难</div></div>
+          <div style="background:#fff5f5;border-radius:3px;padding:3px;"><strong style="color:#d22727;font-size:6px;">2008</strong><div style="font-size:4px;color:#000;">金融危机</div><div style="font-size:3px;color:#666;">百年最严重</div></div>
+          <div style="background:#fff5f5;border-radius:3px;padding:3px;"><strong style="color:#d22727;font-size:6px;">2016</strong><div style="font-size:4px;color:#000;">英国脱欧</div><div style="font-size:3px;color:#666;">格局重塑</div></div>
+          <div style="background:#fff5f5;border-radius:3px;padding:3px;"><strong style="color:#d22727;font-size:6px;">2020</strong><div style="font-size:4px;color:#000;">全球疫情</div><div style="font-size:3px;color:#666;">秩序停摆</div></div>
+        </div>
+        <div style="position:absolute;bottom:4px;left:4px;right:4px;font-size:3px;color:#666;line-height:1.1;">风险提示:投资有风险...</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>④ 近年案例</h3>
+      <p>4 个案例<strong>2×2 网格卡片</strong>(2001/2008/2016/2020),每个:红年份 + 事件 + 影响。信息密度高,填满。</p>
+    </div>
+  </div>
+
+  <!-- 卡 05 结尾 -->
+  <div class="card" data-choice="card05" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#faf3e1;padding:14px;display:flex;justify-content:center;">
+      <div style="background:#fff;border-radius:6px;border-bottom:2px solid #000;width:130px;height:175px;padding:7px 6px;display:flex;flex-direction:column;font-family:sans-serif;position:relative;gap:3px;align-items:center;">
+        <div style="font-size:14px;">🦢</div>
+        <div style="color:#d22727;font-weight:800;font-size:7px;text-align:center;">05 学会应对不确定性</div>
+        <div style="font-size:4.5px;line-height:1.4;color:#000;text-align:center;">黑天鹅提醒我们:保持警惕,学会适应不确定性。</div>
+        <div style="background:#faf3e1;border-radius:3px;padding:3px 4px;width:100%;font-size:4px;color:#000;">✓ 不可预测 ✓ 保持警惕 ✓ 适应变化</div>
+        <div style="background:#d22727;color:#fff;border-radius:20px;padding:4px 10px;font-size:4px;font-weight:700;margin-top:2px;">关注了解更多 →</div>
+        <div style="position:absolute;bottom:4px;left:4px;right:4px;font-size:3px;color:#666;line-height:1.1;">风险提示:投资有风险...</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>⑤ 结尾</h3>
+      <p>图标 + 标题 + 总结段 + <strong>要点回顾</strong>(3 条)+ <strong>CTA 按钮</strong>(关注)。完整收尾,填满。</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:24px;"><strong>填满策略:</strong>每张都靠"正文 + 视觉元素(Aside 重点框 / 引用 / 数字卡片 / 网格 / CTA)"组合填满内容框,不只靠正文。② 定义+起源 那张之前空白最多,现在加 Aside + 引用补足。<br><br>点选你有意见的卡(要改的),或终端说整体反馈。满意就说 OK,我写成设计文档。</p>
