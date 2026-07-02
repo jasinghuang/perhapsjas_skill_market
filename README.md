@@ -6,7 +6,7 @@
 
 | 插件 | 干什么的 | 包含 Skill |
 |------|---------|-----------|
-| **video-toolkit** | 下载、转录、校准字幕，再把文章/口播稿做成可录屏的网页视频 | `video-downloader` `audio-transcribe` `text-refine` `web-video-presentation` |
+| **video-toolkit** | 下载、转录、校准字幕 | `video-downloader` `audio-transcribe` `text-refine` |
 | **xiaohongshu-card** | 小红书图文卡片 + 封面概念图提示词 | `make-html-card` `cover-image-prompt`（`ian-xiaohei-illustrations` 即将推出） |
 | **writting-assistant** | 说出主题，全自动写小红书文案（研究→撰写→质检→存档） | `writting-assistant` |
 
@@ -53,18 +53,6 @@ npx skills add jasinghuang/perhapsjas_skill_market -g --plugin writting-assistan
 
 **串起来用：** 下载视频 → 转录字幕 → 校准翻译，一口气跑完。
 
-### web-video-presentation：文章/口播稿 → 可录屏的网页视频
-
-```
-把这篇文章做成一个视频
-帮我用这个口播稿做一个网页演示，可以录屏发 B 站
-/web-video-presentation
-```
-
-产出 = Vite + React + TS 项目：16:9 舞台、点击推进节拍、每步独占整屏、内容驱动的动画。流程：文章/口播稿 → 一次产出脚本+开发计划 → 对齐（稿子/计划/主题/素材/模式）→ 逐章开发（24 套主题可选）→ 可选合成口播音频（provider 无关，内置 MiniMax + OpenAI TTS）→ 录屏成片。沉淀的是设计方法论 + 协作流程，不绑定具体样式。
-
-**依赖：** Node.js ≥ 20；合成音频可选 MiniMax `mmx-cli` 或 `OPENAI_API_KEY`（也可换 ElevenLabs / edge-tts 等）。
-
 ### xiaohongshu-card：文案 → 图文卡片 + 封面提示词
 
 ```
@@ -106,7 +94,6 @@ npx skills add jasinghuang/perhapsjas_skill_market -g --plugin writting-assistan
 | video-downloader | 自动装 yt-dlp；可选：Node.js ≥ 20（YouTube）、ffmpeg、aria2 |
 | audio-transcribe | Mac: `pip3 install mlx-whisper zhconv` + `brew install ffmpeg`；Windows: `pip install faster-whisper zhconv` |
 | text-refine | 无 |
-| web-video-presentation | Node.js ≥ 20；合成音频可选 `mmx-cli`（MiniMax）或 `OPENAI_API_KEY`（也可换 ElevenLabs / edge-tts 等） |
 | make-html-card | 无 |
 | cover-image-prompt | 无 |
 | writting-assistant | 无（Python 3 用于存档脚本） |
@@ -121,12 +108,7 @@ npx skills add jasinghuang/perhapsjas_skill_market -g --plugin writting-assistan
     │   └── skills/
     │       ├── video-downloader/
     │       ├── audio-transcribe/
-    │       ├── text-refine/
-    │       └── web-video-presentation/
-    │           ├── references/
-    │           ├── scripts/
-    │           ├── templates/
-    │           └── themes/
+    │       └── text-refine/
     ├── xiaohongshu-card/
     │   └── skills/
     │       ├── make-html-card/
