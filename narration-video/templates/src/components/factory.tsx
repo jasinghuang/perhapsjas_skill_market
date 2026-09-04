@@ -4,7 +4,6 @@
 
 import {
   CSSProperties,
-  ElementType,
   ReactNode,
   useEffect,
   useRef,
@@ -25,7 +24,9 @@ export interface PrimitiveProps {
 }
 
 export interface PrimitiveConfig {
-  tag: ElementType;
+  // 收窄为 host 元素（Ruling P2-10）：函数组件 tag 无 forwardRef 时 rootRef.current
+  // 恒为 null、动画被静默跳过，类型系统从此直接拦住错误用法。
+  tag: keyof JSX.IntrinsicElements;
   variants: string[];
   defaultVariant: string;
 }
@@ -40,7 +41,10 @@ export function createPrimitive(
 
   return function Primitive(props: PrimitiveProps) {
     const { variant = defaultVariant, reveal, duration = "mid", stagger, className = "", style, children } = props;
-    const rootRef = useRef<HTMLElement | null>(null);
+    // any：Tag 是全部 host tag 的联合（keyof JSX.IntrinsicElements），各 tag 的 ref 类型
+    // 不同，RefObject<HTMLElement> 无法兼容（如 SVG 元素的 SVGProps ref）。
+    // ref 只用于取 DOM 节点交给 revealAnim，窄类型在此无收益（Ruling P2-10）。
+    const rootRef = useRef<any>(null);
     const handlesRef = useRef<AnimHandle[]>([]);
 
     useEffect(() => {
@@ -67,10 +71,15 @@ export function createPrimitive(
       .filter(Boolean)
       .join(" ");
 
+    // 渲染走 any：JSX 对全量 host tag 联合（keyof JSX.IntrinsicElements）的 props 联合
+    // 报 TS2590「union type too complex」。类型安全由 PrimitiveConfig.tag 的窄类型在
+    // 配置处保证（Ruling P2-10），此处仅是渲染出口。
+    const Host = Tag as any;
+
     return (
-      <Tag ref={rootRef} className={classes} style={style} data-testid={props["data-testid"]}>
+      <Host ref={rootRef} className={classes} style={style} data-testid={props["data-testid"]}>
         {children}
-      </Tag>
+      </Host>
     );
   };
 }
