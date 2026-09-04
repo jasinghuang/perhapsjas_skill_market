@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   allFinished,
   animationWindowMs,
@@ -36,11 +36,10 @@ class FakeAnim {
   }
 }
 
-function makeWaapiStub(totalMs: number): { el: Element; anim: FakeAnim } {
+function makeWaapiStub(): { el: Element; anim: FakeAnim } {
   const anim = new FakeAnim();
   const el = {
-    animate: (_k: unknown, opts: KeyframeAnimationOptions) => {
-      const delay = typeof opts.delay === "number" ? opts.delay : 0;
+    animate: (_k: unknown, _opts: KeyframeAnimationOptions) => {
       anim.state.currentTime = 0;
       return anim as unknown as Animation;
     },
@@ -71,15 +70,15 @@ describe("动画运行时注册表", () => {
     h.dispose();
   });
 
-  it("waapi 适配器：seek 扣掉 delay 并 clamp", () => {
-    const { el, anim } = makeWaapiStub(1000);
+  it("waapi 适配器：seek 直接映射 currentTime 并 clamp 到 total", () => {
+    const { el, anim } = makeWaapiStub();
     const h = waapi(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 1000, delay: 200 });
     h.seek(0);
     expect(anim.state.currentTime).toBe(0);
     h.seek(500);
-    expect(anim.state.currentTime).toBe(300); // 500 - 200 delay
+    expect(anim.state.currentTime).toBe(500); // 直接映射：t 即 currentTime（WAAPI 时间轴已内置 delay）
     h.seek(9999);
-    expect(anim.state.currentTime).toBe(1200); // clamp 到 delay+duration
+    expect(anim.state.currentTime).toBe(1200); // clamp 到 total = delay + duration
     h.dispose();
   });
 

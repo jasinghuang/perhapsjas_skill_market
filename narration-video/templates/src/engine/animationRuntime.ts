@@ -86,7 +86,9 @@ export function waapi(
   const handle = register({
     durationMs: total,
     seek: (tMs) => {
-      animation.currentTime = Math.min(total, Math.max(0, tMs - delay));
+      // WAAPI 的 currentTime 时间轴已内置 delay（active 阶段在 [delay, delay+duration]），
+      // "t 相对动画起点"即直接映射，不再重复扣除 delay。
+      animation.currentTime = Math.min(total, Math.max(0, tMs));
     },
     isFinished: () =>
       Number(animation.currentTime ?? 0) >= total - 0.5 || animation.playState === "finished",
