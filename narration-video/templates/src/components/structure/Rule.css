@@ -1,0 +1,9 @@
+.cdp-rule {
+  border: none;
+  border-top: var(--rule-w) var(--rule-style) var(--rule);
+  margin: var(--space-3) 0;
+}
+
+.cdp-rule-dashed {
+  border-top-style: dashed;
+}

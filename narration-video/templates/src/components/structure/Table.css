@@ -1,0 +1,25 @@
+.cdp-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: var(--t-label);
+  color: var(--text);
+}
+
+.cdp-table-bordered th,
+.cdp-table-bordered td {
+  border: var(--table-border);
+  padding: var(--space-2) var(--space-3);
+}
+
+.cdp-table th {
+  background: var(--table-head-bg);
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cdp-table-zebra tbody tr:nth-child(even) {
+  background: var(--table-zebra);
+}
