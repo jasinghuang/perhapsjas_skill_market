@@ -41,6 +41,7 @@ esac
 
 # 1. 拷贝模板
 cp -R "$TEMPLATE_DIR" "$TARGET"
+rm -rf "$TARGET/node_modules" "$TARGET/dist"
 
 # 2. 写运行时配置（slug + 舞台尺寸 = 档案最小参数）
 cat > "$TARGET/src/engine/runtime-config.ts" <<EOF
