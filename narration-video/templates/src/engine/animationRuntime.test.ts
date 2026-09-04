@@ -18,6 +18,7 @@ interface FakeAnimState {
 
 class FakeAnim {
   state: FakeAnimState = { currentTime: 0, playState: "paused" };
+  cancelCalls = 0;
   // WAAPI Animation.currentTime 顶层属性代理到 state，供断言观察实现写入的 currentTime
   get currentTime(): number {
     return this.state.currentTime;
@@ -33,6 +34,9 @@ class FakeAnim {
   }
   finish() {
     this.state.playState = "finished";
+  }
+  cancel() {
+    this.cancelCalls++;
   }
 }
 
@@ -80,6 +84,16 @@ describe("动画运行时注册表", () => {
     h.seek(9999);
     expect(anim.state.currentTime).toBe(1200); // clamp 到 total = delay + duration
     h.dispose();
+  });
+
+  it("waapi 适配器：dispose 反注册并 cancel 底层动画", () => {
+    const { el, anim } = makeWaapiStub();
+    const h = waapi(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 1000 });
+    expect(registrySize()).toBe(1);
+    expect(anim.cancelCalls).toBe(0);
+    h.dispose();
+    expect(anim.cancelCalls).toBe(1); // dispose 必须真正取消底层动画（DonutMeter/工厂 reveal 依赖）
+    expect(registrySize()).toBe(0);
   });
 
   it("animationWindowMs = 各动画结束时间的最大值", () => {

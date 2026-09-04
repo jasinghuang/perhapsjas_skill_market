@@ -97,7 +97,15 @@ export function waapi(
   });
 
   if (!renderMode) animation.play();
-  return handle;
+  // register 的 dispose 只反注册，不取消底层动画：组件卸载后 WAAPI 动画仍在
+  // 内存中存活（DonutMeter 与工厂 reveal 全依赖此路径），dispose 必须同时 cancel。
+  return {
+    ...handle,
+    dispose: () => {
+      handle.dispose();
+      animation.cancel();
+    },
+  };
 }
 
 /** Canvas 帧函数逃生舱适配器：draw(t) 纯函数 + 虚拟时钟（§6.1 铁律 2） */

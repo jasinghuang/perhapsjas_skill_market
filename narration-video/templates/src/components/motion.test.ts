@@ -9,6 +9,8 @@ class FakeAnim {
   constructor(public opts: KeyframeAnimationOptions) {}
   play() { this.playState = "running"; }
   pause() { this.playState = "paused"; }
+  // P2-13：dispose 必须取消底层动画，stub 需同型（与 test-setup.ts 一致）
+  cancel() {}
 }
 
 function stubElement(): HTMLElement {
