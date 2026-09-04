@@ -8,14 +8,11 @@ import { useAudioPlayer } from "./engine/useAudioPlayer";
 import { useStepper } from "./engine/useStepper";
 
 const params = new URLSearchParams(window.location.search);
+const renderMode = params.has("render"); // ?render=1 创建即冻结
+setRenderMode(renderMode); // Ruling 9：模块加载即设置（先于渲染与 effect），杜绝初始 commit 动画自主播放的时序洞
 
 export default function App() {
   const autoFromStart = params.has("auto"); // ?auto=1 从 step 0 起播
-  const renderMode = params.has("render"); // ?render=1 创建即冻结
-
-  useEffect(() => {
-    setRenderMode(renderMode);
-  }, [renderMode]);
 
   const stepsPerChapter = useMemo(() => chapters.map((c) => c.steps), []);
   const stepper = useStepper(stageConfig.slug, stepsPerChapter, autoFromStart);
