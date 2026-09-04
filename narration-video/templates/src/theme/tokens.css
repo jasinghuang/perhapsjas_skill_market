@@ -1,0 +1,94 @@
+/* 三层 token 骨架（M2a 契约验证用中性占位值；M2b 覆盖为 creative-mode 值）。
+   组件与章节只认变量名，不认值——本文件的结构是契约，值是皮肤。 */
+:root {
+  /* ── 基础 · 色 ── */
+  --surface: #f7f5ef;
+  --surface-2: #eeeae0;
+  --surface-3: #1a1a1a;
+  --text: #1a1a1a;
+  --text-2: #55524a;
+  --text-mute: #8a867c;
+  --text-faint: #b5b1a6;
+  /* 强调色多槽位（§5.4 修正 1）：accent-1 必填，2/3/4 可选（M2b 启用） */
+  --accent-1: #c9501f;
+  --accent-1-dark: #a33f16;
+  --rule: #1a1a1a;
+  --shell: #0b0b0b;
+
+  /* ── 基础 · 阴影语言（支持偏移实色硬阴影，§5.4 修正 3） ── */
+  --shadow-card: 6px 6px 0 rgba(26, 26, 26, 0.9);
+  --shadow-stage: 0 8px 40px rgba(0, 0, 0, 0.35);
+
+  /* ── 基础 · 字阶 ── */
+  --t-display-1: 128px;
+  --t-display-2: 96px;
+  --t-h1: 72px;
+  --t-h2: 56px;
+  --t-h3: 40px;
+  --t-body: 28px;
+  --t-label: 24px;
+  --t-micro: 18px;
+
+  /* ── 基础 · 间距阶 ── */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 48px;
+  --space-6: 64px;
+  --grid-gutter: 28px;
+
+  /* ── 基础 · 动效（数值化，§5.1） ── */
+  --dur-fast: 300ms;
+  --dur-mid: 700ms;
+  --dur-slow: 1400ms;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-emph: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  --stagger: 120ms;
+
+  /* ── 语义 · 卡片 ── */
+  --card-bg: var(--surface);
+  --card-border: 1px solid var(--text);
+  --card-radius: 0px;
+  --r-card: 0px;
+  --r-pill: 999px;
+  --border-w: 1px;
+
+  /* ── 语义 · 表格 ── */
+  --table-border: 1px solid var(--text);
+  --table-head-bg: var(--surface-2);
+  --table-zebra: var(--surface-2);
+
+  /* ── 语义 · 分割线 ── */
+  --rule-w: 2px;
+  --rule-style: solid;
+
+  /* ── 语义 · 徽章 ── */
+  --badge-bg: var(--surface-3);
+  --badge-text: var(--surface);
+
+  /* ── 语义 · 大数字性格 ── */
+  --hero-num-font: var(--font-display-en);
+  --hero-num-weight: 900;
+  --hero-num-track: -0.02em;
+
+  /* ── 语义 · 装饰语言（六族：dot/bar/ring/polygon/block/stamp） ── */
+  --decor-family: dot;
+
+  /* ── 语义 · 字幕 ── */
+  --caption-bg: rgba(10, 10, 10, 0.82);
+  --caption-text: #f5f2ea;
+  --caption-radius: 8px;
+  --caption-size: 30px;
+
+  /* ── 字体四坑位 ── */
+  --font-display-cn: "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-display-en: "Archivo", "Arial Black", sans-serif;
+  --font-body: "Space Grotesk", "PingFang SC", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", monospace;
+
+  /* ── 舞台留白（v1 由主题内部固定、不对章节开放，§5.1） ── */
+  --stage-pad-x: 96px;
+  --stage-pad-y: 64px;
+}
