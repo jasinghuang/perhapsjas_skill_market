@@ -1,0 +1,60 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+.app-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  overflow: hidden;
+}
+
+.stage-fitter {
+  position: relative;
+}
+
+.stage-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: #fff;
+  overflow: hidden;
+}
+
+.caption-layer {
+  position: absolute;
+  left: 50%;
+  bottom: 48px;
+  transform: translateX(-50%);
+  max-width: 80%;
+}
+
+.caption-text {
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 28px;
+  line-height: 1.5;
+}
+
+.transport {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+}
+
+.transport button {
+  font-size: 16px;
+  padding: 8px 20px;
+  cursor: pointer;
+}
