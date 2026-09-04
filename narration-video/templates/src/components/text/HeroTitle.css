@@ -1,0 +1,15 @@
+.cdp-hero-title {
+  font-family: var(--font-display-cn), var(--font-display-en);
+  font-size: var(--t-display-1);
+  line-height: 1.05;
+  color: var(--text);
+  margin: 0;
+}
+
+.cdp-hero-title-stamp {
+  display: inline-block;
+  background: var(--surface-3);
+  color: var(--surface);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-card);
+}

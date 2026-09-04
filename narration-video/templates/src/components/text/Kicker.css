@@ -1,0 +1,20 @@
+.cdp-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  display: inline-block;
+}
+
+.cdp-kicker-block {
+  background: var(--surface-3);
+  color: var(--surface);
+  padding: var(--space-1) var(--space-2);
+}
+
+.cdp-kicker-pill {
+  border: 1px solid var(--text);
+  color: var(--text);
+  border-radius: var(--r-pill);
+  padding: var(--space-1) var(--space-2);
+}
