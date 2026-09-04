@@ -88,7 +88,16 @@ export function useAudioPlayer(): AudioPlayer {
       const audio = getAudio();
       audio.src = src;
       audio.onended = () => afterAnimations(scheduleHold);
-      void audio.play();
+      audio.onerror = () => {
+        // 音频加载失败（如 404）：视同无音频，走估时兜底推进
+        timerRef.current = window.setTimeout(
+          () => afterAnimations(scheduleHold),
+          estimateMs(narration),
+        );
+      };
+      audio.play().catch(() => {
+        // play() 拒绝（自动播放限制等）：错误统一由 onerror 处理，勿让 rejection 冒泡
+      });
     },
     [afterAnimations, clearTimer, estimateMs, getAudio, scheduleHold],
   );
@@ -101,6 +110,7 @@ export function useAudioPlayer(): AudioPlayer {
   }, [clearTimer]);
 
   const resume = useCallback(() => {
+    clearTimer(); // 幂等化 resume：清除悬挂计时器，防双击播放双推进
     const last = lastRef.current;
     if (!last) return;
     const audio = audioRef.current;
@@ -109,7 +119,9 @@ export function useAudioPlayer(): AudioPlayer {
         // 音频已念完、曾在等待动画中被暂停：重新武装等待链
         afterAnimations(scheduleHold);
       } else {
-        void audio.play();
+        audio.play().catch(() => {
+          // play() 拒绝：错误统一由 onerror 处理
+        });
       }
     } else {
       // 兜底估时路径：重新计时（M1 简化，不恢复已流逝部分）
@@ -120,7 +132,7 @@ export function useAudioPlayer(): AudioPlayer {
     }
     resumeAll();
     setPlaying(true);
-  }, [afterAnimations, estimateMs, scheduleHold]);
+  }, [afterAnimations, clearTimer, estimateMs, scheduleHold]);
 
   const stop = useCallback(() => {
     clearTimer();

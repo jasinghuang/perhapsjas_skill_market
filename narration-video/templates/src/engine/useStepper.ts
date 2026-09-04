@@ -67,12 +67,13 @@ export function useStepper(
   );
 
   useEffect(() => {
+    if (autoFromStart) return; // auto 录屏模式不写回游标——"忽略"而非"擦除"用户预览游标
     try {
       localStorage.setItem(key, JSON.stringify(pos));
     } catch {
       // 私密模式等存储不可用，忽略
     }
-  }, [key, pos]);
+  }, [key, pos, autoFromStart]);
 
   const total = stepsPerChapter.length;
   const atStart = pos.chapter === 0 && pos.step === 0;

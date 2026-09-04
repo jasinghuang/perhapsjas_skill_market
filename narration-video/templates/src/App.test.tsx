@@ -10,7 +10,9 @@ class FakeAudio {
   constructor() {
     FakeAudio.instances.push(this);
   }
-  play() {}
+  play() {
+    return Promise.resolve();
+  }
   pause() {}
 }
 
@@ -60,6 +62,20 @@ describe("App 装配", () => {
     fireEvent.keyDown(window, { key: "ArrowRight" });
     fireEvent.click(screen.getByTestId("btn-stop"));
     expect(screen.getByTestId("scene-0")).toBeInTheDocument();
+  });
+
+  it("停止后停在起点静止：不回零重播、不自动推进", () => {
+    render(<App />);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(screen.getByTestId("scene-1")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("btn-stop"));
+    expect(screen.getByTestId("scene-0")).toBeInTheDocument();
+    // 核心语义 1：停止后音频被清空，不回起点重播
+    expect(FakeAudio.instances[0].src).toBe("");
+    // 核心语义 2：时间推进后仍停在 scene-0，不自动推进到 scene-1
+    vi.advanceTimersByTime(5000);
+    expect(screen.getByTestId("scene-0")).toBeInTheDocument();
+    expect(screen.queryByTestId("scene-1")).not.toBeInTheDocument();
   });
 
   it("空 narration 步不显示字幕", () => {

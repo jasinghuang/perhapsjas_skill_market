@@ -8,6 +8,7 @@ class FakeAudio {
   src: string | null = null;
   ended = false;
   onended: (() => void) | null = null;
+  onerror: (() => void) | null = null;
   playCalls = 0;
   pauseCalls = 0;
   constructor() {
@@ -16,6 +17,7 @@ class FakeAudio {
   play() {
     this.playCalls++;
     this.ended = false;
+    return Promise.resolve();
   }
   pause() {
     this.pauseCalls++;
@@ -23,6 +25,9 @@ class FakeAudio {
   end() {
     this.ended = true;
     this.onended?.();
+  }
+  fail() {
+    this.onerror?.();
   }
 }
 
@@ -115,6 +120,36 @@ describe("useAudioPlayer", () => {
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(audio.pauseCalls).toBeGreaterThan(0);
     pending.dispose();
+  });
+
+  it("音频加载失败（404）：onerror 视同无音频走估时兜底推进", () => {
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useAudioPlayer());
+    act(() => {
+      result.current.playStep("你好", "1.mp3", 400, onDone);
+    });
+    const audio = FakeAudio.instances[0];
+    expect(audio.src).toBe("1.mp3");
+
+    act(() => { audio.fail(); }); // 模拟 404 加载失败触发 onerror
+    vi.advanceTimersByTime(1500); // 估时到点（2 字×250 < 1500 下限）
+    vi.advanceTimersByTime(400); // 动画窗口已空 → 直接进停留垫
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("resume 幂等：开头清悬挂计时器，pause 后双击播放不双推进", () => {
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useAudioPlayer());
+    act(() => { result.current.playStep("测试", null, 400, onDone); }); // T1 @1500（估时）
+    vi.advanceTimersByTime(500);
+    act(() => { result.current.resume(); }); // 无 fix：T1 悬挂（timerRef 被 T2 @2000 顶掉）
+    vi.advanceTimersByTime(500);
+    act(() => { result.current.pause(); }); // clearTimer 只清最新的 T2，T1 仍悬挂
+    vi.advanceTimersByTime(100);
+    act(() => { result.current.resume(); }); // 双击播放第 1 次：T3 @2600
+    act(() => { result.current.resume(); }); // 双击播放第 2 次：T4 @2700
+    vi.advanceTimersByTime(5000);
+    expect(onDone).toHaveBeenCalledTimes(1); // 无 fix：T1@1500 推进一次 + T3@2600 再推进 → 2 次
   });
 
   it("stop 清空定时与音频", () => {

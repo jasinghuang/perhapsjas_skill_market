@@ -71,4 +71,18 @@ describe("useStepper", () => {
     const second = renderHook(() => useStepper("demo", STEPS, true));
     expect(second.result.current).toMatchObject({ chapter: 0, step: 0 });
   });
+
+  it("autoFromStart 不写回游标：auto 期间前进后，普通模式恢复的是旧游标", () => {
+    const first = renderHook(() => useStepper("demo", STEPS, false));
+    act(() => first.result.current.next()); // 用户预览游标 (0,1)
+    first.unmount();
+
+    const auto = renderHook(() => useStepper("demo", STEPS, true));
+    act(() => auto.result.current.next()); // auto 期间 (0,1)
+    act(() => auto.result.current.next()); // auto 期间 (0,2)
+    auto.unmount();
+
+    const second = renderHook(() => useStepper("demo", STEPS, false));
+    expect(second.result.current).toMatchObject({ chapter: 0, step: 1 }); // 恢复旧游标，非 (0,2)
+  });
 });
