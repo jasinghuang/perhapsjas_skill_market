@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 // Ruling P2-7：ESM 顶层导入（require 在 ESM 下危险）；死代码 AnimHandle IIFE 已删除，
-// 只保留直接 register 路径。AnimHandle 随导入保留（ruling 原文），本文件仅用 register。
-import { register, AnimHandle } from "../../engine/animationRuntime";
+// 只保留直接 register 路径。
+import { register } from "../../engine/animationRuntime";
 import { MotionDuration } from "../motion";
 
 const DUR_FALLBACK: Record<MotionDuration, number> = { fast: 300, mid: 700, slow: 1400 };
@@ -35,7 +35,12 @@ export function BarGrow({ value, variant = "solid", duration = "mid", className 
       pause: () => a.pause(),
       play: () => a.play(),
     });
-    return () => handle.dispose();
+    return () => {
+      // 卸载 dispose 纪律：反注册之外必须真正 cancel 底层动画，
+      // 否则 prop 变化时旧动画在引擎控制外继续跑。
+      handle.dispose();
+      a.cancel();
+    };
   }, [value, duration]);
 
   return (

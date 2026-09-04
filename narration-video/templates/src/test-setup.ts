@@ -7,10 +7,12 @@ import "@testing-library/jest-dom/vitest";
 // 否则 revealAnim 因 typeof el.animate !== "function" 直接返回 null，注册表恒空。
 class FakeAnim {
   currentTime = 0;
-  playState: "paused" | "running" | "finished" = "paused";
+  playState: "paused" | "running" | "finished" | "idle" = "paused";
   constructor(public opts: KeyframeAnimationOptions) {}
   play() { this.playState = "running"; }
   pause() { this.playState = "paused"; }
+  // 评审修复：BarGrow dispose 纪律调用底层 cancel()（WAAPI 标准接口），stub 需同型
+  cancel() { this.playState = "idle"; }
 }
 
 const originalAnimate = Element.prototype.animate;
