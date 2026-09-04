@@ -89,7 +89,7 @@ export function waapi(
       animation.currentTime = Math.min(total, Math.max(0, tMs - delay));
     },
     isFinished: () =>
-      (animation.currentTime ?? 0) >= total - 0.5 || animation.playState === "finished",
+      Number(animation.currentTime ?? 0) >= total - 0.5 || animation.playState === "finished",
     pause: () => animation.pause(),
     play: () => animation.play(),
   });
