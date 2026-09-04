@@ -1,0 +1,6 @@
+.cdp-counter {
+  font-family: var(--font-mono);
+  font-size: var(--t-display-2);
+  font-weight: 700;
+  color: var(--text);
+}

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach } from "vitest";
+import { cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 // jsdom 无 WAAPI：全局测试基建 stub（Ruling P2-11，T4-T6 组件测试直接复用）。
@@ -22,3 +23,7 @@ beforeEach(() => {
 afterEach(() => {
   Element.prototype.animate = originalAnimate;
 });
+
+// RTL 全局 cleanup（Ruling P2-12）：vitest 未开 globals，RTL 不自动注册，
+// 组件测试不再需要 per-file 手动 cleanup。
+afterEach(cleanup);
