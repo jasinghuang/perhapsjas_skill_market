@@ -108,17 +108,51 @@ export function waapi(
   };
 }
 
-/** Canvas 帧函数逃生舱适配器：draw(t) 纯函数 + 虚拟时钟（§6.1 铁律 2） */
+/** Canvas 帧函数逃生舱适配器：draw(t) 纯函数 + 虚拟时钟（§6.1 铁律 2）。
+ * P3-12：play() = rAF 驱动的真实时钟（预览模式播放）。引擎层 rAF 合法——
+ * 确定性黑名单只约束章节层；render 模式下 register 已冻结（play 不会被调用），
+ * 渲染器仍走 seek，确定性不受影响。 */
 export function canvasAnim(draw: (tMs: number) => void, durationMs: number): AnimHandle {
   let current = 0;
+  let rafId: number | null = null;
+  // rAF 时钟基准：posBase = play 起点虚拟时间；tsBase = 基准帧时间戳（首帧建立）。
+  // 帧 t = posBase + (ts - tsBase)，clamp 到 [0, durationMs]。
+  let posBase = 0;
+  let tsBase: number | null = null;
+
+  const frame = (ts: number) => {
+    if (tsBase == null) tsBase = ts;
+    const t = Math.min(durationMs, Math.max(0, posBase + (ts - tsBase)));
+    current = t;
+    draw(t);
+    if (t >= durationMs) {
+      rafId = null; // 到点：终态 draw(durationMs) 已画，停（不再排帧）
+      return;
+    }
+    rafId = requestAnimationFrame(frame);
+  };
+
   return register({
     durationMs,
     seek: (tMs) => {
       current = Math.min(durationMs, Math.max(0, tMs));
       draw(current);
+      // 重置时钟基准：后续 play 的帧从 seek 位置继续（首帧 t = current）
+      posBase = current;
+      tsBase = null;
     },
     isFinished: () => current >= durationMs - 0.5,
-    pause: () => {},
-    play: () => {},
+    pause: () => {
+      if (rafId != null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+    },
+    play: () => {
+      if (rafId != null) return; // 幂等：已在播放
+      posBase = current; // 从当前（可能被 seek 过）位置继续
+      tsBase = null;
+      rafId = requestAnimationFrame(frame);
+    },
   });
 }

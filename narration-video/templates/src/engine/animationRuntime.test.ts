@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   allFinished,
   animationWindowMs,
@@ -56,6 +56,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   setRenderMode(false);
+  vi.unstubAllGlobals();
 });
 
 describe("动画运行时注册表", () => {
@@ -130,6 +131,80 @@ describe("动画运行时注册表", () => {
     h.seek(9999);
     expect(calls).toEqual([200, 500]);
     expect(h.isFinished()).toBe(true);
+    h.dispose();
+  });
+
+  it("canvasAnim：play 走 rAF 真实时钟，draw 收到递增 t，到点终态停（P3-12）", () => {
+    const pending: Array<{ id: number; cb: FrameRequestCallback }> = [];
+    const cancelled = new Set<number>();
+    let nextId = 1;
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      const id = nextId++;
+      pending.push({ id, cb });
+      return id;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+      cancelled.add(id);
+    });
+    // 手动捕获回调 + 手动推进时间戳（避免 vi.useFakeTimers 与 rAF 的冲突）
+    const advance = (ts: number) => {
+      const batch = pending.splice(0);
+      for (const { id, cb } of batch) if (!cancelled.has(id)) cb(ts);
+    };
+
+    const calls: number[] = [];
+    const h = canvasAnim((t) => calls.push(t), 500);
+
+    h.play();
+    advance(1000); // 首帧建立基准
+    advance(1100);
+    advance(1250);
+    expect(calls).toEqual([0, 100, 250]);
+
+    advance(1600); // 250 + 500 → clamp 到时长，终态 draw(500) 后停（不再排帧）
+    expect(calls).toEqual([0, 100, 250, 500]);
+    expect(pending.length).toBe(0);
+    expect(h.isFinished()).toBe(true);
+
+    h.dispose();
+  });
+
+  it("canvasAnim：pause 取消挂起帧不再 draw；seek 手动 draw 并重置时钟基准（P3-12）", () => {
+    const pending: Array<{ id: number; cb: FrameRequestCallback }> = [];
+    const cancelled = new Set<number>();
+    let nextId = 1;
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      const id = nextId++;
+      pending.push({ id, cb });
+      return id;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+      cancelled.add(id);
+    });
+    const advance = (ts: number) => {
+      const batch = pending.splice(0);
+      for (const { id, cb } of batch) if (!cancelled.has(id)) cb(ts);
+    };
+
+    const calls: number[] = [];
+    const h = canvasAnim((t) => calls.push(t), 500);
+
+    h.play();
+    advance(1000);
+    const pendingId = pending[0].id;
+    h.pause();
+    expect(cancelled.has(pendingId)).toBe(true); // pause 取消了挂起帧
+    advance(9999); // 被取消的帧不执行：不再有 draw
+    expect(calls).toEqual([0]);
+
+    h.seek(300); // seek 手动 draw + 重置时钟基准
+    expect(calls).toEqual([0, 300]);
+
+    h.play(); // play 从 seek 位置继续
+    advance(5000); // 首帧：基准帧，t = 300
+    advance(5100);
+    expect(calls).toEqual([0, 300, 300, 400]);
+
     h.dispose();
   });
 

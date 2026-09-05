@@ -32,7 +32,7 @@ export function PathDraw({ d, duration = "mid", variant = "stroke", className = 
   return (
     <svg
       viewBox="0 0 100 100"
-      className={`cdp-path-draw ${className}`}
+      className={`cdp-path-draw cdp-path-draw-${variant} ${className}`}
       data-testid={rest["data-testid"]}
     >
       <path

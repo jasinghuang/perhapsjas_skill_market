@@ -41,8 +41,12 @@ describe("素材承载组", () => {
   });
 
   it("PathDraw filled 变体不注册动画（纯填充）", () => {
-    const { unmount } = render(<PathDraw d="M0 0 L10 10" variant="filled" />);
+    const { container, unmount } = render(<PathDraw d="M0 0 L10 10" variant="filled" />);
     expect(registrySize()).toBe(0);
+    // P3-11：filled 必须真填充——根 svg 带变体类，CSS 据此覆盖 fill: none
+    const svg = container.querySelector("svg");
+    expect(svg).not.toBeNull();
+    expect(svg).toHaveClass("cdp-path-draw", "cdp-path-draw-filled");
     unmount();
   });
 });

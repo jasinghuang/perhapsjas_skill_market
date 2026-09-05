@@ -8,3 +8,8 @@
   stroke: var(--accent-1);
   stroke-width: 2;
 }
+
+/* P3-11：filled 变体真填充（stroke 变体保持 fill: none 描边自绘） */
+.cdp-path-draw-filled .cdp-path-draw-path {
+  fill: var(--accent-1);
+}
