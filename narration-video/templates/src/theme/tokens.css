@@ -84,10 +84,11 @@
   /* ── 语义 · 装饰语言（Ruling M2b-5：色块族） ── */
   --decor-family: block;
 
-  /* ── 语义 · 字幕（墨底奶油字；pill 全圆底框——六轮 F2：主题圆角例外逻辑，字幕底框属标签条类） ── */
+  /* ── 语义 · 字幕（墨底奶油字；圆角矩形底框） ── */
   --caption-bg: rgba(15, 15, 15, 0.85);
   --caption-text: #efe9d9;
-  --caption-radius: 999px;
+  /* 用户定稿：圆角矩形（16px = --space-2 同值；七轮 F1 由 pill 全圆回调） */
+  --caption-radius: 16px;
   /* 字幕是视频主阅读元素：用户定稿"字幕最大、其他可小"（五轮 F1） */
   --caption-size: 40px;
 
