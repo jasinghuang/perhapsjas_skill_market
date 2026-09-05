@@ -1,3 +1,4 @@
+import type { CSSProperties, ReactNode } from "react";
 import { createPrimitive } from "../factory";
 
 export interface GridProps {
@@ -5,8 +6,8 @@ export interface GridProps {
   /** even 变体下的列数（half 固定 2 列） */
   columns?: number;
   className?: string;
-  style?: React.CSSProperties;
-  children?: React.ReactNode;
+  style?: CSSProperties;
+  children?: ReactNode;
   "data-testid"?: string;
 }
 
@@ -17,7 +18,7 @@ const Base = createPrimitive("grid", {
 });
 
 export function Grid({ variant = "even", columns = 3, style, ...rest }: GridProps) {
-  const gridStyle: React.CSSProperties =
+  const gridStyle: CSSProperties =
     variant === "even"
       ? { gridTemplateColumns: `repeat(${columns}, 1fr)`, ...style }
       : style ?? {};

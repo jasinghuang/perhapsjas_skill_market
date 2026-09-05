@@ -3,8 +3,9 @@ import { cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 // jsdom 无 WAAPI：全局测试基建 stub（Ruling P2-11，T4-T6 组件测试直接复用）。
-// 原型级 stub（与 motion.test.ts / factory.test.tsx 的 FakeAnim 模式一致），
-// 否则 revealAnim 因 typeof el.animate !== "function" 直接返回 null，注册表恒空。
+// 原型级 stub（终审 M9：motion.test.ts / factory.test.tsx 已删本地 FakeAnim 副本，
+// 全库统一走此全局 stub），否则 revealAnim 因 typeof el.animate !== "function"
+// 直接返回 null，注册表恒空。
 class FakeAnim {
   currentTime = 0;
   playState: "paused" | "running" | "finished" | "idle" = "paused";

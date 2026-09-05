@@ -1,28 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import { RevealPreset, revealAnim, staggerMs } from "./motion";
 import { registrySize } from "../engine/animationRuntime";
 
-class FakeAnim {
-  currentTime = 0;
-  playState: "paused" | "running" | "finished" = "paused";
-  constructor(public opts: KeyframeAnimationOptions) {}
-  play() { this.playState = "running"; }
-  pause() { this.playState = "paused"; }
-  // P2-13：dispose 必须取消底层动画，stub 需同型（与 test-setup.ts 一致）
-  cancel() {}
-}
-
-function stubElement(): HTMLElement {
-  const el = document.createElement("div");
-  el.animate = (k: unknown, opts: KeyframeAnimationOptions) =>
-    new FakeAnim(opts) as unknown as Animation;
-  return el;
-}
-
+// 终审 M9：无本地 FakeAnim 副本——Element.prototype.animate 的 WAAPI stub
+// 由全局 test-setup.ts 安装（Ruling P2-11），此处直接用 document.createElement。
 describe("motion 动效档位", () => {
   it("revealAnim 注册进引擎注册表并返回 handle", () => {
-    const el = stubElement();
+    const el = document.createElement("div");
     const h = revealAnim(el, "fade", "fast", 0);
     expect(h).not.toBeNull();
     expect(registrySize()).toBeGreaterThan(0);
@@ -33,7 +17,7 @@ describe("motion 动效档位", () => {
   it("三个预设 keyframes 形状正确", () => {
     const presets: RevealPreset[] = ["fade", "rise", "wipe"];
     for (const p of presets) {
-      const el = stubElement();
+      const el = document.createElement("div");
       const h = revealAnim(el, p, "mid", 0);
       expect(h).not.toBeNull();
       h!.dispose();

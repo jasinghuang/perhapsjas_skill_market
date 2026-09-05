@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
 import { HeroNumber, Counter, BarGrow, DonutMeter, StatCard } from "./";

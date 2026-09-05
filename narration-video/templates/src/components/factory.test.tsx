@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { render } from "@testing-library/react";
 import { createPrimitive } from "./factory";
 import { registrySize, setRenderMode } from "../engine/animationRuntime";
 
@@ -12,31 +12,8 @@ const Demo = createPrimitive("demo", {
 beforeEach(() => setRenderMode(false));
 afterEach(() => setRenderMode(false));
 
-// jsdom 无 WAAPI：原型级 stub（同 motion.test.ts 的 FakeAnim 模式）。
-// 否则 revealAnim 因 typeof el.animate !== "function" 直接返回 null，注册表恒空。
-class FakeAnim {
-  currentTime = 0;
-  playState: "paused" | "running" | "finished" = "paused";
-  constructor(public opts: KeyframeAnimationOptions) {}
-  play() { this.playState = "running"; }
-  pause() { this.playState = "paused"; }
-  // P2-13：dispose 必须取消底层动画，stub 需同型（与 test-setup.ts 一致）
-  cancel() {}
-}
-
-const originalAnimate = Element.prototype.animate;
-
-beforeEach(() => {
-  Element.prototype.animate = (k: unknown, opts: KeyframeAnimationOptions) =>
-    new FakeAnim(opts) as unknown as Animation;
-});
-
-afterEach(() => {
-  Element.prototype.animate = originalAnimate;
-  // vitest 未开 globals，RTL 不自动注册 cleanup（见 Stage.test.tsx 注释），必须手动清理
-  cleanup();
-});
-
+// 终审 M9：无本地 FakeAnim 副本——jsdom 无 WAAPI 的 Element.prototype.animate stub
+// 与 RTL 全局 cleanup 均由全局 test-setup.ts 安装（Ruling P2-11 / P2-12）。
 describe("createPrimitive 工厂", () => {
   it("默认变体类名 = cdp cdp-demo cdp-demo-plain", () => {
     const { getByTestId } = render(<Demo data-testid="x">hi</Demo>);
@@ -51,7 +28,7 @@ describe("createPrimitive 工厂", () => {
   });
 
   it("reveal 动画注册进引擎注册表，卸载时 dispose", () => {
-    const { getByTestId, unmount } = render(
+    const { unmount } = render(
       <Demo reveal="fade" duration="fast" data-testid="x">hi</Demo>,
     );
     expect(registrySize()).toBeGreaterThan(0);

@@ -110,7 +110,7 @@ describe("动画运行时注册表", () => {
   });
 
   it("waapi 适配器：iterations 下 finished 边界随总时长平移（P3-7）", () => {
-    const { el, anim } = makeWaapiStub();
+    const { el } = makeWaapiStub();
     const h = waapi(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 1600, iterations: 3 });
     h.seek(4799.5); // 总时长(4800)前 0.5ms：仍在播放，未 finished
     expect(h.isFinished()).toBe(false);
