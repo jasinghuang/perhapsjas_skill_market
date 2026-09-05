@@ -7,6 +7,7 @@ import "./theme/fonts.css";
 // dev-only 验收工具短路（替换正常 Stage，与 App 渲染并列）：
 // - ?showcase=1：主题效果页（28 组件全展示，M2b 验收）
 // - ?font-preview=1：字体配对对比页（M2b 用户拍板）
+// - ?styleguide=1：样式词典页（全部 token 视觉表达 + 28 组件全变体目录，M2b 验收）
 const params = new URLSearchParams(window.location.search);
 if (params.has("showcase")) {
   import("./ThemeShowcase").then(({ ThemeShowcase }) => {
@@ -15,6 +16,10 @@ if (params.has("showcase")) {
 } else if (params.has("font-preview")) {
   import("./FontPreview").then(({ FontPreview }) => {
     ReactDOM.createRoot(document.getElementById("root")!).render(<FontPreview />);
+  });
+} else if (params.has("styleguide")) {
+  import("./StyleGuide").then(({ StyleGuide }) => {
+    ReactDOM.createRoot(document.getElementById("root")!).render(<StyleGuide />);
   });
 } else {
   // 正常 App 渲染
