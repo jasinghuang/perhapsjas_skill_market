@@ -97,6 +97,28 @@ describe("动画运行时注册表", () => {
     expect(registrySize()).toBe(0);
   });
 
+  it("waapi 适配器：iterations 计入总时长（durationMs = delay + duration × iterations，P3-7）", () => {
+    const { el: elA } = makeWaapiStub();
+    const h3 = waapi(elA, [{ opacity: 0 }, { opacity: 1 }], { duration: 1600, iterations: 3 });
+    expect(h3.durationMs).toBe(4800); // Breathe 呼吸 3 轮：delay(0) + 1600 × 3
+    h3.dispose();
+
+    const { el: elB } = makeWaapiStub();
+    const hDelayed = waapi(elB, [{ opacity: 0 }, { opacity: 1 }], { duration: 1000, delay: 200, iterations: 3 });
+    expect(hDelayed.durationMs).toBe(3200); // delay 只计一次：200 + 1000 × 3
+    hDelayed.dispose();
+  });
+
+  it("waapi 适配器：iterations 下 finished 边界随总时长平移（P3-7）", () => {
+    const { el, anim } = makeWaapiStub();
+    const h = waapi(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 1600, iterations: 3 });
+    h.seek(4799.5); // 总时长(4800)前 0.5ms：仍在播放，未 finished
+    expect(h.isFinished()).toBe(false);
+    h.seek(4800); // 总时长：finished
+    expect(h.isFinished()).toBe(true);
+    h.dispose();
+  });
+
   it("animationWindowMs = 各动画结束时间的最大值", () => {
     const a = register({ durationMs: 1000, seek: () => {}, isFinished: () => false, pause: () => {}, play: () => {} });
     const b = register({ durationMs: 2000, seek: () => {}, isFinished: () => false, pause: () => {}, play: () => {} });

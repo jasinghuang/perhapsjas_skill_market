@@ -31,4 +31,15 @@ describe("SeededRandom（§8.1 确定性随机）", () => {
     const again = seededRandom(9);
     expect(Array.from({ length: 20 }, () => again())).toEqual(first20);
   });
+
+  // 金样值（Ruling P3-9）：标准 mulberry32 参考值（P3T1 评审验证）——
+  // 钉死算法实现，错误常数/错位实现在此现形。
+  it("金样值：seed=42 前 3 个输出与标准 mulberry32 参考值一致", () => {
+    const rnd = seededRandom(42);
+    expect([rnd(), rnd(), rnd()]).toEqual([
+      0.6011037519201636,
+      0.44829055899754167,
+      0.8524657934904099,
+    ]);
+  });
 });

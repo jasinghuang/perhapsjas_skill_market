@@ -79,7 +79,14 @@ export function waapi(
 ): AnimHandle {
   const delay = typeof opts.delay === "number" ? opts.delay : 0;
   const duration = typeof opts.duration === "number" ? opts.duration : 0;
-  const total = delay + duration;
+  // P3-7：total 计入有限 iterations（WAAPI currentTime 跨迭代累加，delay 只计一次）。
+  // 仅正有限值参与计算（Infinity 会污染 animationWindowMs 的 max）；
+  // 无限 iterations 由组件层禁止（氛围组件只传有限 cycles），兜底按 1 轮计。
+  const iterations =
+    typeof opts.iterations === "number" && Number.isFinite(opts.iterations) && opts.iterations > 0
+      ? opts.iterations
+      : 1;
+  const total = delay + duration * iterations;
   const animation = el.animate(keyframes, opts);
   animation.pause();
 
@@ -91,7 +98,9 @@ export function waapi(
       animation.currentTime = Math.min(total, Math.max(0, tMs));
     },
     isFinished: () =>
-      Number(animation.currentTime ?? 0) >= total - 0.5 || animation.playState === "finished",
+      // 严格大于：currentTime 到达总时长才算 finished（WAAPI 真实语义）；
+      // 0.5ms 容差只吸收 seek 抖动，恰在 total - 0.5 时仍在播放。
+      Number(animation.currentTime ?? 0) > total - 0.5 || animation.playState === "finished",
     pause: () => animation.pause(),
     play: () => animation.play(),
   });
