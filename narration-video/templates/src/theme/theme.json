@@ -2,5 +2,14 @@
   "name": "m2a-neutral-placeholder",
   "nameZh": "中性占位（M2b 将替换为 creative-mode）",
   "mood": "契约验证用中性值，不代表最终视觉",
-  "bestFor": "组件契约测试"
+  "bestFor": "组件契约测试",
+  "fonts": {
+    "declared": [
+      { "family": "Archivo Black", "source": "@fontsource/archivo-black" },
+      { "family": "Space Grotesk", "source": "@fontsource/space-grotesk" },
+      { "family": "JetBrains Mono", "source": "@fontsource/jetbrains-mono" },
+      { "family": "Noto Sans SC", "source": "@fontsource/noto-sans-sc", "weights": [900] },
+      { "family": "Noto Serif SC", "source": "@fontsource/noto-serif-sc", "weights": [900] }
+    ]
+  }
 }
