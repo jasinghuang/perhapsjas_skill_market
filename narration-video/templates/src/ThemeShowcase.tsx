@@ -1,12 +1,12 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
 // ?showcase=1 渲染：5 屏 1920×1080 slide deck——每屏带统一 chrome frame
-// （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–938 + 字幕保留区 y[962,1034]；meta 页码条已删）。
+// （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–934 + 字幕保留区 y[958,1038]；meta 页码条已删）。
 // 构图纪律（用户反馈终审）：屏 2-5 严格复刻 creative-mode 参考构图——
 // S2 = 参考 s3 数据屏（2×2 满幅零阴影网格）；S3 = 参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）；
 // S4 = 参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）；S5 = 参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
-// （底边 ≤938 = 字幕区上缘 962 − 24；24px 阴影落点亦算占位，不越界）；③ 氛围背景层与 CaptionLayer 自身豁免。
-// ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 962 线，pointerEvents none）。
+// （底边 ≤934 = 字幕区上缘 958 − 24；24px 阴影落点亦算占位，不越界）；③ 氛围背景层与 CaptionLayer 自身豁免。
+// ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 958 线，pointerEvents none）。
 // 严守用色纪律（每屏 2-3 个强调色）；舞台尺寸 / chrome frame / 印章等 dev 工具页家具用 inline style；
 // 场景内构图与配色走组件 + token，需要局部配色时用 scope() 注入 CSS 自定义属性（token 覆写，不改组件本体）。
 import type { CSSProperties, ReactNode } from "react";
@@ -56,7 +56,7 @@ const SHOWCASE_TWEAKS = `
 const GUIDES_ON = new URLSearchParams(window.location.search).has("guides");
 
 /**
- * 安全框参考线：96px 内容带（x 96/1824 · y 112/938）+ 字幕保留区线 962（CAPTION）+ 64px chrome 带（x 64/1856 · topbar 48）。
+ * 安全框参考线：96px 内容带（x 96/1824 · y 112/934）+ 字幕保留区线 958（CAPTION）+ 64px chrome 带（x 64/1856 · topbar 48）。
  * 纯视觉叠加层：pointerEvents none，不参与布局、不遮挡交互。
  */
 function SafetyGuides({ color }: { color: string }) {
@@ -77,20 +77,20 @@ function SafetyGuides({ color }: { color: string }) {
       <div style={{ ...line, top: 0, bottom: 0, left: 64, borderLeft: `2px dashed ${color}` }} />
       <div style={{ ...line, top: 0, bottom: 0, right: 64, borderRight: `2px dashed ${color}` }} />
       <div style={{ ...line, top: 48, left: 64, right: 64, borderTop: `2px dashed ${color}` }} />
-      {/* 内容带 96：两侧竖线 + 顶 112 / 底 938 限位线 + 字幕保留区 962（字幕区上缘 962 − 24 = 内容底 938） */}
+      {/* 内容带 96：两侧竖线 + 顶 112 / 底 934 限位线 + 字幕保留区 958（字幕区上缘 958 − 24 = 内容底 934） */}
       <div style={{ ...line, top: 0, bottom: 0, left: 96, borderLeft: `2px dashed ${color}` }} />
       <div style={{ ...line, top: 0, bottom: 0, right: 96, borderRight: `2px dashed ${color}` }} />
       <div style={{ ...line, top: 112, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
-      <div style={{ ...line, bottom: 114, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
-      <div style={{ ...line, bottom: 138, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
+      <div style={{ ...line, bottom: 118, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
+      <div style={{ ...line, bottom: 142, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
       {/* mono 小标注 */}
       <span style={{ ...label, top: 8, left: 68 }}>CHROME 64</span>
       <span style={{ ...label, top: 8, left: 252 }}>CONTENT 96</span>
       <span style={{ ...label, top: 8, right: 68 }}>64</span>
       <span style={{ ...label, top: 8, right: 100 }}>96</span>
       <span style={{ ...label, top: 96, left: 100 }}>112</span>
-      <span style={{ ...label, bottom: 102, left: 100 }}>CAPTION 962</span>
-      <span style={{ ...label, bottom: 122, left: 100 }}>938</span>
+      <span style={{ ...label, bottom: 102, left: 100 }}>CAPTION 958</span>
+      <span style={{ ...label, bottom: 122, left: 100 }}>934</span>
     </div>
   );
 }
@@ -176,11 +176,11 @@ function SlideShell({
         </span>
       </div>
       {/* 内容层：StagePad（96px gutter）+ 安全框内容带（topbar 底 88 + 24 = 顶 112；
-          字幕区上缘 962 − 24 = 底 938——四轮 F1 字幕保留区规格，五轮 F1 字幕 40px 档实测同步） */}
+          字幕区上缘 958 − 24 = 底 934——八轮 F1 字幕 4px 粗描边后实测同步） */}
       <StagePad>
         <div
           style={{
-            height: "calc(100% - var(--stage-pad-y) - var(--space-5) - 10px)",
+            height: "calc(100% - var(--stage-pad-y) - var(--space-5) - 14px)",
             display: "flex",
             flexDirection: "column",
             paddingTop: "var(--space-5)",
@@ -190,8 +190,11 @@ function SlideShell({
           {children}
         </div>
       </StagePad>
-      {/* 字幕层（真实 CaptionLayer 组件；视频场景中底部属于字幕——meta 页码条已删除） */}
-      <CaptionLayer text={caption} />
+      {/* 字幕层（真实 CaptionLayer 组件；视频场景中底部属于字幕——meta 页码条已删除）。
+          S5 绿底例外：scope 覆写 stroke/text → cream（真实章节深色 slide 由 M3b 对比度门禁 #18 兜底） */}
+      <div style={invert ? scope({ "--caption-stroke": "var(--surface)", "--caption-text": "var(--surface)" }) : undefined}>
+        <CaptionLayer text={caption} />
+      </div>
       {/* 安全框可视化（?showcase=1&guides=1） */}
       <SafetyGuides color={chrome} />
     </section>

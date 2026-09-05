@@ -19,7 +19,7 @@ const VALID_CSS = `:root {
   --badge-bg: #fff; --badge-text: #000;
   --hero-num-font: serif; --hero-num-weight: 400; --hero-num-track: 0em;
   --decor-family: dot;
-  --caption-bg: #000; --caption-text: #fff; --caption-radius: 0px; --caption-size: 1px;
+  --caption-stroke: #000; --caption-text: #000; --caption-radius: 0px; --caption-size: 1px;
   --font-display-cn: sans-serif; --font-display-en: sans-serif;
   --font-body: sans-serif; --font-mono: monospace;
   --stage-pad-x: 1px; --stage-pad-y: 1px;
