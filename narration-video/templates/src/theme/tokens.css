@@ -1,35 +1,37 @@
-/* 三层 token 骨架（M2a 契约验证用中性占位值；M2b 覆盖为 creative-mode 值）。
-   组件与章节只认变量名，不认值——本文件的结构是契约，值是皮肤。 */
 :root {
-  /* ── 基础 · 色 ── */
-  --surface: #f7f5ef;
-  --surface-2: #eeeae0;
-  --surface-3: #1a1a1a;
-  --text: #1a1a1a;
-  --text-2: #55524a;
-  --text-mute: #8a867c;
-  --text-faint: #b5b1a6;
-  /* 强调色多槽位（§5.4 修正 1）：accent-1 必填，2/3/4 可选（M2b 启用） */
-  --accent-1: #c9501f;
-  --accent-1-dark: #a33f16;
-  --rule: #1a1a1a;
+  /* ── 基础 · 色（creative-mode 1:1） ── */
+  --surface: #efe9d9;          /* cream */
+  --surface-2: #e4dcc4;        /* cream-2 */
+  --surface-3: #0f0f0f;        /* ink */
+  --text: #0f0f0f;             /* ink */
+  --text-2: #2a2a2a;           /* ink-2 */
+  --text-mute: #5c574c;
+  --text-faint: #8f897c;
+  /* 四色强调（Ruling M2b-6：accent-1=森林绿） */
+  --accent-1: #1f8a4c;         /* green */
+  --accent-1-dark: #136636;
+  --accent-2: #f06ca8;         /* pink */
+  --accent-2-dark: #d14e8b;
+  --accent-3: #e85a1f;         /* orange */
+  --accent-4: #f5c518;         /* yellow */
+  --rule: #0f0f0f;
   --shell: #0b0b0b;
 
-  /* ── 基础 · 阴影语言（支持偏移实色硬阴影，§5.4 修正 3） ── */
-  --shadow-card: 6px 6px 0 rgba(26, 26, 26, 0.9);
+  /* ── 阴影语言：24px 双层硬偏移（§5.4 修正 3） ── */
+  --shadow-card: 24px 24px 0 var(--accent-3), 24px 24px 0 4px var(--surface-3);
   --shadow-stage: 0 8px 40px rgba(0, 0, 0, 0.35);
 
-  /* ── 基础 · 字阶 ── */
-  --t-display-1: 128px;
+  /* ── 字阶（creative-mode 直映射；顶档按 Ruling M2b-4 裁剪） ── */
+  --t-display-1: 160px;
   --t-display-2: 96px;
-  --t-h1: 72px;
+  --t-h1: 84px;
   --t-h2: 56px;
   --t-h3: 40px;
   --t-body: 28px;
   --t-label: 24px;
   --t-micro: 18px;
 
-  /* ── 基础 · 间距阶 ── */
+  /* ── 间距（creative-mode 96/64/28/32 体系） ── */
   --space-1: 8px;
   --space-2: 16px;
   --space-3: 24px;
@@ -37,8 +39,10 @@
   --space-5: 48px;
   --space-6: 64px;
   --grid-gutter: 28px;
+  --stage-pad-x: 96px;
+  --stage-pad-y: 64px;
 
-  /* ── 基础 · 动效（数值化，§5.1） ── */
+  /* ── 动效（利落性格；--ease-emph 保持无过冲强缓出） ── */
   --dur-fast: 300ms;
   --dur-mid: 700ms;
   --dur-slow: 1400ms;
@@ -47,48 +51,44 @@
   --ease-emph: cubic-bezier(0.16, 1, 0.3, 1);
   --stagger: 120ms;
 
-  /* ── 语义 · 卡片 ── */
+  /* ── 语义 · 卡片（4px 墨框 + 零圆角） ── */
   --card-bg: var(--surface);
-  --card-border: 1px solid var(--text);
+  --card-border: 4px solid var(--text);
   --card-radius: 0px;
   --r-card: 0px;
   --r-pill: 999px;
-  --border-w: 1px;
+  --border-w: 4px;
 
-  /* ── 语义 · 表格 ── */
-  --table-border: 1px solid var(--text);
-  --table-head-bg: var(--surface-2);
+  /* ── 语义 · 表格（4px 外框 + 3px 行线 + 墨底表头） ── */
+  --table-border: 3px solid var(--text);
+  --table-head-bg: var(--surface-3);
   --table-zebra: var(--surface-2);
 
   /* ── 语义 · 分割线 ── */
-  --rule-w: 2px;
+  --rule-w: 4px;
   --rule-style: solid;
 
-  /* ── 语义 · 徽章 ── */
+  /* ── 语义 · 徽章（墨底奶油字） ── */
   --badge-bg: var(--surface-3);
   --badge-text: var(--surface);
 
-  /* ── 语义 · 大数字性格 ── */
+  /* ── 语义 · 大数字（Archivo Black 性格） ── */
   --hero-num-font: var(--font-display-en);
-  --hero-num-weight: 900;
-  --hero-num-track: -0.02em;
+  --hero-num-weight: 400;
+  --hero-num-track: 0em;
 
-  /* ── 语义 · 装饰语言（六族：dot/bar/ring/polygon/block/stamp） ── */
-  --decor-family: dot;
+  /* ── 语义 · 装饰语言（Ruling M2b-5：色块族） ── */
+  --decor-family: block;
 
-  /* ── 语义 · 字幕 ── */
-  --caption-bg: rgba(10, 10, 10, 0.82);
-  --caption-text: #f5f2ea;
-  --caption-radius: 8px;
+  /* ── 语义 · 字幕（墨底奶油字，零圆角贴边） ── */
+  --caption-bg: rgba(15, 15, 15, 0.85);
+  --caption-text: #efe9d9;
+  --caption-radius: 0px;
   --caption-size: 30px;
 
-  /* ── 字体四坑位 ── */
-  --font-display-cn: "PingFang SC", "Noto Sans SC", sans-serif;
-  --font-display-en: "Archivo", "Arial Black", sans-serif;
+  /* ── 字体四坑位（display-cn 待 Task 4 拍板回填，暂 Sans 900） ── */
+  --font-display-cn: "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-display-en: "Archivo Black", "Arial Black", sans-serif;
   --font-body: "Space Grotesk", "PingFang SC", sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", monospace;
-
-  /* ── 舞台留白（v1 由主题内部固定、不对章节开放，§5.1） ── */
-  --stage-pad-x: 96px;
-  --stage-pad-y: 64px;
 }
