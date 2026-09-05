@@ -36,6 +36,19 @@ describe("结构组组件", () => {
     expect(getByTestId("tb").className).toContain("cdp-table-zebra");
   });
 
+  it("Table columns 变体类名渲染（彩色列）", () => {
+    const { getByTestId } = render(
+      <Table
+        variant="columns"
+        header={["属性", "A", "B", "C"]}
+        rows={[["速度", "快", "更快", "最快"]]}
+        data-testid="tb"
+      />,
+    );
+    expect(getByTestId("tb").className).toContain("cdp-table-columns");
+    expect(getByTestId("tb").querySelectorAll("tbody td")).toHaveLength(4);
+  });
+
   it("Card reveal 走引擎、卸载 dispose", () => {
     const { unmount } = render(<Card reveal="fade">x</Card>);
     expect(registrySize()).toBeGreaterThan(0);

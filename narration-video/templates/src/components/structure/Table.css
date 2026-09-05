@@ -24,3 +24,20 @@
 .cdp-table-zebra tbody tr:nth-child(even) {
   background: var(--table-zebra);
 }
+
+/* columns 变体：彩色数据列（creative-mode slide 7 签名）。
+   对比度纪律：accent-2 底配墨字；accent-1 / accent-3 底配 cream 字。零裸值。 */
+.cdp-table-columns tbody td:nth-child(2) {
+  background: var(--accent-2);
+  color: var(--text);
+}
+
+.cdp-table-columns tbody td:nth-child(3) {
+  background: var(--accent-1);
+  color: var(--surface);
+}
+
+.cdp-table-columns tbody td:nth-child(4) {
+  background: var(--accent-3);
+  color: var(--surface);
+}

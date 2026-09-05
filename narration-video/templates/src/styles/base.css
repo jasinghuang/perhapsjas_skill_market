@@ -42,6 +42,7 @@ body,
   border-radius: 6px;
   font-size: 28px;
   line-height: 1.5;
+  text-align: center; /* 字幕层居中（engine 修正：字幕样例文字居中，非仅展示页） */
 }
 
 .transport {

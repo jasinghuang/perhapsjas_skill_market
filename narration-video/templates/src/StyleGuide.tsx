@@ -49,6 +49,7 @@ const MONO_CN = '"JetBrains Mono", "Noto Sans SC", "SF Mono", monospace';
 /** 组件格内 token 覆写：字阶压缩到目录尺寸 + 硬阴影关（变体对照只读形态，不读投影） */
 const CELL_SCOPE: Record<string, string> = {
   "--shadow-card": "none",
+  "--shadow-card-sm": "none",
   "--t-display-1": "56px",
   "--t-display-2": "40px",
   "--t-h1": "32px",
@@ -504,11 +505,11 @@ function SemanticSection() {
   return (
     <Section index="05" title="语义组件 SEMANTIC">
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-        <SemItem label="CARD · 三变体（plain 保留 24px 硬阴影语义）" testid="semantic-card">
+        <SemItem label="CARD · 三变体（plain 保留 12px 硬阴影语义；featured 24px 档归 marker/数据主角）" testid="semantic-card">
           <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap" }}>
             <Card variant="plain" style={cardRowStyle}>
               <MonoLabel size={12}>PLAIN</MonoLabel>
-              <BodyCopy>奶油底 · 墨框 · 硬阴影</BodyCopy>
+              <BodyCopy>奶油底 · 墨框 · 12px 硬阴影</BodyCopy>
             </Card>
             <div style={INVERT_TEXT}>
               <Card variant="invert" style={cardRowStyle}>
@@ -524,7 +525,7 @@ function SemanticSection() {
             </div>
           </div>
         </SemItem>
-        <SemItem label="TABLE · 两变体（同数据 3 行）" testid="semantic-table">
+        <SemItem label="TABLE · 三变体（同数据 3 行；columns = 彩色列：pink 墨字 / green cream 字 / orange cream 字）" testid="semantic-table">
           <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap", alignItems: "flex-start" }}>
             <div style={{ width: 480 }}>
               <Table
@@ -540,6 +541,14 @@ function SemanticSection() {
                 header={["组件", "变体", "状态"]}
                 rows={[["Card", "plain", "✓"], ["Table", "zebra", "✓"], ["Rule", "dashed", "✓"]]}
                 data-testid="semantic-table-zebra"
+              />
+            </div>
+            <div style={{ width: 480 }}>
+              <Table
+                variant="columns"
+                header={["属性", "方案 A", "方案 B", "方案 C"]}
+                rows={[["速度", "快", "更快", "最快"], ["足迹", "轻", "中", "重"], ["投入", "低", "中", "高"]]}
+                data-testid="semantic-table-columns"
               />
             </div>
           </div>
@@ -610,6 +619,7 @@ function SemanticSection() {
               fontFamily: "var(--font-body)",
               padding: "var(--space-2) var(--space-3)",
               lineHeight: 1.3,
+              textAlign: "center",
             }}
           >
             字幕样式 · caption tokens

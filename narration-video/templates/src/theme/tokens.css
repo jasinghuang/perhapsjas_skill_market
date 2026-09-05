@@ -19,6 +19,8 @@
 
   /* ── 阴影语言：24px 双层硬偏移（§5.4 修正 3） ── */
   --shadow-card: 24px 24px 0 var(--accent-3), 24px 24px 0 4px var(--surface-3);
+  /* 卡片档硬阴影——用户视觉定稿"近一点"；featured 24px 档保留给 marker/数据主角 */
+  --shadow-card-sm: 12px 12px 0 var(--accent-3), 12px 12px 0 4px var(--surface-3);
   --shadow-stage: 0 8px 40px rgba(0, 0, 0, 0.35);
 
   /* ── 字阶（creative-mode 直映射；顶档按 Ruling M2b-4 裁剪） ── */

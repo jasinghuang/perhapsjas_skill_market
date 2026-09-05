@@ -3,14 +3,14 @@ import { createPrimitive } from "../factory";
 export interface TableProps {
   header?: string[];
   rows: string[][];
-  variant?: "bordered" | "zebra";
+  variant?: "bordered" | "zebra" | "columns";
   className?: string;
   "data-testid"?: string;
 }
 
 const Base = createPrimitive("table", {
   tag: "table",
-  variants: ["bordered", "zebra"],
+  variants: ["bordered", "zebra", "columns"],
   defaultVariant: "bordered",
 });
 

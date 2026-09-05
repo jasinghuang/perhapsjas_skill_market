@@ -7,7 +7,7 @@ export const REQUIRED_TOKENS: string[] = [
   "--text", "--text-2", "--text-mute", "--text-faint",
   "--accent-1", "--rule", "--shell",
   // 阴影
-  "--shadow-card", "--shadow-stage",
+  "--shadow-card", "--shadow-card-sm", "--shadow-stage",
   // 字阶
   "--t-display-1", "--t-display-2", "--t-h1", "--t-h2", "--t-h3",
   "--t-body", "--t-label", "--t-micro",

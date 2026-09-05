@@ -1,43 +1,34 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
-// ?showcase=1 渲染：4 屏 1920×1080 slide deck——每屏带统一 chrome frame
+// ?showcase=1 渲染：5 屏 1920×1080 slide deck——每屏带统一 chrome frame
 // （topbar 48px/64px + meta footer 40px/64px + 内容带 96px gutter、垂直 y 112–992）。
+// 构图纪律（用户反馈终审）：屏 2-5 严格复刻 creative-mode 参考构图——
+// S2 = 参考 s3 数据屏（2×2 满幅零阴影网格）；S3 = 参考 s6 流程屏（4 步卡 + dashed 线 + 三角箭头）；
+// S4 = 参考 s7 对比屏（-4deg 徽章 + 彩色列表格）；S5 = 参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
-// （topbar 下缘 +24 起、meta 上缘 −24 止，24px 偏移阴影落点亦算占位）；③ 氛围背景层豁免。
-// 画布无彩色投影（仅 4px 墨框）；硬阴影只保留在 featured 内部元素（S1 marker 块 / S2 HeroNumber / S3 current 卡 / S4 stamp 标题）。
+// （24px 阴影落点亦算占位，不越界）；③ 氛围背景层豁免。
 // ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带，pointerEvents none）。
-// 严守用色纪律（每屏 2-3 个强调色），28 组件全部出场且各有构图角色。
-// 舞台尺寸 / chrome frame / 印章等 dev 工具页家具用 inline style；场景内构图与配色走组件 + token，
-// 需要局部配色时用 scope() 注入 CSS 自定义属性（token 覆写，不改组件本体）。
+// 严守用色纪律（每屏 2-3 个强调色）；舞台尺寸 / chrome frame / 印章等 dev 工具页家具用 inline style；
+// 场景内构图与配色走组件 + token，需要局部配色时用 scope() 注入 CSS 自定义属性（token 覆写，不改组件本体）。
 import type { CSSProperties, ReactNode } from "react";
 import {
   BarGrow,
   BodyCopy,
-  Breathe,
   Card,
   Counter,
   DecorBar,
   DecorDot,
-  DecorRing,
   DonutMeter,
-  Figure,
   Grid,
   HeroNumber,
   HeroTitle,
-  KenBurns,
   Kicker,
-  PathDraw,
   ProgressDots,
   QuoteBlock,
-  RevealList,
-  RevealText,
   Rule,
   SeededParticles,
   StagePad,
-  StatCard,
-  StepSequence,
   Table,
   TimelineTrack,
-  TypedTerminal,
 } from "./components";
 
 /** 局部 token 覆写：向子树注入 CSS 自定义属性（dev 页合法手段，不改组件本体） */
@@ -48,8 +39,15 @@ const MONO_CN = '"JetBrains Mono", "Noto Sans SC", "SF Mono", monospace';
 
 /** 24px 双层硬阴影（featured 专用；offset 色按屏纪律选） */
 const SHADOW_ORANGE = "24px 24px 0 var(--accent-3), 24px 24px 0 4px var(--surface-3)";
-const SHADOW_GREEN = "24px 24px 0 var(--accent-1), 24px 24px 0 4px var(--surface-3)";
 const SHADOW_PINK = "24px 24px 0 var(--accent-2), 24px 24px 0 4px var(--surface-3)";
+
+/** dev 页结构性微调（零颜色，仅尺寸）；自含 <style>，不入组件 CSS */
+const SHOWCASE_TWEAKS = `
+.sg-compare-table { height: 100%; }
+.sg-compare-table thead th { height: 96px; }
+.sg-compare-table thead th:first-child, .sg-compare-table tbody td:first-child { width: 30%; }
+.sg-compare-table tbody td:first-child { background: var(--surface); font-weight: 700; }
+`;
 
 /* ── 安全框可视化（?showcase=1&guides=1 dev-only） ── */
 
@@ -97,11 +95,11 @@ function SafetyGuides({ color }: { color: string }) {
 
 /* ── chrome frame（每屏必有） ── */
 interface SlideShellProps {
-  index: string; // "01".."04"
+  index: string; // "01".."05"
   topbar: ReactNode;
   pill: string;
   meta: ReactNode;
-  bg?: string; // 屏底色（默认 cream；S4 绿底）
+  bg?: string; // 屏底色（默认 cream；S5 绿底）
   invert?: boolean; // 绿底屏 chrome 反色（cream 字 + cream 框 pill）
   children: ReactNode;
 }
@@ -176,7 +174,7 @@ function SlideShell({
         </span>
       </div>
       {/* 内容层：StagePad（96px gutter）+ 安全框内容带（topbar 底 88 + 24 = 顶 112；
-          meta 顶 1016 − 24 = 底 992；带高 880 = StagePad 内容高 944 − 64） */}
+          meta 顶 1016 − 24 = 底 992） */}
       <StagePad>
         <div
           style={{
@@ -190,7 +188,7 @@ function SlideShell({
           {children}
         </div>
       </StagePad>
-      {/* meta footer：40px bottom / 64px 两侧；左描述 + 右 "0N · 04"（10px 墨点分隔） */}
+      {/* meta footer：40px bottom / 64px 两侧；左描述 + 右 "0N · 05"（10px 墨点分隔） */}
       <div
         data-testid="chrome-meta"
         style={{
@@ -231,7 +229,7 @@ function SlideShell({
         >
           <span>{index}</span>
           <span style={{ width: 10, height: 10, borderRadius: "50%", background: chrome }} />
-          <span>04</span>
+          <span>05</span>
         </span>
       </div>
       {/* 安全框可视化（?showcase=1&guides=1） */}
@@ -351,191 +349,287 @@ function CoverSlide() {
   );
 }
 
-/* ── Slide 2 · 数据冲击（强调色：pink + yellow + green，orange 不出场） ── */
+/* ── Slide 2 · 数据冲击 = 参考 s3（强调色：green + pink + orange；yellow 不出场） ── */
+
+/** 数据格（参考 s3 cell）：mono 角标 /0N（右上）+ 大数字 + mono 标签 + 一句描述；
+    bg 按参考序列 green → pink → cream → orange；亮底配墨字、green/orange 底配 cream 字 */
+function StatCell({
+  corner,
+  value,
+  label,
+  desc,
+  bg,
+  ink = true,
+  testid,
+}: {
+  corner: string;
+  value: string;
+  label: string;
+  desc: string;
+  bg: string;
+  ink?: boolean;
+  testid?: string;
+}) {
+  const textScope = ink ? {} : scope({ "--text": "var(--surface)", "--text-2": "var(--surface)" });
+  return (
+    <div style={{ display: "flex", ...textScope }}>
+      <Card
+        variant="plain"
+        data-testid={testid}
+        style={{
+          position: "relative",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: "24px 32px",
+          background: bg,
+        }}
+      >
+        <Kicker
+          style={{
+            position: "absolute",
+            top: 24,
+            right: 28,
+            background: "none",
+            color: "inherit",
+            padding: 0,
+            fontSize: 24,
+            letterSpacing: "0.1em",
+          }}
+        >
+          {corner}
+        </Kicker>
+        <div style={{ paddingTop: 24 }}>
+          <HeroNumber value={value} />
+        </div>
+        <div>
+          <Kicker
+            style={{ background: "none", color: "inherit", padding: 0, fontSize: 24, letterSpacing: "0.12em" }}
+          >
+            {label}
+          </Kicker>
+          <BodyCopy style={{ fontSize: 24, lineHeight: 1.3, marginTop: 6, maxWidth: 520 }}>{desc}</BodyCopy>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function DataSlide() {
   return (
-    <SlideShell
-      index="02"
-      topbar="DATA · 数据冲击"
-      pill="STAT CELLS"
-      meta="配色序列 · 以绿收尾"
-    >
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-        <HeroTitle reveal="rise" style={{ fontSize: "var(--t-h1)", lineHeight: 1 }}>
-          数据冲击
+    <SlideShell index="02" topbar="BY THE NUMBERS" pill="SHOWCASE / M2B" meta="METRICS OVERVIEW">
+      {/* 氛围层（豁免安全框）：种子粒子尘，低透明度铺满整屏 */}
+      <div
+        data-testid="particles-layer"
+        style={{ position: "absolute", inset: 0, opacity: 0.18, pointerEvents: "none" }}
+      >
+        <SeededParticles seed={42} count={40} />
+      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+        {/* headline 两行（参考 s3 "FOUR FIGURES, ONE STORY."；中文按 CJK 细节：逗号分行） */}
+        <HeroTitle style={{ fontSize: 72, lineHeight: 0.95 }}>
+          四个数字，
+          <br />
+          一个故事。
         </HeroTitle>
-        {/* stat cells 一行 4 格：网格单元零阴影（设计铁律）；序列 pink → yellow → cream → green 以绿收尾 */}
+        {/* 2×2 满幅网格：零阴影（--shadow-card-sm none）、格间隙 var(--grid-gutter) 28px */}
         <Grid
           variant="even"
-          columns={4}
+          columns={2}
           data-testid="stat-grid"
-          style={scope({ "--shadow-card": "none", "--text-mute": "var(--text)" })}
+          style={{ flex: 1, gridTemplateRows: "1fr 1fr", ...scope({ "--shadow-card-sm": "none" }) }}
         >
-          <div style={scope({ "--card-bg": "var(--accent-2)" })}>
-            <StatCard number="+47%" label="打开率" variant="plain" />
-          </div>
-          <div style={scope({ "--card-bg": "var(--accent-4)" })}>
-            <StatCard number="12x" label="产出" variant="plain" />
-          </div>
-          <StatCard number="3.2s" label="首屏" variant="plain" />
-          <StatCard number="98%" label="贴合" variant="accent" />
+          <StatCell
+            corner="/01"
+            value="42%"
+            label="参与度提升"
+            desc="参与度相对基线提升 42 个百分点。"
+            bg="var(--accent-1)"
+            ink={false}
+            testid="stat-cell-1"
+          />
+          <StatCell
+            corner="/02"
+            value="2.7×"
+            label="吞吐倍数"
+            desc="同一份口播稿的产出吞吐提升 2.7 倍。"
+            bg="var(--accent-2)"
+            testid="stat-cell-2"
+          />
+          <StatCell
+            corner="/03"
+            value="118"
+            label="活跃占位"
+            desc="活跃占位组件 118 个，随稿迭代。"
+            bg="var(--surface)"
+            testid="stat-cell-3"
+          />
+          <StatCell
+            corner="/04"
+            value="$9.4M"
+            label="样本总值"
+            desc="样本数据总值 940 万美元。"
+            bg="var(--accent-3)"
+            ink={false}
+            testid="stat-cell-4"
+          />
         </Grid>
-        {/* 数据行：动效完成度条 + 帧计数器 + 转化率环 + featured 大数字（本行唯一硬阴影；marginBottom 让阴影收在 meta 带之上） */}
-        <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-4)", marginTop: "auto", marginBottom: "var(--space-4)" }}>
+        {/* 底部一行（宽松 gap 48，只放 3 个）：动效完成度条 + 帧计数器 + 转化率环 */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            gap: 48,
+            marginBottom: "var(--space-3)", // 12px 卡片阴影落点收在内容带内
+          }}
+        >
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
             <Kicker variant="block" style={{ alignSelf: "flex-start" }}>
               70% · 动效完成度
             </Kicker>
             <BarGrow value={0.7} variant="accent" />
           </div>
-          <Card variant="plain" style={{ boxShadow: "none" }}>
-            <Kicker variant="block">FRAMES</Kicker>
-            <Counter to={47} />
-          </Card>
-          <DonutMeter value={0.42} label="转化率" />
-          <div
-            data-testid="featured-hero"
-            style={{
-              background: "var(--surface)",
-              border: "4px solid var(--surface-3)",
-              padding: "var(--space-4)",
-              boxShadow: SHADOW_GREEN,
-              marginRight: "var(--space-3)", // 安全框：24px 阴影落点收在内容带内（右缘 1796 + 28 = 1824）
-            }}
-          >
-            <HeroNumber value="+47%" variant="accent" countUp />
+          <div style={scope({ "--t-display-2": "48px" })}>
+            <Card
+              variant="plain"
+              data-testid="frames-card"
+              style={{
+                padding: "var(--space-3)",
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--space-2)",
+              }}
+            >
+              <Kicker variant="block">FRAMES</Kicker>
+              <Counter to={47} />
+            </Card>
           </div>
+          <DonutMeter value={0.42} label="转化率" />
         </div>
       </div>
     </SlideShell>
   );
 }
 
-/* ── Slide 3 · 流程（强调色：orange + green） ── */
+/* ── Slide 3 · 流程 = 参考 s6（强调色：cream + pink + yellow + green 收尾） ── */
 
-/** 流程步骤卡（cream → ink → green 收尾；current = 本屏 featured 硬阴影 + -4deg NOW 徽章） */
-function StepCard({
-  index,
-  title,
-  desc,
-  tone,
-  current = false,
-}: {
-  index: string;
+interface StepDef {
+  n: string;
   title: string;
   desc: string;
-  tone: "cream" | "ink" | "green";
-  current?: boolean;
-}) {
-  const variant = tone === "cream" ? "plain" : tone === "ink" ? "invert" : "accent";
-  const muted = tone === "cream" ? "var(--text-mute)" : "var(--surface-2)";
-  return (
-    <Card
-      variant={variant}
-      data-testid={`step-card-${tone}`}
-      style={{
-        boxShadow: current ? SHADOW_ORANGE : "none",
-        position: "relative",
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-2)",
-      }}
-    >
-      {current ? (
-        <span
-          style={{
-            position: "absolute",
-            top: -20,
-            right: 20,
-            background: "var(--accent-3)",
-            color: "var(--surface)",
-            border: "4px solid var(--surface-3)",
-            padding: "4px 12px",
-            fontFamily: "var(--font-mono)",
-            fontWeight: 700,
-            fontSize: 18,
-            letterSpacing: "0.1em",
-            transform: "rotate(-4deg)",
-          }}
-        >
-          NOW
-        </span>
-      ) : null}
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.08em", color: muted }}>
-        {index}
-      </span>
-      <div style={{ fontFamily: "var(--font-display-cn)", fontWeight: 900, fontSize: 40, lineHeight: 1 }}>
-        {title}
-      </div>
-      <BodyCopy style={tone === "cream" ? undefined : { color: "var(--surface-2)" }}>{desc}</BodyCopy>
-    </Card>
-  );
+  tone: "cream" | "pink" | "yellow" | "green";
 }
 
-/** 步骤箭头（step-arrow：border 三角） */
+const STEP_DEFS: StepDef[] = [
+  { n: "01", title: "写稿", desc: "口播稿定节奏，一句一拍，每句拆成独立一步。", tone: "cream" },
+  { n: "02", title: "构图", desc: "为每一步选组件，套用主题 token 与配色纪律。", tone: "pink" },
+  { n: "03", title: "动画", desc: "引擎驱动全部动效，可暂停、可快进、可复演。", tone: "yellow" },
+  { n: "04", title: "成片", desc: "录屏导出成片，一张网页承载完整表达。", tone: "green" },
+];
+
+/** 步骤箭头（参考 s6 arrow：CSS border 三角，墨色） */
 function StepArrow() {
   return (
     <div
       aria-hidden="true"
       style={{
+        position: "absolute",
+        right: -22,
+        top: "50%",
+        transform: "translateY(-50%)",
         width: 0,
         height: 0,
         borderTop: "18px solid transparent",
         borderBottom: "18px solid transparent",
         borderLeft: "24px solid var(--surface-3)",
-        alignSelf: "center",
-        flexShrink: 0,
+        zIndex: 2,
       }}
     />
   );
 }
 
+/** 流程步骤卡：大 mono 序号（display-2 96px 档）+ Kicker 标题 + 描述两句 + 右三角箭头（最后一张无）。
+    配色序列 cream → pink（墨字）→ yellow（墨字）→ green（cream 字）收尾；零阴影（参考构图无投影） */
+function StepCard({ def }: { def: StepDef }) {
+  const variant = def.tone === "green" ? "accent" : "plain";
+  const bg =
+    def.tone === "pink" ? "var(--accent-2)" : def.tone === "yellow" ? "var(--accent-4)" : undefined;
+  const creamText = def.tone === "green";
+  return (
+    <Card
+      variant={variant}
+      data-testid={`step-card-${def.tone}`}
+      style={{
+        position: "relative",
+        height: 320,
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-2)",
+        padding: 28,
+        ...(bg ? { background: bg } : {}),
+      }}
+    >
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--t-display-2)",
+          lineHeight: 0.85,
+          color: creamText ? "var(--surface)" : "var(--text)",
+        }}
+      >
+        {def.n}
+      </span>
+      <Kicker
+        style={{
+          background: "none",
+          color: creamText ? "var(--surface)" : "var(--text)",
+          padding: 0,
+          fontSize: 34,
+          lineHeight: 1,
+          fontWeight: 700,
+          letterSpacing: "0.04em",
+        }}
+      >
+        {def.title}
+      </Kicker>
+      <BodyCopy style={{ fontSize: 24, lineHeight: 1.4, color: creamText ? "var(--surface)" : "var(--text-2)" }}>
+        {def.desc}
+      </BodyCopy>
+      {def.tone !== "green" ? <StepArrow /> : null}
+    </Card>
+  );
+}
+
 function FlowSlide() {
   return (
-    <SlideShell index="03" topbar="FLOW · 流程" pill="THREE STEPS" meta="三步管线 · 组件流程">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-        <HeroTitle reveal="rise" style={{ fontSize: "var(--t-h1)", lineHeight: 1 }}>
-          从稿子到成片
-        </HeroTitle>
-        {/* 流程 slide 的 signature：3px dashed 墨线分隔 */}
-        <Rule variant="dashed" data-testid="flow-rule" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-1)" })} />
-        <div data-testid="step-cards" style={{ display: "flex", alignItems: "stretch", gap: "var(--space-3)" }}>
-          <StepCard index="01" title="稿子" desc="口播稿定节奏" tone="cream" />
-          <StepArrow />
-          <StepCard index="02" title="分镜" desc="每句一步视觉" tone="ink" current />
-          <StepArrow />
-          <StepCard index="03" title="成片" desc="录制导出成片" tone="green" />
-        </div>
+    <SlideShell index="03" topbar="HOW IT WORKS" pill="FOUR STEPS" meta="METHOD FLOW">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+        <HeroTitle style={{ fontSize: "var(--t-display-2)", lineHeight: 0.95 }}>一个四步流程。</HeroTitle>
+        {/* 流程 slide 的 signature：3px dashed 墨线分隔（参考 s6 header-line） */}
+        <Rule variant="dashed" data-testid="flow-rule" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-4)" })} />
+        <Grid variant="even" columns={4} data-testid="step-cards" style={scope({ "--shadow-card-sm": "none" })}>
+          {STEP_DEFS.map((def) => (
+            <StepCard key={def.n} def={def} />
+          ))}
+        </Grid>
         <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-6)", marginTop: "auto" }}>
           <div style={{ flex: 1 }}>
-            <RevealList
-              items={["口播稿 → 步进节奏", "组件构图 → 主题 token", "动画 → 引擎驱动"]}
-              activeCount={3}
-              variant="numbered"
-            />
+            <TimelineTrack points={["稿", "镜", "画", "声", "片"]} activeIndex={3} data-testid="flow-timeline" />
           </div>
-          <div style={{ width: 680, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-            {/* orange 角色：时间轴与进度点（token 覆写 --accent-1 → orange） */}
-            <div data-testid="timeline-orange" style={scope({ "--accent-1": "var(--accent-3)" })}>
-              <TimelineTrack points={["稿", "镜", "画", "声", "片"]} activeIndex={3} />
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-              <div style={scope({ "--accent-1": "var(--accent-3)" })}>
-                <ProgressDots total={5} current={4} />
-              </div>
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 18,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "var(--text-mute)",
-                }}
-              >
-                PIPELINE · 五节点
-              </span>
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+            <ProgressDots total={5} current={4} data-testid="flow-progress" />
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 18,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--text-mute)",
+              }}
+            >
+              PIPELINE · 五节点
+            </span>
           </div>
         </div>
       </div>
@@ -543,115 +637,159 @@ function FlowSlide() {
   );
 }
 
-/* ── Slide 4 · 工具箱（绿底 slide；强调色：pink 点缀） ── */
+/* ── Slide 4 · 对比 = 参考 s7（强调色：yellow 徽章 + pink/green/orange 彩色列） ── */
 
-/** 工具箱网格单元：cream 反色 mono 标注 + 内容 */
-function ToolCell({ label, children, style }: { label: string; children: ReactNode; style?: CSSProperties }) {
+const COMPARE_ROWS = [
+  ["速度", "快", "更快", "最快"],
+  ["足迹", "轻", "中", "重"],
+  ["投入", "低", "中", "高"],
+  ["结果", "样例", "样例", "样例"],
+];
+
+function CompareSlide() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", ...style }}>
-      <span
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 18,
-          lineHeight: 1,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "var(--surface)",
-        }}
-      >
-        {label}
-      </span>
-      {children}
-    </div>
+    <SlideShell index="04" topbar="SIDE BY SIDE" pill="COMPARISON" meta="OPTIONS MATRIX">
+      <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+        <HeroTitle style={{ fontSize: "var(--t-h1)", lineHeight: 0.95, maxWidth: 1100 }}>
+          三个选项，逐项对比。
+        </HeroTitle>
+        {/* -4deg 旋转徽章（参考 s7 badge：yellow 底 4px 墨框无圆角 + mono） */}
+        <div
+          data-testid="badge-pick"
+          style={{
+            position: "absolute",
+            right: 24,
+            top: 128,
+            background: "var(--accent-4)",
+            border: "4px solid var(--surface-3)",
+            padding: "14px 22px",
+            fontFamily: "var(--font-mono)",
+            fontWeight: 700,
+            fontSize: 28,
+            letterSpacing: "0.08em",
+            color: "var(--surface-3)",
+            transform: "rotate(-4deg)",
+          }}
+        >
+          选一个
+        </div>
+        {/* 大表格（Table columns 变体）：cream-2 底 4px 墨框 + 彩色数据列（pink 墨字 / green cream 字 / orange cream 字） */}
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            background: "var(--surface-2)",
+            border: "4px solid var(--surface-3)",
+          }}
+        >
+          <Table
+            variant="columns"
+            className="sg-compare-table"
+            header={["属性", "方案 A", "方案 B", "方案 C"]}
+            rows={COMPARE_ROWS}
+            data-testid="compare-table"
+          />
+        </div>
+      </div>
+    </SlideShell>
   );
 }
 
-function ToolkitSlide() {
+/* ── Slide 5 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
+
+function ClosingSlide() {
   return (
     <SlideShell
-      index="04"
-      topbar="TOOLKIT · 工具箱"
-      pill="28 COMPONENTS"
-      meta="28 组件 · 各归其位"
+      index="05"
+      topbar="END OF DECK"
+      pill="FIN."
+      meta="CLOSING CARD"
       bg="var(--accent-1)"
       invert
     >
-      {/* 整屏粒子尘：canvas 绘制色读 :root --accent-1（绿），绿底不可见——
-          dev 页 filter invert 转粉系尘点（S4 强调色纪律内），等比拉伸不变形 */}
-      <div
-        data-testid="particles-layer"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: 1440,
-          opacity: 0.25,
-          pointerEvents: "none",
-          filter: "invert(1)",
-        }}
-      >
-        <SeededParticles seed={42} count={40} />
-      </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-        {/* headline：HeroTitle stamp 变体（墨底 cream 字——绿底上的对比组合；pink 硬阴影 = 本屏 featured。
-            对齐自身宽度（fit-content）：24px 阴影落点收在内容带内） */}
+      <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* 主标题（featured）：stamp 变体（墨底 cream 字）+ 24px pink 硬阴影——本屏 featured 独一份 */}
         <HeroTitle
           variant="stamp"
-          reveal="rise"
-          style={{ fontSize: 72, lineHeight: 1, padding: "16px 24px", boxShadow: SHADOW_PINK, alignSelf: "flex-start" }}
+          style={{
+            fontSize: "var(--t-display-1)",
+            lineHeight: 1,
+            alignSelf: "flex-start",
+            marginTop: "var(--space-5)",
+            boxShadow: SHADOW_PINK,
+          }}
         >
-          组件工具箱
+          谢谢观看。
         </HeroTitle>
-        <Grid variant="even" columns={3} data-testid="toolkit-grid">
-          <ToolCell label="FIGURE · 素材占位" style={{ gridRow: "span 2" }}>
-            <div style={scope({ "--shadow-card": "none" })}>
-              <Figure variant="frame" />
-            </div>
-          </ToolCell>
-          <ToolCell label="TERMINAL · 打字机">
-            <TypedTerminal lines={["creative-mode --showcase", "28 components · toolkit"]} />
-          </ToolCell>
-          <ToolCell label="PATH · 折线自绘">
-            <div style={{ width: 180, ...scope({ "--accent-1": "var(--accent-2)" }) }}>
-              <PathDraw d="M 8 88 L 30 20 L 55 60 L 92 12" />
-            </div>
-          </ToolCell>
-          <ToolCell label="TABLE · 表格">
-            <div style={{ background: "var(--surface-2)", border: "4px solid var(--surface-3)" }}>
-              <Table header={["组件", "角色", "状态"]} rows={[["Table", "数据表", "bordered"]]} variant="bordered" />
-            </div>
-          </ToolCell>
-          <ToolCell label="QUOTE · 引用块">
-            <QuoteBlock
-              variant="block"
-              style={{ background: "var(--accent-2)", color: "var(--surface-3)", fontSize: 36 }}
+        {/* strap 一句（cream 字，参考 s8） */}
+        <BodyCopy
+          style={{
+            marginTop: "auto",
+            marginBottom: "var(--space-4)",
+            maxWidth: 1000,
+            fontSize: 32,
+            lineHeight: 1.4,
+            color: "var(--surface)",
+          }}
+        >
+          把口播稿，做成会动的网页。这是 creative-mode 主题的完整视觉表达。
+        </BodyCopy>
+        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "05/05" + "M2B"；
+            内移 32px 使旋转 bbox 落回内容带 */}
+        <div
+          data-testid="closing-seal"
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            right: "var(--space-4)",
+            bottom: "var(--space-4)",
+            width: 340,
+            height: 340,
+            background: "var(--accent-2)",
+            border: "4px solid var(--surface)",
+            transform: "rotate(-6deg)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "68%",
+              height: "68%",
+              border: "4px solid var(--surface)",
+              borderRadius: "50%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontWeight: 700,
+                fontSize: 48,
+                lineHeight: 1,
+                letterSpacing: "0.04em",
+                color: "var(--surface)",
+              }}
             >
-              粉色点缀 · 一处就好
-            </QuoteBlock>
-          </ToolCell>
-          <ToolCell label="STEPS · 步骤序列">
-            <div style={scope({ "--accent-1": "var(--surface)", "--t-h3": "32px", "--space-3": "16px" })}>
-              <StepSequence variant="plain" currentStep={1} steps={[{ title: "进场" }, { title: "节奏" }, { title: "收束" }]} />
-            </div>
-          </ToolCell>
-          <ToolCell label="REVEAL · 逐词揭示">
-            <div style={scope({ "--text": "var(--surface)" })}>
-              <RevealText text="逐词 揭示 测试" />
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-              <div style={scope({ "--accent-1": "var(--accent-2)" })}>
-                <Breathe cycles={3} />
-              </div>
-              <DecorRing variant="outline" />
-            </div>
-          </ToolCell>
-          <ToolCell label="KENBURNS · 缓推">
-            <div style={{ width: 480, height: 270 }}>
-              <KenBurns duration="slow" />
-            </div>
-          </ToolCell>
-        </Grid>
+              05/05
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 24,
+                letterSpacing: "0.12em",
+                color: "var(--surface)",
+              }}
+            >
+              M2B
+            </span>
+          </div>
+        </div>
       </div>
     </SlideShell>
   );
@@ -661,6 +799,7 @@ function ToolkitSlide() {
 export function ThemeShowcase() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--shell)", paddingTop: 64, paddingBottom: 120 }}>
+      <style>{SHOWCASE_TWEAKS}</style>
       <header
         style={{
           width: 1920,
@@ -681,7 +820,7 @@ export function ThemeShowcase() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 主题效果页 · 4 屏 slide deck
+          creative-mode · 主题效果页 · 5 屏 slide deck · 构图复刻 reference s1/s3/s6/s7/s8
         </span>
         <span
           style={{
@@ -702,7 +841,8 @@ export function ThemeShowcase() {
         <CoverSlide />
         <DataSlide />
         <FlowSlide />
-        <ToolkitSlide />
+        <CompareSlide />
+        <ClosingSlide />
       </main>
     </div>
   );

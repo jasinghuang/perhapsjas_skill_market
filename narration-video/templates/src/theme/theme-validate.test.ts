@@ -5,7 +5,7 @@ const VALID_CSS = `:root {
   --surface: #fff; --surface-2: #eee; --surface-3: #111;
   --text: #111; --text-2: #444; --text-mute: #777; --text-faint: #aaa;
   --accent-1: #c00; --rule: #111; --shell: #000;
-  --shadow-card: 0 0 0 #000; --shadow-stage: 0 0 0 #000;
+  --shadow-card: 0 0 0 #000; --shadow-card-sm: 0 0 0 #000; --shadow-stage: 0 0 0 #000;
   --t-display-1: 1px; --t-display-2: 1px; --t-h1: 1px; --t-h2: 1px;
   --t-h3: 1px; --t-body: 1px; --t-label: 1px; --t-micro: 1px;
   --space-1: 1px; --space-2: 1px; --space-3: 1px; --space-4: 1px;
