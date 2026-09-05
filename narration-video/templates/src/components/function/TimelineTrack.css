@@ -1,0 +1,46 @@
+.cdp-timeline-track {
+  height: var(--space-1);
+  background: var(--surface-2);
+  position: relative;
+  margin-bottom: var(--space-3);
+}
+
+.cdp-timeline-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent-1);
+  transform-origin: left center;
+}
+
+.cdp-timeline-points {
+  display: flex;
+  justify-content: space-between;
+}
+
+.cdp-timeline-point {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.cdp-timeline-dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+}
+
+.cdp-timeline-point-active .cdp-timeline-dot {
+  background: var(--accent-1);
+}
+
+.cdp-timeline-label {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  color: var(--text-mute);
+}
+
+.cdp-timeline-point-active .cdp-timeline-label {
+  color: var(--text);
+}
