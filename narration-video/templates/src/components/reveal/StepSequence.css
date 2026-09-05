@@ -1,0 +1,53 @@
+.cdp-step-seq {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cdp-step-seq-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.cdp-step-seq-marker {
+  width: var(--space-3);
+  height: var(--space-3);
+  margin-top: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.cdp-step-seq-active .cdp-step-seq-marker {
+  background: var(--accent-1);
+}
+
+.cdp-step-seq-done .cdp-step-seq-marker {
+  background: var(--surface-3);
+}
+
+.cdp-step-seq-title {
+  font-family: var(--font-body);
+  font-size: var(--t-h3);
+  color: var(--text);
+}
+
+.cdp-step-seq-desc {
+  margin-top: var(--space-1);
+  font-family: var(--font-body);
+  font-size: var(--t-body);
+  color: var(--text-2);
+}
+
+.cdp-step-seq-cards .cdp-step-seq-item {
+  background: var(--card-bg);
+  border: var(--card-border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-3) var(--space-4);
+}
+
+.cdp-step-seq-pending {
+  opacity: 0.55;
+}
