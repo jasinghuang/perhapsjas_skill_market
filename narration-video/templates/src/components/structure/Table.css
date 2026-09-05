@@ -6,18 +6,22 @@
   color: var(--text);
 }
 
-.cdp-table-bordered th,
-.cdp-table-bordered td {
+/* 视觉终审二轮 F3：表格规范对齐参考 slide 7——3px 墨格线 + 紧凑行高（8/24）全变体生效 */
+.cdp-table th,
+.cdp-table td {
   border: var(--table-border);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
 }
 
+/* 表头：display 档 28px（参考 table-head 28px Archivo Black——主次立即分明）。
+   font-weight 900 = CJK 侧对齐 Archivo Black 的重量感（Latin 侧 Archivo 本身即重） */
 .cdp-table th {
   background: var(--table-head-bg);
   color: var(--table-head-text);
-  font-family: var(--font-mono);
-  font-size: var(--t-micro);
-  letter-spacing: 0.08em;
+  font-family: var(--font-display-cn), var(--font-display-en);
+  font-weight: 900;
+  font-size: var(--t-body);
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 

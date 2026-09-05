@@ -427,11 +427,9 @@ function DataSlide() {
         <SeededParticles seed={42} count={40} />
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-        {/* headline 两行（参考 s3 "FOUR FIGURES, ONE STORY."；中文按 CJK 细节：逗号分行） */}
-        <HeroTitle style={{ fontSize: 72, lineHeight: 0.95 }}>
-          四个数字，
-          <br />
-          一个故事。
+        {/* headline 单行（视觉终审二轮 F1：右侧空间足够，display-2 96px 单行放下 9 字 + 2 标点） */}
+        <HeroTitle style={{ fontSize: "var(--t-display-2)", lineHeight: 0.95 }}>
+          四个数字，一个故事。
         </HeroTitle>
         {/* 2×2 满幅网格：零阴影（--shadow-card-sm none）、格间隙 var(--grid-gutter) 28px */}
         <Grid
@@ -622,7 +620,7 @@ function FlowSlide() {
             <span
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 18,
+                fontSize: "var(--t-label)", // F2：与 TimelineTrack 标签同升 24px（mono 注册表档）
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
                 color: "var(--text-mute)",
@@ -721,11 +719,10 @@ function ClosingSlide() {
         >
           谢谢观看。
         </HeroTitle>
-        {/* strap 一句（cream 字，参考 s8） */}
+        {/* strap 一句（cream 字，F4：紧随 headline——参考 s8 strap 跟在 THANK YOU 之下） */}
         <BodyCopy
           style={{
-            marginTop: "auto",
-            marginBottom: "var(--space-4)",
+            marginTop: "var(--space-3)",
             maxWidth: 1000,
             fontSize: 32,
             lineHeight: 1.4,

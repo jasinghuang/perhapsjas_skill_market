@@ -37,7 +37,7 @@
 
 .cdp-timeline-label {
   font-family: var(--font-mono);
-  font-size: var(--t-micro);
+  font-size: var(--t-label); /* 视觉终审二轮 F2：mono 注册表统一 24px（18px 在 1080p 画布不可读） */
   color: var(--text-mute);
 }
 

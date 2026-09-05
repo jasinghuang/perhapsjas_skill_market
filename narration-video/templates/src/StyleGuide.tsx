@@ -543,7 +543,7 @@ function SemanticSection() {
                 data-testid="semantic-table-zebra"
               />
             </div>
-            <div style={{ width: 480 }}>
+            <div style={{ width: 560 }}>
               <Table
                 variant="columns"
                 header={["属性", "方案 A", "方案 B", "方案 C"]}
