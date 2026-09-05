@@ -40,7 +40,7 @@ body,
   color: #fff;
   padding: 8px 16px;
   border-radius: 6px;
-  font-size: 28px;
+  font-size: var(--caption-size); /* M1 遗留硬编码 28px → token 化（五轮 F1：字幕最大 40px） */
   line-height: 1.5;
   text-align: center; /* 字幕层居中（engine 修正：字幕样例文字居中，非仅展示页） */
 }
@@ -55,7 +55,7 @@ body,
 }
 
 .transport button {
-  font-size: 16px;
+  font-size: var(--t-label); /* 五轮 F1：全局最小字号 24px——16px 字面量升档 token 化 */
   padding: 8px 20px;
   cursor: pointer;
 }

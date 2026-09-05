@@ -57,7 +57,6 @@ const CELL_SCOPE: Record<string, string> = {
   "--t-h3": "24px",
   "--t-body": "20px",
   "--t-label": "18px",
-  "--t-micro": "16px",
   "--space-4": "24px",
   "--space-5": "32px",
 };
@@ -253,8 +252,7 @@ const TYPE_TIERS: { token: string; family: "display" | "body"; lh: number }[] = 
   { token: "--t-h2", family: "display", lh: 1 },
   { token: "--t-h3", family: "display", lh: 1 },
   { token: "--t-body", family: "body", lh: 1.5 },
-  { token: "--t-label", family: "body", lh: 1.3 },
-  { token: "--t-micro", family: "body", lh: 1.3 },
+  { token: "--t-label", family: "body", lh: 1.3 }, // 全局最小字号（五轮 F1：micro 档已删除）
 ];
 
 function TypographySection() {

@@ -30,7 +30,7 @@
 .cdp-figure-caption {
   padding: var(--space-2) var(--space-3);
   font-family: var(--font-mono);
-  font-size: var(--t-micro);
+  font-size: var(--t-label);
   letter-spacing: 0.06em;
   color: var(--text-2);
 }

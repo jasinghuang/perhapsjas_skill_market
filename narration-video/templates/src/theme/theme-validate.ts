@@ -10,7 +10,7 @@ export const REQUIRED_TOKENS: string[] = [
   "--shadow-card", "--shadow-card-sm", "--shadow-stage",
   // 字阶
   "--t-display-1", "--t-display-2", "--t-h1", "--t-h2", "--t-h3",
-  "--t-body", "--t-label", "--t-micro",
+  "--t-body", "--t-label",
   // 间距
   "--space-1", "--space-2", "--space-3", "--space-4", "--space-5", "--space-6",
   "--grid-gutter",

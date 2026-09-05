@@ -30,8 +30,8 @@
   --t-h2: 56px;
   --t-h3: 40px;
   --t-body: 28px;
+  /* 24px · lh 1.3 · Space Grotesk / Noto Sans SC——全局最小字号（用户定稿，五轮 F1：micro 档删除） */
   --t-label: 24px;
-  --t-micro: 18px;
 
   /* ── 间距（creative-mode 96/64/28/32 体系） ── */
   --space-1: 8px;
@@ -87,7 +87,8 @@
   --caption-bg: rgba(15, 15, 15, 0.85);
   --caption-text: #efe9d9;
   --caption-radius: 0px;
-  --caption-size: 30px;
+  /* 字幕是视频主阅读元素：用户定稿"字幕最大、其他可小"（五轮 F1） */
+  --caption-size: 40px;
 
   /* ── 字体四坑位（display-cn 已定稿：Noto Sans SC 900——用户拍板 A；
      模板官方 CJK 指引推荐 Serif 900，此为标注在案的主动偏离） ── */

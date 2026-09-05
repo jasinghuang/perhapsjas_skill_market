@@ -1,6 +1,6 @@
 .cdp-kicker {
   font-family: var(--font-mono);
-  font-size: var(--t-micro);
+  font-size: var(--t-label);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   display: inline-block;
