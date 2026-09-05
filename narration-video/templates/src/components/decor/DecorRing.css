@@ -1,0 +1,12 @@
+.cdp-decor-ring {
+  display: inline-block;
+  width: var(--space-4);
+  height: var(--space-4);
+  border-radius: var(--r-pill);
+  border: var(--border-w) solid var(--text);
+}
+
+.cdp-decor-ring-filled {
+  background: var(--accent-1);
+  border-color: var(--accent-1);
+}
