@@ -1,0 +1,13 @@
+.cdp-terminal {
+  background: var(--surface-3);
+  border-radius: var(--card-radius);
+  padding: var(--space-4);
+}
+
+.cdp-terminal-text {
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  line-height: 1.6;
+  color: var(--surface);
+  white-space: pre-wrap;
+}

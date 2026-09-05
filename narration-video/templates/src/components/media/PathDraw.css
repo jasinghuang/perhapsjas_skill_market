@@ -1,0 +1,10 @@
+.cdp-path-draw {
+  width: 100%;
+  height: auto;
+}
+
+.cdp-path-draw-path {
+  fill: none;
+  stroke: var(--accent-1);
+  stroke-width: 2;
+}
