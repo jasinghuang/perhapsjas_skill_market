@@ -84,7 +84,9 @@
   /* ── 语义 · 装饰语言（Ruling M2b-5：色块族） ── */
   --decor-family: block;
 
-  /* ── 语义 · 字幕（八轮 F1：无填充 + 4px 粗描边——cream 画布上的编辑标签注册） ── */
+  /* ── 语义 · 字幕（白底墨字墨边 = 编辑标签注册；九轮 F1：底色恢复纯白——用户定稿，
+        与设计稿"Do not use pure white"的偏离是用户明示决定，报告记录在案） ── */
+  --caption-bg: #ffffff;         /* 纯白底 */
   --caption-stroke: var(--text); /* 描边色 = 墨色 */
   --caption-text: var(--text);   /* 文字色 = 墨色，与描边同色系 */
   /* 用户定稿：圆角矩形（16px = --space-2 同值；七轮 F1 由 pill 全圆回调） */

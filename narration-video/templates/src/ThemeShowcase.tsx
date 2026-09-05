@@ -1,9 +1,10 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
-// ?showcase=1 渲染：5 屏 1920×1080 slide deck——每屏带统一 chrome frame
+// ?showcase=1 渲染：8 屏 1920×1080 slide deck——每屏带统一 chrome frame
 // （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–934 + 字幕保留区 y[958,1038]；meta 页码条已删）。
-// 构图纪律（用户反馈终审）：屏 2-5 严格复刻 creative-mode 参考构图——
-// S2 = 参考 s3 数据屏（2×2 满幅零阴影网格）；S3 = 参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）；
-// S4 = 参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）；S5 = 参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
+// 构图纪律（用户反馈终审）：九轮 F2 补齐参考模板全部 8 屏，逐屏复刻 creative-mode 构图——
+// S1=参考 s1 封面 / S2=参考 s2 章节开篇 / S3=参考 s3 数据屏（2×2 满幅零阴影网格）/ S4=参考 s4 系统示意（堆叠块）/
+// S5=参考 s5 柱状图（4 行横向条）/ S6=参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）/
+// S7=参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）/ S8=参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
 // （底边 ≤934 = 字幕区上缘 958 − 24；24px 阴影落点亦算占位，不越界）；③ 氛围背景层与 CaptionLayer 自身豁免。
 // ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 958 线，pointerEvents none）。
@@ -23,8 +24,10 @@ import {
   HeroNumber,
   HeroTitle,
   Kicker,
+  PathDraw,
   ProgressDots,
   QuoteBlock,
+  RevealList,
   Rule,
   SeededParticles,
   StagePad,
@@ -48,6 +51,7 @@ const SHOWCASE_TWEAKS = `
 .sg-compare-table thead th { height: 96px; }
 .sg-compare-table thead th:first-child, .sg-compare-table tbody td:first-child { width: 30%; }
 .sg-compare-table tbody td:first-child { background: var(--surface); font-weight: 700; }
+.sg-bar-rows .cdp-bar-grow { height: 56px; }
 `;
 
 /* ── 安全框可视化（?showcase=1&guides=1 dev-only） ── */
@@ -97,7 +101,7 @@ function SafetyGuides({ color }: { color: string }) {
 
 /* ── chrome frame（每屏必有） ── */
 interface SlideShellProps {
-  index: string; // "01".."05"
+  index: string; // "01".."08"
   topbar: ReactNode;
   pill: string;
   caption: string; // 该屏口播台词（CaptionLayer 字幕保留区 y[972,1032]）
@@ -191,10 +195,9 @@ function SlideShell({
         </div>
       </StagePad>
       {/* 字幕层（真实 CaptionLayer 组件；视频场景中底部属于字幕——meta 页码条已删除）。
-          S5 绿底例外：scope 覆写 stroke/text → cream（真实章节深色 slide 由 M3b 对比度门禁 #18 兜底） */}
-      <div style={invert ? scope({ "--caption-stroke": "var(--surface)", "--caption-text": "var(--surface)" }) : undefined}>
-        <CaptionLayer text={caption} />
-      </div>
+          九轮 F1：白底墨字墨边在任何屏底色上均成立（S8 绿底亦然）——无需覆写；
+          真实章节深色 slide 的对比度由 M3b 门禁 #18 兜底 */}
+      <CaptionLayer text={caption} />
       {/* 安全框可视化（?showcase=1&guides=1） */}
       <SafetyGuides color={chrome} />
     </section>
@@ -312,7 +315,60 @@ function CoverSlide() {
   );
 }
 
-/* ── Slide 2 · 数据冲击 = 参考 s3（强调色：green + pink + orange；yellow 不出场） ── */
+/* ── Slide 2 · 章节开篇 = 参考 s2（强调色：green + orange） ── */
+
+function ChapterSlide() {
+  return (
+    <SlideShell index="02" topbar="SECTION 01" pill="CHAPTER OPENER" caption="先说明一件事">
+      <div style={{ flex: 1, display: "flex", gap: "var(--space-6)" }}>
+        {/* 左栏：headline + 开场白段落 + 三要点 */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <HeroTitle style={{ fontSize: "var(--t-display-2)", lineHeight: 0.95 }}>先说明一件事。</HeroTitle>
+          <BodyCopy style={{ maxWidth: 760 }}>
+            这是一套把口播稿变成会动网页的工作流。后面的数据、流程与对比，都是同一主题的不同切片。先记住一句话：节奏由稿子决定。
+          </BodyCopy>
+          <RevealList
+            variant="numbered"
+            items={["口播稿决定节奏", "组件构图决定视觉", "引擎驱动全部动效"]}
+            activeCount={3}
+            data-testid="chapter-points"
+          />
+        </div>
+        {/* 右栏：featured marker 块（green 底 cream 字 + 24px orange 硬阴影——S1 同款 featured 处理） */}
+        <div style={{ width: 560, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div
+            data-testid="featured-marker"
+            style={{
+              background: "var(--accent-1)",
+              border: "4px solid var(--surface-3)",
+              boxShadow: SHADOW_ORANGE,
+              padding: "28px 44px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "var(--space-2)",
+            }}
+          >
+            <Kicker style={{ background: "none", color: "var(--surface)", padding: 0 }}>FLIP THE SWITCH.</Kicker>
+            <div
+              style={{
+                fontFamily: "var(--font-display-cn)",
+                fontWeight: 900,
+                fontSize: 46,
+                lineHeight: 1,
+                color: "var(--surface)",
+              }}
+            >
+              打开开关
+            </div>
+          </div>
+        </div>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 3 · 数据冲击 = 参考 s3（强调色：green + pink + orange；yellow 不出场） ── */
 
 /** 数据格（参考 s3 cell）：mono 角标 /0N（右上）+ 大数字 + mono 标签 + 一句描述；
     bg 按参考序列 green → pink → cream → orange；亮底配墨字、green/orange 底配 cream 字 */
@@ -381,7 +437,7 @@ function StatCell({
 
 function DataSlide() {
   return (
-    <SlideShell index="02" topbar="BY THE NUMBERS" pill="SHOWCASE / M2B" caption="四个数字，讲一个故事">
+    <SlideShell index="03" topbar="BY THE NUMBERS" pill="SHOWCASE / M2B" caption="四个数字，讲一个故事">
       {/* 氛围层（豁免安全框）：种子粒子尘，低透明度铺满整屏 */}
       <div
         data-testid="particles-layer"
@@ -473,7 +529,120 @@ function DataSlide() {
   );
 }
 
-/* ── Slide 3 · 流程 = 参考 s6（强调色：cream + pink + yellow + green 收尾） ── */
+/* ── Slide 4 · 系统示意 = 参考 s4（强调色：pink + yellow + orange） ── */
+
+/** 堆叠方块（参考 s4 stacked-block：4px 墨框 + 18px 墨色硬阴影 + mono 层标签） */
+function StackBlock({ bg, tag, pos }: { bg: string; tag: string; pos: CSSProperties }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        background: bg,
+        border: "4px solid var(--surface-3)",
+        boxShadow: "18px 18px 0 var(--surface-3)",
+        display: "flex",
+        alignItems: "flex-start",
+        ...pos,
+      }}
+    >
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.1em", padding: "10px 14px" }}>
+        {tag}
+      </span>
+    </div>
+  );
+}
+
+function DiagramSlide() {
+  return (
+    <SlideShell index="04" topbar="SYSTEM DIAGRAM" pill="SCHEMATIC / A" caption="一层叠一层的结构">
+      <div style={{ flex: 1, display: "flex", gap: "var(--space-6)" }}>
+        {/* 左栏：headline + 描述 + 四层名单（reveal 编号走 orange——本屏强调色纪律 pink/yellow/orange） */}
+        <div
+          style={{ width: 700, display: "flex", flexDirection: "column", gap: "var(--space-4)", ...scope({ "--accent-1": "var(--accent-3)" }) }}
+        >
+          <HeroTitle style={{ fontSize: "var(--t-h1)", lineHeight: 0.95 }}>一层叠一层的结构。</HeroTitle>
+          <BodyCopy style={{ maxWidth: 640 }}>
+            四层各司其职：引擎层排时间，组件层出构图，主题层管配色，流程层串成片。每层只做一件事，叠起来就是一条流水线。
+          </BodyCopy>
+          <RevealList
+            variant="numbered"
+            items={["引擎层 — 时间与步进", "组件层 — 构图与组件", "主题层 — token 与配色", "流程层 — 章节与成片"]}
+            activeCount={4}
+            data-testid="layer-list"
+          />
+        </div>
+        {/* 右栏：大 panel + 4 方块错位叠放 + PathDraw 折线（ink 覆写，墨色连接线） */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Card variant="plain" data-testid="system-panel" style={{ width: 840, height: 640, padding: "var(--space-4)", position: "relative" }}>
+            <div data-testid="block-stack" style={{ position: "absolute", top: 32, left: 140, width: 560, height: 560 }}>
+              <StackBlock bg="var(--accent-2)" tag="LAYER / 01" pos={{ top: 50, left: 130, width: 300, height: 100 }} />
+              <StackBlock bg="var(--accent-4)" tag="LAYER / 02" pos={{ top: 170, left: 60, width: 380, height: 100 }} />
+              <StackBlock bg="var(--accent-3)" tag="LAYER / 03" pos={{ top: 290, left: 160, width: 300, height: 100 }} />
+              <StackBlock bg="var(--surface-2)" tag="LAYER / 04" pos={{ top: 410, left: 80, width: 340, height: 100 }} />
+              <div style={{ position: "absolute", inset: 0, ...scope({ "--accent-1": "var(--surface-3)" }) }}>
+                <PathDraw d="M 12 95 L 12 12 L 95 12" />
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 5 · 柱状图 = 参考 s5（强调色：green + pink + orange 交替） ── */
+
+const BAR_ROWS = [
+  // tone = null 表示吃默认 accent-1（green）——不可 scope 覆写 --accent-1: var(--accent-1)（自引用循环 → 透明）
+  { label: "Q1 '24", value: 0.34, text: "34", tone: null },
+  { label: "Q2 '24", value: 0.48, text: "48", tone: "var(--accent-2)" },
+  { label: "Q3 '24", value: 0.61, text: "61", tone: "var(--accent-3)" },
+  { label: "Q4 '24", value: 0.55, text: "55", tone: null },
+];
+
+function ChartSlide() {
+  return (
+    <SlideShell index="05" topbar="QUARTERLY READOUT" pill="BARS" caption="季度读数">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+        <HeroTitle style={{ fontSize: "var(--t-h1)", lineHeight: 0.95 }}>季度读数。</HeroTitle>
+        {/* 4 行横向条形图（参考 s5：mono 标签 + BarGrow accent + mono 数值；行高 56px dev 微调） */}
+        <div
+          data-testid="bar-rows"
+          className="sg-bar-rows"
+          style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", marginTop: "auto", marginBottom: "auto" }}
+        >
+          {BAR_ROWS.map((row) => (
+            <div key={row.label} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.1em", width: 140 }}>
+                {row.label}
+              </span>
+              <div style={{ flex: 1, ...(row.tone ? scope({ "--accent-1": row.tone }) : undefined) }}>
+                <BarGrow value={row.value} variant="accent" />
+              </div>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", width: 48, textAlign: "right" }}>
+                {row.text}
+              </span>
+            </div>
+          ))}
+        </div>
+        {/* 图注（参考 s5 note） */}
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--t-label)",
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "var(--text-mute)",
+          }}
+        >
+          FIG. 01 — 数值为占位样例 · SOURCE: SAMPLE DATASET / INTERNAL
+        </span>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 6 · 流程 = 参考 s6（强调色：cream + pink + yellow + green 收尾） ── */
 
 interface StepDef {
   n: string;
@@ -543,7 +712,7 @@ function StepCard({ def }: { def: StepDef }) {
 
 function FlowSlide() {
   return (
-    <SlideShell index="03" topbar="HOW IT WORKS" pill="FOUR STEPS" caption="从稿子到成片，一共四步">
+    <SlideShell index="06" topbar="HOW IT WORKS" pill="FOUR STEPS" caption="从稿子到成片，一共四步">
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
         <HeroTitle style={{ fontSize: "var(--t-display-2)", lineHeight: 0.95 }}>一个四步流程。</HeroTitle>
         {/* 流程 slide 的 signature：3px dashed 墨线分隔（参考 s6 header-line） */}
@@ -577,7 +746,7 @@ function FlowSlide() {
   );
 }
 
-/* ── Slide 4 · 对比 = 参考 s7（强调色：yellow 徽章 + pink/green/orange 彩色列） ── */
+/* ── Slide 7 · 对比 = 参考 s7（强调色：pink/green/orange 彩色列） ── */
 
 const COMPARE_ROWS = [
   ["速度", "快", "更快", "最快"],
@@ -588,7 +757,7 @@ const COMPARE_ROWS = [
 
 function CompareSlide() {
   return (
-    <SlideShell index="04" topbar="SIDE BY SIDE" pill="COMPARISON" caption="三个选项，逐项对比">
+    <SlideShell index="07" topbar="SIDE BY SIDE" pill="COMPARISON" caption="三个选项，逐项对比">
       <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
         <HeroTitle style={{ fontSize: "var(--t-h1)", lineHeight: 0.95, maxWidth: 1100 }}>
           三个选项，逐项对比。
@@ -616,12 +785,12 @@ function CompareSlide() {
   );
 }
 
-/* ── Slide 5 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
+/* ── Slide 8 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
 
 function ClosingSlide() {
   return (
     <SlideShell
-      index="05"
+      index="08"
       topbar="END OF DECK"
       pill="FIN."
       caption="谢谢观看"
@@ -696,7 +865,7 @@ function ClosingSlide() {
                 color: "var(--surface)",
               }}
             >
-              05/05
+              08/08
             </span>
             <span
               style={{
@@ -740,7 +909,7 @@ export function ThemeShowcase() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 主题效果页 · 5 屏 slide deck · 构图复刻 reference s1/s3/s6/s7/s8
+          creative-mode · 主题效果页 · 8 屏 slide deck · 对应参考模板全部构图 s1–s8
         </span>
         <span
           style={{
@@ -759,7 +928,10 @@ export function ThemeShowcase() {
       </header>
       <main style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 96 }}>
         <CoverSlide />
+        <ChapterSlide />
         <DataSlide />
+        <DiagramSlide />
+        <ChartSlide />
         <FlowSlide />
         <CompareSlide />
         <ClosingSlide />

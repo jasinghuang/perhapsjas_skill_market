@@ -24,7 +24,7 @@ export const REQUIRED_TOKENS: string[] = [
   "--badge-bg", "--badge-text",
   "--hero-num-font", "--hero-num-weight", "--hero-num-track",
   "--decor-family",
-  "--caption-stroke", "--caption-text", "--caption-radius", "--caption-size",
+  "--caption-bg", "--caption-stroke", "--caption-text", "--caption-radius", "--caption-size",
   // 字体
   "--font-display-cn", "--font-display-en", "--font-body", "--font-mono",
   // 舞台

@@ -182,6 +182,7 @@ const SWATCH_GROUPS: { label: string; tokens: SwatchDef[] }[] = [
     tokens: [
       { token: "--rule", ink: false },
       { token: "--shell", ink: false },
+      { token: "--caption-bg", ink: true },
       { token: "--caption-stroke", ink: false },
     ],
   },
@@ -606,10 +607,11 @@ function SemanticSection() {
             </div>
           </div>
         </SemItem>
-        <SemItem label="字幕样式 · 字幕 token：--caption-stroke / --caption-text / --caption-radius / --caption-size（无填充 + 4px 粗描边）" testid="semantic-caption">
+        <SemItem label="字幕样式 · 字幕 token：--caption-bg / --caption-stroke / --caption-text / --caption-radius / --caption-size（白底 + 4px 粗描边）" testid="semantic-caption">
           <div
             style={{
               display: "inline-block",
+              background: "var(--caption-bg)",
               border: "var(--border-w) solid var(--caption-stroke)",
               color: "var(--caption-text)",
               borderRadius: "var(--caption-radius)",

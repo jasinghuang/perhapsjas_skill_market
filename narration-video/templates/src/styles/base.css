@@ -36,7 +36,8 @@ body,
 }
 
 .caption-text {
-  /* 八轮 F1：去填充色（M1 遗留 rgba 黑底删除），改 4px 主题签名粗描边 + 墨字 */
+  /* 九轮 F1：恢复纯白底（--caption-bg token）；八轮 F1 的 4px 主题签名粗描边 + 墨字保留 */
+  background: var(--caption-bg);
   border: var(--border-w) solid var(--caption-stroke);
   color: var(--caption-text);
   padding: var(--space-1) var(--space-3); /* M1 遗留硬编码 8/16 → token 化（七轮 F2：左右留空 24px） */
