@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { canvasAnim } from "../../engine/animationRuntime";
 import { createPrimitive } from "../factory";
-import { MotionDuration } from "../motion";
+import { durationMs, MotionDuration } from "../motion";
 
 export interface HeroNumberProps {
   value: string;
@@ -16,8 +16,6 @@ function parseLeadNumber(value: string): number | null {
   const m = value.match(/^-?\d+(\.\d+)?/);
   return m ? parseFloat(m[0]) : null;
 }
-
-const DUR_FALLBACK: Record<MotionDuration, number> = { fast: 300, mid: 700, slow: 1400 };
 
 // Ruling P2-6：Base 必须在模块作用域——放函数体内每次渲染新建组件类型，
 // React 视为不同组件导致子树重挂（动画/注册表状态全部丢失）。
@@ -36,7 +34,7 @@ export function HeroNumber({ value, variant = "plain", countUp, duration = "mid"
     if (!el) return;
     const target = parseLeadNumber(value);
     if (target === null) return;
-    const durMs = DUR_FALLBACK[duration];
+    const durMs = durationMs(el, duration);
     // draw(t)：t ∈ [0, durMs] → 进度 → 数值（帧函数逃生舱，可 seek）
     const h = canvasAnim((tMs) => {
       const progress = Math.min(1, tMs / durMs);

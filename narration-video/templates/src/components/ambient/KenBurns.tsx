@@ -1,9 +1,7 @@
 // 缓推（有限时长 draw(t)，Ruling P3-3）：对容器做缓慢缩放平移，终态冻结。
 import { useEffect, useRef } from "react";
 import { canvasAnim } from "../../engine/animationRuntime";
-import { MotionDuration } from "../motion";
-
-const DUR_FALLBACK: Record<MotionDuration, number> = { fast: 4000, mid: 10000, slow: 20000 };
+import { durationMs, MotionDuration } from "../motion";
 
 export interface KenBurnsProps {
   src?: string;
@@ -18,7 +16,8 @@ export function KenBurns({ src, duration = "mid", className = "", ...rest }: Ken
   useEffect(() => {
     const el = innerRef.current;
     if (!el) return;
-    const durMs = DUR_FALLBACK[duration];
+    // 氛围长时长系数 ×10（Ruling M2b-1）：动效 token 档位 × 系数，系数写组件注释
+    const durMs = durationMs(el, duration) * 10;
     const h = canvasAnim((tMs) => {
       const progress = Math.min(1, tMs / durMs);
       const scale = 1 + 0.12 * progress;

@@ -38,6 +38,14 @@ function readTokenMs(el: Element, token: string, fallback: number): number {
   return fallback;
 }
 
+export { readTokenMs };
+
+/** 从元素计算样式读动效档位时长（ms）。组件动画时长的唯一合法来源（§5.1 动效 token，I1）。
+ * fallback 链与 §5.1 tokens.css 同值：fast 300 / mid 700 / slow 1400。 */
+export function durationMs(el: Element, tier: MotionDuration): number {
+  return readTokenMs(el, DUR_TOKEN[tier], tier === "fast" ? 300 : tier === "mid" ? 700 : 1400);
+}
+
 export function staggerMs(el: Element): number {
   return readTokenMs(el, "--stagger", 120);
 }
@@ -50,7 +58,7 @@ export function revealAnim(
   delayMs: number,
 ): AnimHandle | null {
   if (typeof el.animate !== "function") return null;
-  const dur = readTokenMs(el, DUR_TOKEN[duration], duration === "fast" ? 300 : duration === "mid" ? 700 : 1400);
+  const dur = durationMs(el, duration);
   const easing = getComputedStyle(el).getPropertyValue(EASE_TOKEN[duration]).trim() || "linear";
   return waapi(el, KEYFRAMES[preset], {
     duration: dur,

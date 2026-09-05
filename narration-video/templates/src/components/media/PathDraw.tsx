@@ -1,9 +1,7 @@
 // SVG 路径自绘（原版核心视觉演示之一）：pathLength 归一化 + stroke-dashoffset 动画（白名单 P2-1）。
 import { useEffect, useRef } from "react";
 import { waapi } from "../../engine/animationRuntime";
-import { MotionDuration } from "../motion";
-
-const DUR_FALLBACK: Record<MotionDuration, number> = { fast: 500, mid: 1200, slow: 2400 };
+import { durationMs, MotionDuration } from "../motion";
 
 export interface PathDrawProps {
   d: string;
@@ -20,11 +18,14 @@ export function PathDraw({ d, duration = "mid", variant = "stroke", className = 
     if (variant !== "stroke") return;
     const el = pathRef.current;
     if (!el) return;
-    const durMs = DUR_FALLBACK[duration];
+    const durMs = durationMs(el, duration);
+    // I1：easing 硬编码 cubic-bezier 改读 --ease-out（fallback 与 tokens.css 同值）
+    const easing =
+      getComputedStyle(el).getPropertyValue("--ease-out").trim() || "cubic-bezier(0,0,0.2,1)";
     const h = waapi(
       el,
       [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }],
-      { duration: durMs, easing: "cubic-bezier(0, 0, 0.2, 1)", fill: "forwards" },
+      { duration: durMs, easing, fill: "forwards" },
     );
     return () => h.dispose();
   }, [d, duration, variant]);

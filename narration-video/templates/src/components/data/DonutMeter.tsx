@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
 import { waapi } from "../../engine/animationRuntime";
-import { MotionDuration } from "../motion";
+import { durationMs, MotionDuration } from "../motion";
 
-const DUR_FALLBACK: Record<MotionDuration, number> = { fast: 300, mid: 700, slow: 1400 };
 const R = 54;
 const CIRC = 2 * Math.PI * R;
 
@@ -23,13 +22,16 @@ export function DonutMeter({ value, label, duration = "mid", className = "", ...
     if (!el) return;
     // 环形描边：stroke-dashoffset 动画（Ruling P2-1 白名单扩展）
     const target = CIRC * (1 - value);
+    // I1：easing 硬编码 cubic-bezier 一并改读 --ease-out（同 PathDraw，fallback 与 tokens.css 同值）
+    const easing =
+      getComputedStyle(el).getPropertyValue("--ease-out").trim() || "cubic-bezier(0,0,0.2,1)";
     const h = waapi(
       el,
       [
         { strokeDashoffset: CIRC },
         { strokeDashoffset: target },
       ],
-      { duration: DUR_FALLBACK[duration], easing: "cubic-bezier(0, 0, 0.2, 1)", fill: "both" },
+      { duration: durationMs(el, duration), easing, fill: "both" },
     );
     return () => h.dispose();
   }, [value, duration]);

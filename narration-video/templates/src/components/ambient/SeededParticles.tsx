@@ -2,10 +2,8 @@
 // 粒子位置由 seed 确定性生成；运动 = 有限时长 draw(t)（Ruling P3-3：t ≥ durMs 渲染终态）。
 import { useEffect, useRef } from "react";
 import { canvasAnim } from "../../engine/animationRuntime";
-import { MotionDuration } from "../motion";
+import { durationMs, MotionDuration } from "../motion";
 import { seededRandom } from "../seededRandom";
-
-const DUR_FALLBACK: Record<MotionDuration, number> = { fast: 3000, mid: 8000, slow: 16000 };
 
 export interface SeededParticlesProps {
   seed: number;
@@ -47,7 +45,8 @@ export function SeededParticles({ seed, count = 30, duration = "mid", variant = 
     const accent =
       getComputedStyle(document.documentElement).getPropertyValue("--accent-1").trim() || "#c9501f";
 
-    const durMs = DUR_FALLBACK[duration];
+    // 氛围长时长系数 ×8（Ruling M2b-1）：动效 token 档位 × 系数，系数写组件注释
+    const durMs = durationMs(canvas, duration) * 8;
     const draw = (tMs: number) => {
       const progress = Math.min(1, tMs / durMs);
       ctx.clearRect(0, 0, canvas.width, canvas.height);

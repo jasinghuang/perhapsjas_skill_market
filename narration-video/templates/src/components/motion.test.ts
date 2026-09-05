@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RevealPreset, revealAnim, staggerMs } from "./motion";
+import { durationMs, RevealPreset, revealAnim, staggerMs } from "./motion";
 import { registrySize } from "../engine/animationRuntime";
 
 // 终审 M9：无本地 FakeAnim 副本——Element.prototype.animate 的 WAAPI stub
@@ -27,5 +27,12 @@ describe("motion 动效档位", () => {
   it("staggerMs 读 --stagger 计算值（jsdom 无计算值时报默认 120）", () => {
     expect(typeof staggerMs(document.createElement("div"))).toBe("number");
     expect(staggerMs(document.createElement("div"))).toBeGreaterThan(0);
+  });
+
+  it("durationMs 读 --dur-* 计算值（jsdom 无计算值走 fallback 300/700/1400）", () => {
+    const el = document.createElement("div");
+    expect(durationMs(el, "fast")).toBe(300);
+    expect(durationMs(el, "mid")).toBe(700);
+    expect(durationMs(el, "slow")).toBe(1400);
   });
 });

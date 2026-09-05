@@ -1,8 +1,6 @@
 import { useEffect, useRef } from "react";
 import { canvasAnim } from "../../engine/animationRuntime";
-import { MotionDuration } from "../motion";
-
-const DUR_FALLBACK: Record<MotionDuration, number> = { fast: 300, mid: 700, slow: 1400 };
+import { durationMs, MotionDuration } from "../motion";
 
 export interface CounterProps {
   to: number;
@@ -17,7 +15,7 @@ export function Counter({ to, duration = "mid", className = "", ...rest }: Count
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const durMs = DUR_FALLBACK[duration];
+    const durMs = durationMs(el, duration);
     const h = canvasAnim((tMs) => {
       const progress = Math.min(1, tMs / durMs);
       el.textContent = String(Math.round(to * progress));

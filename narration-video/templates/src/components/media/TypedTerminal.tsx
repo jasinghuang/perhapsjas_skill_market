@@ -2,9 +2,7 @@
 // 打字过程 = 有限 canvasAnim 帧函数：draw(t) 只依赖 t 与捕获值，可 seek。
 import { useEffect, useRef } from "react";
 import { canvasAnim } from "../../engine/animationRuntime";
-import { MotionDuration } from "../motion";
-
-const DUR_FALLBACK: Record<MotionDuration, number> = { fast: 400, mid: 900, slow: 1800 };
+import { durationMs, MotionDuration } from "../motion";
 
 export interface TypedTerminalProps {
   lines: string[];
@@ -20,7 +18,8 @@ export function TypedTerminal({ lines, duration = "mid", className = "", ...rest
     const el = textRef.current;
     if (!el) return;
     const full = lines.join("\n");
-    const durMs = DUR_FALLBACK[duration];
+    // 打字语义长时长系数 ×3（Ruling M2b-1）：动效 token 档位 × 系数，系数写组件注释
+    const durMs = durationMs(el, duration) * 3;
     const h = canvasAnim((tMs) => {
       const progress = Math.min(1, tMs / durMs);
       const count = Math.round(full.length * progress);

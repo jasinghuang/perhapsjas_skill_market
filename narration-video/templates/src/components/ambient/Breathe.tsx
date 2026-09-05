@@ -1,6 +1,7 @@
 // 呼吸微动（有限迭代，Ruling P3-3）：waapi iterations 有限值，渲染可 seek。
 import { useEffect, useRef } from "react";
 import { waapi } from "../../engine/animationRuntime";
+import { durationMs } from "../motion";
 
 export interface BreatheProps {
   cycles?: number;
@@ -22,7 +23,7 @@ export function Breathe({ cycles = 3, variant = "pulse", className = "", ...rest
         { transform: "scale(1.06)", opacity: 1 },
         { transform: "scale(1)", opacity: 0.85 },
       ],
-      { duration: 1600, iterations: cycles, easing: "ease-in-out", fill: "both" },
+      { duration: durationMs(el, "slow"), iterations: cycles, easing: "ease-in-out", fill: "both" },
     );
     return () => h.dispose();
   }, [cycles, variant]);
