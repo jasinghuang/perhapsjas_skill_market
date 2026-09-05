@@ -1,6 +1,7 @@
 // 组件工厂（§6.4 缺点 1 的机制落点）：每个组件 = 变体配置 + components/ 内 CSS。
 // 统一处理：变体类名、token 驱动样式（样式在组件 CSS）、动画预设走引擎注册表、卸载 dispose。
 // 铁律 5：stagger 用逐子元素延迟动画实现（Ruling 8 后 delay 语义正确）。
+// P3-4 契约：子元素在 mount 时固定；动态 children 请走揭示组自接 revealAnim 路径（Ruling P3-1），勿用工厂 stagger。
 
 import {
   CSSProperties,

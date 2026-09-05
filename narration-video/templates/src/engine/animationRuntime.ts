@@ -141,7 +141,7 @@ export function canvasAnim(draw: (tMs: number) => void, durationMs: number): Ani
     rafId = requestAnimationFrame(frame);
   };
 
-  return register({
+  const handle = register({
     durationMs,
     seek: (tMs) => {
       current = Math.min(durationMs, Math.max(0, tMs));
@@ -164,4 +164,11 @@ export function canvasAnim(draw: (tMs: number) => void, durationMs: number): Ani
       rafId = requestAnimationFrame(frame);
     },
   });
+
+  // I-1：镜像 waapi——非 render 模式创建即播（预览触发断链修复）。帧函数组件
+  // mount 即开始排帧，不再依赖任何外部 play 调用；play 幂等，且 render 模式下
+  // register 的 pause 对 rafId=null 是 no-op、play 不被调用，渲染器仍只走 seek，
+  // 创建即冻结的确定性边界不变。
+  if (!isRenderMode()) handle.play();
+  return handle;
 }

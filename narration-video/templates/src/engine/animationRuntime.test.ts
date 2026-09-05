@@ -230,6 +230,51 @@ describe("动画运行时注册表", () => {
     h.dispose();
   });
 
+  it("canvasAnim：非 render 模式创建即排帧，draw 收到递增 t（I-1 预览触发断链修复）", () => {
+    const pending: Array<{ id: number; cb: FrameRequestCallback }> = [];
+    const cancelled = new Set<number>();
+    let nextId = 1;
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      const id = nextId++;
+      pending.push({ id, cb });
+      return id;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+      cancelled.add(id);
+    });
+    const advance = (ts: number) => {
+      const batch = pending.splice(0);
+      for (const { id, cb } of batch) if (!cancelled.has(id)) cb(ts);
+    };
+
+    const calls: number[] = [];
+    const h = canvasAnim((t) => calls.push(t), 500);
+
+    // 创建即开始排帧（无需外部 play）：预览模式组件 mount 后粒子/打字等立即驱动
+    expect(pending.length).toBeGreaterThanOrEqual(1);
+
+    advance(1000); // 首帧建立基准，t = 0
+    advance(1100); // t = 100
+    expect(calls).toEqual([0, 100]);
+
+    h.dispose();
+  });
+
+  it("canvasAnim：render 模式创建不排帧（创建即冻结的确定性边界不变）", () => {
+    setRenderMode(true);
+    let scheduled = 0;
+    vi.stubGlobal("requestAnimationFrame", () => {
+      scheduled++;
+      return scheduled;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+
+    const h = canvasAnim(() => {}, 500);
+    expect(scheduled).toBe(0); // 渲染器只走 seek，不排 rAF
+
+    h.dispose();
+  });
+
   it("seekAll 对全部动画生效且不为负", () => {
     let seeked = 0;
     const h = register({ durationMs: 100, seek: () => { seeked++; }, isFinished: () => false, pause: () => {}, play: () => {} });

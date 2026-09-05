@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
 
 class FakeAudio {
@@ -41,6 +41,8 @@ afterEach(() => {
   // vitest 未开 globals，RTL 不自动注册 cleanup（见 Stage.test.tsx 注释），必须手动清理
   cleanup();
   vi.useRealTimers();
+  // 用例内 stubGlobal（如 rAF 捕获桩）不留存到后续用例；beforeEach 会重新装好 Audio/ResizeObserver
+  vi.unstubAllGlobals();
 });
 
 describe("App 装配", () => {
@@ -84,5 +86,44 @@ describe("App 装配", () => {
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(screen.getByTestId("scene-2")).toBeInTheDocument();
     expect(screen.queryByTestId("caption-layer")).not.toBeInTheDocument();
+  });
+
+  it("含帧函数组件的步骤能自动推进（I-1：canvasAnim 预览触发断链挂死修复）", () => {
+    // rAF 捕获桩：手动排帧（fake timers 只管 setTimeout，rAF 回调手动驱动，两者互不干扰）
+    const pending: Array<{ id: number; cb: FrameRequestCallback }> = [];
+    const cancelled = new Set<number>();
+    let nextId = 1;
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      const id = nextId++;
+      pending.push({ id, cb });
+      return id;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+      cancelled.add(id);
+    });
+    const advanceFrame = (ts: number) => {
+      const batch = pending.splice(0);
+      for (const { id, cb } of batch) if (!cancelled.has(id)) cb(ts);
+    };
+
+    render(<App />);
+    expect(screen.getByTestId("scene-0")).toBeInTheDocument();
+
+    // KenBurns duration="fast" → 4000ms：挂载即排帧（断链修复后的触发点）
+    expect(pending.length).toBeGreaterThanOrEqual(1);
+
+    // 手动驱动 rAF 到 KenBurns 终态：draw 到 t=durMs，isFinished 变 true，不再排帧
+    advanceFrame(1000); // 首帧建立时间基准，t = 0
+    advanceFrame(1000 + 4000); // t 达 durMs → 终态 draw(4000) 后停
+    expect(pending.length).toBe(0);
+
+    // 音频结束 → afterAnimations 轮询发现全部 finished → 停留垫（DEFAULT_HOLD_MS）→ 自动推进
+    act(() => {
+      FakeAudio.instances[0].onended?.();
+    });
+    act(() => {
+      vi.advanceTimersByTime(400 + 50);
+    });
+    expect(screen.getByTestId("scene-1")).toBeInTheDocument();
   });
 });

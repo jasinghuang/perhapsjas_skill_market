@@ -1,4 +1,4 @@
-import { afterEach, beforeEach } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
@@ -21,6 +21,12 @@ const originalAnimate = Element.prototype.animate;
 beforeEach(() => {
   Element.prototype.animate = (k: unknown, opts: KeyframeAnimationOptions) =>
     new FakeAnim(opts) as unknown as Animation;
+  // I-1 修复后 canvasAnim 非 render 模式创建即播：jsdom 原生 rAF 由真实 setInterval
+  // 驱动，会在每个组件测试里留下跨测试的真实后台帧链（直至动画总时长）。
+  // 全局替换为 no-op 捕获桩保确定性；需要帧驱动的测试（animationRuntime.test.ts /
+  // App.test.tsx 集成）在用例内自行 stubGlobal 覆盖，不受影响。
+  vi.stubGlobal("requestAnimationFrame", () => 0);
+  vi.stubGlobal("cancelAnimationFrame", () => {});
 });
 
 afterEach(() => {
