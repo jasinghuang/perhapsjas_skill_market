@@ -1,7 +1,11 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
 // ?showcase=1 渲染：4 屏 1920×1080 slide deck——每屏带统一 chrome frame
-// （topbar 48px/64px + meta footer 40px/64px + 96px 内容 gutter），
-// 严守用色纪律（每屏 2-3 个强调色、硬阴影只给 featured 单元素），28 组件全部出场且各有构图角色。
+// （topbar 48px/64px + meta footer 40px/64px + 内容带 96px gutter、垂直 y 112–992）。
+// 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
+// （topbar 下缘 +24 起、meta 上缘 −24 止，24px 偏移阴影落点亦算占位）；③ 氛围背景层豁免。
+// 画布无彩色投影（仅 4px 墨框）；硬阴影只保留在 featured 内部元素（S1 marker 块 / S2 HeroNumber / S3 current 卡 / S4 stamp 标题）。
+// ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带，pointerEvents none）。
+// 严守用色纪律（每屏 2-3 个强调色），28 组件全部出场且各有构图角色。
 // 舞台尺寸 / chrome frame / 印章等 dev 工具页家具用 inline style；场景内构图与配色走组件 + token，
 // 需要局部配色时用 scope() 注入 CSS 自定义属性（token 覆写，不改组件本体）。
 import type { CSSProperties, ReactNode } from "react";
@@ -47,6 +51,50 @@ const SHADOW_ORANGE = "24px 24px 0 var(--accent-3), 24px 24px 0 4px var(--surfac
 const SHADOW_GREEN = "24px 24px 0 var(--accent-1), 24px 24px 0 4px var(--surface-3)";
 const SHADOW_PINK = "24px 24px 0 var(--accent-2), 24px 24px 0 4px var(--surface-3)";
 
+/* ── 安全框可视化（?showcase=1&guides=1 dev-only） ── */
+
+/** 模块加载时读一次查询参数（与 main.tsx 的 showcase 短路同级，dev 页专用） */
+const GUIDES_ON = new URLSearchParams(window.location.search).has("guides");
+
+/**
+ * 安全框参考线：96px 内容带（x 96/1824 · y 112/992）+ 64px chrome 带（x 64/1856 · topbar 48 / meta 40）。
+ * 纯视觉叠加层：pointerEvents none，不参与布局、不遮挡交互。
+ */
+function SafetyGuides({ color }: { color: string }) {
+  if (!GUIDES_ON) return null;
+  const line: CSSProperties = { position: "absolute", pointerEvents: "none" };
+  const label: CSSProperties = {
+    position: "absolute",
+    fontFamily: "var(--font-mono)",
+    fontSize: 16,
+    lineHeight: 1,
+    color,
+    pointerEvents: "none",
+    whiteSpace: "nowrap",
+  };
+  return (
+    <div data-testid="safety-guides" style={{ position: "absolute", inset: 0, zIndex: 3, pointerEvents: "none" }}>
+      {/* chrome 带 64：两侧竖线 + topbar/meta 上下线 */}
+      <div style={{ ...line, top: 0, bottom: 0, left: 64, borderLeft: `2px dashed ${color}` }} />
+      <div style={{ ...line, top: 0, bottom: 0, right: 64, borderRight: `2px dashed ${color}` }} />
+      <div style={{ ...line, top: 48, left: 64, right: 64, borderTop: `2px dashed ${color}` }} />
+      <div style={{ ...line, bottom: 40, left: 64, right: 64, borderTop: `2px dashed ${color}` }} />
+      {/* 内容带 96：两侧竖线 + 顶 112 / 底 992 限位线 */}
+      <div style={{ ...line, top: 0, bottom: 0, left: 96, borderLeft: `2px dashed ${color}` }} />
+      <div style={{ ...line, top: 0, bottom: 0, right: 96, borderRight: `2px dashed ${color}` }} />
+      <div style={{ ...line, top: 112, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
+      <div style={{ ...line, bottom: 80, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
+      {/* mono 小标注 */}
+      <span style={{ ...label, top: 8, left: 68 }}>CHROME 64</span>
+      <span style={{ ...label, top: 8, left: 252 }}>CONTENT 96</span>
+      <span style={{ ...label, top: 8, right: 68 }}>64</span>
+      <span style={{ ...label, top: 8, right: 100 }}>96</span>
+      <span style={{ ...label, top: 96, left: 100 }}>112</span>
+      <span style={{ ...label, bottom: 62, left: 100 }}>992</span>
+    </div>
+  );
+}
+
 /* ── chrome frame（每屏必有） ── */
 interface SlideShellProps {
   index: string; // "01".."04"
@@ -54,7 +102,6 @@ interface SlideShellProps {
   pill: string;
   meta: ReactNode;
   bg?: string; // 屏底色（默认 cream；S4 绿底）
-  shadow?: string; // 舞台浮起硬阴影（offset 色按屏纪律）
   invert?: boolean; // 绿底屏 chrome 反色（cream 字 + cream 框 pill）
   children: ReactNode;
 }
@@ -65,7 +112,6 @@ function SlideShell({
   pill,
   meta,
   bg = "var(--surface)",
-  shadow = SHADOW_ORANGE,
   invert = false,
   children,
 }: SlideShellProps) {
@@ -81,8 +127,7 @@ function SlideShell({
         flexShrink: 0,
         boxSizing: "border-box",
         background: bg,
-        border: "4px solid var(--surface-3)",
-        boxShadow: shadow,
+        border: "4px solid var(--surface-3)", // 画布边框（非投影；画布无彩色投影——F2 裁定）
         overflow: "hidden",
       }}
     >
@@ -104,6 +149,7 @@ function SlideShell({
           style={{
             fontFamily: MONO_CN,
             fontSize: 24,
+            lineHeight: "24px",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
             color: chrome,
@@ -116,6 +162,7 @@ function SlideShell({
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: 24,
+            lineHeight: "24px",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
             color: chrome,
@@ -128,14 +175,15 @@ function SlideShell({
           {pill}
         </span>
       </div>
-      {/* 内容层：StagePad（96px 内容 gutter）+ 高度减让（为 meta 带留净空，内容底 ≤ 996） */}
+      {/* 内容层：StagePad（96px gutter）+ 安全框内容带（topbar 底 88 + 24 = 顶 112；
+          meta 顶 1016 − 24 = 底 992；带高 880 = StagePad 内容高 944 − 64） */}
       <StagePad>
         <div
           style={{
-            height: "calc(100% - var(--space-5))",
+            height: "calc(100% - var(--stage-pad-y))",
             display: "flex",
             flexDirection: "column",
-            paddingTop: "var(--space-4)",
+            paddingTop: "var(--space-5)",
             paddingBottom: "var(--space-3)",
           }}
         >
@@ -160,6 +208,7 @@ function SlideShell({
           style={{
             fontFamily: MONO_CN,
             fontSize: 24,
+            lineHeight: "24px",
             letterSpacing: "0.06em",
             textTransform: "uppercase",
             color: chrome,
@@ -175,6 +224,7 @@ function SlideShell({
             gap: 16,
             fontFamily: "var(--font-mono)",
             fontSize: 24,
+            lineHeight: "24px",
             letterSpacing: "0.06em",
             color: chrome,
           }}
@@ -184,6 +234,8 @@ function SlideShell({
           <span>04</span>
         </span>
       </div>
+      {/* 安全框可视化（?showcase=1&guides=1） */}
+      <SafetyGuides color={chrome} />
     </section>
   );
 }
@@ -253,13 +305,13 @@ function CoverSlide() {
         <QuoteBlock variant="block" style={{ background: "var(--accent-2)", color: "var(--surface-3)" }}>
           把口播稿，做成会动的网页。
         </QuoteBlock>
-        {/* 印章（右下角）：pink 方块 -6deg + cream 圆环 + 40px mono 小字 */}
+        {/* 印章（右下角）：pink 方块 -6deg + cream 圆环 + 40px mono 小字；内移 32px 使旋转 bbox 落回内容带 */}
         <div
           data-testid="stamp"
           style={{
             position: "absolute",
-            right: 24,
-            bottom: 16,
+            right: "var(--space-4)",
+            bottom: "var(--space-4)",
             width: 340,
             height: 340,
             background: "var(--accent-2)",
@@ -307,7 +359,6 @@ function DataSlide() {
       topbar="DATA · 数据冲击"
       pill="STAT CELLS"
       meta="配色序列 · 以绿收尾"
-      shadow={SHADOW_GREEN}
     >
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
         <HeroTitle reveal="rise" style={{ fontSize: "var(--t-h1)", lineHeight: 1 }}>
@@ -349,6 +400,7 @@ function DataSlide() {
               border: "4px solid var(--surface-3)",
               padding: "var(--space-4)",
               boxShadow: SHADOW_GREEN,
+              marginRight: "var(--space-3)", // 安全框：24px 阴影落点收在内容带内（右缘 1796 + 28 = 1824）
             }}
           >
             <HeroNumber value="+47%" variant="accent" countUp />
@@ -522,7 +574,6 @@ function ToolkitSlide() {
       pill="28 COMPONENTS"
       meta="28 组件 · 各归其位"
       bg="var(--accent-1)"
-      shadow={SHADOW_PINK}
       invert
     >
       {/* 整屏粒子尘：canvas 绘制色读 :root --accent-1（绿），绿底不可见——
@@ -543,11 +594,12 @@ function ToolkitSlide() {
         <SeededParticles seed={42} count={40} />
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-        {/* headline：HeroTitle stamp 变体（墨底 cream 字——绿底上的对比组合；pink 硬阴影 = 本屏 featured） */}
+        {/* headline：HeroTitle stamp 变体（墨底 cream 字——绿底上的对比组合；pink 硬阴影 = 本屏 featured。
+            对齐自身宽度（fit-content）：24px 阴影落点收在内容带内） */}
         <HeroTitle
           variant="stamp"
           reveal="rise"
-          style={{ fontSize: 72, lineHeight: 1, padding: "16px 24px", boxShadow: SHADOW_PINK }}
+          style={{ fontSize: 72, lineHeight: 1, padding: "16px 24px", boxShadow: SHADOW_PINK, alignSelf: "flex-start" }}
         >
           组件工具箱
         </HeroTitle>
@@ -643,7 +695,7 @@ export function ThemeShowcase() {
             padding: "6px 14px",
           }}
         >
-          DEV-ONLY · ?showcase=1
+          DEV-ONLY · ?showcase=1&guides=1
         </span>
       </header>
       <main style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 96 }}>
