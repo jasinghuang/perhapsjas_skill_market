@@ -2,8 +2,8 @@
 // ?showcase=1 渲染：5 屏 1920×1080 slide deck——每屏带统一 chrome frame
 // （topbar 48px/64px + meta footer 40px/64px + 内容带 96px gutter、垂直 y 112–992）。
 // 构图纪律（用户反馈终审）：屏 2-5 严格复刻 creative-mode 参考构图——
-// S2 = 参考 s3 数据屏（2×2 满幅零阴影网格）；S3 = 参考 s6 流程屏（4 步卡 + dashed 线 + 三角箭头）；
-// S4 = 参考 s7 对比屏（-4deg 徽章 + 彩色列表格）；S5 = 参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
+// S2 = 参考 s3 数据屏（2×2 满幅零阴影网格）；S3 = 参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）；
+// S4 = 参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）；S5 = 参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
 // （24px 阴影落点亦算占位，不越界）；③ 氛围背景层豁免。
 // ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带，pointerEvents none）。
@@ -526,29 +526,9 @@ const STEP_DEFS: StepDef[] = [
   { n: "04", title: "成片", desc: "录屏导出成片，一张网页承载完整表达。", tone: "green" },
 ];
 
-/** 步骤箭头（参考 s6 arrow：CSS border 三角，墨色） */
-function StepArrow() {
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        position: "absolute",
-        right: -22,
-        top: "50%",
-        transform: "translateY(-50%)",
-        width: 0,
-        height: 0,
-        borderTop: "18px solid transparent",
-        borderBottom: "18px solid transparent",
-        borderLeft: "24px solid var(--surface-3)",
-        zIndex: 2,
-      }}
-    />
-  );
-}
-
-/** 流程步骤卡：大 mono 序号（display-2 96px 档）+ Kicker 标题 + 描述两句 + 右三角箭头（最后一张无）。
-    配色序列 cream → pink（墨字）→ yellow（墨字）→ green（cream 字）收尾；零阴影（参考构图无投影） */
+/** 流程步骤卡：大 mono 序号（display-2 96px 档）+ Kicker 标题 + 描述两句。
+    配色序列 cream → pink（墨字）→ yellow（墨字）→ green（cream 字）收尾；零阴影（参考构图无投影）。
+    视觉终审三轮 F1：步骤卡间三角箭头已删除（用户拍板），卡片间距保持 Grid gutter 28px */
 function StepCard({ def }: { def: StepDef }) {
   const variant = def.tone === "green" ? "accent" : "plain";
   const bg =
@@ -594,7 +574,6 @@ function StepCard({ def }: { def: StepDef }) {
       <BodyCopy style={{ fontSize: 24, lineHeight: 1.4, color: creamText ? "var(--surface)" : "var(--text-2)" }}>
         {def.desc}
       </BodyCopy>
-      {def.tone !== "green" ? <StepArrow /> : null}
     </Card>
   );
 }
@@ -651,26 +630,7 @@ function CompareSlide() {
         <HeroTitle style={{ fontSize: "var(--t-h1)", lineHeight: 0.95, maxWidth: 1100 }}>
           三个选项，逐项对比。
         </HeroTitle>
-        {/* -4deg 旋转徽章（参考 s7 badge：yellow 底 4px 墨框无圆角 + mono） */}
-        <div
-          data-testid="badge-pick"
-          style={{
-            position: "absolute",
-            right: 24,
-            top: 128,
-            background: "var(--accent-4)",
-            border: "4px solid var(--surface-3)",
-            padding: "14px 22px",
-            fontFamily: "var(--font-mono)",
-            fontWeight: 700,
-            fontSize: 28,
-            letterSpacing: "0.08em",
-            color: "var(--surface-3)",
-            transform: "rotate(-4deg)",
-          }}
-        >
-          选一个
-        </div>
+        {/* 视觉终审三轮 F2：-4deg "选一个" 徽章已删除（用户拍板），headline 与表格保持现有布局 */}
         {/* 大表格（Table columns 变体）：cream-2 底 4px 墨框 + 彩色数据列（pink 墨字 / green cream 字 / orange cream 字） */}
         <div
           style={{
@@ -719,10 +679,10 @@ function ClosingSlide() {
         >
           谢谢观看。
         </HeroTitle>
-        {/* strap 一句（cream 字，F4：紧随 headline——参考 s8 strap 跟在 THANK YOU 之下） */}
+        {/* strap 一句（cream 字，三轮 F3：与 headline 拉开 48px 呼吸间距——参考 s8 段落感） */}
         <BodyCopy
           style={{
-            marginTop: "var(--space-3)",
+            marginTop: "var(--space-5)",
             maxWidth: 1000,
             fontSize: 32,
             lineHeight: 1.4,
