@@ -1,15 +1,16 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
 // ?showcase=1 渲染：5 屏 1920×1080 slide deck——每屏带统一 chrome frame
-// （topbar 48px/64px + meta footer 40px/64px + 内容带 96px gutter、垂直 y 112–992）。
+// （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–948 + 字幕保留区 y[972,1032]；meta 页码条已删）。
 // 构图纪律（用户反馈终审）：屏 2-5 严格复刻 creative-mode 参考构图——
 // S2 = 参考 s3 数据屏（2×2 满幅零阴影网格）；S3 = 参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）；
 // S4 = 参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）；S5 = 参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
-// （24px 阴影落点亦算占位，不越界）；③ 氛围背景层豁免。
-// ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带，pointerEvents none）。
+// （底边 ≤948 = 字幕区上缘 972 − 24；24px 阴影落点亦算占位，不越界）；③ 氛围背景层与 CaptionLayer 自身豁免。
+// ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 972 线，pointerEvents none）。
 // 严守用色纪律（每屏 2-3 个强调色）；舞台尺寸 / chrome frame / 印章等 dev 工具页家具用 inline style；
 // 场景内构图与配色走组件 + token，需要局部配色时用 scope() 注入 CSS 自定义属性（token 覆写，不改组件本体）。
 import type { CSSProperties, ReactNode } from "react";
+import { CaptionLayer } from "./engine/CaptionLayer";
 import {
   BarGrow,
   BodyCopy,
@@ -55,7 +56,7 @@ const SHOWCASE_TWEAKS = `
 const GUIDES_ON = new URLSearchParams(window.location.search).has("guides");
 
 /**
- * 安全框参考线：96px 内容带（x 96/1824 · y 112/992）+ 64px chrome 带（x 64/1856 · topbar 48 / meta 40）。
+ * 安全框参考线：96px 内容带（x 96/1824 · y 112/948）+ 字幕保留区线 972（CAPTION）+ 64px chrome 带（x 64/1856 · topbar 48）。
  * 纯视觉叠加层：pointerEvents none，不参与布局、不遮挡交互。
  */
 function SafetyGuides({ color }: { color: string }) {
@@ -72,23 +73,24 @@ function SafetyGuides({ color }: { color: string }) {
   };
   return (
     <div data-testid="safety-guides" style={{ position: "absolute", inset: 0, zIndex: 3, pointerEvents: "none" }}>
-      {/* chrome 带 64：两侧竖线 + topbar/meta 上下线 */}
+      {/* chrome 带 64：两侧竖线 + topbar 上沿线（meta 页码条已删除，底部归字幕保留区） */}
       <div style={{ ...line, top: 0, bottom: 0, left: 64, borderLeft: `2px dashed ${color}` }} />
       <div style={{ ...line, top: 0, bottom: 0, right: 64, borderRight: `2px dashed ${color}` }} />
       <div style={{ ...line, top: 48, left: 64, right: 64, borderTop: `2px dashed ${color}` }} />
-      <div style={{ ...line, bottom: 40, left: 64, right: 64, borderTop: `2px dashed ${color}` }} />
-      {/* 内容带 96：两侧竖线 + 顶 112 / 底 992 限位线 */}
+      {/* 内容带 96：两侧竖线 + 顶 112 / 底 948 限位线 + 字幕保留区 972（字幕区上缘 972 − 24 = 内容底 948） */}
       <div style={{ ...line, top: 0, bottom: 0, left: 96, borderLeft: `2px dashed ${color}` }} />
       <div style={{ ...line, top: 0, bottom: 0, right: 96, borderRight: `2px dashed ${color}` }} />
       <div style={{ ...line, top: 112, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
-      <div style={{ ...line, bottom: 80, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
+      <div style={{ ...line, bottom: 108, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
+      <div style={{ ...line, bottom: 132, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
       {/* mono 小标注 */}
       <span style={{ ...label, top: 8, left: 68 }}>CHROME 64</span>
       <span style={{ ...label, top: 8, left: 252 }}>CONTENT 96</span>
       <span style={{ ...label, top: 8, right: 68 }}>64</span>
       <span style={{ ...label, top: 8, right: 100 }}>96</span>
       <span style={{ ...label, top: 96, left: 100 }}>112</span>
-      <span style={{ ...label, bottom: 62, left: 100 }}>992</span>
+      <span style={{ ...label, bottom: 92, left: 100 }}>CAPTION 972</span>
+      <span style={{ ...label, bottom: 114, left: 100 }}>948</span>
     </div>
   );
 }
@@ -98,7 +100,7 @@ interface SlideShellProps {
   index: string; // "01".."05"
   topbar: ReactNode;
   pill: string;
-  meta: ReactNode;
+  caption: string; // 该屏口播台词（CaptionLayer 字幕保留区 y[972,1032]）
   bg?: string; // 屏底色（默认 cream；S5 绿底）
   invert?: boolean; // 绿底屏 chrome 反色（cream 字 + cream 框 pill）
   children: ReactNode;
@@ -108,7 +110,7 @@ function SlideShell({
   index,
   topbar,
   pill,
-  meta,
+  caption,
   bg = "var(--surface)",
   invert = false,
   children,
@@ -174,11 +176,11 @@ function SlideShell({
         </span>
       </div>
       {/* 内容层：StagePad（96px gutter）+ 安全框内容带（topbar 底 88 + 24 = 顶 112；
-          meta 顶 1016 − 24 = 底 992） */}
+          字幕区上缘 972 − 24 = 底 948——四轮 F1 字幕保留区规格） */}
       <StagePad>
         <div
           style={{
-            height: "calc(100% - var(--stage-pad-y))",
+            height: "calc(100% - var(--stage-pad-y) - var(--space-5))",
             display: "flex",
             flexDirection: "column",
             paddingTop: "var(--space-5)",
@@ -188,50 +190,8 @@ function SlideShell({
           {children}
         </div>
       </StagePad>
-      {/* meta footer：40px bottom / 64px 两侧；左描述 + 右 "0N · 05"（10px 墨点分隔） */}
-      <div
-        data-testid="chrome-meta"
-        style={{
-          position: "absolute",
-          bottom: 40,
-          left: 64,
-          right: 64,
-          zIndex: 2,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <span
-          style={{
-            fontFamily: MONO_CN,
-            fontSize: 24,
-            lineHeight: "24px",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            color: chrome,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {meta}
-        </span>
-        <span
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-            fontFamily: "var(--font-mono)",
-            fontSize: 24,
-            lineHeight: "24px",
-            letterSpacing: "0.06em",
-            color: chrome,
-          }}
-        >
-          <span>{index}</span>
-          <span style={{ width: 10, height: 10, borderRadius: "50%", background: chrome }} />
-          <span>05</span>
-        </span>
-      </div>
+      {/* 字幕层（真实 CaptionLayer 组件；视频场景中底部属于字幕——meta 页码条已删除） */}
+      <CaptionLayer text={caption} />
       {/* 安全框可视化（?showcase=1&guides=1） */}
       <SafetyGuides color={chrome} />
     </section>
@@ -245,7 +205,7 @@ function CoverSlide() {
       index="01"
       topbar="CREATIVE MODE · 创意模式"
       pill="SHOWCASE / M2B"
-      meta="主题效果页 · 首套主题"
+      caption="把口播稿，做成会动的网页。"
     >
       <div
         style={{
@@ -418,7 +378,7 @@ function StatCell({
 
 function DataSlide() {
   return (
-    <SlideShell index="02" topbar="BY THE NUMBERS" pill="SHOWCASE / M2B" meta="METRICS OVERVIEW">
+    <SlideShell index="02" topbar="BY THE NUMBERS" pill="SHOWCASE / M2B" caption="四个数字，讲一个故事。">
       {/* 氛围层（豁免安全框）：种子粒子尘，低透明度铺满整屏 */}
       <div
         data-testid="particles-layer"
@@ -580,7 +540,7 @@ function StepCard({ def }: { def: StepDef }) {
 
 function FlowSlide() {
   return (
-    <SlideShell index="03" topbar="HOW IT WORKS" pill="FOUR STEPS" meta="METHOD FLOW">
+    <SlideShell index="03" topbar="HOW IT WORKS" pill="FOUR STEPS" caption="从稿子到成片，一共四步。">
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
         <HeroTitle style={{ fontSize: "var(--t-display-2)", lineHeight: 0.95 }}>一个四步流程。</HeroTitle>
         {/* 流程 slide 的 signature：3px dashed 墨线分隔（参考 s6 header-line） */}
@@ -625,7 +585,7 @@ const COMPARE_ROWS = [
 
 function CompareSlide() {
   return (
-    <SlideShell index="04" topbar="SIDE BY SIDE" pill="COMPARISON" meta="OPTIONS MATRIX">
+    <SlideShell index="04" topbar="SIDE BY SIDE" pill="COMPARISON" caption="三个选项，逐项对比。">
       <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
         <HeroTitle style={{ fontSize: "var(--t-h1)", lineHeight: 0.95, maxWidth: 1100 }}>
           三个选项，逐项对比。
@@ -661,7 +621,7 @@ function ClosingSlide() {
       index="05"
       topbar="END OF DECK"
       pill="FIN."
-      meta="CLOSING CARD"
+      caption="谢谢观看。"
       bg="var(--accent-1)"
       invert
     >
@@ -679,10 +639,10 @@ function ClosingSlide() {
         >
           谢谢观看。
         </HeroTitle>
-        {/* strap 一句（cream 字，三轮 F3：与 headline 拉开 48px 呼吸间距——参考 s8 段落感） */}
+        {/* strap 一句（cream 字，四轮 F2：与 headline 拉开 96px——用户仍嫌 48px 近） */}
         <BodyCopy
           style={{
-            marginTop: "var(--space-5)",
+            marginTop: 96,
             maxWidth: 1000,
             fontSize: 32,
             lineHeight: 1.4,

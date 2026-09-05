@@ -1,4 +1,5 @@
 import type { PropsWithChildren } from "react";
+import { CaptionLayer } from "./CaptionLayer";
 import { StageDims, useStageScale } from "./useStageScale";
 
 export interface StageProps extends PropsWithChildren {
@@ -30,11 +31,7 @@ export function Stage({ dims, noUi, caption, onPlay, onPause, onStop, children }
           }}
         >
           {children}
-          {caption ? (
-            <div className="caption-layer" data-testid="caption-layer">
-              <span className="caption-text">{caption}</span>
-            </div>
-          ) : null}
+          {caption ? <CaptionLayer text={caption} /> : null}
         </div>
       </div>
       {!noUi && (
