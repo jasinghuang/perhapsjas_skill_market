@@ -14,6 +14,7 @@
 
 .cdp-table th {
   background: var(--table-head-bg);
+  color: var(--table-head-text);
   font-family: var(--font-mono);
   font-size: var(--t-micro);
   letter-spacing: 0.08em;

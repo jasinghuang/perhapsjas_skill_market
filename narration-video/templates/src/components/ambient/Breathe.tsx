@@ -16,6 +16,9 @@ export function Breathe({ cycles = 3, variant = "pulse", className = "", ...rest
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // 终审 I-3：easing 硬编码改读 --ease-out（同 BarGrow/DonutMeter，fallback 与 tokens.css 同值）
+    const easing =
+      getComputedStyle(el).getPropertyValue("--ease-out").trim() || "cubic-bezier(0,0,0.2,1)";
     const h = waapi(
       el,
       [
@@ -23,7 +26,7 @@ export function Breathe({ cycles = 3, variant = "pulse", className = "", ...rest
         { transform: "scale(1.06)", opacity: 1 },
         { transform: "scale(1)", opacity: 0.85 },
       ],
-      { duration: durationMs(el, "slow"), iterations: cycles, easing: "ease-in-out", fill: "both" },
+      { duration: durationMs(el, "slow"), iterations: cycles, easing, fill: "both" },
     );
     return () => h.dispose();
   }, [cycles, variant]);

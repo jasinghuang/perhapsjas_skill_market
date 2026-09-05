@@ -14,7 +14,7 @@ const VALID_CSS = `:root {
   --ease-in: linear; --ease-out: linear; --ease-emph: linear; --stagger: 1ms;
   --card-bg: #fff; --card-border: 0; --card-radius: 0px; --r-card: 0px;
   --r-pill: 0px; --border-w: 1px;
-  --table-border: 0; --table-head-bg: #fff; --table-zebra: #fff;
+  --table-border: 0; --table-head-bg: #fff; --table-head-text: #fff; --table-zebra: #fff;
   --rule-w: 1px; --rule-style: solid;
   --badge-bg: #fff; --badge-text: #000;
   --hero-num-font: serif; --hero-num-weight: 400; --hero-num-track: 0em;
@@ -57,5 +57,7 @@ describe("主题校验器", () => {
     expect(REQUIRED_TOKENS).toContain("--accent-1");
     expect(REQUIRED_TOKENS).toContain("--dur-fast");
     expect(REQUIRED_TOKENS).toContain("--decor-family");
+    // 终审 I-1：表头文字语义 token（墨底表头需奶油文字）
+    expect(REQUIRED_TOKENS).toContain("--table-head-text");
   });
 });

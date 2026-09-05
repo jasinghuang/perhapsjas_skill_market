@@ -19,7 +19,7 @@ export const REQUIRED_TOKENS: string[] = [
   "--ease-in", "--ease-out", "--ease-emph", "--stagger",
   // 语义
   "--card-bg", "--card-border", "--card-radius", "--r-card", "--r-pill", "--border-w",
-  "--table-border", "--table-head-bg", "--table-zebra",
+  "--table-border", "--table-head-bg", "--table-head-text", "--table-zebra",
   "--rule-w", "--rule-style",
   "--badge-bg", "--badge-text",
   "--hero-num-font", "--hero-num-weight", "--hero-num-track",

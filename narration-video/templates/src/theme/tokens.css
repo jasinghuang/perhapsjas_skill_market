@@ -59,9 +59,10 @@
   --r-pill: 999px;
   --border-w: 4px;
 
-  /* ── 语义 · 表格（4px 外框 + 3px 行线 + 墨底表头） ── */
+  /* ── 语义 · 表格（4px 外框 + 3px 行线 + 墨底表头/奶油表头文字） ── */
   --table-border: 3px solid var(--text);
   --table-head-bg: var(--surface-3);
+  --table-head-text: var(--surface);
   --table-zebra: var(--surface-2);
 
   /* ── 语义 · 分割线 ── */
@@ -86,7 +87,8 @@
   --caption-radius: 0px;
   --caption-size: 30px;
 
-  /* ── 字体四坑位（display-cn 待 Task 4 拍板回填，暂 Sans 900） ── */
+  /* ── 字体四坑位（display-cn 已定稿：Noto Sans SC 900——用户拍板 A；
+     模板官方 CJK 指引推荐 Serif 900，此为标注在案的主动偏离） ── */
   --font-display-cn: "Noto Sans SC", "PingFang SC", sans-serif;
   --font-display-en: "Archivo Black", "Arial Black", sans-serif;
   --font-body: "Space Grotesk", "PingFang SC", sans-serif;

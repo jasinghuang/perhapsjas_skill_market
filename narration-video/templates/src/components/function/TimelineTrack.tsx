@@ -18,10 +18,13 @@ export function TimelineTrack({ points, activeIndex, variant = "line", className
     const el = fillRef.current;
     if (!el) return;
     const ratio = points.length <= 1 ? 0 : activeIndex / (points.length - 1);
+    // 终审 I-3：easing 硬编码改读 --ease-out（同 BarGrow/DonutMeter，fallback 与 tokens.css 同值）
+    const easing =
+      getComputedStyle(el).getPropertyValue("--ease-out").trim() || "cubic-bezier(0,0,0.2,1)";
     const h = waapi(
       el,
       [{ transform: "scaleX(0)" }, { transform: `scaleX(${ratio})` }],
-      { duration: durationMs(el, "mid"), easing: "cubic-bezier(0, 0, 0.2, 1)", fill: "both" },
+      { duration: durationMs(el, "mid"), easing, fill: "both" },
     );
     return () => h.dispose();
   }, [points.length, activeIndex]);
