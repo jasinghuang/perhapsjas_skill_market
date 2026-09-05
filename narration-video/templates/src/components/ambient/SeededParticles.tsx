@@ -41,9 +41,9 @@ export function SeededParticles({ seed, count = 30, duration = "mid", variant = 
     }));
 
     // Ruling P3-6：canvas fillStyle 不支持 var() 语法——effect 内读一次强调色 token，
-    // 非空则用之，否则回退中性占位值（主题值在绘制期稳定，捕获进 draw 闭包）。
+    // 非空则用之，否则回退 creative-mode accent-1（#1f8a4c 森林绿，M2b-10：主题值在绘制期稳定，捕获进 draw 闭包）。
     const accent =
-      getComputedStyle(document.documentElement).getPropertyValue("--accent-1").trim() || "#c9501f";
+      getComputedStyle(document.documentElement).getPropertyValue("--accent-1").trim() || "#1f8a4c";
 
     // 氛围长时长系数 ×8（Ruling M2b-1）：动效 token 档位 × 系数，系数写组件注释
     const durMs = durationMs(canvas, duration) * 8;

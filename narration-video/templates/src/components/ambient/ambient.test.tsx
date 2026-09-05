@@ -80,9 +80,9 @@ describe("氛围组（有限周期确定性微动）", () => {
     expect(ctxA?.arcCalls).toEqual(ctxB?.arcCalls);
     expect(ctxA?.fillCalls).toBe(20);
     expect(ctxB?.fillCalls).toBe(20);
-    // P3-6：fillStyle 不得是 var() 字符串（jsdom 下回退中性占位值）
-    expect(ctxA?.fillStyle).toBe("#c9501f");
-    expect(ctxB?.fillStyle).toBe("#c9501f");
+    // P3-6：fillStyle 不得是 var() 字符串（jsdom 下回退 creative-mode accent-1）
+    expect(ctxA?.fillStyle).toBe("#1f8a4c");
+    expect(ctxB?.fillStyle).toBe("#1f8a4c");
     a.unmount();
     b.unmount();
   });
