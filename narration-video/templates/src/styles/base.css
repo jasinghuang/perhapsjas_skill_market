@@ -39,7 +39,7 @@ body,
   background: rgba(0, 0, 0, 0.7);
   color: #fff;
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: var(--caption-radius); /* M1 遗留硬编码 6px → token 化（六轮 F2：pill 全圆） */
   font-size: var(--caption-size); /* M1 遗留硬编码 28px → token 化（五轮 F1：字幕最大 40px） */
   line-height: 1.5;
   text-align: center; /* 字幕层居中（engine 修正：字幕样例文字居中，非仅展示页） */

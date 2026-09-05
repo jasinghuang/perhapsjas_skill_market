@@ -24,7 +24,8 @@
   --shadow-stage: 0 8px 40px rgba(0, 0, 0, 0.35);
 
   /* ── 字阶（creative-mode 直映射；顶档按 Ruling M2b-4 裁剪） ── */
-  --t-display-1: 160px;
+  /* 六轮 F1：最大字号 130px（用户定稿尝试值） */
+  --t-display-1: 130px;
   --t-display-2: 96px;
   --t-h1: 84px;
   --t-h2: 56px;
@@ -83,10 +84,10 @@
   /* ── 语义 · 装饰语言（Ruling M2b-5：色块族） ── */
   --decor-family: block;
 
-  /* ── 语义 · 字幕（墨底奶油字，零圆角贴边） ── */
+  /* ── 语义 · 字幕（墨底奶油字；pill 全圆底框——六轮 F2：主题圆角例外逻辑，字幕底框属标签条类） ── */
   --caption-bg: rgba(15, 15, 15, 0.85);
   --caption-text: #efe9d9;
-  --caption-radius: 0px;
+  --caption-radius: 999px;
   /* 字幕是视频主阅读元素：用户定稿"字幕最大、其他可小"（五轮 F1） */
   --caption-size: 40px;
 

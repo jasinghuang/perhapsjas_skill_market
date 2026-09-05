@@ -231,7 +231,7 @@ function CoverSlide() {
           <div
             style={{
               fontFamily: "var(--font-display-en)",
-              fontSize: 160,
+              fontSize: "var(--t-display-1)", // 六轮 F1：160 硬编码 → token（130px 用户定稿尝试值）
               lineHeight: 0.92,
               letterSpacing: "-0.01em",
               textTransform: "uppercase",
@@ -244,7 +244,7 @@ function CoverSlide() {
             style={{
               fontFamily: "var(--font-display-cn)",
               fontWeight: 900,
-              fontSize: 160,
+              fontSize: "var(--t-display-1)",
               lineHeight: 1,
               color: "var(--surface-3)",
               marginTop: 12,
