@@ -91,6 +91,6 @@
      模板官方 CJK 指引推荐 Serif 900，此为标注在案的主动偏离） ── */
   --font-display-cn: "Noto Sans SC", "PingFang SC", sans-serif;
   --font-display-en: "Archivo Black", "Arial Black", sans-serif;
-  --font-body: "Space Grotesk", "PingFang SC", sans-serif;
+  --font-body: "Space Grotesk", "Noto Sans SC", "PingFang SC", sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", monospace;
 }

@@ -8,7 +8,7 @@
       { "family": "Archivo Black", "source": "@fontsource/archivo-black" },
       { "family": "Space Grotesk", "source": "@fontsource/space-grotesk", "weights": [400, 600] },
       { "family": "JetBrains Mono", "source": "@fontsource/jetbrains-mono" },
-      { "family": "Noto Sans SC", "source": "@fontsource/noto-sans-sc", "weights": [900] },
+      { "family": "Noto Sans SC", "source": "@fontsource/noto-sans-sc", "weights": [400, 900] },
       { "family": "Noto Serif SC", "source": "@fontsource/noto-serif-sc", "weights": [900] }
     ]
   }
