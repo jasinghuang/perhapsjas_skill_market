@@ -1,5 +1,5 @@
 // 样式词典页（M2b 验收工具；dev-only，不入章节层）。
-// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 31 组件全变体目录。
+// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 32 组件全变体目录。
 // 页面壳：深色 shell 底（var(--shell)）、1920 居中；每区段 mono 区段头（cream，编号 + 标题）
 // + 全幅 cream 内容面板（4px 墨框、水平内衬 96px——与安全框规格一致）。
 // 布局纪律：区段内容水平 ≥96px 内；无横向溢出；组件格容器只允许 inline 布局属性，
@@ -34,6 +34,7 @@ import {
   RevealText,
   Rule,
   SeededParticles,
+  SplitCompare,
   StackedBlocks,
   StagePad,
   StatCard,
@@ -637,7 +638,7 @@ function SemanticSection() {
   );
 }
 
-/* ── 06 · 组件全览 COMPONENTS（31 组件 × 全变体） ── */
+/* ── 06 · 组件全览 COMPONENTS（32 组件 × 全变体） ── */
 
 /** 组件格：cream 底 + 4px 墨框 + 字阶压缩 scope；容器仅 inline 布局属性（零裸色） */
 function CompCell({ name, extraScope, children }: {
@@ -757,7 +758,7 @@ function ComponentsSection() {
           <Variant label="accent"><StatCard number="+47%" label="打开率" variant="accent" data-testid="variant-stat-card-accent" /></Variant>
         </CompCell>
       </CompGroup>
-      <CompGroup label="STRUCTURE · 结构（5）">
+      <CompGroup label="STRUCTURE · 结构（6）">
         <CompCell name="card">
           <Variant label="plain"><Card variant="plain" data-testid="variant-card-plain" style={{ width: 150, padding: 16 }}><BodyCopy>奶油底</BodyCopy></Card></Variant>
           <Variant label="invert"><div style={INVERT_TEXT}><Card variant="invert" data-testid="variant-card-invert" style={{ width: 150, padding: 16 }}><BodyCopy>墨底</BodyCopy></Card></div></Variant>
@@ -803,6 +804,17 @@ function ComponentsSection() {
         <CompCell name="table">
           <Variant label="bordered"><Table variant="bordered" {...tableData} data-testid="variant-table-bordered" /></Variant>
           <Variant label="zebra"><Table variant="zebra" {...tableData} data-testid="variant-table-zebra" /></Variant>
+        </CompCell>
+        <CompCell name="split-compare">
+          <Variant label="default · 单面板 + 中缝 VS 圆章">
+            <div style={{ width: 620 }}>
+              <SplitCompare
+                before={["散落的文档", "模糊的归属"]}
+                after={["一份稿子驱动", "角色清晰"]}
+                data-testid="variant-split-compare-default"
+              />
+            </div>
+          </Variant>
         </CompCell>
       </CompGroup>
       <CompGroup label="REVEAL · 揭示（3）">
@@ -936,7 +948,7 @@ export function StyleGuide() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 样式词典 · 全部 token 视觉表达 + 31 组件目录
+          creative-mode · 样式词典 · 全部 token 视觉表达 + 32 组件目录
         </span>
         <span
           style={{

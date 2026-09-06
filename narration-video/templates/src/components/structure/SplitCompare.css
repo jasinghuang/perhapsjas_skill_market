@@ -1,0 +1,83 @@
+/* 分屏对比（十九轮 F4）：单一面板 + 两半无中缝线直接相接 + 中央 VS 圆章。
+   面板尺寸由消费端容器决定（showcase 1560×560；styleguide 由格内容器约束）。 */
+.cdp-split-compare {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: var(--card-border);
+  box-shadow: var(--shadow-card);
+}
+
+.cdp-split-compare-half {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cdp-split-compare-before {
+  background: var(--surface-2);
+}
+
+.cdp-split-compare-after {
+  background: var(--accent-1);
+}
+
+/* 标题：display 族天然 900（--font-display-cn/en）；左墨右 cream */
+.cdp-split-compare-title {
+  font-family: var(--font-display-cn), var(--font-display-en);
+  font-weight: 900;
+  font-size: var(--t-h3);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.cdp-split-compare-after .cdp-split-compare-title {
+  color: var(--surface);
+}
+
+.cdp-split-compare-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cdp-split-compare-list li {
+  font-family: var(--font-body);
+  font-size: var(--t-h3);
+  line-height: 1;
+  /* before 条目颜色走 token（默认墨色；S13 灰语义经 scope 覆写为 --text-faint） */
+  color: var(--split-before-text, var(--text));
+}
+
+.cdp-split-compare-after .cdp-split-compare-list li {
+  color: var(--surface);
+  text-align: right;
+}
+
+/* 中央 VS 圆章：accent-2 圆 140px + 4px 墨框 + cream 大字 + 24px 墨硬阴影，absolute 压两半交界 */
+.cdp-split-compare-seal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: var(--accent-2);
+  border: var(--card-border);
+  box-shadow: 24px 24px 0 var(--surface-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display-en);
+  font-size: var(--t-h2);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--surface);
+  z-index: 2;
+}

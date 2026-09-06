@@ -83,6 +83,10 @@
   --hero-num-weight: 400;
   --hero-num-track: 0em;
 
+  /* ── 语义 · 分屏对比（十九轮 F4 SplitCompare） ── */
+  /* before 条目文字色：默认墨色；展示页 S13 灰语义经 scope 覆写为 --text-faint */
+  --split-before-text: var(--text);
+
   /* ── 语义 · 装饰语言（Ruling M2b-5：色块族） ── */
   --decor-family: block;
 

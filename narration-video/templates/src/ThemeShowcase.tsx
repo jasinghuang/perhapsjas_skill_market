@@ -38,9 +38,9 @@ import {
   PathDraw,
   ProgressDots,
   QuoteBlock,
-  RevealList,
   Rule,
   SeededParticles,
+  SplitCompare,
   StackedBlocks,
   StagePad,
   Table,
@@ -1098,10 +1098,12 @@ function SpecSheetSlide() {
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           一张规格表，说清一切。
         </HeroTitle>
-        {/* 两栏：左产品卡（Figure bare 3:4 + mono 编号 + Kicker 产品名）；右规格清单 6 行（等距 16px） */}
-        <div data-testid="spec-main" style={{ flex: 1, display: "flex", gap: "var(--space-6)", alignItems: "center" }}>
-          <div style={{ width: 240, display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-2)" }}>
-            <div style={{ width: 240 }}>
+        {/* 紧凑两栏（十九轮 F2）：左栏 440 = Figure 400×533 + SC-01 + 品名；右栏剩余全宽 = 清单 6 行 + ledger 表
+            （400×533 + 全宽底表 + headline 超出 818 内容预算——表入右栏底部与图底对齐，报告记录在案）；
+            图与清单间距 var(--grid-gutter) 28——中缝无大空区 */}
+        <div data-testid="spec-main" style={{ flex: 1, display: "flex", gap: "var(--grid-gutter)" }}>
+          <div style={{ width: 440, display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-2)" }}>
+            <div style={{ width: 400 }}>
               <Figure variant="bare" ratio="3 / 4" data-testid="spec-figure" />
             </div>
             <span
@@ -1114,43 +1116,47 @@ function SpecSheetSlide() {
               BLOOM PEDAL
             </Kicker>
           </div>
-          <div data-testid="spec-list" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-            {SPEC_ROWS.map((row, i) => (
-              <div
-                key={row.label}
-                data-testid={`spec-row-${i + 1}`}
-                style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", height: 56 }}
-              >
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "var(--t-label)",
-                    letterSpacing: "0.08em",
-                    color: "var(--text-mute)",
-                    width: 200,
-                    whiteSpace: "nowrap",
-                  }}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <div data-testid="spec-list" style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+              {SPEC_ROWS.map((row, i) => (
+                <div
+                  key={row.label}
+                  data-testid={`spec-row-${i + 1}`}
+                  style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", height: 56 }}
                 >
-                  {row.label}
-                </span>
-                <span
-                  style={{ flex: 1, fontFamily: "var(--font-body)", fontSize: "var(--t-body)", color: "var(--text)", whiteSpace: "nowrap" }}
-                >
-                  {row.value}
-                </span>
-                <JisCheck checked={row.checked} testid={`jis-check-${i + 1}`} />
-              </div>
-            ))}
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--t-label)",
+                      letterSpacing: "0.08em",
+                      color: "var(--text-mute)",
+                      width: 200,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {row.label}
+                  </span>
+                  <span
+                    style={{ flex: 1, fontFamily: "var(--font-body)", fontSize: "var(--t-body)", color: "var(--text)", whiteSpace: "nowrap" }}
+                  >
+                    {row.value}
+                  </span>
+                  <JisCheck checked={row.checked} testid={`jis-check-${i + 1}`} />
+                </div>
+              ))}
+            </div>
+            {/* ledger 表（参考 s7）：mono 数据风格 4 列 3 行，右栏底部与图底对齐 */}
+            <div style={{ marginTop: "auto" }}>
+              <Table
+                variant="bordered"
+                className="sg-spec-table"
+                header={["NO.", "DATE", "NAME", "VER."]}
+                rows={SPEC_LEDGER}
+                data-testid="spec-ledger"
+              />
+            </div>
           </div>
         </div>
-        {/* 底部 ledger 表（参考 s7）：mono 数据风格 4 列 3 行 */}
-        <Table
-          variant="bordered"
-          className="sg-spec-table"
-          header={["NO.", "DATE", "NAME", "VER."]}
-          rows={SPEC_LEDGER}
-          data-testid="spec-ledger"
-        />
       </div>
     </SlideShell>
   );
@@ -1178,20 +1184,31 @@ function QuarterlyReviewSlide() {
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           今年，比去年快一点。
         </HeroTitle>
-        {/* 图例行（参考 s5 legend）：色块 + mono 标签单行（S4 层次图例同款格式） */}
-        <div data-testid="yoy-legend" style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", marginBottom: "var(--space-4)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-            <div data-testid="yoy-legend-this" style={{ width: 16, height: 16, background: "var(--accent-1)", border: "2px solid var(--text)" }} />
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)" }}>
+        {/* 列头式图例（十九轮 F3）：仅第一对条上方放列头，与条列水平对齐——
+            与数据行同一 flex 骨架（96 标签 + 双 flex 条列 + 双 64 数值列），左缘精确对齐 */}
+        <div
+          data-testid="yoy-colheads"
+          style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-2)" }}
+        >
+          <span style={{ width: 96 }} />
+          <div style={{ flex: 1 }}>
+            <span
+              data-testid="yoy-colhead-this"
+              style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}
+            >
               THIS YEAR
             </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-            <div data-testid="yoy-legend-last" style={{ width: 16, height: 16, background: "var(--surface-2)", border: "2px solid var(--text)" }} />
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)" }}>
+          <div style={{ flex: 1 }}>
+            <span
+              data-testid="yoy-colhead-last"
+              style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}
+            >
               LAST YEAR
             </span>
           </div>
+          <span style={{ width: 64 }} />
+          <span style={{ width: 64 }} />
         </div>
         {/* 4 行成对横条（参考 s5 bar-pair）：今年 accent（green）/ 去年 solid（surface-3 墨）；同列双条等高（.sg-yoy-rows 48px） */}
         <div
@@ -1225,13 +1242,13 @@ function QuarterlyReviewSlide() {
             </div>
           ))}
         </div>
-        {/* KPI 行（参考 s7 three-numbers）：3px pink hairline + 三个 pink 大数字 + mono 标注 */}
-        <div style={{ marginTop: "auto", ...scope({ "--accent-1": "var(--accent-2)", "--rule": "var(--accent-2)" }) }}>
+        {/* KPI 行（参考 s7 three-numbers）：3px pink hairline + 三个墨色大数字（十九轮 F3 去粉）+ mono 标注 */}
+        <div style={{ marginTop: "auto", ...scope({ "--rule": "var(--accent-2)" }) }}>
           <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-3)" })} />
           <div data-testid="yoy-kpis" style={{ display: "flex", gap: "var(--space-6)" }}>
             {YOY_KPIS.map((kpi) => (
               <div key={kpi.value} style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-                <HeroNumber value={kpi.value} variant="accent" />
+                <HeroNumber value={kpi.value} variant="plain" />
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}>
                   {kpi.label}
                 </span>
@@ -1256,64 +1273,24 @@ function BeforeAfterSlide() {
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           同一份稿子，两种样子。
         </HeroTitle>
-        {/* 左右分屏：中缝 = 内容带中心线（两卡 780 各占一侧，镜像对称）；圆章 absolute 压缝 */}
+        {/* 十九轮 F4：SplitCompare 组件（单一面板 + 两半无中缝线 + 中缝 VS 圆章）；
+            before 灰语义经 --split-before-text scope 覆写；面板 1560×560 居中 */}
         <div
           data-testid="ba-split"
-          style={{ flex: 1, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            ...scope({ "--split-before-text": "var(--text-faint)" }),
+          }}
         >
-          {/* 左卡 BEFORE：条目全量 pending 灰态（activeCount 0 = 全灰——"两种样子"对比的暗面） */}
-          <Card
-            variant="plain"
-            data-testid="before-card"
-            style={{ width: 780, height: 560, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "var(--space-3)" }}
-          >
-            <Kicker variant="plain" style={{ color: "var(--text-mute)" }}>
-              BEFORE
-            </Kicker>
-            <RevealList items={BEFORE_ITEMS} activeCount={0} data-testid="before-list" />
-          </Card>
-          {/* 右卡 AFTER：accent 绿底 cream 字（--text scope 覆写使条目 cream）；5 条全量激活 */}
-          <Card
-            variant="accent"
-            data-testid="after-card"
-            style={{
-              width: 780,
-              height: 560,
-              boxSizing: "border-box",
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--space-3)",
-              ...scope({ "--text": "var(--surface)" }),
-            }}
-          >
-            <Kicker variant="plain">AFTER</Kicker>
-            <RevealList items={AFTER_ITEMS} activeCount={AFTER_ITEMS.length} data-testid="after-list" />
-          </Card>
-          {/* 中缝大 VS 圆章（参考 compare-vs）：pink 圆 160px + 4px 墨框 + cream 大字 + 24px 墨硬阴影 */}
-          <div
-            data-testid="vs-seal"
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              left: "50%",
-              top: "50%",
-              transform: "translate(-50%, -50%)",
-              width: 160,
-              height: 160,
-              borderRadius: "50%",
-              background: "var(--accent-2)",
-              border: "4px solid var(--surface-3)",
-              boxShadow: "24px 24px 0 var(--surface-3)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 2,
-            }}
-          >
-            <span style={{ fontFamily: "var(--font-display-en)", fontSize: 64, lineHeight: 1, color: "var(--surface)", letterSpacing: "0.02em" }}>
-              VS
-            </span>
-          </div>
+          <SplitCompare
+            before={BEFORE_ITEMS}
+            after={AFTER_ITEMS}
+            data-testid="before-after-panel"
+            style={{ width: 1560, height: 560 }}
+          />
         </div>
       </div>
     </SlideShell>

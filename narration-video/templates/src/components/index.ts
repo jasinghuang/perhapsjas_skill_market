@@ -1,6 +1,6 @@
 // 组件统一出口（§6.2 章节层唯一合法零件来源）+ 组件 CSS 装配（Ruling P2-4）
 // Ruling P2-4：主题 CSS 随组件统一出口装配——章节层 import components 即得全部样式。
-// 共 31 份组件 CSS（30 + 十六轮 F3 收编 MarkerBlock，磁盘实数为准）。
+// 共 32 份组件 CSS（30 + 十六轮 F3 MarkerBlock + 十九轮 F4 SplitCompare，磁盘实数为准）。
 import "../theme/tokens.css";
 import "./text/HeroTitle.css";
 import "./text/Kicker.css";
@@ -17,6 +17,7 @@ import "./structure/Rule.css";
 import "./structure/Grid.css";
 import "./structure/StagePad.css";
 import "./structure/Table.css";
+import "./structure/SplitCompare.css";
 import "./reveal/RevealText.css";
 import "./reveal/RevealList.css";
 import "./reveal/StepSequence.css";
@@ -36,7 +37,7 @@ import "./function/ProgressDots.css";
 
 export { HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill } from "./text";
 export { HeroNumber, Counter, BarGrow, DonutMeter, StatCard } from "./data";
-export { Card, Rule, Grid, StagePad, Table } from "./structure";
+export { Card, Rule, Grid, StagePad, Table, SplitCompare } from "./structure";
 export { RevealText, RevealList, StepSequence } from "./reveal";
 export { DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock } from "./decor";
 export { Figure, TypedTerminal, PathDraw } from "./media";

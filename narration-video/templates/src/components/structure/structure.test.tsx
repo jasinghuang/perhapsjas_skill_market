@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
-import { Card, Rule, Grid, StagePad, Table } from "./";
+import { Card, Rule, Grid, StagePad, Table, SplitCompare } from "./";
 
 beforeEach(() => setRenderMode(false));
 afterEach(() => setRenderMode(false));
@@ -54,5 +54,34 @@ describe("结构组组件", () => {
     expect(registrySize()).toBeGreaterThan(0);
     unmount();
     expect(registrySize()).toBe(0);
+  });
+
+  it("SplitCompare 单一面板 + 两半标题/条目 + VS 圆章（十九轮 F4）", () => {
+    const { getByTestId } = render(
+      <SplitCompare
+        before={["散落的文档", "模糊的归属"]}
+        after={["一份稿子驱动", "角色清晰"]}
+        data-testid="sc"
+      />,
+    );
+    const panel = getByTestId("sc");
+    expect(panel.className).toContain("cdp-split-compare");
+    // 单一面板：两半为内部子结构，非独立卡片
+    expect(panel.querySelectorAll(".cdp-split-compare-half")).toHaveLength(2);
+    expect(panel.querySelector(".cdp-split-compare-before .cdp-split-compare-title")).toHaveTextContent("BEFORE");
+    expect(panel.querySelector(".cdp-split-compare-after .cdp-split-compare-title")).toHaveTextContent("AFTER");
+    expect(panel.querySelectorAll(".cdp-split-compare-before .cdp-split-compare-list li")).toHaveLength(2);
+    expect(panel.querySelectorAll(".cdp-split-compare-after .cdp-split-compare-list li")).toHaveLength(2);
+    const seal = panel.querySelector(".cdp-split-compare-seal");
+    expect(seal).not.toBeNull();
+    expect(seal).toHaveTextContent("VS");
+  });
+
+  it("SplitCompare 自定义标题透传", () => {
+    const { getByTestId } = render(
+      <SplitCompare before={["甲"]} after={["乙"]} beforeTitle="之前" afterTitle="之后" data-testid="sc2" />,
+    );
+    expect(getByTestId("sc2").querySelector(".cdp-split-compare-before .cdp-split-compare-title")).toHaveTextContent("之前");
+    expect(getByTestId("sc2").querySelector(".cdp-split-compare-after .cdp-split-compare-title")).toHaveTextContent("之后");
   });
 });

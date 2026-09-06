@@ -4,7 +4,7 @@ import { setRenderMode } from "../engine/animationRuntime";
 import {
   HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill,
   HeroNumber, Counter, BarGrow, DonutMeter, StatCard,
-  Card, Rule, Grid, StagePad, Table,
+  Card, Rule, Grid, StagePad, Table, SplitCompare,
   RevealText, RevealList, StepSequence,
   DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock,
   Figure, TypedTerminal, PathDraw,
@@ -14,12 +14,12 @@ import {
 
 // 终审 M3：逐组件 presence 断言——统一出口每个组件必须在画布真实渲染，
 // 只查 ".cdp" 根类会漏掉「组件已导出但从未渲染」的假绿。
-// 全部 30 组件（28 + 十轮 F3/F4 收编 StackedBlocks / NumberPill）。
+// 全部 31 组件（28 + 十轮 F3/F4 收编 StackedBlocks / NumberPill + 十九轮 F4 SplitCompare）。
 const ALL_NAMES = [
   "stage-pad",
   "hero-title", "kicker", "body-copy", "quote-block", "number-pill",
   "hero-number", "counter", "bar-grow", "donut", "stat-card",
-  "card", "rule", "grid", "table",
+  "card", "rule", "grid", "table", "split-compare",
   "reveal-text", "reveal-list", "step-seq",
   "decor-dot", "decor-bar", "decor-ring", "stacked-blocks", "marker-block",
   "figure", "terminal", "path-draw",
@@ -46,7 +46,7 @@ afterEach(() => {
 
 describe("双画布冒烟（§11.2 组件契约测试）", () => {
   for (const dims of STAGE_SIZES) {
-    it(`全部 30 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
+    it(`全部 31 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
       const { container } = render(
         <div style={{ width: dims.width, height: dims.height }}>
           <StagePad>
@@ -57,6 +57,7 @@ describe("双画布冒烟（§11.2 组件契约测试）", () => {
             <StepSequence steps={[{ title: "一" }, { title: "二" }]} currentStep={0} />
             <DecorDot /> <DecorBar /> <DecorRing /> <StackedBlocks />
             <MarkerBlock>主角</MarkerBlock>
+            <SplitCompare before={["散落"]} after={["清晰"]} />
             <NumberPill number="01" />
             <Figure caption="图" />
             <TypedTerminal lines={["line"]} />
