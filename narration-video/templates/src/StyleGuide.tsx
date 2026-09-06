@@ -1,5 +1,5 @@
 // 样式词典页（M2b 验收工具；dev-only，不入章节层）。
-// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 30 组件全变体目录。
+// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 31 组件全变体目录。
 // 页面壳：深色 shell 底（var(--shell)）、1920 居中；每区段 mono 区段头（cream，编号 + 标题）
 // + 全幅 cream 内容面板（4px 墨框、水平内衬 96px——与安全框规格一致）。
 // 布局纪律：区段内容水平 ≥96px 内；无横向溢出；组件格容器只允许 inline 布局属性，
@@ -25,6 +25,7 @@ import {
   HeroTitle,
   KenBurns,
   Kicker,
+  MarkerBlock,
   NumberPill,
   PathDraw,
   ProgressDots,
@@ -636,7 +637,7 @@ function SemanticSection() {
   );
 }
 
-/* ── 06 · 组件全览 COMPONENTS（30 组件 × 全变体） ── */
+/* ── 06 · 组件全览 COMPONENTS（31 组件 × 全变体） ── */
 
 /** 组件格：cream 底 + 4px 墨框 + 字阶压缩 scope；容器仅 inline 布局属性（零裸色） */
 function CompCell({ name, extraScope, children }: {
@@ -819,7 +820,7 @@ function ComponentsSection() {
           <Variant label="cards"><StepSequence steps={stepData} currentStep={1} variant="cards" data-testid="variant-step-sequence-cards" /></Variant>
         </CompCell>
       </CompGroup>
-      <CompGroup label="DECOR · 装饰（4）">
+      <CompGroup label="DECOR · 装饰（5）">
         <CompCell name="decor-dot">
           <Variant label="plain"><DecorDot variant="plain" data-testid="variant-decor-dot-plain" /></Variant>
           <Variant label="glow"><DecorDot variant="glow" data-testid="variant-decor-dot-glow" /></Variant>
@@ -834,6 +835,10 @@ function ComponentsSection() {
         </CompCell>
         <CompCell name="stacked-blocks">
           <Variant label="default · 4×160 错位叠放"><StackedBlocks data-testid="variant-stacked-blocks-default" /></Variant>
+        </CompCell>
+        <CompCell name="marker-block">
+          <Variant label="plain"><MarkerBlock data-testid="variant-marker-block-plain"><BodyCopy>奶油底 · 墨字</BodyCopy></MarkerBlock></Variant>
+          <Variant label="accent"><div style={INVERT_TEXT}><MarkerBlock variant="accent" data-testid="variant-marker-block-accent"><BodyCopy>pink 底 · cream 字</BodyCopy></MarkerBlock></div></Variant>
         </CompCell>
       </CompGroup>
       <CompGroup label="MEDIA · 素材（3）">
@@ -928,7 +933,7 @@ export function StyleGuide() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 样式词典 · 全部 token 视觉表达 + 30 组件目录
+          creative-mode · 样式词典 · 全部 token 视觉表达 + 31 组件目录
         </span>
         <span
           style={{

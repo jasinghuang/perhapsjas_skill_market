@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
-import { DecorDot, DecorBar, DecorRing, StackedBlocks } from "./";
+import { DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock } from "./";
 
 beforeEach(() => setRenderMode(false));
 afterEach(() => setRenderMode(false));
@@ -44,5 +44,19 @@ describe("装饰组", () => {
     const { getByTestId } = render(<StackedBlocks data-testid="stack" />);
     expect(getByTestId("stack").className).toContain("cdp-stacked-blocks");
     expect(getByTestId("stack").querySelectorAll(".cdp-stacked-block")).toHaveLength(4);
+  });
+
+  it("MarkerBlock 两变体类名 + 子内容渲染（十六轮 F3）", () => {
+    const { getByTestId } = render(
+      <div>
+        <MarkerBlock data-testid="m1">CREATIVE</MarkerBlock>
+        <MarkerBlock variant="accent" data-testid="m2">创意模式</MarkerBlock>
+      </div>,
+    );
+    expect(getByTestId("m1").className).toContain("cdp-marker-block");
+    expect(getByTestId("m1").className).toContain("cdp-marker-block-plain");
+    expect(getByTestId("m1").textContent).toBe("CREATIVE");
+    expect(getByTestId("m2").className).toContain("cdp-marker-block-accent");
+    expect(getByTestId("m2").textContent).toBe("创意模式");
   });
 });

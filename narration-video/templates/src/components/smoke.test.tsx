@@ -6,7 +6,7 @@ import {
   HeroNumber, Counter, BarGrow, DonutMeter, StatCard,
   Card, Rule, Grid, StagePad, Table,
   RevealText, RevealList, StepSequence,
-  DecorDot, DecorBar, DecorRing, StackedBlocks,
+  DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock,
   Figure, TypedTerminal, PathDraw,
   SeededParticles, Breathe, KenBurns,
   TimelineTrack, ProgressDots,
@@ -21,7 +21,7 @@ const ALL_NAMES = [
   "hero-number", "counter", "bar-grow", "donut", "stat-card",
   "card", "rule", "grid", "table",
   "reveal-text", "reveal-list", "step-seq",
-  "decor-dot", "decor-bar", "decor-ring", "stacked-blocks",
+  "decor-dot", "decor-bar", "decor-ring", "stacked-blocks", "marker-block",
   "figure", "terminal", "path-draw",
   "particles", "breathe", "kenburns",
   "timeline", "progress-dots",
@@ -56,6 +56,7 @@ describe("双画布冒烟（§11.2 组件契约测试）", () => {
             <RevealList items={["一", "二"]} activeCount={1} />
             <StepSequence steps={[{ title: "一" }, { title: "二" }]} currentStep={0} />
             <DecorDot /> <DecorBar /> <DecorRing /> <StackedBlocks />
+            <MarkerBlock>主角</MarkerBlock>
             <NumberPill number="01" />
             <Figure caption="图" />
             <TypedTerminal lines={["line"]} />

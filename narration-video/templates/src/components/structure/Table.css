@@ -20,7 +20,7 @@
   color: var(--table-head-text);
   font-family: var(--font-display-cn), var(--font-display-en);
   font-weight: 900;
-  font-size: var(--t-h3); /* 十五轮 F4：表头 28 → 40 升一档（层级保持：表头大一号） */
+  font-size: var(--t-body); /* 十六轮 F1：40 回退 28（用户拍板"表头不需要改"）——层级靠 display 字体 + 墨底反色维持 */
   letter-spacing: 0;
   text-transform: uppercase;
 }

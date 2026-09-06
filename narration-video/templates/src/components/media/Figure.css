@@ -2,11 +2,13 @@
   margin: 0;
 }
 
-/* 宽高比档（十三轮一致性：组件级 aspect 处理，替代 dev 页高度覆写） */
+/* 宽高比档（十三轮一致性：组件级 aspect 处理，替代 dev 页高度覆写；
+   十六轮 F2：box-sizing border-box——边框计入 ratio，与同尺寸 sibling 卡片（KenBurns framed）尺寸精确一致） */
 .cdp-figure-ratio {
   display: flex;
   flex-direction: column;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .cdp-figure-ratio .cdp-figure-placeholder {

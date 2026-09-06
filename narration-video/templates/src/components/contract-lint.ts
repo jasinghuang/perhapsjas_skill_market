@@ -25,6 +25,7 @@ import decorDotCss from "./decor/DecorDot.css?raw";
 import decorBarCss from "./decor/DecorBar.css?raw";
 import decorRingCss from "./decor/DecorRing.css?raw";
 import stackedBlocksCss from "./decor/StackedBlocks.css?raw";
+import markerBlockCss from "./decor/MarkerBlock.css?raw";
 import figureCss from "./media/Figure.css?raw";
 import typedTerminalCss from "./media/TypedTerminal.css?raw";
 import pathDrawCss from "./media/PathDraw.css?raw";
@@ -57,6 +58,7 @@ export const COMPONENT_CSS: Array<{ file: string; css: string }> = [
   { file: "decor/DecorBar.css", css: decorBarCss },
   { file: "decor/DecorRing.css", css: decorRingCss },
   { file: "decor/StackedBlocks.css", css: stackedBlocksCss },
+  { file: "decor/MarkerBlock.css", css: markerBlockCss },
   { file: "media/Figure.css", css: figureCss },
   { file: "media/TypedTerminal.css", css: typedTerminalCss },
   { file: "media/PathDraw.css", css: pathDrawCss },

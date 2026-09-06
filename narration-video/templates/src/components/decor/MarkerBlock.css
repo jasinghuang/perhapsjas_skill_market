@@ -1,0 +1,11 @@
+.cdp-marker-block {
+  border: var(--card-border);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4) var(--space-5);
+  color: var(--text);
+}
+
+.cdp-marker-block-accent {
+  background: var(--accent-2);
+  color: var(--surface);
+}

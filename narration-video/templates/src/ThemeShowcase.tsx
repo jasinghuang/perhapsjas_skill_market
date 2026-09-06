@@ -30,6 +30,7 @@ import {
   HeroTitle,
   KenBurns,
   Kicker,
+  MarkerBlock,
   NumberPill,
   PathDraw,
   ProgressDots,
@@ -239,16 +240,9 @@ function CoverSlide() {
         }}
       >
         <Kicker variant="block">CHAPTER 01 · 主题</Kicker>
-        {/* 主标题区（featured）：marker-block 式——pink 底 + 24px 双层硬阴影（orange 偏移 + 4px ink 描边） */}
-        <div
-          data-testid="featured-title"
-          style={{
-            background: "var(--accent-2)",
-            border: "4px solid var(--surface-3)",
-            padding: "40px 56px",
-            boxShadow: SHADOW_ORANGE,
-          }}
-        >
+        {/* 主标题区（featured）：十六轮 F3 收编 MarkerBlock accent（pink 底 cream 字 + 4px 墨框 + 24px 双层硬阴影）；
+            内部 Latin/中文双行排版保留在 dev 页（构图），外壳为组件 */}
+        <MarkerBlock variant="accent" data-testid="featured-title">
           <div
             style={{
               fontFamily: "var(--font-display-en)",
@@ -256,7 +250,6 @@ function CoverSlide() {
               lineHeight: 0.92,
               letterSpacing: "-0.01em",
               textTransform: "uppercase",
-              color: "var(--surface-3)",
             }}
           >
             CREATIVE
@@ -267,13 +260,12 @@ function CoverSlide() {
               fontWeight: 900,
               fontSize: "var(--t-display-1)",
               lineHeight: 1,
-              color: "var(--surface-3)",
               marginTop: 12,
             }}
           >
             创意模式
           </div>
-        </div>
+        </MarkerBlock>
         {/* 装饰行：accent 色条 + glow 圆点 + solid 色条 */}
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginTop: "auto" }}>
           <DecorBar variant="accent" style={{ background: "var(--accent-2)" }} />
@@ -848,8 +840,8 @@ function MediaSlide() {
               {item.kind === "figure" ? (
                 <Figure variant="bare" ratio="3 / 4" data-testid={`portrait-${item.id}`} /> // 十四轮 F4：占位图卡片无阴影（组件级 bare 变体，非 dev 覆写）
               ) : (
-                <div style={{ width: 400, height: 533, boxSizing: "border-box" }}>
-                  <KenBurns duration="slow" variant="framed" data-testid="portrait-kenburns" /> {/* 十五轮 F1：组件级 framed 边框，与 Figure bare 一致 */}
+                <div style={{ width: 400, height: "calc(400px * 4 / 3)", boxSizing: "border-box" }}>
+                  <KenBurns duration="slow" variant="framed" data-testid="portrait-kenburns" /> {/* 十五轮 F1：组件级 framed 边框，与 Figure bare 一致；十六轮 F2：高度与 ratio 3/4 精确对齐 */}
                 </div>
               )}
               <span
