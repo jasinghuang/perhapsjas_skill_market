@@ -113,9 +113,9 @@ const SHOWCASE_TWEAKS = `
 .sg-seg-rows .cdp-bar-grow { height: 56px; }
 /* S12 成对横条：48px 行高（同列双条同高——审计断言依据） */
 .sg-yoy-rows .cdp-bar-grow { height: 48px; }
-/* S11 ledger 表：mono 数据风格 + 紧凑行高 + 首/末列定宽 */
+/* S11 ledger 表：mono 数据风格 + 首/末列定宽（三十一轮 F2：删 padding 4px 覆写——
+   单元格衬垫走组件级安全边距规格 var(--space-3) 24px 四周，零 dev 覆写） */
 .sg-spec-table tbody td { font-family: var(--font-mono); font-size: var(--t-label); }
-.sg-spec-table th, .sg-spec-table td { padding: 4px var(--space-3); }
 .sg-spec-table thead th:first-child, .sg-spec-table tbody td:first-child { width: 120px; }
 .sg-spec-table thead th:last-child, .sg-spec-table tbody td:last-child { width: 120px; }
 `;
@@ -418,8 +418,9 @@ function ChapterSlide() {
 
 /** 数据格 = StatInline 组件（二十九轮 F1 新建——BY THE NUMBERS 专用）。
     布局（用户拍板）：大数字（--t-display-2）与 Kicker 标签同一行（大数字左、标签右贴卡右缘）
-    + desc 仅加粗无底色框（--t-body 28px + 600 + 墨色）；无序号角标；
-    卡内衬紧凑 var(--space-3)（比 StatCell 矮）。S3 四格无 delta、无对角填充（删二十二轮绿填充）。 */
+    + desc 无底色框（--t-body 28px；三十一轮 F1 去粗 400）；无序号角标；
+    三十一轮 F1 v3 定稿：对角绿填充恢复（filled 变体——TL/BR 绿底 cream 字，TR/BL cream 底墨字）、
+    墨底白字药丸标签顶对齐、数字→desc 24px、内衬 32px（卡高再高一点）。 */
 function DataSlide() {
   return (
     <SlideShell index="03" topbar="BY THE NUMBERS" pill="SHOWCASE / M2B" caption="四个数字，讲一个故事">
@@ -436,10 +437,11 @@ function DataSlide() {
           四个数字，一个故事。
         </HeroTitle>
         {/* 2×2 满幅网格：StatInline 组件零阴影（组件级——网格单元纪律）、格间隙 var(--grid-gutter) 28px；
-            二十九轮 F1：StatCell → StatInline（删角标/delta/对角绿填充），desc 无块 padding，
-            每行 min-content 回收 16px——安全框余量随之回宽（条底 931.3 → 更低）；
-            三十轮 F2：行高 1fr → auto + 顶对齐——卡高 = 内容自然高 + 24px 安全边距（不再拉伸，
-            卡片总高随之更矮），底部动效条仍锚屏底（grid flex:1 保持） */}
+            二十九轮 F1：StatCell → StatInline（删角标/delta），desc 无块 padding；
+            三十轮 F2：行高 1fr → auto + 顶对齐——卡高 = 内容自然高 + 24px 安全边距（不再拉伸），
+            底部动效条仍锚屏底（grid flex:1 保持）；
+            三十一轮 F1 v3 定稿：对角绿填充恢复（filled 变体——TL 卡 1 / BR 卡 4 绿底 cream 字，
+            TR 卡 2 / BL 卡 3 保持 cream 底墨字）；desc 去粗 400；数字→desc 24px；内衬 24 → 32（卡高再高一点） */}
         <Grid
           variant="even"
           columns={2}
@@ -447,6 +449,7 @@ function DataSlide() {
           style={{ flex: 1, marginBottom: "var(--space-1)", gridTemplateRows: "auto auto", alignContent: "start" }}
         >
           <StatInline
+            filled
             value="42%"
             label="参与度提升"
             desc="参与度相对基线提升 42 个百分点。"
@@ -465,6 +468,7 @@ function DataSlide() {
             data-testid="stat-inline-3"
           />
           <StatInline
+            filled
             value="9.4M"
             label="样本总值"
             desc="样本数据总值 940 万美元。"
@@ -1370,7 +1374,9 @@ function SpecSheetSlide() {
   return (
     <SlideShell index="15" topbar="SPEC SHEET" pill="CATALOGUE" caption="一张规格表，说清一切">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+        {/* 三十一轮 F2：ledger 表 24px 单元格规格抬升行高，headline 下距 64 → 44 屏内回收 20px
+            （与二十八轮 S3 同款手法），表底回落 ≤ 934 */}
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "calc(var(--headline-gap) - 20px)" }}>
           一张规格表，说清一切。
         </HeroTitle>
         {/* 紧凑两栏（十九轮 F2）：左栏 440 = Figure 400×533 + SC-01 + 品名；右栏剩余全宽 = 清单 6 行 + ledger 表
@@ -1392,12 +1398,14 @@ function SpecSheetSlide() {
             </Kicker>
           </div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <div data-testid="spec-list" style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            {/* 三十一轮 F2：ledger 表单元格衬垫走组件级 24px 规格（删 4px dev 覆写）后行高抬升——
+               清单行 56 → 44 + 行距 16 → 8 屏内回收 112px，表底回落留出安全余量（≤934） */}
+            <div data-testid="spec-list" style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
               {SPEC_ROWS.map((row, i) => (
                 <div
                   key={row.label}
                   data-testid={`spec-row-${i + 1}`}
-                  style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", height: 56 }}
+                  style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", height: 44 }}
                 >
                   <span
                     style={{

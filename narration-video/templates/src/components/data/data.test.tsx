@@ -86,26 +86,39 @@ describe("数据组组件", () => {
     expect(getByTestId("d").querySelector(".cdp-stat-cell-delta")!.className).toContain("cdp-stat-cell-delta-down");
   });
 
-  it("StatInline 大数字标签同行 + 标签 pill 药丸变体 + desc 仅加粗无框 + 无序号角标（三十轮 F2 v2）", () => {
+  it("StatInline v3 大数字标签同行 + 标签 pill 药丸变体 + desc 去粗无框 + filled 对角绿填充类 + 无序号角标（三十一轮 F1）", () => {
     const { getByTestId } = render(
-      <StatInline value="42%" label="参与度提升" desc="参与度相对基线提升 42 个百分点。" data-testid="inline" />,
+      <div>
+        <StatInline value="42%" label="参与度提升" desc="参与度相对基线提升 42 个百分点。" data-testid="inline" />
+        <StatInline filled value="9.4M" label="样本总值" desc="样本数据总值 940 万美元。" data-testid="inline-filled" />
+      </div>,
     );
     const root = getByTestId("inline");
     expect(root.className).toContain("cdp-stat-inline");
+    // 未填充默认：无 filled 档类
+    expect(root.className).not.toContain("cdp-stat-inline-filled");
+    // filled = true → 对角绿填充档类（三十一轮 F1：accent-1 绿底 + cream 字——TL/BR 对角卡）
+    const filled = getByTestId("inline-filled");
+    expect(filled.className).toContain("cdp-stat-inline-filled");
     // 大数字与标签同一行（head 行内同时含 HeroNumber 值与 Kicker 标签）
     const head = root.querySelector(".cdp-stat-inline-head");
     expect(head).not.toBeNull();
     expect(head!.querySelector(".cdp-hero-number-value")).toHaveTextContent("42%");
     const label = head!.querySelector(".cdp-kicker");
     expect(label).toHaveTextContent("参与度提升");
-    // 标签 = Kicker pill 药丸变体（三十轮 F2：进药丸框——2px 墨框 999 圆角为组件自身规格，零覆写）
+    // 标签 = Kicker pill 药丸变体（三十轮 F2 进药丸框；三十一轮 F1 墨底白字——组件内 CSS 定稿，
+    //   类名契约保持 cdp-kicker-pill；computed 墨底白字由 Playwright 审计钉住）
     expect(label!.className).toContain("cdp-kicker-pill");
     // 标签右对齐贴卡右缘：head 行 space-between（类存在即契约；computed 右缘由 Playwright 审计钉住）
-    // desc 仅加粗无框：唯一 desc 类，无 block/pill 档类（600 由 CSS + Playwright computed 钉住）
+    // desc 去粗无框：唯一 desc 类，无 block/pill 档类（400 由 CSS + Playwright computed 钉住）
     const desc = root.querySelector(".cdp-stat-inline-desc");
     expect(desc).not.toBeNull();
     expect(desc!.className).toBe("cdp-stat-inline-desc");
     expect(desc).toHaveTextContent("参与度相对基线提升 42 个百分点。");
+    // filled 卡内同样含完整结构（数字/药丸/desc 三件套在位）
+    expect(filled.querySelector(".cdp-hero-number-value")).toHaveTextContent("9.4M");
+    expect(filled.querySelector(".cdp-kicker")).toHaveTextContent("样本总值");
+    expect(filled.querySelector(".cdp-stat-inline-desc")).toHaveTextContent("样本数据总值 940 万美元。");
     // 无序号角标（StatCell 的 index 件与 NumberPill 均不渲染）
     expect(root.querySelector(".cdp-stat-cell-index")).toBeNull();
     expect(root.querySelector(".cdp-number-pill")).toBeNull();

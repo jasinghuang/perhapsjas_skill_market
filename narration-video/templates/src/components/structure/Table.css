@@ -6,11 +6,13 @@
   color: var(--text);
 }
 
-/* 视觉终审二轮 F3：表格规范对齐参考 slide 7——3px 墨格线 + 紧凑行高（8/24）全变体生效 */
+/* 视觉终审二轮 F3：表格规范对齐参考 slide 7——3px 墨格线；
+   三十一轮 F2 安全边距规格：单元格衬垫 8/24（紧凑行高）→ var(--space-3) 24px 四周——
+   填充类单元格（墨底表头 / zebra / 彩色数据列）内容距单元格边缘 ≥ 24px 全变体生效 */
 .cdp-table th,
 .cdp-table td {
   border: var(--table-border);
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-3);
 }
 
 /* 表头：display 档 28px（参考 table-head 28px Archivo Black——主次立即分明）。

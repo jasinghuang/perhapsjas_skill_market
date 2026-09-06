@@ -1,50 +1,68 @@
-/* 统计内联卡（二十九轮 F1 新建——BY THE NUMBERS 专用；三十轮 F2 v2 编排协调）：Card 风格 4px 墨框 + cream 底
-   + 零阴影（网格单元纪律）。
-   首行 = HeroNumber 大数字（--t-display-2）左 + Kicker pill 药丸标签右（space-between 同行、药丸垂直居中、
-   标签右缘贴卡右缘——三十轮 F2：标签进药丸框）；
-   desc = --t-body 28px + font-weight 600 + 墨色（--text）——仅加粗、无底色框、左对齐（二十九轮 F1 用户拍板）；
+/* 统计内联卡（二十九轮 F1 新建——BY THE NUMBERS 专用；三十轮 F2 v2 编排协调；三十一轮 F1 v3 定稿）：
+   Card 风格 4px 墨框 + cream 底 + 零阴影（网格单元纪律）。
+   首行 = HeroNumber 大数字（--t-display-2）左 + Kicker pill 墨底白字药丸右（space-between 同行、
+   药丸顶部与大数字顶部对齐——三十一轮 F1 flex-start、标签右缘贴卡右缘）；
+   desc = --t-body 28px + font-weight 400 + 墨色（--text）——不粗、无底色框、左对齐（二十九轮 F1 拍板无框、
+   三十一轮 F1 去粗）；
    无序号角标、无 delta。
-   三十轮 F2 编排：数字→desc gap --space-2 → --space-1（8px，desc 上移贴近大数字）；
-   去 space-between 拉伸——卡高 = 内容自然高 + 卡内安全边距 var(--space-3) 24px 四周（更矮）。 */
+   三十一轮 F1 定稿：filled 对角绿填充（accent-1 底 + cream 字，--text/--text-2 覆写贯通子件——TL/BR 对角卡）；
+   标签 pill 墨底白字（surface-3 墨底 + cream 字 + 999 圆角——覆盖 Kicker pill 透明底墨框规格，零 dev 覆写）；
+   数字→desc gap var(--space-3) 24px（三十轮 F2 8px 的 3 倍）；
+   卡高 = 内容自然高 + 卡内安全边距 var(--space-4) 32px 四周（三十轮 F2 24px 再高一点——与 Card/StatCell 同衬）。 */
 .cdp-stat-inline {
   background: var(--card-bg);
   border: var(--card-border);
   border-radius: var(--card-radius);
   box-shadow: none;
-  padding: var(--space-3); /* 卡内安全边距 24px 四周统一（三十轮 F2 规格） */
+  padding: var(--space-4); /* 卡内安全边距 32px 四周（三十一轮 F1：24 → 32，卡高再高一点） */
   display: flex;
   flex-direction: column;
-  /* 数字→desc 8px 收紧（三十轮 F2：--space-2 → --space-1）；
-     不再 justify-content: space-between——内容自上而下，卡高 = 自然高 + 24px 边距 */
-  gap: var(--space-1);
+  /* 数字→desc gap 24px（三十一轮 F1：--space-1 8px → --space-3 24px——3 倍）；
+     不 justify-content: space-between——内容自上而下，卡高 = 自然高 + 32px 边距 */
+  gap: var(--space-3);
   color: var(--text);
 }
 
-/* 首行：大数字左、药丸标签右贴卡右缘（space-between；药丸垂直居中对齐大数字行盒——三十轮 F2 再平衡，
-   与 chrome topbar「文字 + pill 同行」的 center 对齐先例一致） */
+/* 对角绿填充（三十一轮 F1）：accent-1 绿底 + cream 字——--text/--text-2 覆写贯通
+   HeroNumber 大数字与 desc（与 MarkerBlock-accent 同模式，彩底上无墨字） */
+.cdp-stat-inline-filled {
+  background: var(--accent-1);
+  --text: var(--surface);
+  --text-2: var(--surface);
+}
+
+/* 首行：大数字左、墨底白字药丸右贴卡右缘（space-between；药丸顶部与大数字顶部对齐——
+   三十一轮 F1：align-items center → flex-start，同排顶对齐） */
 .cdp-stat-inline-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-2);
 }
 
-/* Kicker 标签（Kicker pill 药丸变体——2px 墨框 999 圆角 + 8/16 衬垫为组件自身规格，零覆写；
-   组件级仅字距规整 + 右对齐贴卡右缘、不换行） */
+/* Kicker 标签（Kicker pill 药丸变体——三十一轮 F1 墨底白字定稿：surface-3 墨底 + cream 字 +
+   999 圆角 + 8/16 衬垫，组件内 CSS 定稿 token 化、零 dev 覆写；覆盖 Kicker pill 默认透明底墨框规格
+   （墨底上 2px 墨框冗余，border: none 去掉）；右对齐贴卡右缘、不换行） */
 .cdp-stat-inline .cdp-kicker {
+  background: var(--surface-3);
+  color: var(--surface);
+  border: none;
+  border-radius: var(--r-pill);
+  padding: var(--space-1) var(--space-2);
   font-size: var(--t-label);
   letter-spacing: 0.12em;
   text-align: right;
   white-space: nowrap;
 }
 
-/* desc：仅加粗无底色框（二十九轮 F1 拍板）——--t-body 28px + font-weight 600 + 墨色、左对齐
-   （审计：computed 28px / 600 / 无背景无边框）；与数字间距 8px（三十轮 F2 收紧） */
+/* desc：不粗无底色框（二十九轮 F1 拍板无框；三十一轮 F1 去粗 600 → 400）——
+   --t-body 28px + font-weight 400 + 墨色、左对齐
+   （审计：computed 28px / 400 / 无背景无边框）；与数字间距 24px（三十一轮 F1：8px 的 3 倍） */
 .cdp-stat-inline-desc {
   margin: 0;
   font-family: var(--font-body);
   font-size: var(--t-body);
   line-height: 1.3;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--text);
 }

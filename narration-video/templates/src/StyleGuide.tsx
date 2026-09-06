@@ -775,8 +775,11 @@ function ComponentsSection() {
           </Variant>
         </CompCell>
         <CompCell name="stat-inline">
-          <Variant label="default · BY THE NUMBERS 专用（三十轮 F2 v2）· 大数字 + pill 药丸标签同行右贴缘 + desc 600 加粗无框左对齐紧贴数字 + 无角标 · 卡高自然高 + 24px 边距">
+          <Variant label="default · BY THE NUMBERS 专用（三十一轮 F1 v3 定稿）· 大数字 + 墨底白字药丸标签同行顶对齐右贴缘 + desc 400 去粗无框 + 数字→desc 24px + 内衬 32px">
             <StatInline value="42%" label="参与度提升" desc="参与度相对基线提升 42 个百分点。" data-testid="variant-stat-inline-default" />
+          </Variant>
+          <Variant label="filled · 对角绿填充变体（accent-1 绿底 + cream 字——S3 TL/BR 卡）">
+            <StatInline filled value="9.4M" label="样本总值" desc="样本数据总值 940 万美元。" data-testid="variant-stat-inline-filled" />
           </Variant>
         </CompCell>
       </CompGroup>
