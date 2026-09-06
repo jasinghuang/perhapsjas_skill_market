@@ -11,7 +11,9 @@
 // ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 958 线，pointerEvents none）。
 // 严守用色纪律（每屏 2-3 个强调色）；舞台尺寸 / chrome frame / 印章等 dev 工具页家具用 inline style；
 // 场景内构图与配色走组件 + token，需要局部配色时用 scope() 注入 CSS 自定义属性（token 覆写，不改组件本体）。
+import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { createPrimitive } from "./components/factory";
 import { CaptionLayer } from "./engine/CaptionLayer";
 import {
   BarGrow,
@@ -50,6 +52,13 @@ const MONO_CN = '"JetBrains Mono", "Noto Sans SC", "SF Mono", monospace';
 /** 24px 双层硬阴影（featured 专用；offset 色按屏纪律选） */
 const SHADOW_ORANGE = "24px 24px 0 var(--accent-3), 24px 24px 0 4px var(--surface-3)";
 const SHADOW_PINK = "24px 24px 0 var(--accent-2), 24px 24px 0 4px var(--surface-3)";
+
+/** 展示页 stagger 行（十二轮 F3）：factory 原语 stagger 对直接子元素逐个错峰 reveal（铁律 5 语义） */
+const StaggerRow = createPrimitive("showcase-stagger-row", {
+  tag: "div",
+  variants: ["default"],
+  defaultVariant: "default",
+});
 
 /** dev 页结构性微调（零颜色，仅尺寸）；自含 <style>，不入组件 CSS */
 const SHOWCASE_TWEAKS = `
@@ -551,6 +560,14 @@ function DataSlide() {
 
 const LAYER_NAMES = ["引擎层 — 时间与步进", "组件层 — 构图与组件", "主题层 — token 与配色", "流程层 — 章节与成片"];
 
+/** 层次图例（十二轮 F2）：色块序列与 StackedBlocks 同源（pink/yellow/orange/cream-2） */
+const LAYER_LEGEND = [
+  { mono: "LAYER 01", name: "引擎层", swatch: "var(--accent-2)" },
+  { mono: "LAYER 02", name: "组件层", swatch: "var(--accent-4)" },
+  { mono: "LAYER 03", name: "主题层", swatch: "var(--accent-3)" },
+  { mono: "LAYER 04", name: "流程层", swatch: "var(--surface-2)" },
+];
+
 function DiagramSlide() {
   return (
     <SlideShell index="04" topbar="SYSTEM DIAGRAM" pill="SCHEMATIC / A" caption="一层叠一层的结构">
@@ -576,13 +593,34 @@ function DiagramSlide() {
               ))}
             </div>
           </div>
-          {/* 右栏：大 panel + StackedBlocks 组件（十轮 F3 收编，4×160px 方块错位叠放）+ PathDraw 折线（ink 覆写） */}
+          {/* 右栏：大 panel——header（Kicker + hairline）+ 两栏（StackedBlocks / 4 行层次图例）。
+              十二轮 F2：清晰层次图重排，PathDraw 移除（S9 动效实验室已有） */}
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Card variant="plain" data-testid="system-panel" style={{ width: 840, height: 560, padding: "var(--space-4)", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ position: "relative" }}>
+            <Card
+              variant="plain"
+              data-testid="system-panel"
+              style={{ width: 820, padding: "var(--space-4)", display: "flex", flexDirection: "column", gap: "var(--space-3)" }}
+            >
+              <Kicker style={{ background: "none", padding: 0, color: "var(--text)", fontSize: "var(--t-label)" }}>
+                SCHEMATIC / A
+              </Kicker>
+              <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-3)" })} />
+              <div data-testid="system-split" style={{ display: "flex", gap: "var(--space-6)", alignItems: "flex-start" }}>
                 <StackedBlocks data-testid="stacked-blocks" />
-                <div style={{ position: "absolute", inset: 0, ...scope({ "--accent-1": "var(--surface-3)" }) }}>
-                  <PathDraw d="M 12 95 L 12 12 L 95 12" />
+                <div data-testid="layer-legend" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+                  {LAYER_LEGEND.map((layer) => (
+                    <div key={layer.mono} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                      <div
+                        style={{ width: 16, height: 16, flexShrink: 0, background: layer.swatch, border: "2px solid var(--text)" }}
+                      />
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)", width: 100 }}>
+                        {layer.mono}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: "var(--t-h3)", lineHeight: 1.2, color: "var(--text)" }}>
+                        {layer.name}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </Card>
@@ -802,8 +840,12 @@ function MediaSlide() {
     <SlideShell index="08" topbar="MEDIA · PORTRAIT" pill="3:4 ASSETS" caption="竖屏素材，各归其位">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="h1" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>竖屏素材，各归其位。</HeroTitle>
-        {/* 3 个 3:4 竖屏 Figure placeholder（frame 变体，零阴影 scope）+ 第 4 个 KenBurns 无 src placeholder */}
-        <div
+        {/* 3 个 3:4 竖屏 Figure placeholder（frame 变体，零阴影 scope）+ 第 4 个 KenBurns 无 src placeholder。
+            十二轮 F3：StaggerRow 逐个错峰 rise 入场，KenBurns 保持 slow 缓推 */}
+        <StaggerRow
+          stagger
+          reveal="rise"
+          duration="mid"
           data-testid="portrait-row"
           style={{ display: "flex", gap: "var(--space-4)", ...scope({ "--shadow-card": "none" }) }}
         >
@@ -826,7 +868,7 @@ function MediaSlide() {
               </span>
             </div>
           ))}
-        </div>
+        </StaggerRow>
       </div>
     </SlideShell>
   );
@@ -901,7 +943,8 @@ function MotionLabSlide() {
   );
 }
 
-/* ── Slide 10 · 语录宣言 = 杂志排版（十一轮 F2；墨/cream 为主 + pink 单点缀） ── */
+/* ── Slide 10 · 语录宣言 = 杂志正页（十二轮 F4：刊头 + 三行大字错位 + 两栏 + folio + 水印；
+     墨/cream 为主 + pink 单点缀） ── */
 
 /** 宣言大字行（display-1 130px / lh 0.92；hanging indent 由 marginLeft 错位） */
 function ManifestLine({ text, indent }: { text: string; indent?: string }) {
@@ -921,11 +964,31 @@ function ManifestLine({ text, indent }: { text: string; indent?: string }) {
   );
 }
 
+/** 本期内容六项（页码与屏号对应，11 屏中选六） */
+const MANIFESTO_TOC = ["01 封面", "03 数据", "04 结构", "07 对比", "09 动效", "11 收尾"];
+
 function QuoteSlide() {
   return (
     <SlideShell index="10" topbar="MANIFESTO" pill="QUOTE" caption="一句话，就够了">
-      <div style={{ flex: 1, display: "flex", gap: "var(--space-6)", position: "relative" }}>
-        {/* 左侧窄栏（~280px 垂直贯穿）：序号 + 栏名 + hairline + 期号 + 小目录 */}
+      <div style={{ position: "relative", flex: 1, display: "flex", gap: "var(--space-6)" }}>
+        {/* 超大 "01" 期号水印（cream-2 · display-1 · 右上低透明，渲染在内容之下） */}
+        <div
+          aria-hidden="true"
+          data-testid="manifesto-watermark"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            fontFamily: "var(--font-display-en)",
+            fontSize: "var(--t-display-1)",
+            lineHeight: 1,
+            color: "var(--surface-2)",
+            opacity: 0.35,
+          }}
+        >
+          01
+        </div>
+        {/* 左侧窄栏（~280px 垂直贯穿）：序号 + 栏名 + hairline + 期号 + 专栏小目录 */}
         <div data-testid="manifesto-sidebar" style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
           <NumberPill number="01" variant="accent" />
           <Kicker style={{ background: "none", padding: 0, color: "var(--text)", fontSize: "var(--t-label)" }}>
@@ -946,42 +1009,80 @@ function QuoteSlide() {
             ))}
           </div>
         </div>
-        {/* 主体宣言区（杂志错位编排） */}
-        <div data-testid="manifesto-main" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          {/* 超大引号（Archivo Black 同字号墨色） */}
+        {/* 主体杂志正页 */}
+        <div data-testid="manifesto-main" style={{ flex: 1, display: "flex", flexDirection: "column", position: "relative" }}>
+          {/* 刊头行：刊名 + hairline + 期号 */}
           <div
-            aria-hidden="true"
-            data-testid="manifesto-quote-mark"
-            style={{ fontFamily: "var(--font-display-en)", fontSize: "var(--t-display-1)", lineHeight: 0.92, color: "var(--text)" }}
+            data-testid="manifesto-masthead"
+            style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-3)" }}
           >
-            “
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)", whiteSpace: "nowrap" }}>
+              CREATIVE MODE WEEKLY · 宣言专刊
+            </span>
+            <Rule variant="solid" style={{ flex: 1, ...scope({ "--rule-w": "3px", margin: "0" }) }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)", whiteSpace: "nowrap" }}>
+              VOL.01 · 2026.09.06
+            </span>
           </div>
-          {/* 三行大字：hanging indent 编排——第二行缩进 64px、第三行 24px 回弹 */}
-          <ManifestLine text="节奏，" />
+          {/* 三行大字（引号并入首行——正页信息量优先，hanging indent 错位保留） */}
+          <div style={{ display: "flex", alignItems: "baseline" }}>
+            <span
+              aria-hidden="true"
+              data-testid="manifesto-quote-mark"
+              style={{ fontFamily: "var(--font-display-en)", fontSize: "var(--t-display-1)", lineHeight: 0.92, color: "var(--text)" }}
+            >
+              “
+            </span>
+            <span style={{ fontFamily: "var(--font-display-cn)", fontWeight: 900, fontSize: "var(--t-display-1)", lineHeight: 0.92, color: "var(--text)" }}>
+              节奏，
+            </span>
+          </div>
           <ManifestLine text="由稿子" indent="var(--space-6)" />
           <ManifestLine text="决定。" indent="var(--space-3)" />
-          {/* 宣言下方：hairline + byline（headline-gap 64 对齐 F1） */}
-          <Rule
-            variant="solid"
-            data-testid="manifesto-rule"
-            style={scope({ "--rule-w": "3px", margin: "var(--headline-gap) 0 var(--space-3)" })}
-          />
-          <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-3)" }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)" }}>
-              FROM THE EDITOR · M2B
-            </span>
-            <BodyCopy style={{ fontSize: "var(--t-label)" }}>一期一页，一期一句。</BodyCopy>
+          {/* 大字下方两栏杂志栏（中间 3px hairline；headline-gap 64 对齐 F1） */}
+          <div data-testid="manifesto-columns" style={{ marginTop: "var(--headline-gap)", display: "flex", gap: "var(--space-4)" }}>
+            <div style={{ flex: 1.3, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+              <BodyCopy style={{ fontSize: "var(--t-label)", lineHeight: 1.4 }}>
+                这是 creative-mode 主题的宣言页。口播稿定节奏，组件出构图，引擎驱动全部动效。
+              </BodyCopy>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text)" }}>
+                FROM THE EDITOR
+              </span>
+            </div>
+            <div style={{ width: 3, alignSelf: "stretch", background: "var(--text)" }} />
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text)", marginBottom: "var(--space-1)" }}>
+                本期内容
+              </span>
+              {MANIFESTO_TOC.map((item) => (
+                <span key={item} style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)" }}>
+                  {item}
+                </span>
+              ))}
+              <QuoteBlock
+                variant="block"
+                data-testid="manifesto-quote"
+                style={{
+                  background: "var(--accent-2)",
+                  color: "var(--surface-3)",
+                  padding: "var(--space-1) var(--space-2)",
+                  fontSize: "var(--t-label)",
+                  alignSelf: "flex-start",
+                  marginTop: "var(--space-1)",
+                }}
+              >
+                一句话，就够了。
+              </QuoteBlock>
+            </div>
           </div>
-          {/* 克制的收尾：pink 单点缀装饰条 + 右下小 QuoteBlock */}
-          <div style={{ marginTop: "auto", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
-            <DecorBar variant="accent" style={{ background: "var(--accent-2)" }} />
-            <QuoteBlock
-              variant="block"
-              data-testid="manifesto-quote"
-              style={{ background: "var(--accent-2)", color: "var(--surface-3)", padding: "var(--space-2) var(--space-3)", fontSize: "var(--t-label)" }}
-            >
-              一句话，就够了。
-            </QuoteBlock>
+          {/* 页脚 folio */}
+          <div data-testid="manifesto-folio" style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}>
+              CREATIVE MODE WEEKLY
+            </span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)" }}>
+              P.01
+            </span>
           </div>
         </div>
       </div>
@@ -1090,6 +1191,12 @@ function ClosingSlide() {
 
 /** 主题效果页（?showcase=1 dev-only 验收工具，与 FontPreview 同级） */
 export function ThemeShowcase() {
+  // 十二轮 F3：8 秒循环重播——main 挂 key 强制整组 slide 重挂，入场动画/氛围微动循环重播
+  const [cycle, setCycle] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setCycle((c) => c + 1), 8000);
+    return () => clearInterval(timer);
+  }, []);
   return (
     <div style={{ minHeight: "100vh", background: "var(--shell)", paddingTop: 64, paddingBottom: 120 }}>
       <style>{SHOWCASE_TWEAKS}</style>
@@ -1113,7 +1220,7 @@ export function ThemeShowcase() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 主题效果页 · 11 屏 slide deck · 参考构图 s1–s8 + 素材/动效/语录
+          creative-mode · 主题效果页 · 11 屏 slide deck · 参考构图 s1–s8 + 素材/动效/语录 · 动画每 8 秒循环重播
         </span>
         <span
           style={{
@@ -1130,7 +1237,7 @@ export function ThemeShowcase() {
           DEV-ONLY · ?showcase=1&guides=1
         </span>
       </header>
-      <main style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 96 }}>
+      <main key={cycle} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 96 }}>
         <CoverSlide />
         <ChapterSlide />
         <DataSlide />
