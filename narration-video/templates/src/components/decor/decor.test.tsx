@@ -63,7 +63,7 @@ describe("装饰组", () => {
     expect(getByTestId("m3").textContent).toBe("墨底");
   });
 
-  it("StepStairs 渲染 N 卡 + 无序号 + 卡高递增 180/220/260 + 位置平齐无 translateY + 无上升箭头（二十九轮 F4 v4）", () => {
+  it("StepStairs 渲染 N 卡 + 无序号 + 卡高递增 200/240/280 + 位置平齐无 translateY + 无上升箭头（三十轮 F1）", () => {
     const { getByTestId } = render(
       <StepStairs
         data-testid="stairs"
@@ -78,10 +78,11 @@ describe("装饰组", () => {
     expect(root.className).toContain("cdp-step-stairs");
     const cards = root.querySelectorAll(".cdp-step-stairs-card");
     expect(cards).toHaveLength(3);
-    // 卡高逐级递增 180/220/260（二十九轮 F4 v4：底缘共线 + 顶部阶梯轮廓——高度步进 40px）
-    expect((cards[0] as HTMLElement).style.height).toBe("180px");
-    expect((cards[1] as HTMLElement).style.height).toBe("220px");
-    expect((cards[2] as HTMLElement).style.height).toBe("260px");
+    // 卡高逐级递增 200/240/280（三十轮 F1 重算：卡内安全边距四周 24px + 最短卡内容底距 ≥24px——
+    //   底缘共线 + 顶部阶梯轮廓——高度步进 40px 保持）
+    expect((cards[0] as HTMLElement).style.height).toBe("200px");
+    expect((cards[1] as HTMLElement).style.height).toBe("240px");
+    expect((cards[2] as HTMLElement).style.height).toBe("280px");
     // 位置高度一致：不再 translateY 错落（同一水平线——二十九轮 F4 v4）
     expect((cards[0] as HTMLElement).style.transform).toBe("");
     expect((cards[1] as HTMLElement).style.transform).toBe("");

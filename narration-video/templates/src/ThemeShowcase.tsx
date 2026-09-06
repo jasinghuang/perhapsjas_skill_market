@@ -38,6 +38,8 @@
 // 二十九轮（视觉终审）：F1 S3 BY THE NUMBERS 改 StatInline 组件（大数字标签同行右对齐 + desc 600 加粗无框 + 无角标——
 // 删对角绿填充与 /01 角标，纯奶油墨字四格）；F2 StepStairs v4（底缘共线 + 卡高 180/220/260 逐级 +40 顶部阶梯轮廓 + 橙条保留）；
 // F3 TimelineTrack 累计点亮（i <= activeIndex——HOW IT WORKS 屏 activeIndex=3 亮 4 暗 1）。
+// 三十轮（视觉终审）：F1 StepStairs 卡内安全边距规格（四周统一 24px）+ 卡高重算 200/240/280（最短卡内容底距 ≥24）；
+// F2 StatInline v2（标签 Kicker pill 药丸 + 数字→desc 8px 收紧 + 卡高自然高 + 24px——S3 行高 1fr → auto 顶对齐）。
 // 用色语义规则（二十四轮入册，控制器同步设计文档 §12）：财报/金融数据语义色——上涨 = 红色系
 // （本主题 accent-3 橙 #E85A1F）、下跌 = 绿色系（accent-1）；delta 标签 / KPI 附注统一按此（涨橙/跌绿），
 // 系列色（年份柱/分类条）非涨跌语义不受影响。
@@ -435,12 +437,14 @@ function DataSlide() {
         </HeroTitle>
         {/* 2×2 满幅网格：StatInline 组件零阴影（组件级——网格单元纪律）、格间隙 var(--grid-gutter) 28px；
             二十九轮 F1：StatCell → StatInline（删角标/delta/对角绿填充），desc 无块 padding，
-            每行 min-content 回收 16px——安全框余量随之回宽（条底 931.3 → 更低） */}
+            每行 min-content 回收 16px——安全框余量随之回宽（条底 931.3 → 更低）；
+            三十轮 F2：行高 1fr → auto + 顶对齐——卡高 = 内容自然高 + 24px 安全边距（不再拉伸，
+            卡片总高随之更矮），底部动效条仍锚屏底（grid flex:1 保持） */}
         <Grid
           variant="even"
           columns={2}
           data-testid="stat-grid"
-          style={{ flex: 1, marginBottom: "var(--space-1)", gridTemplateRows: "1fr 1fr" }}
+          style={{ flex: 1, marginBottom: "var(--space-1)", gridTemplateRows: "auto auto", alignContent: "start" }}
         >
           <StatInline
             value="42%"
@@ -1660,7 +1664,8 @@ function BriefingSlide() {
             </BodyCopy>
           </div>
           {/* StepStairs 阶梯卡组（二十五轮 F4 收编；二十九轮 F4 v4 重设计：无序号 + 底缘共线
-              （同一水平线，不再错落）+ 卡高递增 180/220/260 顶部阶梯轮廓 + 顶部 accent-3 橙条 14px）；
+              （同一水平线，不再错落）+ 卡高递增 200/240/280 顶部阶梯轮廓 + 顶部 accent-3 橙条 14px；
+              三十轮 F1：卡内安全边距四周统一 24px + 卡高重算 200/240/280）；
               容器 alignItems flex-end 使阶梯组底缘贴行底（与左栏/FG 注对齐感） */}
           <div
             data-testid="brief-steps"

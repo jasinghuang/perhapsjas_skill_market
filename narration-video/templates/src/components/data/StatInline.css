@@ -1,29 +1,36 @@
-/* 统计内联卡（二十九轮 F1 新建——BY THE NUMBERS 专用）：Card 风格 4px 墨框 + cream 底 + 零阴影（网格单元纪律）。
-   首行 = HeroNumber 大数字（--t-display-2）左 + Kicker 标签右（space-between 同基线，标签右缘贴卡右缘）；
-   desc = --t-body 28px + font-weight 600 + 墨色（--text）——仅加粗、无底色框（二十九轮 F1 用户拍板）；
-   无序号角标、无 delta；内衬紧凑 var(--space-3)（比 StatCell 的 --space-4 矮——卡片高度更矮）。 */
+/* 统计内联卡（二十九轮 F1 新建——BY THE NUMBERS 专用；三十轮 F2 v2 编排协调）：Card 风格 4px 墨框 + cream 底
+   + 零阴影（网格单元纪律）。
+   首行 = HeroNumber 大数字（--t-display-2）左 + Kicker pill 药丸标签右（space-between 同行、药丸垂直居中、
+   标签右缘贴卡右缘——三十轮 F2：标签进药丸框）；
+   desc = --t-body 28px + font-weight 600 + 墨色（--text）——仅加粗、无底色框、左对齐（二十九轮 F1 用户拍板）；
+   无序号角标、无 delta。
+   三十轮 F2 编排：数字→desc gap --space-2 → --space-1（8px，desc 上移贴近大数字）；
+   去 space-between 拉伸——卡高 = 内容自然高 + 卡内安全边距 var(--space-3) 24px 四周（更矮）。 */
 .cdp-stat-inline {
   background: var(--card-bg);
   border: var(--card-border);
   border-radius: var(--card-radius);
   box-shadow: none;
-  padding: var(--space-3);
+  padding: var(--space-3); /* 卡内安全边距 24px 四周统一（三十轮 F2 规格） */
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: var(--space-2);
+  /* 数字→desc 8px 收紧（三十轮 F2：--space-2 → --space-1）；
+     不再 justify-content: space-between——内容自上而下，卡高 = 自然高 + 24px 边距 */
+  gap: var(--space-1);
   color: var(--text);
 }
 
-/* 首行：大数字左、标签右贴卡右缘（space-between + baseline 同基线） */
+/* 首行：大数字左、药丸标签右贴卡右缘（space-between；药丸垂直居中对齐大数字行盒——三十轮 F2 再平衡，
+   与 chrome topbar「文字 + pill 同行」的 center 对齐先例一致） */
 .cdp-stat-inline-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
 }
 
-/* Kicker 标签（Kicker plain 组件 + 组件级字距规整；右对齐贴卡右缘，不换行） */
+/* Kicker 标签（Kicker pill 药丸变体——2px 墨框 999 圆角 + 8/16 衬垫为组件自身规格，零覆写；
+   组件级仅字距规整 + 右对齐贴卡右缘、不换行） */
 .cdp-stat-inline .cdp-kicker {
   font-size: var(--t-label);
   letter-spacing: 0.12em;
@@ -31,7 +38,8 @@
   white-space: nowrap;
 }
 
-/* desc：仅加粗无底色框（二十九轮 F1 拍板）——--t-body 28px + font-weight 600 + 墨色（审计：computed 28px / 600 / 无背景无边框） */
+/* desc：仅加粗无底色框（二十九轮 F1 拍板）——--t-body 28px + font-weight 600 + 墨色、左对齐
+   （审计：computed 28px / 600 / 无背景无边框）；与数字间距 8px（三十轮 F2 收紧） */
 .cdp-stat-inline-desc {
   margin: 0;
   font-family: var(--font-body);

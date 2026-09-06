@@ -86,7 +86,7 @@ describe("数据组组件", () => {
     expect(getByTestId("d").querySelector(".cdp-stat-cell-delta")!.className).toContain("cdp-stat-cell-delta-down");
   });
 
-  it("StatInline 大数字标签同行 + desc 仅加粗无框 + 无序号角标（二十九轮 F1）", () => {
+  it("StatInline 大数字标签同行 + 标签 pill 药丸变体 + desc 仅加粗无框 + 无序号角标（三十轮 F2 v2）", () => {
     const { getByTestId } = render(
       <StatInline value="42%" label="参与度提升" desc="参与度相对基线提升 42 个百分点。" data-testid="inline" />,
     );
@@ -96,7 +96,10 @@ describe("数据组组件", () => {
     const head = root.querySelector(".cdp-stat-inline-head");
     expect(head).not.toBeNull();
     expect(head!.querySelector(".cdp-hero-number-value")).toHaveTextContent("42%");
-    expect(head!.querySelector(".cdp-kicker")).toHaveTextContent("参与度提升");
+    const label = head!.querySelector(".cdp-kicker");
+    expect(label).toHaveTextContent("参与度提升");
+    // 标签 = Kicker pill 药丸变体（三十轮 F2：进药丸框——2px 墨框 999 圆角为组件自身规格，零覆写）
+    expect(label!.className).toContain("cdp-kicker-pill");
     // 标签右对齐贴卡右缘：head 行 space-between（类存在即契约；computed 右缘由 Playwright 审计钉住）
     // desc 仅加粗无框：唯一 desc 类，无 block/pill 档类（600 由 CSS + Playwright computed 钉住）
     const desc = root.querySelector(".cdp-stat-inline-desc");

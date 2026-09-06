@@ -722,7 +722,7 @@ function ComponentsSection() {
         <CompCell name="kicker">
           <Variant label="plain"><Kicker variant="plain" data-testid="variant-kicker-plain">CHAPTER 01</Kicker></Variant>
           <Variant label="block"><Kicker variant="block" data-testid="variant-kicker-block">CHAPTER 01</Kicker></Variant>
-          <Variant label="pill"><Kicker variant="pill" data-testid="variant-kicker-pill">CHAPTER 01</Kicker></Variant>
+          <Variant label="pill · 2px 墨框 999 圆角（三十轮 F2）"><Kicker variant="pill" data-testid="variant-kicker-pill">CHAPTER 01</Kicker></Variant>
         </CompCell>
         <CompCell name="body-copy">
           <Variant label="plain"><BodyCopy data-testid="variant-body-copy-plain">口播视频的节奏，由稿子决定。</BodyCopy></Variant>
@@ -775,7 +775,7 @@ function ComponentsSection() {
           </Variant>
         </CompCell>
         <CompCell name="stat-inline">
-          <Variant label="default · BY THE NUMBERS 专用（二十九轮 F1）· 大数字标签同行右贴缘 + desc 600 加粗无框 + 无角标 · 内衬紧凑">
+          <Variant label="default · BY THE NUMBERS 专用（三十轮 F2 v2）· 大数字 + pill 药丸标签同行右贴缘 + desc 600 加粗无框左对齐紧贴数字 + 无角标 · 卡高自然高 + 24px 边距">
             <StatInline value="42%" label="参与度提升" desc="参与度相对基线提升 42 个百分点。" data-testid="variant-stat-inline-default" />
           </Variant>
         </CompCell>
@@ -883,7 +883,7 @@ function ComponentsSection() {
           <Variant label="default · 4×160 错位叠放"><StackedBlocks data-testid="variant-stacked-blocks-default" /></Variant>
         </CompCell>
         <CompCell name="step-stairs">
-          <Variant label="default · 无序号 · 底缘共线 · 卡高递增 180/220/260 顶部阶梯轮廓 · 顶部橙条（二十九轮 F4 v4）">
+          <Variant label="default · 无序号 · 底缘共线 · 卡高递增 200/240/280 顶部阶梯轮廓 · 顶部橙条 · 卡内安全边距 24px 四周（三十轮 F1）">
             <StepStairs
               data-testid="variant-step-stairs-default"
               items={[
