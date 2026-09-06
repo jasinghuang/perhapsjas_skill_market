@@ -21,7 +21,6 @@ import {
   Counter,
   DecorBar,
   DecorDot,
-  DecorRing,
   DonutMeter,
   Figure,
   Grid,
@@ -33,7 +32,6 @@ import {
   PathDraw,
   ProgressDots,
   QuoteBlock,
-  RevealText,
   Rule,
   SeededParticles,
   StackedBlocks,
@@ -335,11 +333,11 @@ function ChapterSlide() {
       <div style={{ flex: 1, display: "flex", gap: "var(--space-6)" }}>
         {/* 左栏：headline（display-2 96px）+ 开场白段落（--t-body 28px）+ 三要点（--t-h3 40px）。
             十轮 F2：headline 与正文间距加大到 64px（容器 gap 32 + 标题 marginBottom 32） */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-          <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--space-4)" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
             先说明一件事。
           </HeroTitle>
-          <BodyCopy style={{ maxWidth: 760 }}>
+          <BodyCopy style={{ maxWidth: 760, marginBottom: "var(--space-4)" }}>
             这是一套把口播稿变成会动网页的工作流。后面的数据、流程与对比，都是同一主题的不同切片。先记住一句话：节奏由稿子决定。
           </BodyCopy>
           {/* 三要点：NumberPill plain 序号（十轮 F4 收编——替代 RevealList numbered 的薄弱序号） */}
@@ -421,14 +419,14 @@ function StatCell({
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          padding: "24px 32px",
+          padding: "20px 28px", // 十一轮 F1：收紧使 64px headline-gap 下网格不撑破内容带
           background: bg,
         }}
       >
         <Kicker
           style={{
             position: "absolute",
-            top: 24,
+            top: 20,
             right: 28,
             background: "none",
             color: "inherit",
@@ -439,7 +437,7 @@ function StatCell({
         >
           {corner}
         </Kicker>
-        <div style={{ paddingTop: 24 }}>
+        <div style={{ paddingTop: 16 }}>
           <HeroNumber value={value} />
         </div>
         <div>
@@ -448,7 +446,7 @@ function StatCell({
           >
             {label}
           </Kicker>
-          <BodyCopy style={{ fontSize: 24, lineHeight: 1.3, marginTop: 6, maxWidth: 520 }}>{desc}</BodyCopy>
+          <BodyCopy style={{ fontSize: 24, lineHeight: 1.3, marginTop: 4, maxWidth: 520 }}>{desc}</BodyCopy>
         </div>
       </Card>
     </div>
@@ -465,9 +463,9 @@ function DataSlide() {
       >
         <SeededParticles seed={42} count={40} />
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* headline 单行（视觉终审二轮 F1：右侧空间足够，display-2 96px 单行放下 9 字 + 2 标点） */}
-        <HeroTitle size="display-2" style={{ lineHeight: 0.95 }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           四个数字，一个故事。
         </HeroTitle>
         {/* 2×2 满幅网格：零阴影（--shadow-card-sm none）、格间隙 var(--grid-gutter) 28px */}
@@ -475,7 +473,7 @@ function DataSlide() {
           variant="even"
           columns={2}
           data-testid="stat-grid"
-          style={{ flex: 1, gridTemplateRows: "1fr 1fr", ...scope({ "--shadow-card-sm": "none" }) }}
+          style={{ flex: 1, marginBottom: "var(--space-3)", gridTemplateRows: "1fr 1fr", ...scope({ "--shadow-card-sm": "none" }) }}
         >
           <StatCell
             corner="/01"
@@ -518,7 +516,7 @@ function DataSlide() {
             display: "flex",
             alignItems: "flex-end",
             gap: 48,
-            marginBottom: "var(--space-3)", // 12px 卡片阴影落点收在内容带内
+            marginBottom: "var(--space-2)", // 12px 卡片阴影落点收在内容带内
           }}
         >
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
@@ -556,9 +554,9 @@ const LAYER_NAMES = ["引擎层 — 时间与步进", "组件层 — 构图与�
 function DiagramSlide() {
   return (
     <SlideShell index="04" topbar="SYSTEM DIAGRAM" pill="SCHEMATIC / A" caption="一层叠一层的结构">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* 十轮 F1：headline 单行（display-2 96px 档，9 字实测放下） */}
-        <HeroTitle size="display-2" style={{ lineHeight: 0.95 }}>一层叠一层的结构。</HeroTitle>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>一层叠一层的结构。</HeroTitle>
         <div style={{ flex: 1, display: "flex", gap: "var(--space-6)" }}>
           {/* 左栏：描述 + 四层名单（NumberPill accent 序号——十轮 F4；--accent-1 → orange 本屏纪律） */}
           <div
@@ -608,13 +606,13 @@ const BAR_ROWS = [
 function ChartSlide() {
   return (
     <SlideShell index="05" topbar="QUARTERLY READOUT" pill="BARS" caption="季度读数">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-        <HeroTitle size="h1" style={{ lineHeight: 0.95 }}>季度读数。</HeroTitle>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="h1" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>季度读数。</HeroTitle>
         {/* 4 行横向条形图（参考 s5：mono 标签 + BarGrow accent + mono 数值；行高 56px dev 微调） */}
         <div
           data-testid="bar-rows"
           className="sg-bar-rows"
-          style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", marginTop: "auto", marginBottom: "auto" }}
+          style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", marginBottom: "var(--space-4)" }}
         >
           {BAR_ROWS.map((row) => (
             <div key={row.label} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
@@ -718,11 +716,11 @@ function StepCard({ def }: { def: StepDef }) {
 function FlowSlide() {
   return (
     <SlideShell index="06" topbar="HOW IT WORKS" pill="FOUR STEPS" caption="从稿子到成片，一共四步">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-        <HeroTitle size="display-2" style={{ lineHeight: 0.95 }}>一个四步流程。</HeroTitle>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>一个四步流程。</HeroTitle>
         {/* 流程 slide 的 signature：3px dashed 墨线分隔（参考 s6 header-line） */}
         <Rule variant="dashed" data-testid="flow-rule" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-4)" })} />
-        <Grid variant="even" columns={4} data-testid="step-cards" style={scope({ "--shadow-card-sm": "none" })}>
+        <Grid variant="even" columns={4} data-testid="step-cards" style={{ marginBottom: "var(--space-4)", ...scope({ "--shadow-card-sm": "none" }) }}>
           {STEP_DEFS.map((def) => (
             <StepCard key={def.n} def={def} />
           ))}
@@ -763,8 +761,8 @@ const COMPARE_ROWS = [
 function CompareSlide() {
   return (
     <SlideShell index="07" topbar="SIDE BY SIDE" pill="COMPARISON" caption="三个选项，逐项对比">
-      <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-        <HeroTitle size="h1" style={{ lineHeight: 0.95, maxWidth: 1100 }}>
+      <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="h1" style={{ lineHeight: 0.95, maxWidth: 1100, marginBottom: "var(--headline-gap)" }}>
           三个选项，逐项对比。
         </HeroTitle>
         {/* 视觉终审三轮 F2：-4deg "选一个" 徽章已删除（用户拍板），headline 与表格保持现有布局 */}
@@ -802,8 +800,8 @@ const PORTRAIT_ITEMS = [
 function MediaSlide() {
   return (
     <SlideShell index="08" topbar="MEDIA · PORTRAIT" pill="3:4 ASSETS" caption="竖屏素材，各归其位">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-        <HeroTitle size="h1" style={{ lineHeight: 0.95 }}>竖屏素材，各归其位。</HeroTitle>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="h1" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>竖屏素材，各归其位。</HeroTitle>
         {/* 3 个 3:4 竖屏 Figure placeholder（frame 变体，零阴影 scope）+ 第 4 个 KenBurns 无 src placeholder */}
         <div
           data-testid="portrait-row"
@@ -861,8 +859,8 @@ function MotionCell({ label, children }: { label: string; children: ReactNode })
 function MotionLabSlide() {
   return (
     <SlideShell index="09" topbar="MOTION LAB" pill="PRESETS" caption="动效，各就各位">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-        <HeroTitle size="h1" style={{ lineHeight: 0.95 }}>动效，各就各位。</HeroTitle>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="h1" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>动效，各就各位。</HeroTitle>
         <Grid
           variant="even"
           columns={3}
@@ -903,32 +901,88 @@ function MotionLabSlide() {
   );
 }
 
-/* ── Slide 10 · 语录宣言 = 情绪收束（十轮 F5；强调色：pink + green 点缀） ── */
+/* ── Slide 10 · 语录宣言 = 杂志排版（十一轮 F2；墨/cream 为主 + pink 单点缀） ── */
+
+/** 宣言大字行（display-1 130px / lh 0.92；hanging indent 由 marginLeft 错位） */
+function ManifestLine({ text, indent }: { text: string; indent?: string }) {
+  return (
+    <div
+      style={{
+        fontFamily: "var(--font-display-cn)",
+        fontWeight: 900,
+        fontSize: "var(--t-display-1)",
+        lineHeight: 0.92,
+        color: "var(--text)",
+        marginLeft: indent,
+      }}
+    >
+      {text}
+    </div>
+  );
+}
 
 function QuoteSlide() {
   return (
     <SlideShell index="10" topbar="MANIFESTO" pill="QUOTE" caption="一句话，就够了">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-        <HeroTitle size="h1" style={{ lineHeight: 0.95 }}>一句话，就够了。</HeroTitle>
-        {/* 大 QuoteBlock（pink 底墨字）——呼应 S2 文案 */}
-        <QuoteBlock
-          variant="block"
-          data-testid="manifesto-quote"
-          style={{ background: "var(--accent-2)", color: "var(--surface-3)", alignSelf: "flex-start", padding: "var(--space-5) var(--space-6)" }}
-        >
-          节奏由稿子决定。
-        </QuoteBlock>
-        {/* 逐词第二句 */}
-        <div data-testid="manifesto-reveal">
-          <RevealText text="口播稿 做成 会动的 网页" variant="words" />
+      <div style={{ flex: 1, display: "flex", gap: "var(--space-6)", position: "relative" }}>
+        {/* 左侧窄栏（~280px 垂直贯穿）：序号 + 栏名 + hairline + 期号 + 小目录 */}
+        <div data-testid="manifesto-sidebar" style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+          <NumberPill number="01" variant="accent" />
+          <Kicker style={{ background: "none", padding: 0, color: "var(--text)", fontSize: "var(--t-label)" }}>
+            MANIFESTO · 宣言
+          </Kicker>
+          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "var(--space-2) 0 var(--space-3)" })} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)" }}>
+            VOL. 01 — M2B
+          </span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
+            {["01 稿子", "02 分镜", "03 成片"].map((item) => (
+              <span
+                key={item}
+                style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}
+              >
+                {item}
+              </span>
+            ))}
+          </div>
         </div>
-        {/* 装饰行（情绪收束） */}
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", marginTop: "auto" }}>
-          <DecorBar variant="accent" style={{ background: "var(--accent-2)" }} />
-          <DecorDot variant="glow" style={{ background: "var(--accent-2)", boxShadow: "0 0 var(--space-4) var(--accent-2)" }} />
-          <DecorBar variant="solid" />
-          <DecorRing variant="outline" />
-          <DecorRing variant="filled" />
+        {/* 主体宣言区（杂志错位编排） */}
+        <div data-testid="manifesto-main" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          {/* 超大引号（Archivo Black 同字号墨色） */}
+          <div
+            aria-hidden="true"
+            data-testid="manifesto-quote-mark"
+            style={{ fontFamily: "var(--font-display-en)", fontSize: "var(--t-display-1)", lineHeight: 0.92, color: "var(--text)" }}
+          >
+            “
+          </div>
+          {/* 三行大字：hanging indent 编排——第二行缩进 64px、第三行 24px 回弹 */}
+          <ManifestLine text="节奏，" />
+          <ManifestLine text="由稿子" indent="var(--space-6)" />
+          <ManifestLine text="决定。" indent="var(--space-3)" />
+          {/* 宣言下方：hairline + byline（headline-gap 64 对齐 F1） */}
+          <Rule
+            variant="solid"
+            data-testid="manifesto-rule"
+            style={scope({ "--rule-w": "3px", margin: "var(--headline-gap) 0 var(--space-3)" })}
+          />
+          <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-3)" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)" }}>
+              FROM THE EDITOR · M2B
+            </span>
+            <BodyCopy style={{ fontSize: "var(--t-label)" }}>一期一页，一期一句。</BodyCopy>
+          </div>
+          {/* 克制的收尾：pink 单点缀装饰条 + 右下小 QuoteBlock */}
+          <div style={{ marginTop: "auto", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+            <DecorBar variant="accent" style={{ background: "var(--accent-2)" }} />
+            <QuoteBlock
+              variant="block"
+              data-testid="manifesto-quote"
+              style={{ background: "var(--accent-2)", color: "var(--surface-3)", padding: "var(--space-2) var(--space-3)", fontSize: "var(--t-label)" }}
+            >
+              一句话，就够了。
+            </QuoteBlock>
+          </div>
         </div>
       </div>
     </SlideShell>
@@ -964,7 +1018,7 @@ function ClosingSlide() {
         {/* strap 一句（cream 字，四轮 F2：与 headline 拉开 96px——用户仍嫌 48px 近） */}
         <BodyCopy
           style={{
-            marginTop: 96,
+            marginTop: "var(--headline-gap)", // 十一轮 F1：96 → 64 统一（旧值注释见报告）
             maxWidth: 1000,
             fontSize: 32,
             lineHeight: 1.4,

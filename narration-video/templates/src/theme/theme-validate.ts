@@ -13,7 +13,7 @@ export const REQUIRED_TOKENS: string[] = [
   "--t-body", "--t-label",
   // 间距
   "--space-1", "--space-2", "--space-3", "--space-4", "--space-5", "--space-6",
-  "--grid-gutter",
+  "--headline-gap", "--grid-gutter",
   // 动效
   "--dur-fast", "--dur-mid", "--dur-slow",
   "--ease-in", "--ease-out", "--ease-emph", "--stagger",

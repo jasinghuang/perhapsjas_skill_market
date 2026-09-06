@@ -9,7 +9,7 @@ const VALID_CSS = `:root {
   --t-display-1: 1px; --t-display-2: 1px; --t-h1: 1px; --t-h2: 1px;
   --t-h3: 1px; --t-body: 1px; --t-label: 1px;
   --space-1: 1px; --space-2: 1px; --space-3: 1px; --space-4: 1px;
-  --space-5: 1px; --space-6: 1px; --grid-gutter: 1px;
+  --space-5: 1px; --space-6: 1px; --headline-gap: 1px; --grid-gutter: 1px;
   --dur-fast: 1ms; --dur-mid: 1ms; --dur-slow: 1ms;
   --ease-in: linear; --ease-out: linear; --ease-emph: linear; --stagger: 1ms;
   --card-bg: #fff; --card-border: 0; --card-radius: 0px; --r-card: 0px;

@@ -41,6 +41,8 @@
   --space-4: 32px;
   --space-5: 48px;
   --space-6: 64px;
+  /* 标题与下方首个元素的统一间距——用户定稿规则（十一轮 F1） */
+  --headline-gap: var(--space-6);
   --grid-gutter: 28px;
   --stage-pad-x: 96px;
   --stage-pad-y: 64px;
