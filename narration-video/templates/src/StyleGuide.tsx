@@ -807,11 +807,13 @@ function ComponentsSection() {
         </CompCell>
         <CompCell name="split-compare">
           <Variant label="default · 单面板 + 中缝 VS 圆章">
+            {/* 面板 24px 橙硬阴影为字面量（二十轮 F2 单色整块）——格内密度优先压 none，自然态见 showcase S13 */}
             <div style={{ width: 620 }}>
               <SplitCompare
                 before={["散落的文档", "模糊的归属"]}
                 after={["一份稿子驱动", "角色清晰"]}
                 data-testid="variant-split-compare-default"
+                style={{ boxShadow: "none" }}
               />
             </div>
           </Variant>

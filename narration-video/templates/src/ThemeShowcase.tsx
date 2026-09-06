@@ -74,6 +74,10 @@ const SHOWCASE_TWEAKS = `
 .sg-bar-rows .cdp-bar-grow { height: 56px; }
 /* S12 成对横条：48px 行高（同列双条同高——审计断言依据） */
 .sg-yoy-rows .cdp-bar-grow { height: 48px; }
+/* S12 去年条（二十轮 F1）：surface-2 浅档填充 + track 归 canvas 同色（浅档填充可读；
+   var scope 别名会在使用点解析失效，tweak 直指类名是既有手法） */
+.sg-yoy-last { background: var(--surface); }
+.sg-yoy-last .cdp-bar-grow-fill { background: var(--surface-2); }
 /* S11 ledger 表：mono 数据风格 + 紧凑行高 + 首/末列定宽 */
 .sg-spec-table tbody td { font-family: var(--font-mono); font-size: var(--t-label); }
 .sg-spec-table th, .sg-spec-table td { padding: 4px var(--space-3); }
@@ -375,10 +379,10 @@ function ChapterSlide() {
   );
 }
 
-/* ── Slide 3 · 数据冲击 = 参考 s3（强调色：green + pink + orange；yellow 不出场） ── */
+/* ── Slide 3 · 数据冲击 = 参考 s3（二十轮 F3 双色对角收敛：green + pink；orange 不出场） ── */
 
 /** 数据格（参考 s3 cell）：mono 角标 /0N（右上）+ 大数字 + mono 标签 + 一句描述；
-    bg 按参考序列 green → pink → cream → orange；亮底配墨字、green/orange 底配 cream 字 */
+    二十轮 F3 配色 = 双色对角——TL/BR pink 底墨字、TR/BL green 底 cream 字 */
 function StatCell({
   corner,
   value,
@@ -464,8 +468,7 @@ function DataSlide() {
             value="42%"
             label="参与度提升"
             desc="参与度相对基线提升 42 个百分点。"
-            bg="var(--accent-1)"
-            ink={false}
+            bg="var(--accent-2)"
             testid="stat-cell-1"
           />
           <StatCell
@@ -473,7 +476,8 @@ function DataSlide() {
             value="2.7×"
             label="吞吐倍数"
             desc="同一份口播稿的产出吞吐提升 2.7 倍。"
-            bg="var(--accent-2)"
+            bg="var(--accent-1)"
+            ink={false}
             testid="stat-cell-2"
           />
           <StatCell
@@ -481,7 +485,8 @@ function DataSlide() {
             value="118"
             label="活跃占位"
             desc="活跃占位组件 118 个，随稿迭代。"
-            bg="var(--surface)"
+            bg="var(--accent-1)"
+            ink={false}
             testid="stat-cell-3"
           />
           <StatCell
@@ -489,8 +494,7 @@ function DataSlide() {
             value="$9.4M"
             label="样本总值"
             desc="样本数据总值 940 万美元。"
-            bg="var(--accent-3)"
-            ink={false}
+            bg="var(--accent-2)"
             testid="stat-cell-4"
           />
         </Grid>
@@ -1226,8 +1230,15 @@ function QuarterlyReviewSlide() {
               <div style={{ flex: 1 }}>
                 <BarGrow value={row.thisYear} variant="accent" data-testid={`yoy-bar-${row.label}-this`} />
               </div>
+              {/* 去年条：surface-2 浅档（二十轮 F1——与图例色块同档；.sg-yoy-last tweak 让填充浅档可读：
+                  填充 surface-2、track 归 canvas 同色——scope 覆写 var 别名会在使用点解析失效，改 dev tweak 直指） */}
               <div style={{ flex: 1 }}>
-                <BarGrow value={row.lastYear} variant="solid" data-testid={`yoy-bar-${row.label}-last`} />
+                <BarGrow
+                  value={row.lastYear}
+                  variant="solid"
+                  className="sg-yoy-last"
+                  data-testid={`yoy-bar-${row.label}-last`}
+                />
               </div>
               <span
                 style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", width: 64, textAlign: "right", color: "var(--accent-1)" }}
@@ -1242,8 +1253,9 @@ function QuarterlyReviewSlide() {
             </div>
           ))}
         </div>
-        {/* KPI 行（参考 s7 three-numbers）：3px pink hairline + 三个墨色大数字（十九轮 F3 去粉）+ mono 标注 */}
-        <div style={{ marginTop: "auto", ...scope({ "--rule": "var(--accent-2)" }) }}>
+        {/* KPI 行（参考 s7 three-numbers）：3px 墨 hairline（二十轮 F1 去粉）+ 三个墨色大数字（十九轮 F3 去粉）+ mono 标注
+            ——本屏无 pink 残留（收敛为绿 + 墨 + cream，无刻意点缀） */}
+        <div style={{ marginTop: "auto" }}>
           <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-3)" })} />
           <div data-testid="yoy-kpis" style={{ display: "flex", gap: "var(--space-6)" }}>
             {YOY_KPIS.map((kpi) => (
