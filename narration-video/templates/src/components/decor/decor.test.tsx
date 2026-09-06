@@ -46,11 +46,12 @@ describe("装饰组", () => {
     expect(getByTestId("stack").querySelectorAll(".cdp-stacked-block")).toHaveLength(4);
   });
 
-  it("MarkerBlock 两变体类名 + 子内容渲染（十六轮 F3）", () => {
+  it("MarkerBlock 三变体类名 + 子内容渲染（十六轮 F3；二十二轮 F1 补 invert）", () => {
     const { getByTestId } = render(
       <div>
         <MarkerBlock data-testid="m1">CREATIVE</MarkerBlock>
         <MarkerBlock variant="accent" data-testid="m2">创意模式</MarkerBlock>
+        <MarkerBlock variant="invert" data-testid="m3">墨底</MarkerBlock>
       </div>,
     );
     expect(getByTestId("m1").className).toContain("cdp-marker-block");
@@ -58,5 +59,7 @@ describe("装饰组", () => {
     expect(getByTestId("m1").textContent).toBe("CREATIVE");
     expect(getByTestId("m2").className).toContain("cdp-marker-block-accent");
     expect(getByTestId("m2").textContent).toBe("创意模式");
+    expect(getByTestId("m3").className).toContain("cdp-marker-block-invert");
+    expect(getByTestId("m3").textContent).toBe("墨底");
   });
 });

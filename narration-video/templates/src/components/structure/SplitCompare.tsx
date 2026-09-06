@@ -11,6 +11,8 @@ export interface SplitCompareProps {
   after: string[];
   beforeTitle?: string;
   afterTitle?: string;
+  /** 对齐模式（二十二轮 F4）：split = 左半左对齐/右半右对齐（长文案）；center = 两半均居中（短文案）。默认 split */
+  align?: "center" | "split";
   className?: string;
   style?: CSSProperties;
   "data-testid"?: string;
@@ -21,12 +23,17 @@ export function SplitCompare({
   after,
   beforeTitle = "BEFORE",
   afterTitle = "AFTER",
+  align = "split",
   className = "",
   style,
   ...rest
 }: SplitCompareProps) {
   return (
-    <div className={`cdp-split-compare ${className}`} style={style} data-testid={rest["data-testid"]}>
+    <div
+      className={`cdp-split-compare ${align === "center" ? "cdp-split-compare-center" : ""} ${className}`}
+      style={style}
+      data-testid={rest["data-testid"]}
+    >
       <div className="cdp-split-compare-half cdp-split-compare-before">
         <div className="cdp-split-compare-title">{beforeTitle}</div>
         <ul className="cdp-split-compare-list">

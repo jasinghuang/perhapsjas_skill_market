@@ -8,4 +8,15 @@
 .cdp-marker-block-accent {
   background: var(--accent-2);
   color: var(--surface);
+  /* 子元素自设色的（如 HeroTitle/BodyCopy 读 --text/--text-2）经覆写回归 cream——否则彩底上出现墨字 */
+  --text: var(--surface);
+  --text-2: var(--surface);
+}
+
+/* invert：墨底 cream 字（二十二轮 F1 封面主角块） */
+.cdp-marker-block-invert {
+  background: var(--surface-3);
+  color: var(--surface);
+  --text: var(--surface);
+  --text-2: var(--surface);
 }

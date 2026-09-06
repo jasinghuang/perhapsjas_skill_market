@@ -806,13 +806,23 @@ function ComponentsSection() {
           <Variant label="zebra"><Table variant="zebra" {...tableData} data-testid="variant-table-zebra" /></Variant>
         </CompCell>
         <CompCell name="split-compare">
-          <Variant label="default · 单面板 + 中缝 VS 圆章">
-            {/* 面板阴影回归 --shadow-card（二十一轮 F1 双层签名）——格内密度 scope 自动压 none，自然态见 showcase S13 */}
+          <Variant label="default · split（左半左 / 右半右）">
+            {/* 面板阴影 --shadow-card（二十一轮 F1 双层签名）——格内密度 scope 自动压 none，自然态见 showcase S13 */}
             <div style={{ width: 620 }}>
               <SplitCompare
                 before={["散落的文档", "模糊的归属"]}
                 after={["一份稿子驱动", "角色清晰"]}
                 data-testid="variant-split-compare-default"
+              />
+            </div>
+          </Variant>
+          <Variant label="align=center · 两半居中（短文案）">
+            <div style={{ width: 620 }}>
+              <SplitCompare
+                before={["散落的文档", "模糊的归属"]}
+                after={["一份稿子驱动", "角色清晰"]}
+                align="center"
+                data-testid="variant-split-compare-center"
               />
             </div>
           </Variant>
@@ -855,6 +865,7 @@ function ComponentsSection() {
         <CompCell name="marker-block">
           <Variant label="plain"><MarkerBlock data-testid="variant-marker-block-plain"><BodyCopy>奶油底 · 墨字</BodyCopy></MarkerBlock></Variant>
           <Variant label="accent"><div style={INVERT_TEXT}><MarkerBlock variant="accent" data-testid="variant-marker-block-accent"><BodyCopy>pink 底 · cream 字</BodyCopy></MarkerBlock></div></Variant>
+          <Variant label="invert · 封面主角块"><div style={INVERT_TEXT}><MarkerBlock variant="invert" data-testid="variant-marker-block-invert"><BodyCopy>墨底 · cream 字</BodyCopy></MarkerBlock></div></Variant>
         </CompCell>
       </CompGroup>
       <CompGroup label="MEDIA · 素材（3）">

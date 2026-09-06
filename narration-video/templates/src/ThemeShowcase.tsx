@@ -251,8 +251,8 @@ function CoverSlide() {
         }}
       >
         <Kicker variant="block">CHAPTER 01 · 主题</Kicker>
-        {/* 主标题区（featured）：MarkerBlock accent 外壳（十六轮 F3）+ HeroTitle 双语双行（十七轮 F1：全组件化，dev 页手写混排删除） */}
-        <MarkerBlock variant="accent" data-testid="featured-title">
+        {/* 主标题区（featured）：MarkerBlock invert 外壳（二十二轮 F1——封面主角块主色禁粉，墨底符合主题墨线语言）+ HeroTitle 双语双行 */}
+        <MarkerBlock variant="invert" data-testid="featured-title">
           <HeroTitle size="display-1" latin="CREATIVE" cn="创意模式" />
         </MarkerBlock>
         {/* 装饰行：accent 色条 + glow 圆点 + solid 色条 */}
@@ -375,10 +375,10 @@ function ChapterSlide() {
   );
 }
 
-/* ── Slide 3 · 数据冲击 = 参考 s3（二十一轮 F3 单填充色对角收敛：pink + cream；green/orange 不出场） ── */
+/* ── Slide 3 · 数据冲击 = 参考 s3（二十二轮 F3 单填充色对角收敛：green + cream） ── */
 
 /** 数据格（参考 s3 cell）：mono 角标 /0N（右上）+ 大数字 + mono 标签 + 一句描述；
-    二十一轮 F3 配色 = 一种填充色 + 无填充——TL/BR pink 填充墨字、TR/BL 无填充（bg 不传 = Card plain 自然态 cream 墨字） */
+    二十二轮 F3 配色 = 一种填充色 + 无填充——TL/BR accent-1 green 填充 cream 字、TR/BL 无填充（bg 不传 = Card plain 自然态 cream 墨字） */
 function StatCell({
   corner,
   value,
@@ -464,7 +464,8 @@ function DataSlide() {
             value="42%"
             label="参与度提升"
             desc="参与度相对基线提升 42 个百分点。"
-            bg="var(--accent-2)"
+            bg="var(--accent-1)"
+            ink={false}
             testid="stat-cell-1"
           />
           <StatCell
@@ -486,7 +487,8 @@ function DataSlide() {
             value="$9.4M"
             label="样本总值"
             desc="样本数据总值 940 万美元。"
-            bg="var(--accent-2)"
+            bg="var(--accent-1)"
+            ink={false}
             testid="stat-cell-4"
           />
         </Grid>
@@ -584,11 +586,12 @@ function DiagramSlide() {
 /* ── Slide 5 · 柱状图 = 参考 s5（强调色：green + pink + orange 交替） ── */
 
 const BAR_ROWS = [
+  // 二十二轮 F2：季度/分类类条形图每季一色（四强调色序列——此规则优先于"每屏 2-3 强调色"通用纪律，分类色彩编码是语义需求）
   // tone = null 表示吃默认 accent-1（green）——不可 scope 覆写 --accent-1: var(--accent-1)（自引用循环 → 透明）
-  { label: "Q1 '24", value: 0.34, text: "34", tone: null },
-  { label: "Q2 '24", value: 0.48, text: "48", tone: "var(--accent-2)" },
-  { label: "Q3 '24", value: 0.61, text: "61", tone: "var(--accent-3)" },
-  { label: "Q4 '24", value: 0.55, text: "55", tone: null },
+  { label: "Q1 '24", value: 0.34, text: "34", tone: null }, // accent-1 绿
+  { label: "Q2 '24", value: 0.48, text: "48", tone: "var(--accent-2)" }, // 粉
+  { label: "Q3 '24", value: 0.61, text: "61", tone: "var(--accent-3)" }, // 橙
+  { label: "Q4 '24", value: 0.55, text: "55", tone: "var(--accent-4)" }, // 黄
 ];
 
 function ChartSlide() {
@@ -1245,8 +1248,8 @@ function BeforeAfterSlide() {
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           同一份稿子，两种样子。
         </HeroTitle>
-        {/* 十九轮 F4：SplitCompare 组件（单一面板 + 两半无中缝线 + 中缝 VS 圆章）；
-            before 灰语义经 --split-before-text scope 覆写；面板 1560×560 居中 */}
+        {/* 十九轮 F4：SplitCompare 组件（单一面板 + 3px 中分界 + 中缝 VS 圆章）；二十二轮 F4：align="center"
+            （文案短 → 两半居中）；before 灰语义经 --split-before-text scope 覆写；面板 1560×560 居中 */}
         <div
           data-testid="ba-split"
           style={{
@@ -1260,6 +1263,7 @@ function BeforeAfterSlide() {
           <SplitCompare
             before={BEFORE_ITEMS}
             after={AFTER_ITEMS}
+            align="center"
             data-testid="before-after-panel"
             style={{ width: 1560, height: 560 }}
           />

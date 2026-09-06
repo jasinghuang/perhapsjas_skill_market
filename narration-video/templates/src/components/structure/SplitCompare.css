@@ -69,6 +69,16 @@
   text-align: right;
 }
 
+/* 对齐模式（二十二轮 F4）：center = 两半标题与条目均居中（短文案场景）；
+   规则：对比卡文案短时居中、长时左/右分对齐（默认 split） */
+.cdp-split-compare-center .cdp-split-compare-title {
+  text-align: center;
+}
+
+.cdp-split-compare-center .cdp-split-compare-list li {
+  text-align: center;
+}
+
 /* 中央 VS 圆章：accent-2 圆 140px + 4px 墨框 + cream 大字 + 24px 墨硬阴影，absolute 压两半交界 */
 .cdp-split-compare-seal {
   position: absolute;

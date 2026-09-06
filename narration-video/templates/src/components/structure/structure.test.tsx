@@ -84,4 +84,16 @@ describe("结构组组件", () => {
     expect(getByTestId("sc2").querySelector(".cdp-split-compare-before .cdp-split-compare-title")).toHaveTextContent("之前");
     expect(getByTestId("sc2").querySelector(".cdp-split-compare-after .cdp-split-compare-title")).toHaveTextContent("之后");
   });
+
+  it("SplitCompare 对齐模式类名（二十二轮 F4：默认 split 无 center 类；align=center 加类）", () => {
+    const { getByTestId } = render(
+      <div>
+        <SplitCompare before={["甲"]} after={["乙"]} data-testid="sc-split" />
+        <SplitCompare before={["甲"]} after={["乙"]} align="center" data-testid="sc-center" />
+      </div>,
+    );
+    expect(getByTestId("sc-split").className).toContain("cdp-split-compare");
+    expect(getByTestId("sc-split").className).not.toContain("cdp-split-compare-center");
+    expect(getByTestId("sc-center").className).toContain("cdp-split-compare-center");
+  });
 });
