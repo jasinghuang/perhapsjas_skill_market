@@ -18,17 +18,21 @@
  *   3) 色值判定前再剥离 var() 引用与 url() 内容；无冒号行（选择器/注释/At 规则头）跳过色值判定。
  * emoji 检查单独用原文行（brief 负样本钉死注释内 emoji 仍报）。
  *
- * 字阶/间距集合从 src/theme/tokens.css 以 `?raw` 导入解析（Ruling P4-1——与主题同源，
- * 主题改档门禁自动跟随）。色/字体/时长基查与 contract-lint 的 lintCssText 同型正则；
+ * 字阶/间距集合从 src/theme/tokens.css 解析（Ruling P4-1——与主题同源，主题改档门禁
+ * 自动跟随）。Ruling P4-6（T6 落地）：弃 `?raw` 改 node:fs 读取——tsx（node 环境）
+ * 不能解析 Vite 的 `?raw` 后缀；脚本所在项目即被检项目，模块相对路径天然指向
+ * 同项目 tokens.css。色/字体/时长基查与 contract-lint 的 lintCssText 同型正则；
  * 本层自实现核心的取舍（结构化 Finding 输出、white/black 豁免、防误伤紫色主题）见 task-2-report。
  *
  * 纯 TS、无 DOM 依赖——tsx（node）与 vitest 双环境消费。
  */
 
-import tokensCss from "../../src/theme/tokens.css?raw";
+import { readFileSync } from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Finding } from "./findings";
 
-// ── 主题同源集合（Ruling P4-1） ──
+// ── 主题同源集合（Ruling P4-1 + P4-6） ──
 
 function parsePxValues(css: string, re: RegExp): Set<number> {
   const values = new Set<number>();
@@ -36,13 +40,30 @@ function parsePxValues(css: string, re: RegExp): Set<number> {
   return values;
 }
 
+// 模块相对路径：脚手架复制后脚本随项目走，指向被检项目自身的 tokens.css。
+// 注意不用 `new URL(rel, import.meta.url)`——vitest 的 jsdom 全局 URL 对 file: 基址
+// 会解析成 http://localhost:3000 虚拟 origin；fileURLToPath + path 双环境皆稳。
+const TOKENS_CSS_FILE = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../src/theme/tokens.css",
+);
+let tokensCss: string;
+try {
+  tokensCss = readFileSync(TOKENS_CSS_FILE, "utf8");
+} catch (e) {
+  throw new Error(
+    `scanner-css：无法读取 src/theme/tokens.css（${TOKENS_CSS_FILE}）——` +
+      `宁炸不假绿（${e instanceof Error ? e.message : String(e)}）`,
+  );
+}
+
 const TYPE_SCALE = parsePxValues(tokensCss, /--t-[\w-]*\s*:\s*([\d.]+)px/g);
 const SPACE_SCALE = parsePxValues(tokensCss, /--space-\d+\s*:\s*([\d.]+)px/g);
 
-// 护栏：`?raw` 被 stub 成空串时（vitest test.css 未开启）宁可炸掉也不假绿/误报（终审 C1 教训）
+// 护栏：tokens.css 读取成功但字阶/间距集合解析为空时宁可炸掉也不假绿/误报（终审 C1 教训）
 if (TYPE_SCALE.size === 0 || SPACE_SCALE.size === 0) {
   throw new Error(
-    "scanner-css：tokens.css 字阶/间距集合解析为空（`?raw` 导入被 stub？vitest 需 test.css=true）",
+    `scanner-css：tokens.css 字阶/间距集合解析为空（${TOKENS_CSS_FILE}）——主题档位契约破坏，宁炸不假绿`,
   );
 }
 
