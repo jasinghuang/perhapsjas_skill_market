@@ -39,12 +39,13 @@ export function TimelineTrack({ points, activeIndex, variant = "line", className
       </div>
       <div className="cdp-timeline-points">
         {points.map((p, i) => (
-          // brief 自洽修正：测试契约钉住单一 active 节点（activeIndex=2 时仍恰 1 个
-          // .cdp-timeline-point-active），brief 实现段 i <= activeIndex 会点亮 3 个。
+          // 二十九轮 F3 裁决翻转（P3-13 用户拍板）：单节点点亮语义 → 累计点亮——
+          // i <= activeIndex 全部点亮（已走过的稿/镜/画亮、未完成的不亮）。
+          // 生长线比例逻辑不变（ratio = activeIndex / (n-1)）。
           <div
             key={i}
             className={
-              i === activeIndex
+              i <= activeIndex
                 ? "cdp-timeline-point cdp-timeline-point-active"
                 : "cdp-timeline-point"
             }

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
-import { HeroNumber, Counter, BarGrow, DonutMeter, StatCard, StatCell } from "./";
+import { HeroNumber, Counter, BarGrow, DonutMeter, StatCard, StatCell, StatInline } from "./";
 
 beforeEach(() => setRenderMode(false));
 afterEach(() => setRenderMode(false));
@@ -84,6 +84,30 @@ describe("数据组组件", () => {
       <StatCell index="/01" value="9,637" label="归母净利" desc="回调一档。" delta="▼ -3.20%" deltaTone="down" data-testid="d" />,
     );
     expect(getByTestId("d").querySelector(".cdp-stat-cell-delta")!.className).toContain("cdp-stat-cell-delta-down");
+  });
+
+  it("StatInline 大数字标签同行 + desc 仅加粗无框 + 无序号角标（二十九轮 F1）", () => {
+    const { getByTestId } = render(
+      <StatInline value="42%" label="参与度提升" desc="参与度相对基线提升 42 个百分点。" data-testid="inline" />,
+    );
+    const root = getByTestId("inline");
+    expect(root.className).toContain("cdp-stat-inline");
+    // 大数字与标签同一行（head 行内同时含 HeroNumber 值与 Kicker 标签）
+    const head = root.querySelector(".cdp-stat-inline-head");
+    expect(head).not.toBeNull();
+    expect(head!.querySelector(".cdp-hero-number-value")).toHaveTextContent("42%");
+    expect(head!.querySelector(".cdp-kicker")).toHaveTextContent("参与度提升");
+    // 标签右对齐贴卡右缘：head 行 space-between（类存在即契约；computed 右缘由 Playwright 审计钉住）
+    // desc 仅加粗无框：唯一 desc 类，无 block/pill 档类（600 由 CSS + Playwright computed 钉住）
+    const desc = root.querySelector(".cdp-stat-inline-desc");
+    expect(desc).not.toBeNull();
+    expect(desc!.className).toBe("cdp-stat-inline-desc");
+    expect(desc).toHaveTextContent("参与度相对基线提升 42 个百分点。");
+    // 无序号角标（StatCell 的 index 件与 NumberPill 均不渲染）
+    expect(root.querySelector(".cdp-stat-cell-index")).toBeNull();
+    expect(root.querySelector(".cdp-number-pill")).toBeNull();
+    // 无 delta
+    expect(root.querySelector(".cdp-stat-cell-delta")).toBeNull();
   });
 
   it("StatCell descStyle 四档类名：默认 block 加档类、pill/pillFilled 加档类、plain 无档类（二十八轮 F3 默认改 block）", () => {

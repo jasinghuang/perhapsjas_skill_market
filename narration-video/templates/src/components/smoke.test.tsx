@@ -3,7 +3,7 @@ import { render } from "@testing-library/react";
 import { setRenderMode } from "../engine/animationRuntime";
 import {
   HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill,
-  HeroNumber, Counter, BarGrow, DonutMeter, StatCard, StatCell,
+  HeroNumber, Counter, BarGrow, DonutMeter, StatCard, StatCell, StatInline,
   Card, Rule, Grid, StagePad, Table, SplitCompare,
   RevealText, RevealList, StepSequence,
   DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock, StepStairs,
@@ -14,11 +14,11 @@ import {
 
 // 终审 M3：逐组件 presence 断言——统一出口每个组件必须在画布真实渲染，
 // 只查 ".cdp" 根类会漏掉「组件已导出但从未渲染」的假绿。
-// 全部 34 组件（28 + 十轮 F3/F4 收编 StackedBlocks / NumberPill + 十九轮 F4 SplitCompare + 二十五轮 F4 StepStairs + 二十五轮 F5 StatCell）。
+// 全部 35 组件（28 + 十轮 F3/F4 收编 StackedBlocks / NumberPill + 十九轮 F4 SplitCompare + 二十五轮 F4 StepStairs + 二十五轮 F5 StatCell + 二十九轮 F1 StatInline）。
 const ALL_NAMES = [
   "stage-pad",
   "hero-title", "kicker", "body-copy", "quote-block", "number-pill",
-  "hero-number", "counter", "bar-grow", "donut", "stat-card", "stat-cell",
+  "hero-number", "counter", "bar-grow", "donut", "stat-card", "stat-cell", "stat-inline",
   "card", "rule", "grid", "table", "split-compare",
   "reveal-text", "reveal-list", "step-seq",
   "decor-dot", "decor-bar", "decor-ring", "stacked-blocks", "marker-block", "step-stairs",
@@ -46,7 +46,7 @@ afterEach(() => {
 
 describe("双画布冒烟（§11.2 组件契约测试）", () => {
   for (const dims of STAGE_SIZES) {
-    it(`全部 34 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
+    it(`全部 35 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
       const { container } = render(
         <div style={{ width: dims.width, height: dims.height }}>
           <StagePad>
@@ -70,6 +70,7 @@ describe("双画布冒烟（§11.2 组件契约测试）", () => {
             <ProgressDots total={3} current={1} />
             <Grid variant="half"><StatCard number="47" label="增长" /><Card>卡</Card></Grid>
             <StatCell index="/01" value="+47%" label="增长" desc="一句描述。" delta="▲ +9.52%" deltaTone="up" />
+            <StatInline value="42%" label="参与度提升" desc="一句描述。" />
             <HeroNumber value="+47%" /><Counter to={47} /><BarGrow value={0.7} />
             <DonutMeter value={0.42} label="转化率" /><Rule />
             <Table header={["A", "B"]} rows={[["1", "2"]]} />

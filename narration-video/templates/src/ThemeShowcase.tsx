@@ -35,6 +35,9 @@
 // S21=参考 emerald-editorial s5 双年对比（双色柱组 + y 轴刻度 + 图例）/ S22=业务分部（分类条形逐类一色——季度规则复用）/
 // S23=资产负债表速览（结构条 84/16 两段 + 三数字）/ S24=参考 monochrome s6 年度亮点（二十六轮 F5 两列数据版：年度亮点 + 经营数据 + 页边注窄栏 + 展望强调块）/
 // S25=参考 s8 收尾屏（绿底 + stamp 标题 + 印章 25/25）。
+// 二十九轮（视觉终审）：F1 S3 BY THE NUMBERS 改 StatInline 组件（大数字标签同行右对齐 + desc 600 加粗无框 + 无角标——
+// 删对角绿填充与 /01 角标，纯奶油墨字四格）；F2 StepStairs v4（底缘共线 + 卡高 180/220/260 逐级 +40 顶部阶梯轮廓 + 橙条保留）；
+// F3 TimelineTrack 累计点亮（i <= activeIndex——HOW IT WORKS 屏 activeIndex=3 亮 4 暗 1）。
 // 用色语义规则（二十四轮入册，控制器同步设计文档 §12）：财报/金融数据语义色——上涨 = 红色系
 // （本主题 accent-3 橙 #E85A1F）、下跌 = 绿色系（accent-1）；delta 标签 / KPI 附注统一按此（涨橙/跌绿），
 // 系列色（年份柱/分类条）非涨跌语义不受影响。
@@ -73,6 +76,7 @@ import {
   StackedBlocks,
   StagePad,
   StatCell,
+  StatInline,
   StepStairs,
   Table,
   TimelineTrack,
@@ -408,11 +412,12 @@ function ChapterSlide() {
   );
 }
 
-/* ── Slide 3 · 数据冲击 = 参考 s3（二十二轮 F3 单填充色对角收敛：green + cream） ── */
+/* ── Slide 3 · 数据冲击 = 参考 s3（二十九轮 F1：StatInline 内联统计卡——纯奶油墨字四格） ── */
 
-/** 数据格 = StatCell 组件（二十五轮 F5 收编——原本地 StatCell 函数组件化）。
-    二十二轮 F3 配色 = 一种填充色 + 无填充——TL/BR accent-1 green 填充 cream 字（scope 注入 --text* 反色，组件本体不改）、
-    TR/BL 无填充（StatCell 自然态 cream 墨字）。S3 四格无 delta。 */
+/** 数据格 = StatInline 组件（二十九轮 F1 新建——BY THE NUMBERS 专用）。
+    布局（用户拍板）：大数字（--t-display-2）与 Kicker 标签同一行（大数字左、标签右贴卡右缘）
+    + desc 仅加粗无底色框（--t-body 28px + 600 + 墨色）；无序号角标；
+    卡内衬紧凑 var(--space-3)（比 StatCell 矮）。S3 四格无 delta、无对角填充（删二十二轮绿填充）。 */
 function DataSlide() {
   return (
     <SlideShell index="03" topbar="BY THE NUMBERS" pill="SHOWCASE / M2B" caption="四个数字，讲一个故事">
@@ -428,45 +433,38 @@ function DataSlide() {
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "calc(var(--headline-gap) - 20px)" }}>
           四个数字，一个故事。
         </HeroTitle>
-        {/* 2×2 满幅网格：StatCell 组件零阴影（组件级——网格单元纪律）、格间隙 var(--grid-gutter) 28px；
-            二十六轮审计：marginBottom space-3→space-2 使底部 BarGrow 条底落回内容带 ≤934（网格 1fr 行不收缩，条底原 935.3 越带 1.3px）；
-            二十八轮 F3 联动：desc 定稿 block（绿块 padding 8 上/下）使每行 min-content +16px、条底 931.3→967.3 越带，
-            屏内回收 36px（headline 下距 64→44 + 网格下距 16→8 + kicker-bar 距 16→8）恢复 ≤934 */}
+        {/* 2×2 满幅网格：StatInline 组件零阴影（组件级——网格单元纪律）、格间隙 var(--grid-gutter) 28px；
+            二十九轮 F1：StatCell → StatInline（删角标/delta/对角绿填充），desc 无块 padding，
+            每行 min-content 回收 16px——安全框余量随之回宽（条底 931.3 → 更低） */}
         <Grid
           variant="even"
           columns={2}
           data-testid="stat-grid"
           style={{ flex: 1, marginBottom: "var(--space-1)", gridTemplateRows: "1fr 1fr" }}
         >
-          <StatCell
-            index="/01"
+          <StatInline
             value="42%"
             label="参与度提升"
             desc="参与度相对基线提升 42 个百分点。"
-            data-testid="stat-cell-1"
-            style={{ background: "var(--accent-1)", ...scope({ "--text": "var(--surface)", "--text-2": "var(--surface)", "--text-mute": "var(--surface)" }) }}
+            data-testid="stat-inline-1"
           />
-          <StatCell
-            index="/02"
+          <StatInline
             value="2.7×"
             label="吞吐倍数"
             desc="同一份口播稿的产出吞吐提升 2.7 倍。"
-            data-testid="stat-cell-2"
+            data-testid="stat-inline-2"
           />
-          <StatCell
-            index="/03"
+          <StatInline
             value="118"
             label="活跃占位"
             desc="活跃占位组件 118 个，随稿迭代。"
-            data-testid="stat-cell-3"
+            data-testid="stat-inline-3"
           />
-          <StatCell
-            index="/04"
-            value="$9.4M"
+          <StatInline
+            value="9.4M"
             label="样本总值"
             desc="样本数据总值 940 万美元。"
-            data-testid="stat-cell-4"
-            style={{ background: "var(--accent-1)", ...scope({ "--text": "var(--surface)", "--text-2": "var(--surface)", "--text-mute": "var(--surface)" }) }}
+            data-testid="stat-inline-4"
           />
         </Grid>
         {/* 底部一行（二十一轮 F3：只留动效完成度条——Counter 卡/DonutMeter 移除（用户拍板"不知道为什么放这里"），
@@ -693,6 +691,7 @@ function FlowSlide() {
         </Grid>
         <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-6)", marginTop: "auto" }}>
           <div style={{ flex: 1 }}>
+            {/* 二十九轮 F3：组件语义改累计点亮（i <= activeIndex）——activeIndex=3 亮 4 暗 1（稿/镜/画/声亮、片未完成不亮），随组件自动生效 */}
             <TimelineTrack points={["稿", "镜", "画", "声", "片"]} activeIndex={3} data-testid="flow-timeline" />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
@@ -1660,8 +1659,8 @@ function BriefingSlide() {
               三个读数，一级一阶。把关键数字排成可以扫读的阶梯，就是一张简报。
             </BodyCopy>
           </div>
-          {/* StepStairs 阶梯卡组（二十五轮 F4 收编；二十八轮 F4 v3 重设计：无序号 + 卡等高等宽 +
-              位置阶梯左低右高（逐卡 translateY 0/-24/-48）+ 顶部 accent-3 橙条 14px）；
+          {/* StepStairs 阶梯卡组（二十五轮 F4 收编；二十九轮 F4 v4 重设计：无序号 + 底缘共线
+              （同一水平线，不再错落）+ 卡高递增 180/220/260 顶部阶梯轮廓 + 顶部 accent-3 橙条 14px）；
               容器 alignItems flex-end 使阶梯组底缘贴行底（与左栏/FG 注对齐感） */}
           <div
             data-testid="brief-steps"

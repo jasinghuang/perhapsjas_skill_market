@@ -1,14 +1,15 @@
-/* 阶梯卡组（二十五轮 F4 收编；二十六轮 F3 方向反转 + 同色；二十八轮 F4 v3 位置阶梯重设计）。
-   无序号、无上升箭头；卡片等高等宽（flex: 1 + 组件层统一 220px 高）。
-   "上升"感 = 位置高度阶梯：左低右高——逐卡 translateY(0/-24/-48) 上抬（组件层 inline 注入，
-   24px 步进审计依据）；容器底部锚定（卡 0 底贴容器底）。
+/* 阶梯卡组（二十五轮 F4 收编；二十六轮 F3 方向反转 + 同色；二十九轮 F4 v4 高度递增 + 位置平齐重设计）。
+   无序号、无上升箭头；卡片等宽（flex: 1）、高度递增（组件层 inline 注入 180/220/260——40px 步进审计依据）。
+   "上升"感 = 卡片高度阶梯：三卡位置高度一致（同一水平线，不再 translateY 错落）、
+   底缘共线（容器底部锚定 align-items: flex-end）、顶部阶梯轮廓（左低右高）。
    每卡顶部 accent-3 橙条 14px 高（::before 零元素，贴卡内上缘、4px 墨框内、横贯卡顶）；
    卡内文字经 padding-top 预留（橙条高 + --space-3）向下避让。
    Card 风格 4px 墨框 + 全卡同色 cream 底（--card-bg）+ 零阴影（网格单元纪律）。 */
 .cdp-step-stairs {
   width: 100%;
   display: flex;
-  /* 底部锚定：卡 0 底贴容器底，右卡逐级 translateY 上抬（左低右高——二十八轮 F4 v3 审计依据） */
+  /* 底部锚定：全部卡底缘贴容器底（同一水平线——二十九轮 F4 v4 审计依据），
+     卡高逐级递增使顶缘形成左低右高阶梯轮廓 */
   align-items: flex-end;
   gap: var(--space-4);
 }
@@ -28,7 +29,7 @@
   gap: var(--space-2);
 }
 
-/* 顶部橙条（二十八轮 F4 v3）：::before 零元素，top/left/right 0 贴 padding box 上缘
+/* 顶部橙条（二十八轮 F4 v3 保留）：::before 零元素，top/left/right 0 贴 padding box 上缘
    （= 4px 墨框内上缘），横贯卡顶；高 14px 与卡内 padding-top 预留一致 */
 .cdp-step-stairs-card::before {
   content: "";

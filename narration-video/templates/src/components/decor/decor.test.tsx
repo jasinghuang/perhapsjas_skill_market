@@ -63,7 +63,7 @@ describe("装饰组", () => {
     expect(getByTestId("m3").textContent).toBe("墨底");
   });
 
-  it("StepStairs 渲染 N 卡 + 无序号 + 卡等高等宽 + 位置阶梯 translateY 0/-24/-48 + 无上升箭头（二十八轮 F4 v3）", () => {
+  it("StepStairs 渲染 N 卡 + 无序号 + 卡高递增 180/220/260 + 位置平齐无 translateY + 无上升箭头（二十九轮 F4 v4）", () => {
     const { getByTestId } = render(
       <StepStairs
         data-testid="stairs"
@@ -78,17 +78,17 @@ describe("装饰组", () => {
     expect(root.className).toContain("cdp-step-stairs");
     const cards = root.querySelectorAll(".cdp-step-stairs-card");
     expect(cards).toHaveLength(3);
-    // 卡高全等 220px（二十八轮 F4 v3：等高等宽——高度统一，宽度 flex:1 均分）
-    expect((cards[0] as HTMLElement).style.height).toBe("220px");
+    // 卡高逐级递增 180/220/260（二十九轮 F4 v4：底缘共线 + 顶部阶梯轮廓——高度步进 40px）
+    expect((cards[0] as HTMLElement).style.height).toBe("180px");
     expect((cards[1] as HTMLElement).style.height).toBe("220px");
-    expect((cards[2] as HTMLElement).style.height).toBe("220px");
-    // 位置阶梯：左低右高——逐卡 translateY(0/-24/-48) 上抬（24px 步进）
-    expect((cards[0] as HTMLElement).style.transform).toBe("translateY(0px)");
-    expect((cards[1] as HTMLElement).style.transform).toBe("translateY(-24px)");
-    expect((cards[2] as HTMLElement).style.transform).toBe("translateY(-48px)");
+    expect((cards[2] as HTMLElement).style.height).toBe("260px");
+    // 位置高度一致：不再 translateY 错落（同一水平线——二十九轮 F4 v4）
+    expect((cards[0] as HTMLElement).style.transform).toBe("");
+    expect((cards[1] as HTMLElement).style.transform).toBe("");
+    expect((cards[2] as HTMLElement).style.transform).toBe("");
     // 无 NumberPill 序号（二十七轮 F3 删除——组件不再渲染序号）
     expect(root.querySelector(".cdp-number-pill")).toBeNull();
-    // 无上升箭头（二十八轮 F4 v3 删除）
+    // 无上升箭头（二十八轮 F4 v3 删除，v4 保留）
     expect(root.querySelectorAll(".cdp-step-stairs-rise")).toHaveLength(0);
     // 卡内两件套：HeroNumber 值 + mono 注（note 可选）
     expect(cards[0].querySelector(".cdp-hero-number-value")).toHaveTextContent("42%");
