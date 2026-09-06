@@ -6,10 +6,17 @@
  *   禁硬编码字体 blocker  #3    裸 font-family（须走 var(--font-*)）
  *   禁裸动画时长 blocker  #4    animation-duration/transition-duration 裸值（须走 var(--dur-*)）
  *   禁裸紫粉渐变 warning  #6    手写 gradient() 内含紫粉色相（hue ∈ [250°, 350°)）裸色；token 化渐变豁免
- *   禁emoji      warning  #6b   Unicode Extended_Pictographic 范围（注释内同样计）
+ *   禁emoji      warning  #6b   Unicode Extended_Pictographic 范围（注释内同样计——原文上判，不剥离注释）
  *   字阶成员     warning  #5    font-size 裸 px ≥24 且 ∉ tokens.css 字阶集合
  *   最小字号     warning  V4    font-size 裸 px <24（低于 --t-label 24px 档）
  *   间距成员     warning  #5b   margin/padding/gap 裸 px ∉ tokens.css --space 集合（0 豁免）
+ *
+ * 行预处理管线（评审修复）：
+ *   1) 注释剥离状态机（/*…*\/ 跨行追踪）——注释内 pink/font-family/font-size 不误报；
+ *   2) 声明区切片只取最后一个 `{` 之后——单行规则 `.x { color: #f00; }` 不漏检，
+ *      `.purple-card {`（无声明）→ 空串安全；
+ *   3) 色值判定前再剥离 var() 引用与 url() 内容；无冒号行（选择器/注释/At 规则头）跳过色值判定。
+ * emoji 检查单独用原文行（brief 负样本钉死注释内 emoji 仍报）。
  *
  * 字阶/间距集合从 src/theme/tokens.css 以 `?raw` 导入解析（Ruling P4-1——与主题同源，
  * 主题改档门禁自动跟随）。色/字体/时长基查与 contract-lint 的 lintCssText 同型正则；
@@ -45,6 +52,28 @@ const SPACE_SCALE_LABEL = [...SPACE_SCALE].sort((a, b) => a - b).join("/");
 // ── 规则正则（色/字体/时长与 contract-lint lintCssText 同型） ──
 
 const VAR_RE = /var\([^)]*\)/g; // 剥离 var() 引用段——token 化豁免
+const URL_RE = /url\([^)]*\)/g; // 剥离 url() 内容——防 pink.png 类资源名误报
+const COMMENT_RE = /\/\*[\s\S]*?(?:\*\/|$)/g; // 行内注释剥离（未闭合 `/*` 剥到行尾）
+
+/** 注释剥离状态机：`/*…*\/` 跨行追踪，注释行整体返回空串（emoji 检查不走此管线）。 */
+interface CommentState {
+  on: boolean;
+}
+
+function stripCommentLine(line: string, state: CommentState): string {
+  let s = line;
+  if (state.on) {
+    const end = s.indexOf("*/");
+    if (end === -1) return ""; // 整行仍在注释中（状态保持 on）
+    s = s.slice(end + 2);
+    state.on = false;
+  }
+  const stripped = s.replace(COMMENT_RE, "");
+  const openers = (s.match(/\/\*/g) ?? []).length;
+  const closers = (s.match(/\*\//g) ?? []).length;
+  if (openers > closers) state.on = true;
+  return stripped;
+}
 const WHITE_BLACK_HEX_RE = /#(?:fff|ffffff|000|000000)\b/gi; // white/black 豁免（hex 形式）
 const HEX_RE_G = /#[0-9a-fA-F]{3,8}\b/g; // match/matchAll 用（全局）
 const RGB_RE = /rgba?\(/;
@@ -123,37 +152,47 @@ function pushFinding(
   findings.push({ rule, severity, location, message });
 }
 
-function scanLine(path: string, lineNo: number, line: string, findings: Finding[]): void {
+function scanLine(
+  path: string,
+  lineNo: number,
+  rawLine: string,
+  declLine: string,
+  findings: Finding[],
+): void {
   const loc = `${path}:${lineNo}`;
 
-  // 声明区切片：色值只查声明部分（最后一个 { 或 } 之后），防 `.purple-card` 类选择器误报
-  const lastBrace = Math.max(line.lastIndexOf("{"), line.lastIndexOf("}"));
-  const declPart = lastBrace >= 0 ? line.slice(lastBrace + 1) : line;
-  const colorLine = declPart.replace(VAR_RE, ""); // 剥离 var() 引用——token 化豁免
+  // 声明区切片（评审修复）：只取最后一个 `{` 之后——单行规则 `.x { color: #f00; }`
+  // 的声明不能被 `}` 切掉；`.purple-card {`（无声明）→ 空串安全。
+  const lastBrace = declLine.lastIndexOf("{");
+  const declPart = lastBrace >= 0 ? declLine.slice(lastBrace + 1) : declLine;
+  // 剥离 var() 引用（token 化豁免）与 url() 内容（防 pink.png 类资源名误报）
+  const colorLine = declPart.replace(VAR_RE, "").replace(URL_RE, "");
 
-  // #2 禁硬编码色（white/black 豁免：命名 + hex 形式）
+  // #2 禁硬编码色（white/black 豁免：命名 + hex 形式）。
+  // 无冒号行 = 非声明行（注释/选择器/At 规则头），跳过——防 .purple-card / #gold 误报（评审修复）。
   const noWhiteBlack = colorLine.replace(WHITE_BLACK_HEX_RE, "");
   if (
-    noWhiteBlack.match(HEX_RE_G) !== null ||
-    RGB_RE.test(colorLine) ||
-    HSL_RE.test(colorLine) ||
-    NAMED_COLOR_RE.test(colorLine)
+    colorLine.includes(":") &&
+    (noWhiteBlack.match(HEX_RE_G) !== null ||
+      RGB_RE.test(colorLine) ||
+      HSL_RE.test(colorLine) ||
+      NAMED_COLOR_RE.test(colorLine))
   ) {
     pushFinding(findings, "禁硬编码色", "blocker", loc, "裸色值（须走 var(--*) token，white/black 豁免）");
   }
 
   // #3 禁硬编码字体
-  if (FONT_RE.test(line)) {
+  if (FONT_RE.test(declPart)) {
     pushFinding(findings, "禁硬编码字体", "blocker", loc, "裸 font-family（须走 var(--font-*)）");
   }
 
   // #4 禁裸动画时长（CSS 部分）
-  if (DUR_RE.test(line) || TRANSITION_DUR_RE.test(line)) {
+  if (DUR_RE.test(declPart) || TRANSITION_DUR_RE.test(declPart)) {
     pushFinding(findings, "禁裸动画时长", "blocker", loc, "裸动画时长（须走 var(--dur-*)）");
   }
 
   // #6 禁裸紫粉渐变（token 化渐变豁免：var() 已剥离，手写渐变仅对裸色做色相检测）
-  if (GRADIENT_RE.test(line)) {
+  if (GRADIENT_RE.test(declPart)) {
     const hues = purplePinkHuesOnLine(colorLine);
     if (hues.length > 0) {
       pushFinding(
@@ -166,13 +205,13 @@ function scanLine(path: string, lineNo: number, line: string, findings: Finding[
     }
   }
 
-  // #6b 禁 emoji（Unicode Extended_Pictographic 范围；注释内同样计）
-  if (EMOJI_RE.test(line)) {
+  // #6b 禁 emoji（Unicode Extended_Pictographic 范围；判原文——注释内 emoji 仍计，负样本钉死）
+  if (EMOJI_RE.test(rawLine)) {
     pushFinding(findings, "禁emoji", "warning", loc, "出现 emoji 字符（Unicode Extended_Pictographic）");
   }
 
   // #5 字阶成员 + V4 最小字号（合并判断：<24 → 最小字号；≥24 且 ∉ 字阶 → 字阶成员）
-  for (const m of line.matchAll(FONT_SIZE_RE)) {
+  for (const m of declPart.matchAll(FONT_SIZE_RE)) {
     const v = parseFloat(m[1]);
     if (v < MIN_FONT_PX) {
       pushFinding(findings, "最小字号", "warning", loc, `字号 ${v}px 低于最小字号 ${MIN_FONT_PX}px（V4）`);
@@ -182,7 +221,7 @@ function scanLine(path: string, lineNo: number, line: string, findings: Finding[
   }
 
   // #5b 间距成员（margin/padding/gap 裸 px 须 ∈ --space 集合；0 豁免）
-  for (const m of line.matchAll(SPACING_DECL_RE)) {
+  for (const m of declPart.matchAll(SPACING_DECL_RE)) {
     for (const p of m[2].matchAll(PX_VALUE_RE)) {
       const v = Math.abs(parseFloat(p[1]));
       if (v === 0) continue;
@@ -205,8 +244,11 @@ export function scanChapterCss(cssFiles: Array<{ path: string; css: string }>): 
   }
   const findings: Finding[] = [];
   for (const { path, css } of cssFiles) {
+    const commentState: CommentState = { on: false };
     const lines = css.split("\n");
-    lines.forEach((line, i) => scanLine(path, i + 1, line, findings));
+    lines.forEach((line, i) => {
+      scanLine(path, i + 1, line, stripCommentLine(line, commentState), findings);
+    });
   }
   return findings;
 }

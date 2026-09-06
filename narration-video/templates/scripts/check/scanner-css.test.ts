@@ -44,3 +44,55 @@ describe("章节层 CSS 扫描器", () => {
     expect(bad.some((f) => f.rule === "间距成员" && f.severity === "warning")).toBe(true);
   });
 });
+
+// 评审回归钉死（修复 commit 追加）：核心色规则切分漏检 + 注释/选择器误报
+describe("章节层 CSS 扫描器 · 核心可靠性", () => {
+  it("Finding 1：单行规则 .x { color: #f00; } 命中禁硬编码色", () => {
+    const r = scanChapterCss([{ path: "c.css", css: ".x { color: #f00; }" }]);
+    expect(r.some((f) => f.rule === "禁硬编码色" && f.severity === "blocker")).toBe(true);
+  });
+
+  it("Finding 2：/* pink */ 注释不误报禁硬编码色", () => {
+    const r = scanChapterCss([{ path: "c.css", css: "/* pink 强调 */" }]);
+    expect(r).toEqual([]);
+  });
+
+  it("Finding 2：.purple-card / #gold 选择器（inline 与 Allman 换行）不误报", () => {
+    const inline = scanChapterCss([{ path: "c.css", css: ".purple-card { color: var(--text); }" }]);
+    expect(inline).toEqual([]);
+    const allman = scanChapterCss([{ path: "c.css", css: ".purple-card" }]);
+    expect(allman).toEqual([]);
+    const id = scanChapterCss([{ path: "c.css", css: "#gold" }]);
+    expect(id).toEqual([]);
+  });
+
+  it("Finding 2：注释内 font-family / font-size 不误报", () => {
+    const r = scanChapterCss([{ path: "c.css", css: "/* font-family: Arial; font-size: 20px; */" }]);
+    expect(r).toEqual([]);
+  });
+
+  it("多行注释跨行不误报（剥离状态机）", () => {
+    const r = scanChapterCss([{ path: "c.css", css: "/* 注释开始\npink 说明\n*/" }]);
+    expect(r).toEqual([]);
+  });
+
+  it("white/black hex 形式豁免（#fff/#000/#FFF）", () => {
+    const r = scanChapterCss([{ path: "c.css", css: "color: #fff; background: #000; border-color: #FFF;" }]);
+    expect(r).toEqual([]);
+  });
+
+  it("var(--purple-500) 引用不误报命名色", () => {
+    const r = scanChapterCss([{ path: "c.css", css: "color: var(--purple-500);" }]);
+    expect(r).toEqual([]);
+  });
+
+  it("rgba(0,0,0,.35) 裸值仍为 blocker（white/black 豁免不覆盖 rgba）", () => {
+    const r = scanChapterCss([{ path: "c.css", css: "box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);" }]);
+    expect(r.some((f) => f.rule === "禁硬编码色" && f.severity === "blocker")).toBe(true);
+  });
+
+  it("font-size: 24px 边界通过（V4 下限 + 字阶成员双重豁免）", () => {
+    const r = scanChapterCss([{ path: "c.css", css: "font-size: 24px;" }]);
+    expect(r).toEqual([]);
+  });
+});
