@@ -63,7 +63,7 @@ describe("装饰组", () => {
     expect(getByTestId("m3").textContent).toBe("墨底");
   });
 
-  it("StepStairs 渲染 N 卡 + 左高右低阶梯 24px 步进 + 墨/cream 底交替 + 卡内三件套（二十五轮 F4）", () => {
+  it("StepStairs 渲染 N 卡 + 左低右高阶梯 24px 步进 + 全卡同色无墨卡 + 卡内三件套（二十六轮 F3）", () => {
     const { getByTestId } = render(
       <StepStairs
         data-testid="stairs"
@@ -78,14 +78,12 @@ describe("装饰组", () => {
     expect(root.className).toContain("cdp-step-stairs");
     const cards = root.querySelectorAll(".cdp-step-stairs-card");
     expect(cards).toHaveLength(3);
-    // 左高右低阶梯：逐卡 marginTop 0/24/48（审计断言依据——computed y 逐卡递增 24px）
-    expect((cards[0] as HTMLElement).style.marginTop).toBe("0px");
+    // 左低右高阶梯：第一卡最低、向右逐级升高（逐卡 marginTop 48/24/0——审计断言依据：computed y 逐卡递减 24px）
+    expect((cards[0] as HTMLElement).style.marginTop).toBe("48px");
     expect((cards[1] as HTMLElement).style.marginTop).toBe("24px");
-    expect((cards[2] as HTMLElement).style.marginTop).toBe("48px");
-    // 首卡墨、墨/cream 交替（类名审计依据）
-    expect(cards[0].className).toContain("cdp-step-stairs-card-ink");
-    expect(cards[1].className).not.toContain("cdp-step-stairs-card-ink");
-    expect(cards[2].className).toContain("cdp-step-stairs-card-ink");
+    expect((cards[2] as HTMLElement).style.marginTop).toBe("0px");
+    // 全卡同色：无任何墨卡（二十六轮 F3 删除交替）
+    expect(root.querySelector(".cdp-step-stairs-card-ink")).toBeNull();
     // 卡内三件套：NumberPill 序号 + HeroNumber 值 + mono 注（note 可选）
     expect(cards[0].querySelector(".cdp-number-pill")).toHaveTextContent("01");
     expect(cards[0].querySelector(".cdp-hero-number-value")).toHaveTextContent("42%");

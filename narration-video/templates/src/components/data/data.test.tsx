@@ -85,4 +85,20 @@ describe("数据组组件", () => {
     );
     expect(getByTestId("d").querySelector(".cdp-stat-cell-delta")!.className).toContain("cdp-stat-cell-delta-down");
   });
+
+  it("StatCell descStyle 三档类名：默认 plain 无档类、block/pill 加档类（二十六轮 F4）", () => {
+    const { getByTestId } = render(
+      <div>
+        <StatCell index="/01" value="42%" label="参与度提升" desc="默认档。" data-testid="s-plain" />
+        <StatCell index="/02" value="27,930" label="营业收入" desc="底色块。" descStyle="block" data-testid="s-block" />
+        <StatCell index="/03" value="9,637" label="归母净利" desc="药丸框。" descStyle="pill" data-testid="s-pill" />
+      </div>,
+    );
+    const desc = (id: string) => getByTestId(id).querySelector(".cdp-stat-cell-desc");
+    expect(desc("s-plain")!.className).toBe("cdp-stat-cell-desc cdp-stat-cell-desc-plain");
+    expect(desc("s-block")!.className).toContain("cdp-stat-cell-desc-block");
+    expect(desc("s-block")!.className).not.toContain("cdp-stat-cell-desc-pill");
+    expect(desc("s-pill")!.className).toContain("cdp-stat-cell-desc-pill");
+    expect(desc("s-pill")!.className).not.toContain("cdp-stat-cell-desc-block");
+  });
 });

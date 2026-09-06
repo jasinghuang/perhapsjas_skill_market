@@ -1,10 +1,11 @@
-/* 分屏对比（十九轮 F4 收编；二十轮 F2 修正；二十五轮 F6 分界线 3px→4px）：单一面板 + 两半之间 4px 墨分界线（VS 圆章压其上）+ 中央 VS 圆章。
+/* 分屏对比（十九轮 F4 收编；二十轮 F2 修正；二十五轮 F6 分界线 3px→4px；二十六轮 F2 宽度自适应）：单一面板 + 两半之间 4px 墨分界线（VS 圆章压其上）+ 中央 VS 圆章。
    投影层单色橙整块（24px 偏移硬阴影——单色、无双层描边、无中缝痕迹）。
-   面板尺寸由消费端容器决定（showcase 1560×560；styleguide 由格内容器约束）。 */
+   二十六轮 F2：面板 width: max-content 自适应内容（内容少就窄，居中摆放由使用方容器决定——showcase S17 / styleguide 均不再给固定宽度）。 */
 .cdp-split-compare {
   position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  width: max-content;
   border: var(--card-border);
   /* 二十一轮 F1：恢复双层签名（24px 橙块 + 4px 墨描边层 = --shadow-card 完整形态）；
      仍为整块单色无中缝（阴影层与面板双半背景无关） */

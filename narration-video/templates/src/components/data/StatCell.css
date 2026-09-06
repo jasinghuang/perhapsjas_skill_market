@@ -1,6 +1,7 @@
-/* 统计格（二十五轮 F5 收编）：Card 风格 4px 墨框 + cream 底 + 零阴影（网格单元纪律）。
+/* 统计格（二十五轮 F5 收编；二十六轮 F4 descStyle 三档 + 去粗）：Card 风格 4px 墨框 + cream 底 + 零阴影（网格单元纪律）。
    头行 = mono 角标左 + delta 涨跌标签右置（与角标同一行右侧）；
-   desc 突出样式 = --t-body 28px + font-weight 600（Space Grotesk 600 已装）；
+   desc = --t-body 28px + font-weight 400（二十六轮 F4 去粗——用户拍板"字就不用加粗了"）；
+   descStyle 三档：plain 无底无框 / block --surface-2 底 + 4px 墨框 / pill 2px 墨框药丸（--r-pill 999）；
    delta 涨跌语义色（二十四轮 A股规则）：up = accent-3 橙（涨）/ down = accent-1 绿（跌）。 */
 .cdp-stat-cell {
   background: var(--card-bg);
@@ -53,13 +54,29 @@
   letter-spacing: 0.12em;
 }
 
-/* desc 突出样式：--t-body 28px + 600（审计：computed 28px / 600） */
+/* desc 样式：--t-body 28px + 400 去粗（二十六轮 F4；审计：computed 28px / 400） */
 .cdp-stat-cell-desc {
   margin: 2px 0 0;
   font-family: var(--font-body);
   font-size: var(--t-body);
   line-height: 1.3;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--text-2);
   max-width: 520px;
+}
+
+/* descStyle 三档（二十六轮 F4）：block = 底色块（--surface-2 底 + padding + 4px 墨框）；pill = 药丸框（2px 墨框 + --r-pill 999 + padding）；
+   plain = 现状无底无框（无附加规则）。块/药丸收缩贴文（fit-content），内衬 padding var(--space-1) var(--space-2） */
+.cdp-stat-cell-desc-block {
+  background: var(--surface-2);
+  border: var(--border-w) solid var(--text);
+  padding: var(--space-1) var(--space-2);
+  width: fit-content;
+}
+
+.cdp-stat-cell-desc-pill {
+  border: 2px solid var(--text);
+  border-radius: var(--r-pill);
+  padding: var(--space-1) var(--space-2);
+  width: fit-content;
 }

@@ -19,8 +19,8 @@ export interface StepStairsProps {
 }
 
 /** 阶梯卡组（二十五轮 F4 收编——原展示页 S19 简报三错落阶梯方块组件化）。
-    N 张卡横向排布，左高右低阶梯（每卡 marginTop 步进 24px——可审计实现：
-    逐卡 computed y 递增 24px）；Card 风格 4px 墨框 + 墨/cream 底交替（首卡墨）+ 零阴影（网格单元纪律）。
+    N 张卡横向排布，左低右高阶梯（每卡 marginTop 步进 24px 自末卡回推——可审计实现：
+    逐卡 computed y 递减 24px）；Card 风格 4px 墨框 + 全卡同色 cream 底（二十六轮 F3：删除墨/cream 交替）+ 零阴影（网格单元纪律）。
     卡内 = NumberPill 序号 + HeroNumber 值 + mono 注。 */
 export function StepStairs({ items, className = "", style, ...rest }: StepStairsProps) {
   return (
@@ -28,8 +28,8 @@ export function StepStairs({ items, className = "", style, ...rest }: StepStairs
       {items.map((item, i) => (
         <div
           key={item.label}
-          className={`cdp-step-stairs-card ${i % 2 === 0 ? "cdp-step-stairs-card-ink" : ""}`}
-          style={{ marginTop: i * 24 }}
+          className="cdp-step-stairs-card"
+          style={{ marginTop: (items.length - 1 - i) * 24 }}
         >
           <NumberPill number={item.label} variant="accent" />
           <HeroNumber value={item.value} />

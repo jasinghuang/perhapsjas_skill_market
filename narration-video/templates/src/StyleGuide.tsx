@@ -760,14 +760,14 @@ function ComponentsSection() {
           <Variant label="accent"><StatCard number="+47%" label="打开率" variant="accent" data-testid="variant-stat-card-accent" /></Variant>
         </CompCell>
         <CompCell name="stat-cell">
-          <Variant label="plain · 无 delta（二十五轮 F5）">
-            <StatCell index="/01" value="42%" label="参与度提升" desc="一句描述，突出样式。" data-testid="variant-stat-cell-plain" />
+          <Variant label="descStyle block · 底色块（二十六轮 F4）">
+            <StatCell index="/01" value="42%" label="参与度提升" desc="一句描述，突出样式。" descStyle="block" data-testid="variant-stat-cell-block" />
           </Variant>
-          <Variant label="delta up · 涨橙（A股语义）">
-            <StatCell index="/02" value="27,930" label="营业收入 · 百万元" desc="收入规模稳步抬升。" delta="▲ +9.52%" deltaTone="up" data-testid="variant-stat-cell-up" />
+          <Variant label="descStyle pill · 药丸框 · delta up 涨橙">
+            <StatCell index="/02" value="27,930" label="营业收入 · 百万元" desc="收入规模稳步抬升。" descStyle="pill" delta="▲ +9.52%" deltaTone="up" data-testid="variant-stat-cell-pill" />
           </Variant>
-          <Variant label="delta down · 跌绿（A股语义）">
-            <StatCell index="/03" value="9,637" label="归母净利 · 百万元" desc="回调一档，落袋为安。" delta="▼ -3.20%" deltaTone="down" data-testid="variant-stat-cell-down" />
+          <Variant label="descStyle plain · 无底无框 · delta down 跌绿">
+            <StatCell index="/03" value="9,637" label="归母净利 · 百万元" desc="回调一档，落袋为安。" descStyle="plain" delta="▼ -3.20%" deltaTone="down" data-testid="variant-stat-cell-plain" />
           </Variant>
         </CompCell>
       </CompGroup>
@@ -820,24 +820,21 @@ function ComponentsSection() {
         </CompCell>
         <CompCell name="split-compare">
           <Variant label="default · split（左半左 / 右半右）">
-            {/* 面板阴影 --shadow-card（二十一轮 F1 双层签名）——格内密度 scope 自动压 none，自然态见 showcase S13 */}
-            <div style={{ width: 620 }}>
-              <SplitCompare
-                before={["散落的文档", "模糊的归属"]}
-                after={["一份稿子驱动", "角色清晰"]}
-                data-testid="variant-split-compare-default"
-              />
-            </div>
+            {/* 面板阴影 --shadow-card（二十一轮 F1 双层签名）——格内密度 scope 自动压 none，自然态见 showcase S17；
+                二十六轮 F2：width: max-content 自适应内容，无固定宽度容器 */}
+            <SplitCompare
+              before={["散落的文档", "模糊的归属"]}
+              after={["一份稿子驱动", "角色清晰"]}
+              data-testid="variant-split-compare-default"
+            />
           </Variant>
           <Variant label="align=center · 两半居中（短文案）">
-            <div style={{ width: 620 }}>
-              <SplitCompare
-                before={["散落的文档", "模糊的归属"]}
-                after={["一份稿子驱动", "角色清晰"]}
-                align="center"
-                data-testid="variant-split-compare-center"
-              />
-            </div>
+            <SplitCompare
+              before={["散落的文档", "模糊的归属"]}
+              after={["一份稿子驱动", "角色清晰"]}
+              align="center"
+              data-testid="variant-split-compare-center"
+            />
           </Variant>
         </CompCell>
       </CompGroup>
@@ -876,7 +873,7 @@ function ComponentsSection() {
           <Variant label="default · 4×160 错位叠放"><StackedBlocks data-testid="variant-stacked-blocks-default" /></Variant>
         </CompCell>
         <CompCell name="step-stairs">
-          <Variant label="default · 左高右低 24px 步进（二十五轮 F4）">
+          <Variant label="default · 左低右高 24px 步进 · 全卡同色（二十六轮 F3）">
             <StepStairs
               data-testid="variant-step-stairs-default"
               items={[
