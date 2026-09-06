@@ -2,7 +2,7 @@
   border-collapse: collapse;
   width: 100%;
   font-family: var(--font-body);
-  font-size: var(--t-label);
+  font-size: var(--t-body); /* 十五轮 F4：单元格 24 → 28 升一档 */
   color: var(--text);
 }
 
@@ -20,7 +20,7 @@
   color: var(--table-head-text);
   font-family: var(--font-display-cn), var(--font-display-en);
   font-weight: 900;
-  font-size: var(--t-body);
+  font-size: var(--t-h3); /* 十五轮 F4：表头 28 → 40 升一档（层级保持：表头大一号） */
   letter-spacing: 0;
   text-transform: uppercase;
 }

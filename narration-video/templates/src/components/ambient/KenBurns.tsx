@@ -6,11 +6,13 @@ import { durationMs, MotionDuration } from "../motion";
 export interface KenBurnsProps {
   src?: string;
   duration?: MotionDuration;
+  /** plain = 现状；framed = 4px 墨框无阴影（与 Figure bare 同款卡片处理——十五轮 F1） */
+  variant?: "plain" | "framed";
   className?: string;
   "data-testid"?: string;
 }
 
-export function KenBurns({ src, duration = "mid", className = "", ...rest }: KenBurnsProps) {
+export function KenBurns({ src, duration = "mid", variant = "plain", className = "", ...rest }: KenBurnsProps) {
   const innerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,7 +30,10 @@ export function KenBurns({ src, duration = "mid", className = "", ...rest }: Ken
   }, [src, duration]);
 
   return (
-    <div className={`cdp-kenburns ${className}`} data-testid={rest["data-testid"]}>
+    <div
+      className={`cdp-kenburns cdp-kenburns-${variant} ${className}`.trim()}
+      data-testid={rest["data-testid"]}
+    >
       <div
         ref={innerRef}
         className="cdp-kenburns-inner"

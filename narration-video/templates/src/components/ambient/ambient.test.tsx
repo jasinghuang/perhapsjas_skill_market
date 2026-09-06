@@ -107,4 +107,15 @@ describe("氛围组（有限周期确定性微动）", () => {
     unmount();
     expect(registrySize()).toBe(0);
   });
+
+  it("KenBurns framed 变体类名渲染（十五轮 F1）", () => {
+    const { getByTestId } = render(
+      <div>
+        <KenBurns data-testid="k1" />
+        <KenBurns variant="framed" data-testid="k2" />
+      </div>,
+    );
+    expect(getByTestId("k1").className).toContain("cdp-kenburns-plain");
+    expect(getByTestId("k2").className).toContain("cdp-kenburns-framed");
+  });
 });

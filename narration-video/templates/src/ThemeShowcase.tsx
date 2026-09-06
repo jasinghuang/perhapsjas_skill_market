@@ -1,11 +1,11 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
-// ?showcase=1 渲染：11 屏 1920×1080 slide deck——每屏带统一 chrome frame
+// ?showcase=1 渲染：10 屏 1920×1080 slide deck——每屏带统一 chrome frame
 // （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–934 + 字幕保留区 y[958,1038]；meta 页码条已删）。
-// 构图纪律（用户反馈终审）：九轮补齐参考 8 屏 + 十轮 F5 扩到 11 屏——
+// 构图纪律（用户反馈终审）：十五轮 F3 定稿 10 屏——
 // S1=参考 s1 封面 / S2=参考 s2 章节开篇 / S3=参考 s3 数据屏（2×2 满幅零阴影网格）/ S4=参考 s4 系统示意（StackedBlocks 组件）/
 // S5=参考 s5 柱状图（4 行横向条）/ S6=参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）/
 // S7=参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）/ S8=媒体 3:4 素材（用户点名竖屏占位）/
-// S9=动效实验室（全部动效词汇）/ S10=语录宣言（情绪收束）/ S11=参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
+// S9=动效实验室（全部动效词汇）/ S10=参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
 // （底边 ≤934 = 字幕区上缘 958 − 24；24px 阴影落点亦算占位，不越界）；③ 氛围背景层与 CaptionLayer 自身豁免。
 // ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 958 线，pointerEvents none）。
@@ -116,7 +116,7 @@ function SafetyGuides({ color }: { color: string }) {
 
 /* ── chrome frame（每屏必有） ── */
 interface SlideShellProps {
-  index: string; // "01".."11"
+  index: string; // "01".."10"
   topbar: ReactNode;
   pill: string;
   caption: string; // 该屏口播台词（CaptionLayer 字幕保留区 y[972,1032]）
@@ -280,10 +280,10 @@ function CoverSlide() {
           <DecorDot variant="glow" style={{ background: "var(--accent-2)", boxShadow: "0 0 var(--space-4) var(--accent-2)" }} />
           <DecorBar variant="solid" />
         </div>
-        {/* 宣言（pink 底墨字） */}
-        <QuoteBlock variant="block" style={{ background: "var(--accent-2)", color: "var(--surface-3)" }}>
-          把口播稿，做成会动的网页。
-        </QuoteBlock>
+        {/* 宣言（十五轮 F2：rule 左粗条无底色——组件既有变体零覆写；--accent-1 → pink 保持 S1 用色纪律） */}
+        <div style={scope({ "--accent-1": "var(--accent-2)" })}>
+          <QuoteBlock variant="rule">把口播稿，做成会动的网页。</QuoteBlock>
+        </div>
         {/* 印章（右下角）：pink 方块 -6deg + cream 圆环 + 40px mono 小字；内移 32px 使旋转 bbox 落回内容带 */}
         <div
           data-testid="stamp"
@@ -848,8 +848,8 @@ function MediaSlide() {
               {item.kind === "figure" ? (
                 <Figure variant="bare" ratio="3 / 4" data-testid={`portrait-${item.id}`} /> // 十四轮 F4：占位图卡片无阴影（组件级 bare 变体，非 dev 覆写）
               ) : (
-                <div style={{ width: 400, height: 533, boxSizing: "border-box", border: "4px solid var(--surface-3)" }}>
-                  <KenBurns duration="slow" data-testid="portrait-kenburns" />
+                <div style={{ width: 400, height: 533, boxSizing: "border-box" }}>
+                  <KenBurns duration="slow" variant="framed" data-testid="portrait-kenburns" /> {/* 十五轮 F1：组件级 framed 边框，与 Figure bare 一致 */}
                 </div>
               )}
               <span
@@ -934,120 +934,12 @@ function MotionLabSlide() {
   );
 }
 
-/* ── Slide 10 · 语录宣言 = 杂志编辑风（十四轮 F3：双线刊头 + 主标题 + 两栏正文 + folio；
-     墨/cream 为主 + pink 单点缀 drop cap / pull quote） ── */
-
-/** 本期目录五项（页码与屏号对应，11 屏中选五） */
-const MANIFESTO_TOC = ["封面 01", "开篇 02", "数据 03", "流程 06", "收尾 11"];
-
-function QuoteSlide() {
-  return (
-    <SlideShell index="10" topbar="MANIFESTO" pill="QUOTE" caption="一句话，就够了">
-      <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column" }}>
-        {/* 双线刊头：3px 墨线 + 刊名行（display-2 96px）+ 1px 墨线平行 */}
-        <div data-testid="manifesto-masthead">
-          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0" })} />
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "4px 0" }}>
-            <span style={{ fontFamily: "var(--font-display-cn)", fontWeight: 900, fontSize: "var(--t-display-2)", lineHeight: 0.95, color: "var(--text)" }}>
-              CREATIVE MODE WEEKLY
-            </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text)", whiteSpace: "nowrap" }}>
-              宣言专刊 · VOL.01 · 2026.09.06
-            </span>
-          </div>
-          <Rule variant="solid" style={scope({ "--rule-w": "1px", margin: "0" })} />
-        </div>
-        {/* 主标题：全宽单行 display-1 130px */}
-        <div
-          data-testid="manifesto-title"
-          style={{ fontFamily: "var(--font-display-cn)", fontWeight: 900, fontSize: "var(--t-display-1)", lineHeight: 0.92, color: "var(--text)", marginTop: 4 }}
-        >
-          节奏，由稿子决定。
-        </div>
-        <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "4px 0 var(--space-2)" })} />
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text)" }}>
-            FROM THE EDITOR · M2B
-          </span>
-        </div>
-        {/* 正文两栏（headline-gap 64：标题块 → 两栏；中间 1px hairline） */}
-        <div data-testid="manifesto-columns" style={{ marginTop: "var(--headline-gap)", display: "flex", gap: "var(--space-4)" }}>
-          {/* 左栏：导语两段 + 首字下沉 drop cap（96px · 下沉约 3 行 · pink 点缀）+ 段间 byline */}
-          <div style={{ width: 860, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-            <BodyCopy data-testid="manifesto-lede" style={{ fontSize: "var(--t-label)", lineHeight: 1.5 }}>
-              <span
-                data-testid="manifesto-dropcap"
-                style={{ float: "left", fontFamily: "var(--font-display-cn)", fontWeight: 900, fontSize: 96, lineHeight: 0.95, color: "var(--accent-2)", marginRight: "var(--space-2)", marginTop: 2 }}
-              >
-                节
-              </span>
-              奏由稿子决定，其余都是执行。每一屏、每一句口播，都从这句出发。
-            </BodyCopy>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)" }}>
-              — FROM THE EDITOR —
-            </span>
-            <BodyCopy style={{ fontSize: "var(--t-label)", lineHeight: 1.5 }}>
-              主题的每一处强调色、每一道 4px 墨框，都在服务同一件事：让一句话的节奏，变成一页能循环播放的网页。
-            </BodyCopy>
-          </div>
-          <div style={{ width: 1, alignSelf: "stretch", background: "var(--text)" }} />
-          {/* 右栏：pull quote（hairline 上下）+ 封面缩略图（Figure bare ratio 3:4）+ 目录五项（与缩略图并排——预算约束的布局裁定） */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <Rule variant="solid" style={scope({ "--rule-w": "1px", margin: "0 0 4px" })} />
-            <QuoteBlock
-              variant="block"
-              data-testid="manifesto-quote"
-              style={{ background: "var(--accent-2)", color: "var(--surface-3)", padding: "4px var(--space-3)", fontSize: "var(--t-h3)", lineHeight: 1.2, textAlign: "center" }}
-            >
-              一句话，就够了。
-            </QuoteBlock>
-            <Rule variant="solid" style={scope({ "--rule-w": "1px", margin: "4px 0 var(--space-2)" })} />
-            <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "flex-start" }}>
-              <div style={{ width: 240, flexShrink: 0 }}>
-                <Figure variant="bare" ratio="3 / 4" data-testid="manifesto-cover" />
-                <span
-                  style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)", marginTop: "var(--space-1)" }}
-                >
-                  COVER · P.01
-                </span>
-              </div>
-              <div data-testid="manifesto-toc" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
-                {MANIFESTO_TOC.map((item) => (
-                  <span key={item} style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)", whiteSpace: "nowrap" }}>
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* Folio：底部双线（1px + 3px）+ 左/中/右 mono */}
-        <div data-testid="manifesto-folio" style={{ marginTop: "auto" }}>
-          <Rule variant="solid" style={scope({ "--rule-w": "1px", margin: "0 0 4px" })} />
-          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0" })} />
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)" }}>
-              CREATIVE MODE WEEKLY
-            </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text)" }}>
-              P.01
-            </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)" }}>
-              2026.09.06
-            </span>
-          </div>
-        </div>
-      </div>
-    </SlideShell>
-  );
-}
-
-/* ── Slide 11 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
+/* ── Slide 10 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
 
 function ClosingSlide() {
   return (
     <SlideShell
-      index="11"
+      index="10"
       topbar="END OF DECK"
       pill="FIN."
       caption="谢谢观看"
@@ -1080,7 +972,7 @@ function ClosingSlide() {
         >
           把口播稿，做成会动的网页。这是 creative-mode 主题的完整视觉表达。
         </BodyCopy>
-        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "11/11" + "M2B"；
+        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "10/10" + "M2B"；
             内移 32px 使旋转 bbox 落回内容带 */}
         <div
           data-testid="closing-seal"
@@ -1122,7 +1014,7 @@ function ClosingSlide() {
                 color: "var(--surface)",
               }}
             >
-              11/11
+              10/10
             </span>
             <span
               style={{
@@ -1172,7 +1064,7 @@ export function ThemeShowcase() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 主题效果页 · 11 屏 slide deck · 参考构图 s1–s8 + 素材/动效/语录 · 动画每 8 秒循环重播
+          creative-mode · 主题效果页 · 10 屏 slide deck · 参考构图 s1–s8 + 素材/动效 · 动画每 8 秒循环重播
         </span>
         <span
           style={{
@@ -1199,7 +1091,6 @@ export function ThemeShowcase() {
         <CompareSlide />
         <MediaSlide />
         <MotionLabSlide />
-        <QuoteSlide />
         <ClosingSlide />
       </main>
     </div>

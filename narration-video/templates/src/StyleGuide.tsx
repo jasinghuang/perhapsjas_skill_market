@@ -529,7 +529,7 @@ function SemanticSection() {
         </SemItem>
         <SemItem label="TABLE · 三变体（同数据 3 行；columns = 彩色列：pink 墨字 / green cream 字 / orange cream 字；展示页 S4 的表头高 96px/首列 30%/标签列 cream 底为参考 slide 7 构图级例外）" testid="semantic-table">
           <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap", alignItems: "flex-start" }}>
-            <div style={{ width: 480 }}>
+            <div style={{ width: 420 }}>
               <Table
                 variant="bordered"
                 header={["组件", "变体", "状态"]}
@@ -537,7 +537,7 @@ function SemanticSection() {
                 data-testid="semantic-table-bordered"
               />
             </div>
-            <div style={{ width: 480 }}>
+            <div style={{ width: 420 }}>
               <Table
                 variant="zebra"
                 header={["组件", "变体", "状态"]}
@@ -545,7 +545,7 @@ function SemanticSection() {
                 data-testid="semantic-table-zebra"
               />
             </div>
-            <div style={{ width: 560 }}>
+            <div style={{ width: 760 }}>
               <Table
                 variant="columns"
                 header={["属性", "方案 A", "方案 B", "方案 C"]}
@@ -866,6 +866,11 @@ function ComponentsSection() {
           <Variant label="default · 缓推">
             <div style={{ width: 240, height: 135 }}>
               <KenBurns duration="mid" data-testid="variant-ken-burns-default" />
+            </div>
+          </Variant>
+          <Variant label="framed · 4px 墨框无阴影（十五轮 F1）">
+            <div style={{ width: 240, height: 135 }}>
+              <KenBurns duration="mid" variant="framed" data-testid="variant-ken-burns-framed" />
             </div>
           </Variant>
         </CompCell>
