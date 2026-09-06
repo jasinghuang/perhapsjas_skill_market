@@ -1,8 +1,9 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
-// ?showcase=1 渲染：21 屏 1920×1080 slide deck——每屏带统一 chrome frame
+// ?showcase=1 渲染：20 屏 1920×1080 slide deck——每屏带统一 chrome frame
 // （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–934 + 字幕保留区 y[958,1038]；meta 页码条已删）。
 // 构图纪律（用户反馈终审）：十五轮 F3 定稿 10 屏 + 十八轮新增 4 屏（外挂模板构图灵感，本主题 token/组件渲染）+
-// 二十三轮新增 6 屏（财报解读系列，真实年报数据）——
+// 二十三轮新增 6 屏（财报解读系列，真实年报数据）——序号连续 1-20（控制器裁定：
+// 现 deck 14 屏 + 6 新 = 20 物理屏，财报系列 S14–S19、收尾 S20）。
 // S1=参考 s1 封面 / S2=参考 s2 章节开篇 / S3=参考 s3 数据屏（2×2 满幅零阴影网格）/ S4=参考 s4 系统示意（StackedBlocks 组件）/
 // S5=参考 s5 柱状图（4 行横向条）/ S6=参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）/
 // S7=参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）/ S8=媒体 3:4 素材（用户点名竖屏占位）/
@@ -10,12 +11,10 @@
 // S11=参考 sakura-chroma s3/s7 规格清单（产品图 + SC-01 + 6 行规格 JIS 勾选框 + 底部 ledger 表）/
 // S12=参考 editorial-forest s5/s7 季度回顾（图例 + 4 行成对横条 + KPI 大数字行）/
 // S13=参考 scatterbrain s9 Before/After（左右分屏 + 中缝 VS 圆章）/
-// S15=参考 signal s1 年报封面（双语大标题 + Rule 上下关键数字带）/ S16=参考 emerald-editorial s7 核心指标（KPI 四格 + 涨跌标签）/
-// S17=参考 emerald-editorial s5 双年对比（双色柱组 + y 轴刻度 + 图例）/ S18=业务分部（分类条形逐类一色——季度规则复用）/
-// S19=资产负债表速览（结构条 84/16 两段 + 三数字）/ S20=参考 monochrome s6 年度亮点（有序列表 + 页边注窄栏）/
-// S21=参考 s8 收尾屏（绿底 + stamp 标题 + 印章 21/21）。
-// 序号说明：财报系列按用户口径编号 S15–S20、收尾顺延 S21（索引 14 空缺——现 deck 14 屏 + 6 新 = 20 物理屏；
-// 用户口径 21 屏与 14+6 差一，交付按口径编号、物理数见报告）。
+// S14=参考 signal s1 年报封面（双语大标题 + Rule 上下关键数字带）/ S15=参考 emerald-editorial s7 核心指标（KPI 四格 + 涨跌标签）/
+// S16=参考 emerald-editorial s5 双年对比（双色柱组 + y 轴刻度 + 图例）/ S17=业务分部（分类条形逐类一色——季度规则复用）/
+// S18=资产负债表速览（结构条 84/16 两段 + 三数字）/ S19=参考 monochrome s6 年度亮点（有序列表 + 页边注窄栏）/
+// S20=参考 s8 收尾屏（绿底 + stamp 标题 + 印章 20/20）。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
 // （底边 ≤934 = 字幕区上缘 958 − 24；24px 阴影落点亦算占位，不越界）；③ 氛围背景层与 CaptionLayer 自身豁免。
 // ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 958 线，pointerEvents none）。
@@ -79,7 +78,7 @@ const SHOWCASE_TWEAKS = `
 .sg-compare-table thead th:first-child, .sg-compare-table tbody td:first-child { width: 30%; }
 .sg-compare-table tbody td:first-child { background: var(--surface); font-weight: 700; }
 .sg-bar-rows .cdp-bar-grow { height: 56px; }
-/* S18 分部条：56px 行高（同 S5 季度条节奏） */
+/* S17 分部条：56px 行高（同 S5 季度条节奏） */
 .sg-seg-rows .cdp-bar-grow { height: 56px; }
 /* S12 成对横条：48px 行高（同列双条同高——审计断言依据） */
 .sg-yoy-rows .cdp-bar-grow { height: 48px; }
@@ -137,7 +136,7 @@ function SafetyGuides({ color }: { color: string }) {
 
 /* ── chrome frame（每屏必有） ── */
 interface SlideShellProps {
-  index: string; // "01".."21"
+  index: string; // "01".."20"
   topbar: ReactNode;
   pill: string;
   caption: string; // 该屏口播台词（CaptionLayer 字幕保留区 y[972,1032]）
@@ -1282,11 +1281,11 @@ function BeforeAfterSlide() {
   );
 }
 
-/* ── Slide 15 · 年报封面 = 参考 signal s1（机构封面；强调色：green） ── */
+/* ── Slide 14 · 年报封面 = 参考 signal s1（机构封面；强调色：green） ── */
 
 function AnnualCoverSlide() {
   return (
-    <SlideShell index="15" topbar="ANNUAL REPORT · 2025" pill="GF SECURITIES" caption="广发证券，2025 年度报告">
+    <SlideShell index="14" topbar="ANNUAL REPORT · 2025" pill="GF SECURITIES" caption="广发证券，2025 年度报告">
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
         {/* signal s1 封面的 session stamp：mono 小标一行 */}
         <Kicker
@@ -1331,7 +1330,7 @@ function AnnualCoverSlide() {
   );
 }
 
-/* ── Slide 16 · 核心指标 = 参考 emerald-editorial s7（KPI 四格 + 涨跌标签；强调色：green） ── */
+/* ── Slide 15 · 核心指标 = 参考 emerald-editorial s7（KPI 四格 + 涨跌标签；强调色：green） ── */
 
 const KPI_CELLS = [
   { label: "营业收入 · 百万元", value: "27,930", delta: "▲ +9.52%" },
@@ -1342,7 +1341,7 @@ const KPI_CELLS = [
 
 function KeyMetricsSlide() {
   return (
-    <SlideShell index="16" topbar="KEY METRICS" pill="FY2025" caption="四个数字，看懂一年">
+    <SlideShell index="15" topbar="KEY METRICS" pill="FY2025" caption="四个数字，看懂一年">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           四个数字，看懂一年。
@@ -1384,7 +1383,7 @@ function KeyMetricsSlide() {
   );
 }
 
-/* ── Slide 17 · 双年对比柱状图 = 参考 emerald-editorial s5（双色柱组 + y 轴 + 图例；强调色：green） ── */
+/* ── Slide 16 · 双年对比柱状图 = 参考 emerald-editorial s5（双色柱组 + y 轴 + 图例；强调色：green） ── */
 
 const YOY_GROUPS = [
   { group: "营业收入", year24: 25502, year25: 27930 },
@@ -1413,7 +1412,7 @@ function YearBarGroup({ group }: { group: (typeof YOY_GROUPS)[number] }) {
 
 function YearOverYearSlide() {
   return (
-    <SlideShell index="17" topbar="YEAR ON YEAR" pill="2024 VS 2025" caption="两年对比，看增长成色">
+    <SlideShell index="16" topbar="YEAR ON YEAR" pill="2024 VS 2025" caption="两年对比，看增长成色">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           两年对比，看增长成色。
@@ -1513,7 +1512,7 @@ function YearOverYearSlide() {
   );
 }
 
-/* ── Slide 18 · 业务分部 = 分类条形逐类一色（季度规则复用；强调色：四色序列语义） ── */
+/* ── Slide 17 · 业务分部 = 分类条形逐类一色（季度规则复用；强调色：四色序列语义） ── */
 
 const SEG_ROWS = [
   // 分类/季度类条形图每季一色（二十二轮 F2 规则，优先于每屏 2-3 强调色纪律）；tone = null 吃默认 accent-1 绿
@@ -1525,7 +1524,7 @@ const SEG_ROWS = [
 
 function BusinessSegmentsSlide() {
   return (
-    <SlideShell index="18" topbar="BUSINESS SEGMENTS" pill="FOUR LINES" caption="四条业务线，各撑一片天">
+    <SlideShell index="17" topbar="BUSINESS SEGMENTS" pill="FOUR LINES" caption="四条业务线，各撑一片天">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           四条业务线，各撑一片天。
@@ -1562,7 +1561,7 @@ function BusinessSegmentsSlide() {
   );
 }
 
-/* ── Slide 19 · 资产负债表速览 = 结构条 84/16 两段 + 三数字（强调色：green） ── */
+/* ── Slide 18 · 资产负债表速览 = 结构条 84/16 两段 + 三数字（强调色：green） ── */
 
 const BS_NUMBERS = [
   { value: "975,484", label: "总资产 · 百万元" },
@@ -1572,7 +1571,7 @@ const BS_NUMBERS = [
 
 function BalanceSheetSlide() {
   return (
-    <SlideShell index="19" topbar="BALANCE SHEET" pill="SNAPSHOT" caption="资产负债，一眼看清">
+    <SlideShell index="18" topbar="BALANCE SHEET" pill="SNAPSHOT" caption="资产负债，一眼看清">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           资产负债，一眼看清。
@@ -1632,7 +1631,7 @@ function BalanceSheetSlide() {
   );
 }
 
-/* ── Slide 20 · 年度亮点与展望 = 参考 monochrome s6（有序列表 + 页边注窄栏；强调色：green） ── */
+/* ── Slide 19 · 年度亮点与展望 = 参考 monochrome s6（有序列表 + 页边注窄栏；强调色：green） ── */
 
 const HIGHLIGHT_ITEMS = [
   { title: "净利 +42.18%", desc: "增幅领跑。" },
@@ -1644,7 +1643,7 @@ const HIGHLIGHT_ITEMS = [
 
 function HighlightsSlide() {
   return (
-    <SlideShell index="20" topbar="HIGHLIGHTS & OUTLOOK" pill="FIVE NOTES" caption="五个亮点，一个展望">
+    <SlideShell index="19" topbar="HIGHLIGHTS & OUTLOOK" pill="FIVE NOTES" caption="五个亮点，一个展望">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           五个亮点，一个展望。
@@ -1690,12 +1689,12 @@ function HighlightsSlide() {
   );
 }
 
-/* ── Slide 21 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
+/* ── Slide 20 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
 
 function ClosingSlide() {
   return (
     <SlideShell
-      index="21"
+      index="20"
       topbar="END OF DECK"
       pill="FIN."
       caption="谢谢观看"
@@ -1728,7 +1727,7 @@ function ClosingSlide() {
         >
           把口播稿，做成会动的网页。这是 creative-mode 主题的完整视觉表达。
         </BodyCopy>
-        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "21/21" + "M2B"；
+        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "20/20" + "M2B"；
             内移 32px 使旋转 bbox 落回内容带 */}
         <div
           data-testid="closing-seal"
@@ -1770,7 +1769,7 @@ function ClosingSlide() {
                 color: "var(--surface)",
               }}
             >
-              21/21
+              20/20
             </span>
             <span
               style={{
@@ -1820,7 +1819,7 @@ export function ThemeShowcase() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 主题效果页 · 21 屏 slide deck · 参考构图 s1–s8 + scatterbrain / sakura-chroma / editorial-forest / signal / emerald-editorial / monochrome · 动画每 8 秒循环重播
+          creative-mode · 主题效果页 · 20 屏 slide deck · 参考构图 s1–s8 + scatterbrain / sakura-chroma / editorial-forest / signal / emerald-editorial / monochrome · 动画每 8 秒循环重播
         </span>
         <span
           style={{
