@@ -710,6 +710,9 @@ function ComponentsSection() {
         <CompCell name="hero-title">
           <Variant label="plain"><HeroTitle data-testid="variant-hero-title-plain" style={{ fontSize: 56, lineHeight: 0.92 }}>口播视频</HeroTitle></Variant>
           <Variant label="stamp"><HeroTitle variant="stamp" data-testid="variant-hero-title-stamp" style={{ fontSize: 28, lineHeight: 1, padding: "8px 14px" }}>口播视频</HeroTitle></Variant>
+          <Variant label="latin + cn · 双语双行（十七轮 F1）">
+            <HeroTitle latin="CREATIVE" cn="创意模式" data-testid="variant-hero-title-bilingual" style={{ fontSize: 40 }} />
+          </Variant>
           <MonoLabel color="var(--text-faint)" size={12}>构图级例外：展示页 stamp 阴影色按 featured 纪律覆写（每屏 2-3 强调色）</MonoLabel>
         </CompCell>
         <CompCell name="kicker">

@@ -240,31 +240,9 @@ function CoverSlide() {
         }}
       >
         <Kicker variant="block">CHAPTER 01 · 主题</Kicker>
-        {/* 主标题区（featured）：十六轮 F3 收编 MarkerBlock accent（pink 底 cream 字 + 4px 墨框 + 24px 双层硬阴影）；
-            内部 Latin/中文双行排版保留在 dev 页（构图），外壳为组件 */}
+        {/* 主标题区（featured）：MarkerBlock accent 外壳（十六轮 F3）+ HeroTitle 双语双行（十七轮 F1：全组件化，dev 页手写混排删除） */}
         <MarkerBlock variant="accent" data-testid="featured-title">
-          <div
-            style={{
-              fontFamily: "var(--font-display-en)",
-              fontSize: "var(--t-display-1)", // 六轮 F1：160 硬编码 → token（130px 用户定稿尝试值）
-              lineHeight: 0.92,
-              letterSpacing: "-0.01em",
-              textTransform: "uppercase",
-            }}
-          >
-            CREATIVE
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-display-cn)",
-              fontWeight: 900,
-              fontSize: "var(--t-display-1)",
-              lineHeight: 1,
-              marginTop: 12,
-            }}
-          >
-            创意模式
-          </div>
+          <HeroTitle size="display-1" latin="CREATIVE" cn="创意模式" />
         </MarkerBlock>
         {/* 装饰行：accent 色条 + glow 圆点 + solid 色条 */}
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginTop: "auto" }}>

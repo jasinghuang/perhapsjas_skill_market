@@ -6,6 +6,23 @@
   margin: 0;
 }
 
+/* 双语双行（十七轮 F1）：latin 行 Archivo Black uppercase / cn 行 Noto Sans SC 900；字号继承 size 档 */
+.cdp-hero-title-latin {
+  display: block;
+  font-family: var(--font-display-en);
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 0.92;
+}
+
+.cdp-hero-title-cn {
+  display: block;
+  font-family: var(--font-display-cn);
+  font-weight: 900;
+  line-height: 0.92;
+  margin-top: var(--space-2);
+}
+
 /* 字阶档位（十轮 F2：size prop 消费 --t-* token） */
 .cdp-hero-title-size-display-1 {
   font-size: var(--t-display-1);

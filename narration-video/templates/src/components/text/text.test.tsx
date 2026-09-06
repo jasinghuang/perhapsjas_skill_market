@@ -63,6 +63,21 @@ describe("文字组组件", () => {
     expect(getByTestId("s3").className).toContain("cdp-hero-title-size-h2");
   });
 
+  it("HeroTitle latin+cn 双语双行渲染 + children 兼容不变（十七轮 F1）", () => {
+    const { getByTestId } = render(
+      <div>
+        <HeroTitle latin="CREATIVE" cn="创意模式" data-testid="bi" />
+        <HeroTitle data-testid="legacy">旧用法</HeroTitle>
+      </div>,
+    );
+    const bi = getByTestId("bi");
+    expect(bi.querySelector(".cdp-hero-title-latin")).not.toBeNull();
+    expect(bi.querySelector(".cdp-hero-title-cn")).not.toBeNull();
+    expect(bi.querySelector(".cdp-hero-title-latin")!.textContent).toBe("CREATIVE");
+    expect(bi.querySelector(".cdp-hero-title-cn")!.textContent).toBe("创意模式");
+    expect(getByTestId("legacy").textContent).toBe("旧用法");
+  });
+
   it("NumberPill 三变体类名 + 数字渲染", () => {
     const { getByTestId } = render(
       <div>

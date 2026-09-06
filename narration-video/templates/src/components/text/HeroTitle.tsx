@@ -5,6 +5,9 @@ import type { MotionDuration, RevealPreset } from "../motion";
 export interface HeroTitleProps {
   /** 字阶档位（消费 --t-display-1/--t-display-2/--t-h1/--t-h2；默认 display-1） */
   size?: "display-1" | "display-2" | "h1" | "h2";
+  /** 双语双行（十七轮 F1）：latin 行（Archivo Black uppercase）+ cn 行（Noto Sans SC 900）；两者都给时渲染双行 */
+  latin?: string;
+  cn?: string;
   variant?: "plain" | "stamp";
   reveal?: RevealPreset;
   duration?: MotionDuration;
@@ -29,7 +32,20 @@ const SIZE_CLASSES: Record<NonNullable<HeroTitleProps["size"]>, string> = {
 };
 
 /** 大标题（§6.2 文字组）。variants: plain（字阶直排）/ stamp（墨底白字印戳式硬阴影）；
-    size = 字阶 token 档位（十轮 F2 组件增强：标题/正文/列表字阶明确化） */
-export function HeroTitle({ size = "display-1", variant, className = "", ...rest }: HeroTitleProps) {
-  return <Base variant={variant} className={[SIZE_CLASSES[size], className].filter(Boolean).join(" ")} {...rest} />;
+    size = 字阶 token 档位（十轮 F2 组件增强）；latin+cn = 双语双行（十七轮 F1），仅 children 时行为不变（向后兼容） */
+export function HeroTitle({ size = "display-1", latin, cn, variant, className = "", children, ...rest }: HeroTitleProps) {
+  const content =
+    latin && cn ? (
+      <>
+        <span className="cdp-hero-title-latin">{latin}</span>
+        <span className="cdp-hero-title-cn">{cn}</span>
+      </>
+    ) : (
+      children
+    );
+  return (
+    <Base variant={variant} className={[SIZE_CLASSES[size], className].filter(Boolean).join(" ")} {...rest}>
+      {content}
+    </Base>
+  );
 }
