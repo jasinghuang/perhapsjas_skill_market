@@ -1,20 +1,28 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
-// ?showcase=1 渲染：20 屏 1920×1080 slide deck——每屏带统一 chrome frame
+// ?showcase=1 渲染：25 屏 1920×1080 slide deck——每屏带统一 chrome frame
 // （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–934 + 字幕保留区 y[958,1038]；meta 页码条已删）。
 // 构图纪律（用户反馈终审）：十五轮 F3 定稿 10 屏 + 十八轮新增 4 屏（外挂模板构图灵感，本主题 token/组件渲染）+
-// 二十三轮新增 6 屏（财报解读系列，真实年报数据）——序号连续 1-20（控制器裁定：
-// 现 deck 14 屏 + 6 新 = 20 物理屏，财报系列 S14–S19、收尾 S20）。
+// 二十三轮新增 6 屏（财报解读系列，真实年报数据）→ 二十四轮（M2b showcase refine）：
+// 删财报封面（用户拍板复用 S1 封面排版）、S15 KEY METRICS 改 S3 同构 2×2 统计格、A股涨橙跌绿语义落地、
+// 新增 6 创意屏（A 菜单 / B 海报 / C 终端 / D 路线图 / E 墨底 / F 简报）——共 25 屏，序号连续 1-25。
 // S1=参考 s1 封面 / S2=参考 s2 章节开篇 / S3=参考 s3 数据屏（2×2 满幅零阴影网格）/ S4=参考 s4 系统示意（StackedBlocks 组件）/
 // S5=参考 s5 柱状图（4 行横向条）/ S6=参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）/
 // S7=参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）/ S8=媒体 3:4 素材（用户点名竖屏占位）/
-// S9=动效实验室（全部动效词汇）/ S10=参考 scatterbrain s1 便签墙（5 便签微旋转 + 图钉 + 底部 mono 注）/
-// S11=参考 sakura-chroma s3/s7 规格清单（产品图 + SC-01 + 6 行规格 JIS 勾选框 + 底部 ledger 表）/
-// S12=参考 editorial-forest s5/s7 季度回顾（图例 + 4 行成对横条 + KPI 大数字行）/
-// S13=参考 scatterbrain s9 Before/After（左右分屏 + 中缝 VS 圆章）/
-// S14=参考 signal s1 年报封面（双语大标题 + Rule 上下关键数字带）/ S15=参考 emerald-editorial s7 核心指标（KPI 四格 + 涨跌标签）/
-// S16=参考 emerald-editorial s5 双年对比（双色柱组 + y 轴刻度 + 图例）/ S17=业务分部（分类条形逐类一色——季度规则复用）/
-// S18=资产负债表速览（结构条 84/16 两段 + 三数字）/ S19=参考 monochrome s6 年度亮点（有序列表 + 页边注窄栏）/
-// S20=参考 s8 收尾屏（绿底 + stamp 标题 + 印章 20/20）。
+// S9=动效实验室（全部动效词汇）/
+// S10=新屏 A 内容菜单（supper-club 菜单排版：mono 编号 + 条目 + 虚线引导 + 价格式数值）/
+// S11=新屏 B 海报宣言（bold-poster 超大堆叠标题逐词放大 + -4deg 徽章）/ S12=新屏 C 复古终端（窗口面板 + TypedTerminal + 状态行 + 网格底）/
+// S13=参考 scatterbrain s1 便签墙（5 便签微旋转 + 图钉 + 底部 mono 注）/
+// S14=新屏 D 路线图（pin-and-paper：图钉 + CSS 虚线串联 5 节点药丸）/ S15=参考 sakura-chroma s3/s7 规格清单（产品图 + SC-01 + 6 行规格 JIS 勾选框 + 底部 ledger 表）/
+// S16=参考 editorial-forest s5/s7 季度回顾（图例 + 4 行成对横条 + KPI 大数字行）/
+// S17=参考 scatterbrain s9 Before/After（左右分屏 + 中缝 VS 圆章）/
+// S18=新屏 E 墨底大字（整屏反色 surface-3 + cream 标语 + 单强调色条）/ S19=新屏 F 研究简报（cobalt-grid 网格底 + 阶梯数据块 + FIG 注）/
+// S20=核心指标（S3 同构 2×2 统计格：角标/数字/标签/描述四件套 + 涨跌标签橙字——A股红涨语义）/
+// S21=参考 emerald-editorial s5 双年对比（双色柱组 + y 轴刻度 + 图例）/ S22=业务分部（分类条形逐类一色——季度规则复用）/
+// S23=资产负债表速览（结构条 84/16 两段 + 三数字）/ S24=参考 monochrome s6 年度亮点（有序列表 + 页边注窄栏）/
+// S25=参考 s8 收尾屏（绿底 + stamp 标题 + 印章 25/25）。
+// 用色语义规则（二十四轮入册，控制器同步设计文档 §12）：财报/金融数据语义色——上涨 = 红色系
+// （本主题 accent-3 橙 #E85A1F）、下跌 = 绿色系（accent-1）；delta 标签 / KPI 附注统一按此（涨橙/跌绿），
+// 系列色（年份柱/分类条）非涨跌语义不受影响。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
 // （底边 ≤934 = 字幕区上缘 958 − 24；24px 阴影落点亦算占位，不越界）；③ 氛围背景层与 CaptionLayer 自身豁免。
 // ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 958 线，pointerEvents none）。
@@ -136,7 +144,7 @@ function SafetyGuides({ color }: { color: string }) {
 
 /* ── chrome frame（每屏必有） ── */
 interface SlideShellProps {
-  index: string; // "01".."20"
+  index: string; // "01".."25"
   topbar: ReactNode;
   pill: string;
   caption: string; // 该屏口播台词（CaptionLayer 字幕保留区 y[972,1032]）
@@ -386,7 +394,8 @@ function ChapterSlide() {
 /* ── Slide 3 · 数据冲击 = 参考 s3（二十二轮 F3 单填充色对角收敛：green + cream） ── */
 
 /** 数据格（参考 s3 cell）：mono 角标 /0N（右上）+ 大数字 + mono 标签 + 一句描述；
-    二十二轮 F3 配色 = 一种填充色 + 无填充——TL/BR accent-1 green 填充 cream 字、TR/BL 无填充（bg 不传 = Card plain 自然态 cream 墨字） */
+    二十二轮 F3 配色 = 一种填充色 + 无填充——TL/BR accent-1 green 填充 cream 字、TR/BL 无填充（bg 不传 = Card plain 自然态 cream 墨字）。
+    delta 可选（S20 核心指标）：mono 涨跌标签 accent-3 橙字（二十四轮 A股红涨语义——涨橙/跌绿规则，控制器同步设计文档 §12） */
 function StatCell({
   corner,
   value,
@@ -394,7 +403,9 @@ function StatCell({
   desc,
   bg,
   ink = true,
+  delta,
   testid,
+  deltaTestid,
 }: {
   corner: string;
   value: string;
@@ -402,7 +413,9 @@ function StatCell({
   desc: string;
   bg?: string;
   ink?: boolean;
+  delta?: string;
   testid?: string;
+  deltaTestid?: string;
 }) {
   const textScope = ink ? {} : scope({ "--text": "var(--surface)", "--text-2": "var(--surface)" });
   return (
@@ -440,6 +453,19 @@ function StatCell({
           </Kicker>
           <BodyCopy style={{ fontSize: 24, lineHeight: 1.3, marginTop: 2, maxWidth: 520 }}>{desc}</BodyCopy>
         </div>
+        {delta ? (
+          <span
+            data-testid={deltaTestid}
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 24,
+              letterSpacing: "0.06em",
+              color: "var(--accent-3)", // 涨橙（A股红涨语义；跌为 accent-1 绿——本 deck 无跌例）
+            }}
+          >
+            {delta}
+          </span>
+        ) : null}
       </Card>
     </div>
   );
@@ -900,7 +926,241 @@ function MotionLabSlide() {
   );
 }
 
-/* ── Slide 10 · 便签墙 = 参考 scatterbrain s1（五色便签 + 图钉） ── */
+/* ── Slide 10 · 内容菜单 = 新屏 A（supper-club 菜单排版；强调色：orange 单点缀） ── */
+
+const MENU_ITEMS = [
+  { n: "01", name: "口播稿", note: "一句一拍 · 节奏由稿子决定", price: "¥ 09" },
+  { n: "02", name: "分镜", note: "每步一屏 · 组件负责构图", price: "¥ 16" },
+  { n: "03", name: "动效", note: "引擎驱动 · 可停可快进", price: "¥ 25" },
+  { n: "04", name: "主题", note: "token 换肤 · 一键切换", price: "¥ 36" },
+  { n: "05", name: "成片", note: "录屏导出 · 一张网页承载", price: "¥ 49" },
+];
+
+function MenuSlide() {
+  return (
+    <SlideShell index="10" topbar="CONTENT MENU" pill="A LA CARTE" caption="一份菜单，五道菜">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          内容菜单。
+        </HeroTitle>
+        {/* 菜单式居中窄栏（supper-club 排版）：mono 编号 + 条目名 + 注 + 虚线引导（border-bottom dotted）+ 右侧价格式数值 */}
+        <div
+          data-testid="menu-list"
+          style={{ width: 1000, alignSelf: "center", display: "flex", flexDirection: "column", gap: "var(--space-4)", marginTop: "var(--space-4)" }}
+        >
+          {MENU_ITEMS.map((item, i) => (
+            <div key={item.n} data-testid={`menu-row-${i + 1}`} style={{ display: "flex", alignItems: "baseline", gap: "var(--space-3)" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.08em", color: "var(--text-mute)", width: 48 }}>
+                {item.n}
+              </span>
+              <span style={{ fontFamily: "var(--font-display-cn)", fontWeight: 900, fontSize: 48, lineHeight: 1 }}>{item.name}</span>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 24, lineHeight: 1, color: "var(--text-mute)", whiteSpace: "nowrap" }}>
+                {item.note}
+              </span>
+              {/* 虚线引导：flex:1 撑满剩余宽度（border-bottom dotted 2px faint 墨） */}
+              <span
+                aria-hidden="true"
+                style={{ flex: 1, alignSelf: "baseline", borderBottom: "2px dotted var(--text-faint)", transform: "translateY(-4px)" }}
+              />
+              <span
+                data-testid={`menu-price-${i + 1}`}
+                style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 700, letterSpacing: "0.04em", color: "var(--accent-3)" }}
+              >
+                {item.price}
+              </span>
+            </div>
+          ))}
+        </div>
+        {/* 底部 mono 注 */}
+        <span
+          data-testid="menu-note"
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--t-label)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--text-mute)",
+            alignSelf: "center",
+            marginTop: "auto",
+            marginBottom: "var(--space-2)",
+          }}
+        >
+          MENU · 章节菜单
+        </span>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 11 · 海报宣言 = 新屏 B（bold-poster 超大堆叠标题；强调色：orange 单色） ── */
+
+const POSTER_LINES = [
+  { text: "口播", size: "var(--t-h2)", indent: 0 },
+  { text: "视频", size: "var(--t-h1)", indent: "var(--space-6)" },
+  { text: "稿子", size: "var(--t-display-2)", indent: "calc(var(--space-6) * 2)" },
+  { text: "成片", size: "var(--t-display-1)", indent: "calc(var(--space-6) * 3)" },
+];
+
+function PosterSlide() {
+  return (
+    <SlideShell index="11" topbar="POSTER" pill="MANIFESTO" caption="大字，就要大声">
+      <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* 右上 -4deg 旋转徽章（NumberPill 式 CSS 徽章：999 圆角 2px 墨框 + 橙底 cream 字；
+            内移 32px 使旋转 bbox（约 ±21px 扩展）落回内容带） */}
+        <div
+          data-testid="poster-badge"
+          style={{
+            position: "absolute",
+            top: "var(--space-2)",
+            right: "var(--space-4)",
+            transform: "rotate(-4deg)",
+            border: "2px solid var(--surface-3)",
+            borderRadius: 999,
+            background: "var(--accent-3)",
+            color: "var(--surface)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 24,
+            lineHeight: 1,
+            letterSpacing: "0.08em",
+            padding: "10px 20px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          POSTER NO.01
+        </div>
+        {/* 四行超大堆叠标题（逐词放大 + 逐行错位缩进——海报式不对称编排） */}
+        <div data-testid="poster-lines" style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          {POSTER_LINES.map((line, i) => (
+            <span
+              key={line.text}
+              data-testid={`poster-line-${i + 1}`}
+              style={{
+                fontFamily: "var(--font-display-cn)",
+                fontWeight: 900,
+                fontSize: line.size,
+                lineHeight: 0.95,
+                color: "var(--text)",
+                marginLeft: line.indent,
+              }}
+            >
+              {line.text}
+            </span>
+          ))}
+        </div>
+        {/* 单强调色橙字一行 */}
+        <span
+          data-testid="poster-accent-line"
+          style={{
+            fontFamily: "var(--font-display-cn)",
+            fontWeight: 900,
+            fontSize: "var(--t-h1)",
+            lineHeight: 0.95,
+            color: "var(--accent-3)",
+            marginTop: "var(--space-3)",
+          }}
+        >
+          让稿子动起来
+        </span>
+        {/* 底部小字 mono 注 */}
+        <span
+          data-testid="poster-note"
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--t-label)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--text-mute)",
+            marginTop: "auto",
+            alignSelf: "flex-start",
+          }}
+        >
+          POSTER — 海报宣言 · 大字排版
+        </span>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 12 · 复古终端 = 新屏 C（retro-windows 窗口面板；强调色：三色小方块装饰） ── */
+
+const TERMINAL_LINES = ["$ m2b render --theme creative-mode", "compiling slides ... 25 found", "export ./out/demo.mp4 — done"];
+
+function TerminalSlide() {
+  return (
+    <SlideShell index="12" topbar="RETRO WINDOW" pill="TERMINAL.EXE" caption="老窗口，新引擎">
+      {/* 氛围层（豁免安全框）：窗口外淡背景网格线（CSS 细线 1px 网格，极淡墨） */}
+      <div
+        data-testid="terminal-grid"
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          backgroundImage:
+            "linear-gradient(rgba(15, 15, 15, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 15, 15, 0.05) 1px, transparent 1px)",
+          backgroundSize: "48px 48px",
+        }}
+      />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* 大窗口面板：4px 墨框 + 标题条（墨底 cream mono "TERMINAL.EXE" + 三个小方块）+ TypedTerminal + 状态行 */}
+        <div
+          data-testid="terminal-window"
+          style={{
+            alignSelf: "center",
+            width: 1100,
+            marginTop: "auto",
+            marginBottom: "auto",
+            display: "flex",
+            flexDirection: "column",
+            border: "4px solid var(--surface-3)",
+            background: "var(--surface)",
+            padding: "var(--space-3)",
+          }}
+        >
+          <div
+            data-testid="terminal-titlebar"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-2)",
+              background: "var(--surface-3)",
+              color: "var(--surface)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 24,
+              lineHeight: 1,
+              letterSpacing: "0.08em",
+              padding: "12px var(--space-3)",
+            }}
+          >
+            {/* 三个小方块装饰（经典窗口红黄绿，本主题三强调色） */}
+            <span aria-hidden="true" style={{ width: 14, height: 14, background: "var(--accent-3)" }} />
+            <span aria-hidden="true" style={{ width: 14, height: 14, background: "var(--accent-4)" }} />
+            <span aria-hidden="true" style={{ width: 14, height: 14, background: "var(--accent-1)" }} />
+            <span style={{ flex: 1, textAlign: "center" }}>TERMINAL.EXE</span>
+          </div>
+          <div style={{ marginTop: "var(--space-3)" }}>
+            <TypedTerminal lines={TERMINAL_LINES} duration="slow" data-testid="terminal-body" />
+          </div>
+          {/* 底部 mono 状态行 */}
+          <span
+            data-testid="terminal-status"
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 24,
+              letterSpacing: "0.08em",
+              color: "var(--text-mute)",
+              marginTop: "var(--space-3)",
+            }}
+          >
+            READY · PRESS ANY KEY
+          </span>
+        </div>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 13 · 便签墙 = 参考 scatterbrain s1（五色便签 + 图钉） ── */
 
 interface PostItDef {
   id: string;
@@ -989,7 +1249,7 @@ function PostIt({ def }: { def: PostItDef }) {
 
 function StickyWallSlide() {
   return (
-    <SlideShell index="10" topbar="STICKY WALL" pill="NOTES" caption="想法，先贴上墙">
+    <SlideShell index="13" topbar="STICKY WALL" pill="NOTES" caption="想法，先贴上墙">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           想法，先贴上墙。
@@ -1023,7 +1283,92 @@ function StickyWallSlide() {
   );
 }
 
-/* ── Slide 11 · 规格清单 = 参考 sakura-chroma s3/s7（强调色：green + orange 点缀） ── */
+/* ── Slide 14 · 路线图 = 新屏 D（pin-and-paper：图钉 + CSS 虚线串联；强调色：orange 单色） ── */
+
+const ROADMAP_NODES = [
+  { n: "01", name: "写稿", note: "口播稿定节奏" },
+  { n: "02", name: "分镜", note: "每步一屏构图" },
+  { n: "03", name: "动效", note: "引擎驱动全部" },
+  { n: "04", name: "主题", note: "token 一键换肤" },
+  { n: "05", name: "成片", note: "录屏导出成片" },
+];
+
+function RoadmapSlide() {
+  return (
+    <SlideShell index="14" topbar="ROADMAP" pill="FIVE STOPS" caption="一条线，串起五站">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          一条线，串起五站。
+        </HeroTitle>
+        {/* 水平路线图：3px dashed 墨线横向贯穿（串联各站图钉），5 节点列 space-between 均布 */}
+        <div data-testid="roadmap" style={{ position: "relative", flex: 1 }}>
+          <div
+            data-testid="roadmap-route"
+            style={{ position: "absolute", top: 48, left: "var(--space-5)", right: "var(--space-5)", borderTop: "3px dashed var(--text)" }}
+          />
+          <div
+            data-testid="roadmap-nodes"
+            style={{
+              position: "absolute",
+              top: 40,
+              left: "var(--space-5)",
+              right: "var(--space-5)",
+              display: "flex",
+              justifyContent: "space-between",
+              ...scope({ "--accent-1": "var(--accent-3)" }), // 药丸 accent → orange（本屏单强调色）
+            }}
+          >
+            {ROADMAP_NODES.map((node, i) => (
+              <div
+                key={node.n}
+                data-testid={`roadmap-node-${i + 1}`}
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-2)", width: 200 }}
+              >
+                {/* 图钉（CSS 几何）：16px 墨点 + 2/3px 短线硬阴影（墨点短线阴影 = 钉感），中心压在虚线上 */}
+                <div
+                  data-testid={`roadmap-pin-${i + 1}`}
+                  aria-hidden="true"
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: "50%",
+                    background: "var(--surface-3)",
+                    boxShadow: "2px 3px 0 rgba(15, 15, 15, 0.35)",
+                  }}
+                />
+                <NumberPill number={node.n} variant="accent" data-testid={`roadmap-pill-${i + 1}`} />
+                {/* 节点名（新屏 D 规格：NumberPill + Kicker 节点名 + 小注——S6 步卡 Kicker 先例） */}
+                <Kicker variant="plain" style={{ fontSize: 44, lineHeight: 1, fontWeight: 700, letterSpacing: "0.04em" }}>
+                  {node.name}
+                </Kicker>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, lineHeight: 1, letterSpacing: "0.04em", color: "var(--text-mute)", whiteSpace: "nowrap" }}>
+                  {node.note}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* 底部 mono 注 */}
+        <span
+          data-testid="roadmap-note"
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--t-label)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--text-mute)",
+            alignSelf: "center",
+            marginTop: "var(--space-2)",
+          }}
+        >
+          ROADMAP · 路线图
+        </span>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 15 · 规格清单 = 参考 sakura-chroma s3/s7（强调色：green + orange 点缀） ── */
 
 const SPEC_ROWS = [
   { label: "DIMENSIONS", value: "140 × 96 × 38 MM", checked: true },
@@ -1078,7 +1423,7 @@ function JisCheck({ checked, testid }: { checked: boolean; testid?: string }) {
 
 function SpecSheetSlide() {
   return (
-    <SlideShell index="11" topbar="SPEC SHEET" pill="CATALOGUE" caption="一张规格表，说清一切">
+    <SlideShell index="15" topbar="SPEC SHEET" pill="CATALOGUE" caption="一张规格表，说清一切">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           一张规格表，说清一切。
@@ -1147,7 +1492,7 @@ function SpecSheetSlide() {
   );
 }
 
-/* ── Slide 12 · 季度回顾 = 参考 editorial-forest s5/s7（强调色：green + pink） ── */
+/* ── Slide 16 · 季度回顾 = 参考 editorial-forest s5/s7（强调色：green + orange 涨橙 KPI） ── */
 
 const YOY_ROWS = [
   { label: "Q1", thisYear: 0.62, lastYear: 0.48 },
@@ -1157,14 +1502,16 @@ const YOY_ROWS = [
 ];
 
 const YOY_KPIS = [
-  { value: "+42%", label: "ACTIVE ACCOUNTS · 年增" },
-  { value: "+18%", label: "NET RETENTION · 年增" },
-  { value: "92", label: "PEOPLE SERVED · 当季" },
+  // tone = accent-3 橙（二十四轮 A股红涨语义：年增 KPI 附注属涨跌语义标注——涨橙/跌绿，控制器同步设计文档 §12）；
+  // 当季数非涨跌语义，保持墨色
+  { value: "+42%", label: "ACTIVE ACCOUNTS · 年增", tone: "var(--accent-3)" },
+  { value: "+18%", label: "NET RETENTION · 年增", tone: "var(--accent-3)" },
+  { value: "92", label: "PEOPLE SERVED · 当季", tone: null },
 ];
 
 function QuarterlyReviewSlide() {
   return (
-    <SlideShell index="12" topbar="QUARTERLY REVIEW" pill="YOY" caption="今年，比去年快一点">
+    <SlideShell index="16" topbar="QUARTERLY REVIEW" pill="YOY" caption="今年，比去年快一点">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           今年，比去年快一点。
@@ -1230,7 +1577,10 @@ function QuarterlyReviewSlide() {
           <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-3)" })} />
           <div data-testid="yoy-kpis" style={{ display: "flex", gap: "var(--space-6)" }}>
             {YOY_KPIS.map((kpi) => (
-              <div key={kpi.value} style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+              <div
+                key={kpi.value}
+                style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)", ...(kpi.tone ? scope({ "--text": kpi.tone }) : undefined) }}
+              >
                 <HeroNumber value={kpi.value} variant="plain" />
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}>
                   {kpi.label}
@@ -1244,14 +1594,14 @@ function QuarterlyReviewSlide() {
   );
 }
 
-/* ── Slide 13 · Before / After = 参考 scatterbrain s9（强调色：green + pink） ── */
+/* ── Slide 17 · Before / After = 参考 scatterbrain s9（强调色：green + pink） ── */
 
 const BEFORE_ITEMS = ["散落的文档", "模糊的归属", "不一致的流程", "被动救火", "部门孤岛"];
 const AFTER_ITEMS = ["一份稿子驱动", "角色清晰", "流程一致", "主动推进", "一条流水线"];
 
 function BeforeAfterSlide() {
   return (
-    <SlideShell index="13" topbar="BEFORE / AFTER" pill="VS" caption="同一份稿子，两种样子">
+    <SlideShell index="17" topbar="BEFORE / AFTER" pill="VS" caption="同一份稿子，两种样子">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           同一份稿子，两种样子。
@@ -1281,48 +1631,128 @@ function BeforeAfterSlide() {
   );
 }
 
-/* ── Slide 14 · 年报封面 = 参考 signal s1（机构封面；强调色：green） ── */
+/* ── Slide 18 · 墨底大字 = 新屏 E（studio 整屏反色；强调色：orange 单色装饰条） ── */
 
-function AnnualCoverSlide() {
+function InkSlide() {
   return (
-    <SlideShell index="14" topbar="ANNUAL REPORT · 2025" pill="GF SECURITIES" caption="广发证券，2025 年度报告">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-        {/* signal s1 封面的 session stamp：mono 小标一行 */}
-        <Kicker
-          variant="plain"
-          style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.12em", color: "var(--text-mute)" }}
-        >
-          年度报告 · H 股 · 示例解读
-        </Kicker>
-        {/* 主标题：HeroTitle 双语双行（display-1 160px 实测放得下）——封面主角块不包 MarkerBlock（signal 封面直排标题，无粉块） */}
-        <HeroTitle size="display-1" latin="GF SECURITIES" cn="广发证券" data-testid="annual-title" />
-        <BodyCopy variant="lede" style={{ maxWidth: 980 }}>
-          一份 2025 年度报告的解读预览，数据取自公开年报。
+    <SlideShell index="18" topbar="INK MODE" pill="INVERTED" caption="反白，也是态度" bg="var(--surface-3)" invert>
+      <div
+        style={{
+          position: "relative",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          ...scope({ "--text": "var(--surface)", "--text-2": "var(--surface)" }), // 墨底上组件自设色子元素回归 cream（MarkerBlock 同款手法）
+        }}
+      >
+        {/* cream 大字标语 + 单强调色装饰条（orange，本屏唯一强调色） */}
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+          <DecorBar variant="accent" data-testid="ink-bar" style={{ background: "var(--accent-3)", width: 96, height: 24 }} />
+          <HeroTitle size="display-1" data-testid="ink-title" style={{ lineHeight: 0.95 }}>
+            一句话，就够了。
+          </HeroTitle>
+        </div>
+        <BodyCopy style={{ marginTop: "var(--space-4)", fontSize: 32, lineHeight: 1.4, maxWidth: 980, color: "var(--surface)" }}>
+          整屏反色，是为了让一句话站到台前。白底字幕框在墨底上依旧成立。
         </BodyCopy>
-        {/* 关键数字带（Rule 上下）：总资产（墨）+ 净利同比（绿 accent）——本屏唯一强调色 */}
-        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column" }}>
-          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-3)" })} />
-          <div data-testid="annual-numbers" style={{ display: "flex", gap: "var(--space-6)", alignItems: "flex-end" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-              <HeroNumber value="9,754.84 亿" />
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.1em", color: "var(--text-mute)" }}>
-                总资产
-              </span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-              <HeroNumber value="+42.18%" variant="accent" />
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.1em", color: "var(--text-mute)" }}>
-                净利同比
-              </span>
-            </div>
+        {/* 右下小 mono 注 */}
+        <span
+          data-testid="ink-note"
+          style={{
+            position: "absolute",
+            right: 0,
+            bottom: 0,
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--t-label)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--surface)",
+          }}
+        >
+          INK — 墨底大字
+        </span>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 19 · 研究简报 = 新屏 F（cobalt-grid 图纸网格 + 阶梯数据块；强调色：orange 单色） ── */
+
+const BRIEF_BLOCKS = [
+  { n: "01", value: "42%", note: "参与度提升" },
+  { n: "02", value: "2.7×", note: "吞吐倍数" },
+  { n: "03", value: "25", note: "屏数 · 本套" },
+];
+
+function BriefingSlide() {
+  return (
+    <SlideShell index="19" topbar="RESEARCH BRIEF" pill="FIG. A" caption="简报，也是一张画">
+      {/* 氛围层（豁免安全框）：淡网格底（CSS 细线 1px 网格，极淡墨） */}
+      <div
+        data-testid="brief-grid"
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          backgroundImage:
+            "linear-gradient(rgba(15, 15, 15, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 15, 15, 0.05) 1px, transparent 1px)",
+          backgroundSize: "56px 56px",
+        }}
+      />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* 左栏 headline 与导语 + 右栏阶梯式数据块 */}
+        <div style={{ flex: 1, display: "flex", gap: "var(--space-6)", minHeight: 0 }}>
+          <div style={{ width: 620, display: "flex", flexDirection: "column" }}>
+            <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+              研究简报。
+            </HeroTitle>
+            <Kicker variant="plain" data-testid="brief-kicker" style={{ fontSize: 24, letterSpacing: "0.12em", color: "var(--text-mute)" }}>
+              BRIEF — 数据速读
+            </Kicker>
+            <BodyCopy style={{ marginTop: "var(--space-3)", maxWidth: 560 }}>
+              三个读数，一级一阶。把关键数字排成可以扫读的阶梯，就是一张简报。
+            </BodyCopy>
           </div>
-          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "var(--space-3) 0 var(--space-3)" })} />
-          {/* 数据诚实纪律：每屏 mono 小注 */}
-          <span
-            data-testid="annual-note"
-            style={{ fontFamily: "var(--font-mono)", fontSize: 18, letterSpacing: "0.06em", color: "var(--text-faint)" }}
+          {/* 三个错落阶梯方块（4px 墨框 + 24px 步进错落）：NumberPill + 数字 + mono 注 */}
+          <div
+            data-testid="brief-steps"
+            style={{ flex: 1, display: "flex", alignItems: "flex-start", justifyContent: "flex-end", gap: "var(--space-4)", ...scope({ "--accent-1": "var(--accent-3)" }) }}
           >
-            数据取自 2025 年年度报告 · 示例解读
+            {BRIEF_BLOCKS.map((block, i) => (
+              <div
+                key={block.n}
+                data-testid={`brief-block-${i + 1}`}
+                style={{
+                  width: 300,
+                  boxSizing: "border-box",
+                  marginTop: i * 24, // 阶梯错落 24px 步进
+                  border: "4px solid var(--surface-3)",
+                  background: "var(--surface)",
+                  padding: "var(--space-4)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--space-2)",
+                }}
+              >
+                <NumberPill number={block.n} variant="accent" data-testid={`brief-pill-${i + 1}`} />
+                <HeroNumber value={block.value} data-testid={`brief-value-${i + 1}`} />
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, lineHeight: 1, letterSpacing: "0.06em", color: "var(--text-mute)" }}>
+                  {block.note}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* 底部 hairline 数据注 */}
+        <div style={{ display: "flex", flexDirection: "column", marginTop: "var(--space-4)" }}>
+          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-2)" })} />
+          <span
+            data-testid="brief-fig"
+            style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.06em", color: "var(--text-mute)" }}
+          >
+            FIG. A — 阶梯读数
           </span>
         </div>
       </div>
@@ -1330,23 +1760,24 @@ function AnnualCoverSlide() {
   );
 }
 
-/* ── Slide 15 · 核心指标 = 参考 emerald-editorial s7（KPI 四格 + 涨跌标签；强调色：green） ── */
+/* ── Slide 20 · 核心指标 = 参考 emerald-editorial s7 + S3 同构统计格（KPI 四格 + 涨跌标签；涨橙跌绿语义） ── */
 
 const KPI_CELLS = [
-  { label: "营业收入 · 百万元", value: "27,930", delta: "▲ +9.52%" },
-  { label: "归母净利 · 百万元", value: "13,702", delta: "▲ +42.18%" },
-  { label: "总资产 · 百万元", value: "975,484", delta: "▲ +28.57%" },
-  { label: "归母权益 · 百万元", value: "156,111", delta: "▲ +27.93%" },
+  { corner: "/01", label: "营业收入 · 百万元", value: "27,930", delta: "▲ +9.52%", desc: "收入规模稳步抬升，再上台阶。" },
+  { corner: "/02", label: "归母净利 · 百万元", value: "13,702", delta: "▲ +42.18%", desc: "利润增速领跑，成色十足。" },
+  { corner: "/03", label: "总资产 · 百万元", value: "975,484", delta: "▲ +28.57%", desc: "资产盘子继续扩张，逼近万亿。" },
+  { corner: "/04", label: "归母权益 · 百万元", value: "156,111", delta: "▲ +27.93%", desc: "股东权益同步增厚，家底更实。" },
 ];
 
 function KeyMetricsSlide() {
   return (
-    <SlideShell index="15" topbar="KEY METRICS" pill="FY2025" caption="四个数字，看懂一年">
+    <SlideShell index="20" topbar="KEY METRICS" pill="FY2025" caption="四个数字，看懂一年">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           四个数字，看懂一年。
         </HeroTitle>
-        {/* 2×2 Card plain 零阴影网格（参考 s7 kpi-grid：标签 → 大数字 → 涨跌标签） */}
+        {/* 2×2 满幅零阴影网格——与 S3 BY THE NUMBERS 同构统计格（二十四轮 M2b：角标/数字/标签/描述四件套 + delta 标签）；
+            cream 底（无对角填充——财报屏克制，涨跌语义色已由 delta 橙字承载） */}
         <Grid
           variant="even"
           columns={2}
@@ -1354,24 +1785,16 @@ function KeyMetricsSlide() {
           style={{ flex: 1, marginBottom: "var(--space-3)", gridTemplateRows: "1fr 1fr", ...scope({ "--shadow-card-sm": "none" }) }}
         >
           {KPI_CELLS.map((cell, i) => (
-            <Card
+            <StatCell
               key={cell.label}
-              variant="plain"
-              data-testid={`kpi-cell-${i + 1}`}
-              style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}
-            >
-              <Kicker variant="plain" style={{ fontSize: 24, letterSpacing: "0.12em" }}>
-                {cell.label}
-              </Kicker>
-              <HeroNumber value={cell.value} />
-              {/* 涨跌标签：mono 小标，涨用 accent-1 绿字（本屏四格全为涨，无跌例） */}
-              <span
-                data-testid={`kpi-delta-${i + 1}`}
-                style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.06em", color: "var(--accent-1)" }}
-              >
-                {cell.delta}
-              </span>
-            </Card>
+              corner={cell.corner}
+              value={cell.value}
+              label={cell.label}
+              desc={cell.desc}
+              delta={cell.delta}
+              testid={`kpi-cell-${i + 1}`}
+              deltaTestid={`kpi-delta-${i + 1}`}
+            />
           ))}
         </Grid>
         {/* 底部数据来源小注 */}
@@ -1383,7 +1806,7 @@ function KeyMetricsSlide() {
   );
 }
 
-/* ── Slide 16 · 双年对比柱状图 = 参考 emerald-editorial s5（双色柱组 + y 轴 + 图例；强调色：green） ── */
+/* ── Slide 21 · 双年对比柱状图 = 参考 emerald-editorial s5（双色柱组 + y 轴 + 图例；强调色：green） ── */
 
 const YOY_GROUPS = [
   { group: "营业收入", year24: 25502, year25: 27930 },
@@ -1412,7 +1835,7 @@ function YearBarGroup({ group }: { group: (typeof YOY_GROUPS)[number] }) {
 
 function YearOverYearSlide() {
   return (
-    <SlideShell index="16" topbar="YEAR ON YEAR" pill="2024 VS 2025" caption="两年对比，看增长成色">
+    <SlideShell index="21" topbar="YEAR ON YEAR" pill="2024 VS 2025" caption="两年对比，看增长成色">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           两年对比，看增长成色。
@@ -1512,7 +1935,7 @@ function YearOverYearSlide() {
   );
 }
 
-/* ── Slide 17 · 业务分部 = 分类条形逐类一色（季度规则复用；强调色：四色序列语义） ── */
+/* ── Slide 22 · 业务分部 = 分类条形逐类一色（季度规则复用；强调色：四色序列语义） ── */
 
 const SEG_ROWS = [
   // 分类/季度类条形图每季一色（二十二轮 F2 规则，优先于每屏 2-3 强调色纪律）；tone = null 吃默认 accent-1 绿
@@ -1524,7 +1947,7 @@ const SEG_ROWS = [
 
 function BusinessSegmentsSlide() {
   return (
-    <SlideShell index="17" topbar="BUSINESS SEGMENTS" pill="FOUR LINES" caption="四条业务线，各撑一片天">
+    <SlideShell index="22" topbar="BUSINESS SEGMENTS" pill="FOUR LINES" caption="四条业务线，各撑一片天">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           四条业务线，各撑一片天。
@@ -1561,7 +1984,7 @@ function BusinessSegmentsSlide() {
   );
 }
 
-/* ── Slide 18 · 资产负债表速览 = 结构条 84/16 两段 + 三数字（强调色：green） ── */
+/* ── Slide 23 · 资产负债表速览 = 结构条 84/16 两段 + 三数字（强调色：green） ── */
 
 const BS_NUMBERS = [
   { value: "975,484", label: "总资产 · 百万元" },
@@ -1571,7 +1994,7 @@ const BS_NUMBERS = [
 
 function BalanceSheetSlide() {
   return (
-    <SlideShell index="18" topbar="BALANCE SHEET" pill="SNAPSHOT" caption="资产负债，一眼看清">
+    <SlideShell index="23" topbar="BALANCE SHEET" pill="SNAPSHOT" caption="资产负债，一眼看清">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           资产负债，一眼看清。
@@ -1631,7 +2054,7 @@ function BalanceSheetSlide() {
   );
 }
 
-/* ── Slide 19 · 年度亮点与展望 = 参考 monochrome s6（有序列表 + 页边注窄栏；强调色：green） ── */
+/* ── Slide 24 · 年度亮点与展望 = 参考 monochrome s6（有序列表 + 页边注窄栏；强调色：green） ── */
 
 const HIGHLIGHT_ITEMS = [
   { title: "净利 +42.18%", desc: "增幅领跑。" },
@@ -1641,9 +2064,23 @@ const HIGHLIGHT_ITEMS = [
   { title: "每股权益 17.07 元", desc: "扣永续债口径。" },
 ];
 
+/** A股涨跌语义（二十四轮全局落地）：文本内 "+NN.NN%" 增减片段 → accent-3 橙字
+    （涨橙/跌绿规则，本 deck 无跌例）；无涨跌片段的文本原样 */
+function DeltaText({ text }: { text: string }) {
+  const m = text.match(/\+[0-9]+(?:\.[0-9]+)?%/);
+  if (!m || m.index === undefined) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, m.index)}
+      <span style={{ color: "var(--accent-3)" }}>{m[0]}</span>
+      {text.slice(m.index + m[0].length)}
+    </>
+  );
+}
+
 function HighlightsSlide() {
   return (
-    <SlideShell index="19" topbar="HIGHLIGHTS & OUTLOOK" pill="FIVE NOTES" caption="五个亮点，一个展望">
+    <SlideShell index="24" topbar="HIGHLIGHTS & OUTLOOK" pill="FIVE NOTES" caption="五个亮点，一个展望">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           五个亮点，一个展望。
@@ -1656,9 +2093,11 @@ function HighlightsSlide() {
                 <NumberPill number={`0${i + 1}`} variant="accent" data-testid={`hl-pill-${i + 1}`} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <Kicker variant="plain" style={{ fontSize: 34, lineHeight: 1, fontWeight: 700, letterSpacing: "0.04em" }}>
-                    {item.title}
+                    <DeltaText text={item.title} />
                   </Kicker>
-                  <BodyCopy style={{ fontSize: 24, lineHeight: 1.4, color: "var(--text-2)" }}>{item.desc}</BodyCopy>
+                  <BodyCopy style={{ fontSize: 24, lineHeight: 1.4, color: "var(--text-2)" }}>
+                    <DeltaText text={item.desc} />
+                  </BodyCopy>
                 </div>
               </div>
             ))}
@@ -1689,12 +2128,12 @@ function HighlightsSlide() {
   );
 }
 
-/* ── Slide 20 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
+/* ── Slide 25 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
 
 function ClosingSlide() {
   return (
     <SlideShell
-      index="20"
+      index="25"
       topbar="END OF DECK"
       pill="FIN."
       caption="谢谢观看"
@@ -1727,7 +2166,7 @@ function ClosingSlide() {
         >
           把口播稿，做成会动的网页。这是 creative-mode 主题的完整视觉表达。
         </BodyCopy>
-        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "20/20" + "M2B"；
+        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "25/25" + "M2B"；
             内移 32px 使旋转 bbox 落回内容带 */}
         <div
           data-testid="closing-seal"
@@ -1769,7 +2208,7 @@ function ClosingSlide() {
                 color: "var(--surface)",
               }}
             >
-              20/20
+              25/25
             </span>
             <span
               style={{
@@ -1819,7 +2258,7 @@ export function ThemeShowcase() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 主题效果页 · 20 屏 slide deck · 参考构图 s1–s8 + scatterbrain / sakura-chroma / editorial-forest / signal / emerald-editorial / monochrome · 动画每 8 秒循环重播
+          creative-mode · 主题效果页 · 25 屏 slide deck · 参考构图 s1–s8 + scatterbrain / sakura-chroma / editorial-forest / emerald-editorial / monochrome + supper-club / bold-poster / retro-windows / pin-and-paper / studio / cobalt-grid · 动画每 8 秒循环重播
         </span>
         <span
           style={{
@@ -1846,11 +2285,16 @@ export function ThemeShowcase() {
         <CompareSlide />
         <MediaSlide />
         <MotionLabSlide />
+        <MenuSlide />
+        <PosterSlide />
+        <TerminalSlide />
         <StickyWallSlide />
+        <RoadmapSlide />
         <SpecSheetSlide />
         <QuarterlyReviewSlide />
         <BeforeAfterSlide />
-        <AnnualCoverSlide />
+        <InkSlide />
+        <BriefingSlide />
         <KeyMetricsSlide />
         <YearOverYearSlide />
         <BusinessSegmentsSlide />
