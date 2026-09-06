@@ -1,11 +1,14 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
-// ?showcase=1 渲染：10 屏 1920×1080 slide deck——每屏带统一 chrome frame
+// ?showcase=1 渲染：14 屏 1920×1080 slide deck——每屏带统一 chrome frame
 // （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–934 + 字幕保留区 y[958,1038]；meta 页码条已删）。
-// 构图纪律（用户反馈终审）：十五轮 F3 定稿 10 屏——
+// 构图纪律（用户反馈终审）：十五轮 F3 定稿 10 屏 + 十八轮新增 4 屏（外挂模板构图灵感，本主题 token/组件渲染）——
 // S1=参考 s1 封面 / S2=参考 s2 章节开篇 / S3=参考 s3 数据屏（2×2 满幅零阴影网格）/ S4=参考 s4 系统示意（StackedBlocks 组件）/
 // S5=参考 s5 柱状图（4 行横向条）/ S6=参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）/
 // S7=参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）/ S8=媒体 3:4 素材（用户点名竖屏占位）/
-// S9=动效实验室（全部动效词汇）/ S10=参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
+// S9=动效实验室（全部动效词汇）/ S10=参考 scatterbrain s1 便签墙（5 便签微旋转 + 图钉 + 底部 mono 注）/
+// S11=参考 sakura-chroma s3/s7 规格清单（产品图 + SC-01 + 6 行规格 JIS 勾选框 + 底部 ledger 表）/
+// S12=参考 editorial-forest s5/s7 季度回顾（图例 + 4 行成对横条 + KPI 大数字行）/
+// S13=参考 scatterbrain s9 Before/After（左右分屏 + 中缝 VS 圆章）/ S14=参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
 // （底边 ≤934 = 字幕区上缘 958 − 24；24px 阴影落点亦算占位，不越界）；③ 氛围背景层与 CaptionLayer 自身豁免。
 // ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 958 线，pointerEvents none）。
@@ -35,6 +38,7 @@ import {
   PathDraw,
   ProgressDots,
   QuoteBlock,
+  RevealList,
   Rule,
   SeededParticles,
   StackedBlocks,
@@ -61,13 +65,20 @@ const StaggerRow = createPrimitive("showcase-stagger-row", {
   defaultVariant: "default",
 });
 
-/** dev 页结构性微调（零颜色，仅尺寸）；自含 <style>，不入组件 CSS */
+/** dev 页结构性微调（零颜色，仅尺寸/字体）；自含 <style>，不入组件 CSS */
 const SHOWCASE_TWEAKS = `
 .sg-compare-table { height: 100%; }
 .sg-compare-table thead th { height: 96px; }
 .sg-compare-table thead th:first-child, .sg-compare-table tbody td:first-child { width: 30%; }
 .sg-compare-table tbody td:first-child { background: var(--surface); font-weight: 700; }
 .sg-bar-rows .cdp-bar-grow { height: 56px; }
+/* S12 成对横条：48px 行高（同列双条同高——审计断言依据） */
+.sg-yoy-rows .cdp-bar-grow { height: 48px; }
+/* S11 ledger 表：mono 数据风格 + 紧凑行高 + 首/末列定宽 */
+.sg-spec-table tbody td { font-family: var(--font-mono); font-size: var(--t-label); }
+.sg-spec-table th, .sg-spec-table td { padding: 4px var(--space-3); }
+.sg-spec-table thead th:first-child, .sg-spec-table tbody td:first-child { width: 120px; }
+.sg-spec-table thead th:last-child, .sg-spec-table tbody td:last-child { width: 120px; }
 `;
 
 /* ── 安全框可视化（?showcase=1&guides=1 dev-only） ── */
@@ -117,7 +128,7 @@ function SafetyGuides({ color }: { color: string }) {
 
 /* ── chrome frame（每屏必有） ── */
 interface SlideShellProps {
-  index: string; // "01".."10"
+  index: string; // "01".."14"
   topbar: ReactNode;
   pill: string;
   caption: string; // 该屏口播台词（CaptionLayer 字幕保留区 y[972,1032]）
@@ -489,7 +500,7 @@ function DataSlide() {
             display: "flex",
             alignItems: "flex-end",
             gap: 48,
-            marginBottom: "var(--space-2)", // 12px 卡片阴影落点收在内容带内
+            marginBottom: "var(--space-2)", // 12px 卡片阴影落点收在内容带内（阴影 ≤ 字幕线 958——既有审计规则）
           }}
         >
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
@@ -904,12 +915,417 @@ function MotionLabSlide() {
   );
 }
 
-/* ── Slide 10 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
+/* ── Slide 10 · 便签墙 = 参考 scatterbrain s1（五色便签 + 图钉） ── */
+
+interface PostItDef {
+  id: string;
+  label: string;
+  text: string;
+  tone: "pink" | "yellow" | "green" | "orange" | "cream";
+  width: number;
+  height: number;
+  left: number;
+  top: number;
+  /** 构图级微旋转（印章同款构图 transform 许可——旋转 bbox 落带内为安全框验收项） */
+  rotate: number;
+}
+
+/** 便签墙 5 卡错落排布：主角卡 520×320 居中偏上，4 张小卡 240×240 四角环绕（左右镜像对称）；
+    wall 坐标 x[0,1728] × y[0,~623]——位置已按旋转 bbox（+4~5px 扩展）预演算在带内 */
+const POST_IT_DEFS: PostItDef[] = [
+  { id: "hero", label: "BIG IDEA", text: "别让想法溜走", tone: "yellow", width: 520, height: 320, left: 604, top: 24, rotate: -2 },
+  { id: "pink", label: "NOTE 01", text: "先把想法贴墙", tone: "pink", width: 240, height: 240, left: 80, top: 100, rotate: -3 },
+  { id: "green", label: "NOTE 02", text: "组件负责构图", tone: "green", width: 240, height: 240, left: 1408, top: 100, rotate: 2 },
+  { id: "orange", label: "NOTE 03", text: "引擎驱动动效", tone: "orange", width: 240, height: 240, left: 320, top: 372, rotate: 2 },
+  { id: "cream", label: "NOTE 04", text: "配色听 token 的", tone: "cream", width: 240, height: 240, left: 1168, top: 372, rotate: -2 },
+];
+
+const POST_IT_BG: Record<PostItDef["tone"], string> = {
+  pink: "var(--accent-2)",
+  yellow: "var(--accent-4)",
+  green: "var(--accent-1)",
+  orange: "var(--accent-3)",
+  cream: "var(--surface)",
+};
+
+/** 便签卡：Card accent + inline 底色覆写（S6 步卡先例——四色显式覆写、零改组件）；
+    亮底（yellow/cream）用 plain 变体保持墨字对比度，深色三色用 accent 变体 cream 字 */
+function PostIt({ def }: { def: PostItDef }) {
+  const darkInk = def.tone === "yellow" || def.tone === "cream";
+  return (
+    <Card
+      variant={darkInk ? "plain" : "accent"}
+      data-testid={`post-it-${def.id}`}
+      style={{
+        position: "absolute",
+        left: def.left,
+        top: def.top,
+        width: def.width,
+        height: def.height,
+        boxSizing: "border-box", // 外框 = 构图尺寸（内衬/边框计入——旋转 bbox 预演算依据）
+        transform: `rotate(${def.rotate}deg)`,
+        background: POST_IT_BG[def.tone],
+        padding: 28,
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-3)",
+      }}
+    >
+      {/* 图钉（CSS 几何）：8px 墨点居中于左上卡角（卡角 = padding 框外缘 -4px 边框；-4 边框 − 4 半径 = -8；随卡旋转） */}
+      <div
+        data-testid={`post-it-pin-${def.id}`}
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          top: -8,
+          left: -8,
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: "var(--surface-3)",
+        }}
+      />
+      <Kicker variant="plain" style={{ fontSize: "var(--t-label)" }}>
+        {def.label}
+      </Kicker>
+      <span
+        style={{
+          fontFamily: "var(--font-display-cn)",
+          fontWeight: 900,
+          fontSize: def.id === "hero" ? 44 : 28,
+          lineHeight: 1.15,
+        }}
+      >
+        {def.text}
+      </span>
+    </Card>
+  );
+}
+
+function StickyWallSlide() {
+  return (
+    <SlideShell index="10" topbar="STICKY WALL" pill="NOTES" caption="想法，先贴上墙">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          想法，先贴上墙。
+        </HeroTitle>
+        {/* 便签墙：零硬阴影（构图纪律——贴墙便签平面感，S3 网格同款 scope 覆写，报告记录在案） */}
+        <div
+          data-testid="sticky-wall"
+          style={{ position: "relative", flex: 1, minHeight: 0, ...scope({ "--shadow-card-sm": "none" }) }}
+        >
+          {POST_IT_DEFS.map((def) => (
+            <PostIt key={def.id} def={def} />
+          ))}
+        </div>
+        {/* 底部 mono 小注 */}
+        <span
+          data-testid="sticky-note"
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--t-label)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--text-mute)",
+            alignSelf: "center",
+            marginTop: "var(--space-2)",
+          }}
+        >
+          REMEMBER THIS · 便签墙
+        </span>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 11 · 规格清单 = 参考 sakura-chroma s3/s7（强调色：green + orange 点缀） ── */
+
+const SPEC_ROWS = [
+  { label: "DIMENSIONS", value: "140 × 96 × 38 MM", checked: true },
+  { label: "WEIGHT", value: "1.2 KG", checked: true },
+  { label: "POWER", value: "9V DC · 300 MA", checked: true },
+  { label: "CONNECT", value: "TRS / MIDI", checked: true },
+  { label: "COLOR", value: "MINT GREEN", checked: true },
+  { label: "EDITION", value: "2026 SPRING", checked: false },
+];
+
+/** 底部 ledger 表数据（参考 s7：编号/日期/名称/版本 4 列 3 行） */
+const SPEC_LEDGER = [
+  ["SC-01", "2026-09-01", "BLOOM PEDAL", "V2.1"],
+  ["SC-02", "2026-08-14", "TAP TEMPO", "V1.4"],
+  ["SC-03", "2026-07-30", "CASCADE REVERB", "V3.0"],
+];
+
+/** JIS 勾选框（CSS 几何，dev 页）：24×24 墨框方块；checked = 墨底 + cream 对勾
+    （12×7 L 形 3px 左/下边框，rotate -45deg） */
+function JisCheck({ checked, testid }: { checked: boolean; testid?: string }) {
+  return (
+    <div
+      data-testid={testid}
+      aria-hidden="true"
+      style={{
+        width: 24,
+        height: 24,
+        flexShrink: 0,
+        border: "2px solid var(--text)",
+        background: checked ? "var(--text)" : "transparent",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxSizing: "border-box",
+      }}
+    >
+      {checked ? (
+        <div
+          style={{
+            width: 12,
+            height: 7,
+            boxSizing: "border-box",
+            borderLeft: "3px solid var(--surface)",
+            borderBottom: "3px solid var(--surface)",
+            transform: "rotate(-45deg) translateY(-1px)",
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function SpecSheetSlide() {
+  return (
+    <SlideShell index="11" topbar="SPEC SHEET" pill="CATALOGUE" caption="一张规格表，说清一切">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          一张规格表，说清一切。
+        </HeroTitle>
+        {/* 两栏：左产品卡（Figure bare 3:4 + mono 编号 + Kicker 产品名）；右规格清单 6 行（等距 16px） */}
+        <div data-testid="spec-main" style={{ flex: 1, display: "flex", gap: "var(--space-6)", alignItems: "center" }}>
+          <div style={{ width: 240, display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-2)" }}>
+            <div style={{ width: 240 }}>
+              <Figure variant="bare" ratio="3 / 4" data-testid="spec-figure" />
+            </div>
+            <span
+              data-testid="spec-code"
+              style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.12em", color: "var(--text)" }}
+            >
+              SC-01
+            </span>
+            <Kicker variant="plain" data-testid="spec-name" style={{ fontSize: "var(--t-label)" }}>
+              BLOOM PEDAL
+            </Kicker>
+          </div>
+          <div data-testid="spec-list" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            {SPEC_ROWS.map((row, i) => (
+              <div
+                key={row.label}
+                data-testid={`spec-row-${i + 1}`}
+                style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", height: 56 }}
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "var(--t-label)",
+                    letterSpacing: "0.08em",
+                    color: "var(--text-mute)",
+                    width: 200,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {row.label}
+                </span>
+                <span
+                  style={{ flex: 1, fontFamily: "var(--font-body)", fontSize: "var(--t-body)", color: "var(--text)", whiteSpace: "nowrap" }}
+                >
+                  {row.value}
+                </span>
+                <JisCheck checked={row.checked} testid={`jis-check-${i + 1}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* 底部 ledger 表（参考 s7）：mono 数据风格 4 列 3 行 */}
+        <Table
+          variant="bordered"
+          className="sg-spec-table"
+          header={["NO.", "DATE", "NAME", "VER."]}
+          rows={SPEC_LEDGER}
+          data-testid="spec-ledger"
+        />
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 12 · 季度回顾 = 参考 editorial-forest s5/s7（强调色：green + pink） ── */
+
+const YOY_ROWS = [
+  { label: "Q1", thisYear: 0.62, lastYear: 0.48 },
+  { label: "Q2", thisYear: 0.74, lastYear: 0.55 },
+  { label: "Q3", thisYear: 0.81, lastYear: 0.67 },
+  { label: "Q4", thisYear: 0.88, lastYear: 0.72 },
+];
+
+const YOY_KPIS = [
+  { value: "+42%", label: "ACTIVE ACCOUNTS · 年增" },
+  { value: "+18%", label: "NET RETENTION · 年增" },
+  { value: "92", label: "PEOPLE SERVED · 当季" },
+];
+
+function QuarterlyReviewSlide() {
+  return (
+    <SlideShell index="12" topbar="QUARTERLY REVIEW" pill="YOY" caption="今年，比去年快一点">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          今年，比去年快一点。
+        </HeroTitle>
+        {/* 图例行（参考 s5 legend）：色块 + mono 标签单行（S4 层次图例同款格式） */}
+        <div data-testid="yoy-legend" style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", marginBottom: "var(--space-4)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+            <div data-testid="yoy-legend-this" style={{ width: 16, height: 16, background: "var(--accent-1)", border: "2px solid var(--text)" }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)" }}>
+              THIS YEAR
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+            <div data-testid="yoy-legend-last" style={{ width: 16, height: 16, background: "var(--surface-2)", border: "2px solid var(--text)" }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)" }}>
+              LAST YEAR
+            </span>
+          </div>
+        </div>
+        {/* 4 行成对横条（参考 s5 bar-pair）：今年 accent（green）/ 去年 solid（surface-3 墨）；同列双条等高（.sg-yoy-rows 48px） */}
+        <div
+          data-testid="yoy-rows"
+          className="sg-yoy-rows"
+          style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}
+        >
+          {YOY_ROWS.map((row) => (
+            <div key={row.label} data-testid={`yoy-row-${row.label}`} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+              <span
+                style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.1em", width: 96, color: "var(--text)" }}
+              >
+                {row.label}
+              </span>
+              <div style={{ flex: 1 }}>
+                <BarGrow value={row.thisYear} variant="accent" data-testid={`yoy-bar-${row.label}-this`} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <BarGrow value={row.lastYear} variant="solid" data-testid={`yoy-bar-${row.label}-last`} />
+              </div>
+              <span
+                style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", width: 64, textAlign: "right", color: "var(--accent-1)" }}
+              >
+                {row.thisYear.toFixed(2)}
+              </span>
+              <span
+                style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", width: 64, textAlign: "right", color: "var(--text-mute)" }}
+              >
+                {row.lastYear.toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
+        {/* KPI 行（参考 s7 three-numbers）：3px pink hairline + 三个 pink 大数字 + mono 标注 */}
+        <div style={{ marginTop: "auto", ...scope({ "--accent-1": "var(--accent-2)", "--rule": "var(--accent-2)" }) }}>
+          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-3)" })} />
+          <div data-testid="yoy-kpis" style={{ display: "flex", gap: "var(--space-6)" }}>
+            {YOY_KPIS.map((kpi) => (
+              <div key={kpi.value} style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                <HeroNumber value={kpi.value} variant="accent" />
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}>
+                  {kpi.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 13 · Before / After = 参考 scatterbrain s9（强调色：green + pink） ── */
+
+const BEFORE_ITEMS = ["散落的文档", "模糊的归属", "不一致的流程", "被动救火", "部门孤岛"];
+const AFTER_ITEMS = ["一份稿子驱动", "角色清晰", "流程一致", "主动推进", "一条流水线"];
+
+function BeforeAfterSlide() {
+  return (
+    <SlideShell index="13" topbar="BEFORE / AFTER" pill="VS" caption="同一份稿子，两种样子">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          同一份稿子，两种样子。
+        </HeroTitle>
+        {/* 左右分屏：中缝 = 内容带中心线（两卡 780 各占一侧，镜像对称）；圆章 absolute 压缝 */}
+        <div
+          data-testid="ba-split"
+          style={{ flex: 1, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          {/* 左卡 BEFORE：条目全量 pending 灰态（activeCount 0 = 全灰——"两种样子"对比的暗面） */}
+          <Card
+            variant="plain"
+            data-testid="before-card"
+            style={{ width: 780, height: 560, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "var(--space-3)" }}
+          >
+            <Kicker variant="plain" style={{ color: "var(--text-mute)" }}>
+              BEFORE
+            </Kicker>
+            <RevealList items={BEFORE_ITEMS} activeCount={0} data-testid="before-list" />
+          </Card>
+          {/* 右卡 AFTER：accent 绿底 cream 字（--text scope 覆写使条目 cream）；5 条全量激活 */}
+          <Card
+            variant="accent"
+            data-testid="after-card"
+            style={{
+              width: 780,
+              height: 560,
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-3)",
+              ...scope({ "--text": "var(--surface)" }),
+            }}
+          >
+            <Kicker variant="plain">AFTER</Kicker>
+            <RevealList items={AFTER_ITEMS} activeCount={AFTER_ITEMS.length} data-testid="after-list" />
+          </Card>
+          {/* 中缝大 VS 圆章（参考 compare-vs）：pink 圆 160px + 4px 墨框 + cream 大字 + 24px 墨硬阴影 */}
+          <div
+            data-testid="vs-seal"
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              width: 160,
+              height: 160,
+              borderRadius: "50%",
+              background: "var(--accent-2)",
+              border: "4px solid var(--surface-3)",
+              boxShadow: "24px 24px 0 var(--surface-3)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 2,
+            }}
+          >
+            <span style={{ fontFamily: "var(--font-display-en)", fontSize: 64, lineHeight: 1, color: "var(--surface)", letterSpacing: "0.02em" }}>
+              VS
+            </span>
+          </div>
+        </div>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 14 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
 
 function ClosingSlide() {
   return (
     <SlideShell
-      index="10"
+      index="14"
       topbar="END OF DECK"
       pill="FIN."
       caption="谢谢观看"
@@ -942,7 +1358,7 @@ function ClosingSlide() {
         >
           把口播稿，做成会动的网页。这是 creative-mode 主题的完整视觉表达。
         </BodyCopy>
-        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "10/10" + "M2B"；
+        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "14/14" + "M2B"；
             内移 32px 使旋转 bbox 落回内容带 */}
         <div
           data-testid="closing-seal"
@@ -984,7 +1400,7 @@ function ClosingSlide() {
                 color: "var(--surface)",
               }}
             >
-              10/10
+              14/14
             </span>
             <span
               style={{
@@ -1034,7 +1450,7 @@ export function ThemeShowcase() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 主题效果页 · 10 屏 slide deck · 参考构图 s1–s8 + 素材/动效 · 动画每 8 秒循环重播
+          creative-mode · 主题效果页 · 14 屏 slide deck · 参考构图 s1–s8 + scatterbrain / sakura-chroma / editorial-forest · 动画每 8 秒循环重播
         </span>
         <span
           style={{
@@ -1061,6 +1477,10 @@ export function ThemeShowcase() {
         <CompareSlide />
         <MediaSlide />
         <MotionLabSlide />
+        <StickyWallSlide />
+        <SpecSheetSlide />
+        <QuarterlyReviewSlide />
+        <BeforeAfterSlide />
         <ClosingSlide />
       </main>
     </div>
