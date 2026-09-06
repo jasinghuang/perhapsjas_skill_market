@@ -7,11 +7,11 @@
  *   SVG属性色值  blocker  #2      fill=/stroke= 属性（JSX 属性或表达式内字符串）裸色值；
  *                                none/white/black 豁免、var(--x) 豁免
  *   确定性黑名单 blocker  #7      setTimeout/setInterval/Math.random/Date.now/performance.now/
- *                                requestAnimationFrame/new Date() 调用——engine/ 与 components/
- *                                目录路径豁免（引擎虚拟时钟/SeededRandom 层合法）
+ *                                requestAnimationFrame/new Date() 调用——engine/ 目录豁免
+ *                                （P4-7：组件同为库代码不豁免，同样要确定性）
  *   无限循环动画 blocker  #8      iterations: Infinity / -1 / -Infinity 字面量（WAAPI 负 iterations = 无限）
  *   禁裸缓动     blocker  终审    字符串/模板串内 cubic-bezier( 裸值（须走 var(--ease-*) token）——
- *                                components/ 目录豁免（组件层 contract-lint 已管 token 纯度）
+ *                                engine/ 与 components/ 目录豁免（P4-7）
  *
  * 实现取舍（任务要求报告）：typescript compiler API AST 遍历，非正则。理由：
  *   1. 属性名精确匹配——fillOpacity/strokeWidth 等前缀属性零误报，正则做不到（startsWith 必炸）；
@@ -28,8 +28,16 @@ import type { Finding } from "./findings";
 
 // ── 目录豁免 ──
 
-function hasDirSegment(path: string, dir: string): boolean {
-  return path.replace(/\\/g, "/").split("/").includes(dir);
+/**
+ * 豁免锚定（评审 Finding 2）：最后一个 `src` 段之后的下一段必须是 dir（相对路径契约
+ * src/<dir>/... 才豁免）。全路径任意段 includes 会把祖辈路径段叫 engine/components 的
+ * 任意文件（scaffold 到用户目录后）静默豁免全项目——锚定后 /home/user/engine/x.tsx、
+ * src/chapters/engine-foo/x.tsx 均不豁免。
+ */
+function isSrcSubdir(path: string, dir: string): boolean {
+  const segs = path.replace(/\\/g, "/").split("/");
+  const srcIdx = segs.lastIndexOf("src");
+  return srcIdx >= 0 && segs[srcIdx + 1] === dir;
 }
 
 // ── 色值判定（与 scanner-css / contract-lint 同型正则） ──
@@ -74,14 +82,20 @@ function dottedName(node: ts.Expression): string | undefined {
 function determinismHit(node: ts.CallExpression | ts.NewExpression): string | undefined {
   const name = dottedName(node.expression);
   if (name === undefined) return undefined;
+  const parts = name.split(".");
+  const bare = parts[parts.length - 1];
   if (ts.isNewExpression(node)) {
-    return name === "Date" || name.endsWith(".Date") ? "new Date()" : undefined;
+    return bare === "Date" ? "new Date()" : undefined; // new Date() / new window.Date()
   }
-  if (BLACKLIST_PLAIN.has(name)) return name;
-  if (BLACKLIST_DOTTED.has(name)) return name;
-  // window.setTimeout / globalThis.requestAnimationFrame 等别名
-  const bare = name.slice(name.lastIndexOf(".") + 1);
-  return BLACKLIST_PLAIN.has(bare) ? name : undefined;
+  // window.setTimeout / globalThis.requestAnimationFrame 等别名（末段对照）
+  if (BLACKLIST_PLAIN.has(bare)) return name;
+  // window.Math.random / globalThis.Date.now 等点分成员别名（评审 Finding 1：
+  // 末两段对照点分集合——只测末段会让 window.Math.random 等真实浏览器别名全部逃逸）
+  if (parts.length >= 2) {
+    const lastTwo = `${parts[parts.length - 2]}.${parts[parts.length - 1]}`;
+    if (BLACKLIST_DOTTED.has(lastTwo)) return name;
+  }
+  return undefined;
 }
 
 // ── 字符串/模板串静态段 ──
@@ -111,8 +125,8 @@ interface ScanCtx {
   path: string;
   findings: Finding[];
   seen: Set<string>; // `${rule}|${line}` 去重——单行同规则最多一条（与 scanner-css 粒度一致）
-  exemptDeterminism: boolean; // engine/ 或 components/ 目录
-  exemptEasing: boolean; // components/ 目录
+  exemptDeterminism: boolean; // P4-7：仅 src/engine/（组件同为库代码不豁免）
+  exemptEasing: boolean; // P4-7：src/engine/ 或 src/components/
 }
 
 function pushFinding(ctx: ScanCtx, rule: string, node: ts.Node, message: string): void {
@@ -231,12 +245,17 @@ function isInfiniteIterations(node: ts.PropertyAssignment): boolean {
 
 // ── 解析 ──
 
-/** 建 TSX SourceFile；parseDiagnostics 非空即 throw（坏语法文件无法 AST 扫描，宁炸不假绿）。 */
+/** 建 TSX SourceFile；parseDiagnostics 缺失或非空均 throw（坏语法文件无法 AST 扫描，宁炸不假绿）。 */
 function parseSource(path: string, source: string): ts.SourceFile {
   const sf = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  // TS 5.x 内部属性（类型未公开，防御式读取）；TS 6 移除后需换 program.getSyntacticDiagnostics
-  const diags =
-    (sf as unknown as { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics ?? [];
+  // TS 5.x 内部属性（类型未公开）。缺失即 throw（评审 Minor 4）：TS 6 移除该内部属性时
+  // 门禁会响亮失败而非 `?? []` 静默假绿——与门禁"宁炸不假绿"哲学一致。
+  const diags = (sf as unknown as { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics;
+  if (diags === undefined) {
+    throw new Error(
+      `scanChapterTsx：${path} 无法读取 parseDiagnostics（typescript 内部属性缺失，疑似 TS 版本不兼容）——宁炸不假绿`,
+    );
+  }
   if (diags.length > 0) {
     const d = diags[0];
     const where =
@@ -264,8 +283,8 @@ export function scanChapterTsx(files: Array<{ path: string; source: string }>): 
       path,
       findings,
       seen: new Set<string>(),
-      exemptDeterminism: hasDirSegment(path, "engine") || hasDirSegment(path, "components"),
-      exemptEasing: hasDirSegment(path, "components"),
+      exemptDeterminism: isSrcSubdir(path, "engine"),
+      exemptEasing: isSrcSubdir(path, "engine") || isSrcSubdir(path, "components"),
     };
     walk(ctx, sf);
   }

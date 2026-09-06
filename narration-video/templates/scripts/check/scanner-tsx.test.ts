@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { scanChapterTsx } from "./scanner-tsx";
 
 const CH = "src/chapters/01-bad/index.tsx";
@@ -51,7 +51,7 @@ export const easing = { transition: "cubic-bezier(0.16,1,0.3,1)" };
     expect(r.every((f) => /^src\/chapters\/01-bad\/index\.tsx:\d+$/.test(f.location))).toBe(true);
   });
 
-  it("false-positive：engine/components 黑名单豁免、组件 easing 豁免、var()/none/white-black 全通过", () => {
+  it("false-positive：engine 黑名单+easing 豁免、组件 easing 豁免、var()/none/white-black 全通过", () => {
     const engine = scanChapterTsx([
       {
         path: "src/engine/clock.ts",
@@ -66,21 +66,28 @@ export const tick = () => {
   const d = new Date(2026);
   return [a, b, c, d];
 };
+export const EASE = "cubic-bezier(0,0,0.2,1)";
 `,
       },
     ]);
     expect(engine).toEqual([]);
 
-    const components = scanChapterTsx([
+    const componentsEasing = scanChapterTsx([
       {
         path: "src/components/reveal/MaskReveal.tsx",
-        source: `
-export const EASE = "cubic-bezier(0,0,0.2,1)";
-export const warmup = () => setTimeout(() => {}, 0);
-`,
+        source: `export const EASE = "cubic-bezier(0,0,0.2,1)";`,
       },
     ]);
-    expect(components).toEqual([]);
+    expect(componentsEasing).toEqual([]);
+
+    // P4-7：组件同为库代码，黑名单只豁免 engine/——组件内 setTimeout 仍报
+    const componentsTimer = scanChapterTsx([
+      {
+        path: "src/components/reveal/MaskReveal.tsx",
+        source: `export const warmup = () => setTimeout(() => {}, 0);`,
+      },
+    ]);
+    expect(componentsTimer.some((f) => f.rule === "确定性黑名单" && f.severity === "blocker")).toBe(true);
 
     const legal = scanChapterTsx([
       {
@@ -132,6 +139,57 @@ export const c = Date.now();
       },
     ]);
     expect(r.filter((f) => f.rule === "确定性黑名单")).toHaveLength(3);
+  });
+
+  it("黑名单点分成员别名不逃逸：window.Math.random/window.performance.now/globalThis.Date.now/new window.Date() 全命中（Finding 1）", () => {
+    const r = scanChapterTsx([
+      {
+        path: CH,
+        source: `
+export const a = window.Math.random();
+export const b = window.performance.now();
+export const c = globalThis.Date.now();
+export const d = new window.Date();
+`,
+      },
+    ]);
+    expect(r.filter((f) => f.rule === "确定性黑名单")).toHaveLength(4);
+  });
+
+  it("豁免锚定：src 直下 engine/components 才豁免，祖辈/伪前缀路径不豁免（Finding 2）", () => {
+    const home = scanChapterTsx([
+      { path: "/home/user/engine/x.tsx", source: "export const t = setTimeout(() => {}, 1);" },
+    ]);
+    expect(home.some((f) => f.rule === "确定性黑名单")).toBe(true);
+    const engineFoo = scanChapterTsx([
+      { path: "src/chapters/engine-foo/x.tsx", source: "export const t = setTimeout(() => {}, 1);" },
+    ]);
+    expect(engineFoo.some((f) => f.rule === "确定性黑名单")).toBe(true);
+    const componentsFoo = scanChapterTsx([
+      { path: "src/chapters/components-foo/x.tsx", source: `export const e = "cubic-bezier(0,0,0.2,1)";` },
+    ]);
+    expect(componentsFoo.some((f) => f.rule === "禁裸缓动")).toBe(true);
+  });
+
+  it("parseDiagnostics 内部属性缺失即 throw（Minor 4，宁炸不假绿）", async () => {
+    // typescript 是冻结 ESM namespace（vi.spyOn 不可用），用 doMock + 重导入注入缺失场景
+    vi.resetModules();
+    vi.doMock("typescript", () => ({
+      default: {
+        createSourceFile: () => ({}),
+        ScriptTarget: { Latest: 99 },
+        ScriptKind: { TSX: 4 },
+      },
+    }));
+    try {
+      const mod = await import("./scanner-tsx");
+      expect(() => mod.scanChapterTsx([{ path: CH, source: "export const x = 1;" }])).toThrow(
+        /parseDiagnostics/,
+      );
+    } finally {
+      vi.doUnmock("typescript");
+      vi.resetModules();
+    }
   });
 
   it("new Date() 章节层命中、engine 路径豁免（含 new Date(2026)）", () => {
