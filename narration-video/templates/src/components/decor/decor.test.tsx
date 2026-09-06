@@ -63,14 +63,14 @@ describe("装饰组", () => {
     expect(getByTestId("m3").textContent).toBe("墨底");
   });
 
-  it("StepStairs 渲染 N 卡 + 左低右高阶梯 24px 步进 + 全卡同色无墨卡 + 卡内三件套（二十六轮 F3）", () => {
+  it("StepStairs 渲染 N 卡 + 无序号 + 卡高逐级递增 220/248/276 + 卡间上升箭头 N-1（二十七轮 F3）", () => {
     const { getByTestId } = render(
       <StepStairs
         data-testid="stairs"
         items={[
-          { label: "01", value: "42%", note: "参与度提升" },
-          { label: "02", value: "2.7×" },
-          { label: "03", value: "25", note: "屏数" },
+          { value: "42%", note: "参与度提升" },
+          { value: "2.7×" },
+          { value: "25", note: "屏数" },
         ]}
       />,
     );
@@ -78,14 +78,15 @@ describe("装饰组", () => {
     expect(root.className).toContain("cdp-step-stairs");
     const cards = root.querySelectorAll(".cdp-step-stairs-card");
     expect(cards).toHaveLength(3);
-    // 左低右高阶梯：第一卡最低、向右逐级升高（逐卡 marginTop 48/24/0——审计断言依据：computed y 逐卡递减 24px）
-    expect((cards[0] as HTMLElement).style.marginTop).toBe("48px");
-    expect((cards[1] as HTMLElement).style.marginTop).toBe("24px");
-    expect((cards[2] as HTMLElement).style.marginTop).toBe("0px");
-    // 全卡同色：无任何墨卡（二十六轮 F3 删除交替）
-    expect(root.querySelector(".cdp-step-stairs-card-ink")).toBeNull();
-    // 卡内三件套：NumberPill 序号 + HeroNumber 值 + mono 注（note 可选）
-    expect(cards[0].querySelector(".cdp-number-pill")).toHaveTextContent("01");
+    // 卡高逐级递增（底部对齐 → 顶部阶梯上升；右卡更高，逐卡 +28px 审计依据——computed 高度审计同源）
+    expect((cards[0] as HTMLElement).style.height).toBe("220px");
+    expect((cards[1] as HTMLElement).style.height).toBe("248px");
+    expect((cards[2] as HTMLElement).style.height).toBe("276px");
+    // 无 NumberPill 序号（二十七轮 F3 删除——组件不再渲染序号）
+    expect(root.querySelector(".cdp-number-pill")).toBeNull();
+    // 卡间上升箭头 = N-1 个（末卡无；span 空元素 + CSS 几何）
+    expect(root.querySelectorAll(".cdp-step-stairs-rise")).toHaveLength(2);
+    // 卡内两件套：HeroNumber 值 + mono 注（note 可选）
     expect(cards[0].querySelector(".cdp-hero-number-value")).toHaveTextContent("42%");
     expect(cards[0].querySelector(".cdp-step-stairs-note")).toHaveTextContent("参与度提升");
     expect(cards[1].querySelector(".cdp-step-stairs-note")).toBeNull();

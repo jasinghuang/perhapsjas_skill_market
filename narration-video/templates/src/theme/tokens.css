@@ -86,6 +86,9 @@
   /* ── 语义 · 分屏对比（十九轮 F4 SplitCompare） ── */
   /* before 条目文字色：默认墨色；展示页 S13 灰语义经 scope 覆写为 --text-faint */
   --split-before-text: var(--text);
+  /* 二十七轮 F2 加宽：面板最小宽（格内密度场景可 scope 覆写）+ 中缝侧净空（圆章覆盖区零文字） */
+  --split-min-w: 1200px;
+  --split-seam-pad: 96px;
 
   /* ── 语义 · 装饰语言（Ruling M2b-5：色块族） ── */
   --decor-family: block;

@@ -56,7 +56,7 @@ describe("双画布冒烟（§11.2 组件契约测试）", () => {
             <RevealList items={["一", "二"]} activeCount={1} />
             <StepSequence steps={[{ title: "一" }, { title: "二" }]} currentStep={0} />
             <DecorDot /> <DecorBar /> <DecorRing /> <StackedBlocks />
-            <StepStairs items={[{ label: "01", value: "42%", note: "参与度提升" }, { label: "02", value: "2.7×" }]} />
+            <StepStairs items={[{ value: "42%", note: "参与度提升" }, { value: "2.7×" }]} />
             <MarkerBlock>主角</MarkerBlock>
             <SplitCompare before={["散落"]} after={["清晰"]} />
             <NumberPill number="01" />

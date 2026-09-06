@@ -15,6 +15,11 @@
 // F4 StatCell descStyle 三档（plain/block/pill）+ desc 去粗 400，S20 对比试验（卡1 block / 卡2 pill / 卡3-4 plain）；
 // F5 S24 改两列数据版（年度亮点 5 条 + 经营数据 5 条）+ 展望强调块（墨底 cream 字 4px 墨框）+ 页边注字号 20→24px（--t-label 下限）；
 // F6 S25 印章底抬 space-4→space-5（旋转 bbox 全落内容带）。
+// 二十七轮（视觉终审）：F1 S11 海报橙底色块改 flex 居中（height 176 + line-height 1——130px 文字在橙底内上下等距）；
+// F2 S17 SplitCompare 加宽重排（min-width 1200 + padding space-5 + 中缝侧 96px 净空 + VS 圆章 140→120px——覆盖区零文字）；
+// F3 StepStairs 阶梯感重设计（删 NumberPill 序号 + 卡高逐级递增 220/248/276 底部对齐顶部阶梯上升 + 卡间 CSS 上升箭头）；
+// F4 StatCell descStyle 四档定型（block 绿底 cream 字无框 / pill 4px 墨框药丸 600 / pillFilled 绿填充药丸 / plain 对照——S20 卡 1-4 逐档）；
+// F5 S24 展望块墨底→accent-1 绿底 cream 字 + 主文案 --t-body→--t-h3 40px 字阶升级（Kicker 保持）。
 // S1=参考 s1 封面 / S2=参考 s2 章节开篇 / S3=参考 s3 数据屏（2×2 满幅零阴影网格）/ S4=参考 s4 系统示意（StackedBlocks 组件）/
 // S5=参考 s5 柱状图（4 行横向条）/ S6=参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）/
 // S7=参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）/ S8=媒体 3:4 素材（用户点名竖屏占位）/
@@ -963,7 +968,9 @@ function PosterSlide() {
           MANIFESTO · POSTER NO.01
         </Kicker>
         {/* ② 主体大字区：display-1 双行——"口播视频" 墨 + "稿子成片" accent-3 橙底 cream 字（单强调色语义）；
-            二十六轮 F1：行距 0.92 → 1.05（CJK 130px 视觉重叠修正）；第二行橙底色块（左右 padding --space-3） */}
+            二十六轮 F1：行距 0.92 → 1.05（CJK 130px 视觉重叠修正）；第二行橙底色块（左右 padding --space-3）；
+            二十七轮 F1：色块改 flex 居中（height 176 + line-height 1——130px 文字 rect 中心与色块中心精确重合，
+            上下等距 23px，消除字体 ascent/descent 偏移造成的视觉不居中） */}
         <div data-testid="poster-title" style={{ display: "flex", flexDirection: "column", marginTop: "var(--space-4)" }}>
           <HeroTitle size="display-1" data-testid="poster-line-1" style={{ lineHeight: 1.05 }}>
             口播视频
@@ -972,7 +979,10 @@ function PosterSlide() {
             size="display-1"
             data-testid="poster-line-2"
             style={{
-              lineHeight: 1.05,
+              display: "flex",
+              alignItems: "center",
+              height: 176,
+              lineHeight: 1,
               background: "var(--accent-3)",
               color: "var(--surface)",
               padding: "0 var(--space-3)",
@@ -1538,8 +1548,9 @@ function BeforeAfterSlide() {
           同一份稿子，两种样子。
         </HeroTitle>
         {/* 十九轮 F4：SplitCompare 组件（单一面板 + 4px 中分界 + 中缝 VS 圆章）；二十二轮 F4 align="center"
-            → 二十六轮 F2 撤销：用回 align="split"（左半左对齐/右半右对齐）；面板 width: max-content
-            自适应内容（组件级，窄于内容带），居中摆放由本容器决定；before 灰语义经 --split-before-text scope 覆写 */}
+            → 二十六轮 F2 撤销：用回 align="split"（左半左对齐/右半右对齐）；二十七轮 F2：组件级加宽
+            （min-width 1200 + padding space-5 + 中缝侧 96px 净空 + VS 圆章 120px——圆章覆盖区零文字），
+            居中摆放由本容器决定；before 灰语义经 --split-before-text scope 覆写 */}
         <div
           data-testid="ba-split"
           style={{
@@ -1612,9 +1623,9 @@ function InkSlide() {
 /* ── Slide 19 · 研究简报 = 新屏 F（cobalt-grid 图纸网格 + StepStairs 阶梯卡组；强调色：orange 单色） ── */
 
 const BRIEF_BLOCKS = [
-  { label: "01", value: "42%", note: "参与度提升" },
-  { label: "02", value: "2.7×", note: "吞吐倍数" },
-  { label: "03", value: "25", note: "屏数 · 本套" },
+  { value: "42%", note: "参与度提升" },
+  { value: "2.7×", note: "吞吐倍数" },
+  { value: "25", note: "屏数 · 本套" },
 ];
 
 function BriefingSlide() {
@@ -1648,11 +1659,12 @@ function BriefingSlide() {
               三个读数，一级一阶。把关键数字排成可以扫读的阶梯，就是一张简报。
             </BodyCopy>
           </div>
-          {/* StepStairs 阶梯卡组（二十五轮 F4 收编组件；二十六轮 F3：左低右高 24px 步进 + 全卡同色 cream + 零阴影）；
-              --accent-1 → orange 使 NumberPill accent 走本屏单强调色 */}
+          {/* StepStairs 阶梯卡组（二十五轮 F4 收编；二十七轮 F3 重设计：无序号 + 卡高逐级递增 220/248/276
+              底部对齐顶部阶梯上升 + 卡间上升箭头）；--accent-1 → orange 使上升箭头走本屏单强调色；
+              容器 alignItems flex-end 使阶梯组底缘贴行底（与左栏/FG 注对齐感） */}
           <div
             data-testid="brief-steps"
-            style={{ flex: 1, display: "flex", alignItems: "flex-start", justifyContent: "flex-end", ...scope({ "--accent-1": "var(--accent-3)" }) }}
+            style={{ flex: 1, display: "flex", alignItems: "flex-end", justifyContent: "flex-end", ...scope({ "--accent-1": "var(--accent-3)" }) }}
           >
             <StepStairs items={BRIEF_BLOCKS} data-testid="brief-stairs" />
           </div>
@@ -1677,7 +1689,7 @@ function BriefingSlide() {
 const KPI_CELLS = [
   { index: "/01", label: "营业收入 · 百万元", value: "27,930", delta: "▲ +9.52%", desc: "收入规模稳步抬升，再上台阶。", descStyle: "block" as const },
   { index: "/02", label: "归母净利 · 百万元", value: "13,702", delta: "▲ +42.18%", desc: "利润增速领跑，成色十足。", descStyle: "pill" as const },
-  { index: "/03", label: "总资产 · 百万元", value: "975,484", delta: "▲ +28.57%", desc: "资产盘子继续扩张，逼近万亿。", descStyle: "plain" as const },
+  { index: "/03", label: "总资产 · 百万元", value: "975,484", delta: "▲ +28.57%", desc: "资产盘子继续扩张，逼近万亿。", descStyle: "pillFilled" as const },
   { index: "/04", label: "归母权益 · 百万元", value: "156,111", delta: "▲ +27.93%", desc: "股东权益同步增厚，家底更实。", descStyle: "plain" as const },
 ];
 
@@ -1691,7 +1703,7 @@ function KeyMetricsSlide() {
         {/* 2×2 满幅网格——与 S3 BY THE NUMBERS 同构 StatCell（二十四轮 M2b：角标/数字/标签/描述四件套 + delta 标签；
             二十五轮 F5 收编组件：delta 右置头行、up 橙字——A股涨橙语义）；
             cream 底（无对角填充——财报屏克制，涨跌语义色已由 delta 橙字承载）；
-            二十六轮 F4 descStyle 对比试验：第 1 卡 block 底色块 / 第 2 卡 pill 药丸框 / 第 3、4 卡 plain（供选型） */}
+            二十七轮 F4 descStyle 四档定型：卡 1 block 绿底 cream 字 / 卡 2 pill 4px 墨框药丸 / 卡 3 pillFilled 绿填充药丸 / 卡 4 plain 对照 */}
         <Grid
           variant="even"
           columns={2}
@@ -2060,13 +2072,14 @@ function HighlightsSlide() {
             </span>
           </aside>
         </div>
-        {/* 底部展望强调块（二十六轮 F5）：墨底 cream 字 + 4px 墨框 + padding，Kicker + 主文案 */}
+        {/* 底部展望强调块（二十六轮 F5 墨底；二十七轮 F5：surface-3 墨底 → accent-1 绿底 + cream 字，
+            主文案 --t-body 28px → --t-h3 40px 字阶升级；4px 墨框保持（Card 风格）；Kicker 保持 24px） */}
         <div
           data-testid="hl-outlook"
           style={{
             marginTop: "var(--space-3)",
-            background: "var(--surface-3)",
-            border: "4px solid var(--surface-3)",
+            background: "var(--accent-1)",
+            border: "var(--border-w) solid var(--text)",
             padding: "var(--space-3) var(--space-4)",
             display: "flex",
             alignItems: "center",
@@ -2076,7 +2089,7 @@ function HighlightsSlide() {
           <Kicker variant="plain" data-testid="hl-outlook-kicker" style={{ fontSize: 24, letterSpacing: "0.12em", color: "var(--surface)" }}>
             OUTLOOK · 展望
           </Kicker>
-          <BodyCopy style={{ color: "var(--surface)", fontSize: 28 }}>
+          <BodyCopy style={{ color: "var(--surface)", fontSize: "var(--t-h3)" }}>
             财富管理转型与国际化布局，仍是主线。
           </BodyCopy>
         </div>

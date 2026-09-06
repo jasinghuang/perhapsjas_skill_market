@@ -11,8 +11,9 @@ export interface StatCellProps {
   label: string;
   /** 描述一句（--t-body 28px；二十六轮 F4：font-weight 600 → 400 去粗） */
   desc: string;
-  /** 描述样式三档（二十六轮 F4）：plain = 现状无底无框 / block = --surface-2 底色块 + 4px 墨框 / pill = 2px 墨框药丸（--r-pill 999）。默认 plain */
-  descStyle?: "plain" | "block" | "pill";
+  /** 描述样式四档（二十七轮 F4 迭代）：plain = 现状无底无框 / block = accent-1 绿底 cream 字（无边框）
+      / pill = 4px 墨框药丸（--r-pill 999）+ 600 加粗 / pillFilled = accent-1 绿填充药丸 cream 字（无边框）。默认 plain */
+  descStyle?: "plain" | "block" | "pill" | "pillFilled";
   /** 涨跌标签（可选；头行右置，与角标同一行右侧） */
   delta?: string;
   /** 涨跌语义色（A股规则——二十四轮全局落地）：up = accent-3 橙（涨）/ down = accent-1 绿（跌）；默认 up */
@@ -26,6 +27,14 @@ export interface StatCellProps {
     结构 = 头行（mono 角标左 + delta 涨跌标签右置）+ HeroNumber 大数字 + Kicker 标签 + desc（二十六轮 F4 去粗）；
     格体 Card 风格（4px 墨框 + cream 底）零阴影——网格单元纪律。
     填充配色由消费端 scope() 注入（S3 对角绿填充先例，组件本体不改） */
+
+/** descStyle 档位 → CSS 类（pillFilled 映射 kebab 类名——descStyle 字面 camelCase 与 CSS 命名约定解耦） */
+const DESC_STYLE_CLASS: Record<NonNullable<StatCellProps["descStyle"]>, string> = {
+  plain: "cdp-stat-cell-desc-plain",
+  block: "cdp-stat-cell-desc-block",
+  pill: "cdp-stat-cell-desc-pill",
+  pillFilled: "cdp-stat-cell-desc-pill-filled",
+};
 export function StatCell({
   index,
   value,
@@ -50,7 +59,7 @@ export function StatCell({
       <Kicker variant="plain" className="cdp-stat-cell-label">
         {label}
       </Kicker>
-      <p className={`cdp-stat-cell-desc cdp-stat-cell-desc-${descStyle}`}>{desc}</p>
+      <p className={`cdp-stat-cell-desc ${DESC_STYLE_CLASS[descStyle]}`}>{desc}</p>
     </div>
   );
 }
