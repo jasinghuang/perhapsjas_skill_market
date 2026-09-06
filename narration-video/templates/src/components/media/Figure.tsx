@@ -4,7 +4,7 @@ import { createPrimitive } from "../factory";
 export interface FigureProps {
   src?: string;
   caption?: string;
-  variant?: "frame" | "plain";
+  variant?: "frame" | "bare" | "plain";
   /** 宽高比（组件级 aspect 处理，如 "3 / 4"）：高度由 width 与 ratio 决定，placeholder 撑满 */
   ratio?: string;
   reveal?: "fade" | "rise" | "wipe";
@@ -15,7 +15,7 @@ export interface FigureProps {
 
 const Base = createPrimitive("figure", {
   tag: "figure",
-  variants: ["frame", "plain"],
+  variants: ["frame", "bare", "plain"],
   defaultVariant: "frame",
 });
 

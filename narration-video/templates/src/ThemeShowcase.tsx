@@ -352,7 +352,7 @@ function ChapterSlide() {
             {CHAPTER_POINTS.map((point, i) => (
               <div key={point} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                 <NumberPill number={`0${i + 1}`} data-testid={`chapter-point-${i + 1}`} />
-                <span style={{ fontFamily: "var(--font-body)", fontSize: "var(--t-h3)", color: "var(--text)" }}>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: "var(--t-h3)", lineHeight: 1, color: "var(--text)" }}>
                   {point}
                 </span>
               </div>
@@ -580,7 +580,7 @@ function DiagramSlide() {
               {LAYER_NAMES.map((name, i) => (
                 <div key={name} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                   <NumberPill number={`0${i + 1}`} variant="accent" data-testid={`layer-pill-${i + 1}`} />
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: "var(--t-h3)", color: "var(--text)" }}>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: "var(--t-h3)", lineHeight: 1, color: "var(--text)" }}>
                     {name}
                   </span>
                 </div>
@@ -607,10 +607,11 @@ function DiagramSlide() {
                       <div
                         style={{ width: 16, height: 16, flexShrink: 0, background: layer.swatch, border: "2px solid var(--text)" }}
                       />
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)", width: 100 }}>
+                      {/* 十四轮 F1：图例行单行——色块 + LAYER NN + 层名同一行（StackedBlocks 使用约定） */}
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text)", whiteSpace: "nowrap" }}>
                         {layer.mono}
                       </span>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: "var(--t-h3)", lineHeight: 1.2, color: "var(--text)" }}>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: "var(--t-label)", lineHeight: 1, color: "var(--text-mute)", whiteSpace: "nowrap" }}>
                         {layer.name}
                       </span>
                     </div>
@@ -845,7 +846,7 @@ function MediaSlide() {
           {PORTRAIT_ITEMS.map((item) => (
             <div key={item.id} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)", width: 400 }}>
               {item.kind === "figure" ? (
-                <Figure variant="frame" ratio="3 / 4" data-testid={`portrait-${item.id}`} />
+                <Figure variant="bare" ratio="3 / 4" data-testid={`portrait-${item.id}`} /> // 十四轮 F4：占位图卡片无阴影（组件级 bare 变体，非 dev 覆写）
               ) : (
                 <div style={{ width: 400, height: 533, boxSizing: "border-box", border: "4px solid var(--surface-3)" }}>
                   <KenBurns duration="slow" data-testid="portrait-kenburns" />
@@ -933,145 +934,106 @@ function MotionLabSlide() {
   );
 }
 
-/* ── Slide 10 · 语录宣言 = 杂志正页（十二轮 F4：刊头 + 三行大字错位 + 两栏 + folio + 水印；
-     墨/cream 为主 + pink 单点缀） ── */
+/* ── Slide 10 · 语录宣言 = 杂志编辑风（十四轮 F3：双线刊头 + 主标题 + 两栏正文 + folio；
+     墨/cream 为主 + pink 单点缀 drop cap / pull quote） ── */
 
-/** 宣言大字行（display-1 130px / lh 0.92；hanging indent 由 marginLeft 错位） */
-function ManifestLine({ text, indent }: { text: string; indent?: string }) {
-  return (
-    <div
-      style={{
-        fontFamily: "var(--font-display-cn)",
-        fontWeight: 900,
-        fontSize: "var(--t-display-1)",
-        lineHeight: 0.92,
-        color: "var(--text)",
-        marginLeft: indent,
-      }}
-    >
-      {text}
-    </div>
-  );
-}
-
-/** 本期内容六项（页码与屏号对应，11 屏中选六） */
-const MANIFESTO_TOC = ["01 封面", "03 数据", "04 结构", "07 对比", "09 动效", "11 收尾"];
+/** 本期目录五项（页码与屏号对应，11 屏中选五） */
+const MANIFESTO_TOC = ["封面 01", "开篇 02", "数据 03", "流程 06", "收尾 11"];
 
 function QuoteSlide() {
   return (
     <SlideShell index="10" topbar="MANIFESTO" pill="QUOTE" caption="一句话，就够了">
-      <div style={{ position: "relative", flex: 1, display: "flex", gap: "var(--space-6)" }}>
-        {/* 超大 "01" 期号水印（cream-2 · display-1 · 右上低透明，渲染在内容之下） */}
-        <div
-          aria-hidden="true"
-          data-testid="manifesto-watermark"
-          style={{
-            position: "absolute",
-            top: 0,
-            right: 0,
-            fontFamily: "var(--font-display-en)",
-            fontSize: "var(--t-display-1)",
-            lineHeight: 1,
-            color: "var(--surface-2)",
-            opacity: 0.35,
-          }}
-        >
-          01
-        </div>
-        {/* 左侧窄栏（~280px 垂直贯穿）：序号 + 栏名 + hairline + 期号 + 专栏小目录 */}
-        <div data-testid="manifesto-sidebar" style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-          <NumberPill number="01" variant="accent" />
-          <Kicker variant="plain" style={{ fontSize: "var(--t-label)" }}>
-            MANIFESTO · 宣言
-          </Kicker>
-          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "var(--space-2) 0 var(--space-3)" })} />
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)" }}>
-            VOL. 01 — M2B
-          </span>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
-            {["01 稿子", "02 分镜", "03 成片"].map((item) => (
-              <span
-                key={item}
-                style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}
-              >
-                {item}
-              </span>
-            ))}
-          </div>
-        </div>
-        {/* 主体杂志正页 */}
-        <div data-testid="manifesto-main" style={{ flex: 1, display: "flex", flexDirection: "column", position: "relative" }}>
-          {/* 刊头行：刊名 + hairline + 期号 */}
-          <div
-            data-testid="manifesto-masthead"
-            style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-3)" }}
-          >
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)", whiteSpace: "nowrap" }}>
-              CREATIVE MODE WEEKLY · 宣言专刊
-            </span>
-            <Rule variant="solid" style={{ flex: 1, ...scope({ "--rule-w": "3px", margin: "0" }) }} />
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)", whiteSpace: "nowrap" }}>
-              VOL.01 · 2026.09.06
-            </span>
-          </div>
-          {/* 三行大字（引号并入首行——正页信息量优先，hanging indent 错位保留） */}
-          <div style={{ display: "flex", alignItems: "baseline" }}>
-            <span
-              aria-hidden="true"
-              data-testid="manifesto-quote-mark"
-              style={{ fontFamily: "var(--font-display-en)", fontSize: "var(--t-display-1)", lineHeight: 0.92, color: "var(--text)" }}
-            >
-              “
-            </span>
-            <span style={{ fontFamily: "var(--font-display-cn)", fontWeight: 900, fontSize: "var(--t-display-1)", lineHeight: 0.92, color: "var(--text)" }}>
-              节奏，
-            </span>
-          </div>
-          <ManifestLine text="由稿子" indent="var(--space-6)" />
-          <ManifestLine text="决定。" indent="var(--space-3)" />
-          {/* 大字下方两栏杂志栏（中间 3px hairline；headline-gap 64 对齐 F1） */}
-          <div data-testid="manifesto-columns" style={{ marginTop: "var(--headline-gap)", display: "flex", gap: "var(--space-4)" }}>
-            <div style={{ flex: 1.3, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-              <BodyCopy style={{ fontSize: "var(--t-label)", lineHeight: 1.4 }}>
-                这是 creative-mode 主题的宣言页。口播稿定节奏，组件出构图，引擎驱动全部动效。
-              </BodyCopy>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text)" }}>
-                FROM THE EDITOR
-              </span>
-            </div>
-            <div style={{ width: 3, alignSelf: "stretch", background: "var(--text)" }} />
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text)", marginBottom: "var(--space-1)" }}>
-                本期内容
-              </span>
-              {MANIFESTO_TOC.map((item) => (
-                <span key={item} style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)" }}>
-                  {item}
-                </span>
-              ))}
-              <QuoteBlock
-                variant="block"
-                data-testid="manifesto-quote"
-                style={{
-                  background: "var(--accent-2)",
-                  color: "var(--surface-3)",
-                  padding: "var(--space-1) var(--space-2)",
-                  fontSize: "var(--t-label)",
-                  alignSelf: "flex-start",
-                  marginTop: "var(--space-1)",
-                }}
-              >
-                一句话，就够了。
-              </QuoteBlock>
-            </div>
-          </div>
-          {/* 页脚 folio */}
-          <div data-testid="manifesto-folio" style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}>
+      <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* 双线刊头：3px 墨线 + 刊名行（display-2 96px）+ 1px 墨线平行 */}
+        <div data-testid="manifesto-masthead">
+          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0" })} />
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "4px 0" }}>
+            <span style={{ fontFamily: "var(--font-display-cn)", fontWeight: 900, fontSize: "var(--t-display-2)", lineHeight: 0.95, color: "var(--text)" }}>
               CREATIVE MODE WEEKLY
             </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text)" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text)", whiteSpace: "nowrap" }}>
+              宣言专刊 · VOL.01 · 2026.09.06
+            </span>
+          </div>
+          <Rule variant="solid" style={scope({ "--rule-w": "1px", margin: "0" })} />
+        </div>
+        {/* 主标题：全宽单行 display-1 130px */}
+        <div
+          data-testid="manifesto-title"
+          style={{ fontFamily: "var(--font-display-cn)", fontWeight: 900, fontSize: "var(--t-display-1)", lineHeight: 0.92, color: "var(--text)", marginTop: 4 }}
+        >
+          节奏，由稿子决定。
+        </div>
+        <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "4px 0 var(--space-2)" })} />
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text)" }}>
+            FROM THE EDITOR · M2B
+          </span>
+        </div>
+        {/* 正文两栏（headline-gap 64：标题块 → 两栏；中间 1px hairline） */}
+        <div data-testid="manifesto-columns" style={{ marginTop: "var(--headline-gap)", display: "flex", gap: "var(--space-4)" }}>
+          {/* 左栏：导语两段 + 首字下沉 drop cap（96px · 下沉约 3 行 · pink 点缀）+ 段间 byline */}
+          <div style={{ width: 860, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <BodyCopy data-testid="manifesto-lede" style={{ fontSize: "var(--t-label)", lineHeight: 1.5 }}>
+              <span
+                data-testid="manifesto-dropcap"
+                style={{ float: "left", fontFamily: "var(--font-display-cn)", fontWeight: 900, fontSize: 96, lineHeight: 0.95, color: "var(--accent-2)", marginRight: "var(--space-2)", marginTop: 2 }}
+              >
+                节
+              </span>
+              奏由稿子决定，其余都是执行。每一屏、每一句口播，都从这句出发。
+            </BodyCopy>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)" }}>
+              — FROM THE EDITOR —
+            </span>
+            <BodyCopy style={{ fontSize: "var(--t-label)", lineHeight: 1.5 }}>
+              主题的每一处强调色、每一道 4px 墨框，都在服务同一件事：让一句话的节奏，变成一页能循环播放的网页。
+            </BodyCopy>
+          </div>
+          <div style={{ width: 1, alignSelf: "stretch", background: "var(--text)" }} />
+          {/* 右栏：pull quote（hairline 上下）+ 封面缩略图（Figure bare ratio 3:4）+ 目录五项（与缩略图并排——预算约束的布局裁定） */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <Rule variant="solid" style={scope({ "--rule-w": "1px", margin: "0 0 4px" })} />
+            <QuoteBlock
+              variant="block"
+              data-testid="manifesto-quote"
+              style={{ background: "var(--accent-2)", color: "var(--surface-3)", padding: "4px var(--space-3)", fontSize: "var(--t-h3)", lineHeight: 1.2, textAlign: "center" }}
+            >
+              一句话，就够了。
+            </QuoteBlock>
+            <Rule variant="solid" style={scope({ "--rule-w": "1px", margin: "4px 0 var(--space-2)" })} />
+            <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "flex-start" }}>
+              <div style={{ width: 240, flexShrink: 0 }}>
+                <Figure variant="bare" ratio="3 / 4" data-testid="manifesto-cover" />
+                <span
+                  style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)", marginTop: "var(--space-1)" }}
+                >
+                  COVER · P.01
+                </span>
+              </div>
+              <div data-testid="manifesto-toc" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
+                {MANIFESTO_TOC.map((item) => (
+                  <span key={item} style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)", whiteSpace: "nowrap" }}>
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Folio：底部双线（1px + 3px）+ 左/中/右 mono */}
+        <div data-testid="manifesto-folio" style={{ marginTop: "auto" }}>
+          <Rule variant="solid" style={scope({ "--rule-w": "1px", margin: "0 0 4px" })} />
+          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0" })} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)" }}>
+              CREATIVE MODE WEEKLY
+            </span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text)" }}>
               P.01
+            </span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", lineHeight: 1, letterSpacing: "0.08em", color: "var(--text-mute)" }}>
+              2026.09.06
             </span>
           </div>
         </div>

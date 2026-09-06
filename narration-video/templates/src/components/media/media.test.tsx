@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { render } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
 import { Figure, TypedTerminal, PathDraw } from "./";
 
 beforeEach(() => setRenderMode(false));
-afterEach(() => setRenderMode(false));
+afterEach(() => {
+  setRenderMode(false);
+  cleanup();
+});
 
 describe("素材承载组", () => {
   it("Figure 无 src 渲染 placeholder 卡（诚实原则）", () => {
@@ -48,5 +51,26 @@ describe("素材承载组", () => {
     expect(svg).not.toBeNull();
     expect(svg).toHaveClass("cdp-path-draw", "cdp-path-draw-filled");
     unmount();
+  });
+
+  it("Figure 三变体类名渲染（frame/bare/plain——十四轮 F4）", () => {
+    const { getByTestId } = render(
+      <div>
+        <Figure variant="frame" data-testid="f1" />
+        <Figure variant="bare" data-testid="f2" />
+        <Figure variant="plain" data-testid="f3" />
+      </div>,
+    );
+    expect(getByTestId("f1").className).toContain("cdp-figure-frame");
+    expect(getByTestId("f2").className).toContain("cdp-figure-bare");
+    expect(getByTestId("f3").className).toContain("cdp-figure-plain");
+  });
+
+  it("Figure ratio prop 挂 ratio 类名 + placeholder 文案", () => {
+    const { getByTestId } = render(<Figure ratio="3 / 4" caption="图" data-testid="fr" />);
+    const fig = getByTestId("fr");
+    expect(fig.className).toContain("cdp-figure-ratio");
+    expect(fig.querySelector(".cdp-figure-placeholder-text")!.textContent).toBe("素材待补");
+    expect(fig.querySelector(".cdp-figure-caption")!.textContent).toBe("图");
   });
 });

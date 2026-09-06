@@ -20,6 +20,18 @@
   background: var(--surface);
 }
 
+/* 十四轮 F4：bare = 4px 墨框无阴影（占位图卡片）；plain = 无框无阴影（补齐既有死变体 CSS） */
+.cdp-figure-bare {
+  border: var(--border-w) solid var(--text);
+  box-shadow: none;
+  background: var(--surface);
+}
+
+.cdp-figure-plain {
+  border: none;
+  box-shadow: none;
+}
+
 .cdp-figure-img {
   display: block;
   width: 100%;

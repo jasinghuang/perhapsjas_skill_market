@@ -600,12 +600,15 @@ function SemanticSection() {
             </div>
           </div>
         </SemItem>
-        <SemItem label="FIGURE · frame / plain（placeholder；frame 保留 24px 硬阴影自然态——展示页 S8 同款；06 格内为目录密度压缩）" testid="semantic-figure">
+        <SemItem label="FIGURE · frame / bare / plain（placeholder；frame 保留 24px 硬阴影自然态——展示页 S8 同款；06 格内为目录密度压缩）" testid="semantic-figure">
           <div style={{ display: "flex", gap: "var(--space-6)", flexWrap: "wrap", alignItems: "flex-start" }}>
-            <div style={{ width: 260 }}>
+            <div style={{ width: 240 }}>
               <Figure variant="frame" data-testid="semantic-figure-frame" />
             </div>
-            <div style={{ width: 260 }}>
+            <div style={{ width: 240 }}>
+              <Figure variant="bare" data-testid="semantic-figure-bare" />
+            </div>
+            <div style={{ width: 240 }}>
               <Figure variant="plain" data-testid="semantic-figure-plain" />
             </div>
           </div>
@@ -836,6 +839,7 @@ function ComponentsSection() {
       <CompGroup label="MEDIA · 素材（3）">
         <CompCell name="figure">
           <Variant label="frame"><div style={{ width: 220 }}><Figure variant="frame" className="sg-figure-short" data-testid="variant-figure-frame" /></div></Variant>
+          <Variant label="bare"><div style={{ width: 220 }}><Figure variant="bare" className="sg-figure-short" data-testid="variant-figure-bare" /></div></Variant>
           <Variant label="plain"><div style={{ width: 220 }}><Figure variant="plain" className="sg-figure-short" data-testid="variant-figure-plain" /></div></Variant>
           <Variant label="ratio 3 / 4（组件级 aspect）"><div style={{ width: 140 }}><Figure variant="frame" ratio="3 / 4" data-testid="variant-figure-ratio" /></div></Variant>
         </CompCell>

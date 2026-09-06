@@ -4,7 +4,8 @@
   justify-content: center;
   border: 2px solid var(--text);
   border-radius: var(--r-pill);
-  padding: var(--space-1) var(--space-2);
+  /* 垂直 padding 4px——与 --t-label 24px 相邻文字视觉同高（用户定稿，十四轮 F2） */
+  padding: 4px var(--space-2);
   font-family: var(--font-mono);
   font-size: var(--t-label);
   line-height: 1;
