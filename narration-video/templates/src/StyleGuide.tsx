@@ -1,5 +1,5 @@
 // 样式词典页（M2b 验收工具；dev-only，不入章节层）。
-// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 28 组件全变体目录。
+// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 30 组件全变体目录。
 // 页面壳：深色 shell 底（var(--shell)）、1920 居中；每区段 mono 区段头（cream，编号 + 标题）
 // + 全幅 cream 内容面板（4px 墨框、水平内衬 96px——与安全框规格一致）。
 // 布局纪律：区段内容水平 ≥96px 内；无横向溢出；组件格容器只允许 inline 布局属性，
@@ -25,6 +25,7 @@ import {
   HeroTitle,
   KenBurns,
   Kicker,
+  NumberPill,
   PathDraw,
   ProgressDots,
   QuoteBlock,
@@ -32,6 +33,7 @@ import {
   RevealText,
   Rule,
   SeededParticles,
+  StackedBlocks,
   StagePad,
   StatCard,
   StepSequence,
@@ -630,7 +632,7 @@ function SemanticSection() {
   );
 }
 
-/* ── 06 · 组件全览 COMPONENTS（28 组件 × 全变体） ── */
+/* ── 06 · 组件全览 COMPONENTS（30 组件 × 全变体） ── */
 
 /** 组件格：cream 底 + 4px 墨框 + 字阶压缩 scope；容器仅 inline 布局属性（零裸色） */
 function CompCell({ name, extraScope, children }: {
@@ -699,7 +701,7 @@ function ComponentsSection() {
   const stepData = [{ title: "进场" }, { title: "节奏" }, { title: "收束" }];
   return (
     <Section index="06" title="组件全览 COMPONENTS">
-      <CompGroup label="TEXT · 文字（4）">
+      <CompGroup label="TEXT · 文字（5）">
         <CompCell name="hero-title">
           <Variant label="plain"><HeroTitle data-testid="variant-hero-title-plain" style={{ fontSize: 56, lineHeight: 0.92 }}>口播视频</HeroTitle></Variant>
           <Variant label="stamp"><HeroTitle variant="stamp" data-testid="variant-hero-title-stamp" style={{ fontSize: 28, lineHeight: 1, padding: "8px 14px" }}>口播视频</HeroTitle></Variant>
@@ -715,6 +717,11 @@ function ComponentsSection() {
         <CompCell name="quote-block">
           <Variant label="rule"><QuoteBlock variant="rule" data-testid="variant-quote-block-rule">把口播稿做成会动的网页</QuoteBlock></Variant>
           <Variant label="block"><QuoteBlock variant="block" data-testid="variant-quote-block-block">把口播稿做成会动的网页</QuoteBlock></Variant>
+        </CompCell>
+        <CompCell name="number-pill">
+          <Variant label="plain"><NumberPill number="01" data-testid="variant-number-pill-plain" /></Variant>
+          <Variant label="accent"><NumberPill number="02" variant="accent" data-testid="variant-number-pill-accent" /></Variant>
+          <Variant label="invert"><NumberPill number="03" variant="invert" data-testid="variant-number-pill-invert" /></Variant>
         </CompCell>
       </CompGroup>
       <CompGroup label="DATA · 数据（5）">
@@ -804,7 +811,7 @@ function ComponentsSection() {
           <Variant label="cards"><StepSequence steps={stepData} currentStep={1} variant="cards" data-testid="variant-step-sequence-cards" /></Variant>
         </CompCell>
       </CompGroup>
-      <CompGroup label="DECOR · 装饰（3）">
+      <CompGroup label="DECOR · 装饰（4）">
         <CompCell name="decor-dot">
           <Variant label="plain"><DecorDot variant="plain" data-testid="variant-decor-dot-plain" /></Variant>
           <Variant label="glow"><DecorDot variant="glow" data-testid="variant-decor-dot-glow" /></Variant>
@@ -816,6 +823,9 @@ function ComponentsSection() {
         <CompCell name="decor-ring">
           <Variant label="outline"><DecorRing variant="outline" data-testid="variant-decor-ring-outline" /></Variant>
           <Variant label="filled"><DecorRing variant="filled" data-testid="variant-decor-ring-filled" /></Variant>
+        </CompCell>
+        <CompCell name="stacked-blocks">
+          <Variant label="default · 4×160 错位叠放"><StackedBlocks data-testid="variant-stacked-blocks-default" /></Variant>
         </CompCell>
       </CompGroup>
       <CompGroup label="MEDIA · 素材（3）">
@@ -903,7 +913,7 @@ export function StyleGuide() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 样式词典 · 全部 token 视觉表达 + 28 组件目录
+          creative-mode · 样式词典 · 全部 token 视觉表达 + 30 组件目录
         </span>
         <span
           style={{

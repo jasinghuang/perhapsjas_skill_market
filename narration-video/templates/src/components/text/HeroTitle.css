@@ -6,6 +6,23 @@
   margin: 0;
 }
 
+/* 字阶档位（十轮 F2：size prop 消费 --t-* token） */
+.cdp-hero-title-size-display-1 {
+  font-size: var(--t-display-1);
+}
+
+.cdp-hero-title-size-display-2 {
+  font-size: var(--t-display-2);
+}
+
+.cdp-hero-title-size-h1 {
+  font-size: var(--t-h1);
+}
+
+.cdp-hero-title-size-h2 {
+  font-size: var(--t-h2);
+}
+
 .cdp-hero-title-stamp {
   display: inline-block;
   background: var(--surface-3);

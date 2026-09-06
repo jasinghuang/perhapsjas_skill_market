@@ -1,12 +1,13 @@
 // 组件契约 lint（§11.1 #9 内核）：组件 CSS 只消费 token——禁裸色值、禁裸 font-family、禁裸动画时长。
 // M3a 门禁与本章节测试共用同一实现。
 // Ruling P2-8：不用 node:fs + __dirname（ESM 无 __dirname、无 @types/node，tsc 必挂），
-// 改用 Vite `?raw` 显式导入 28 个组件 CSS，lint 扫描这些字符串。
+// 改用 Vite `?raw` 显式导入 30 个组件 CSS，lint 扫描这些字符串。
 
 import heroTitleCss from "./text/HeroTitle.css?raw";
 import kickerCss from "./text/Kicker.css?raw";
 import bodyCopyCss from "./text/BodyCopy.css?raw";
 import quoteBlockCss from "./text/QuoteBlock.css?raw";
+import numberPillCss from "./text/NumberPill.css?raw";
 import heroNumberCss from "./data/HeroNumber.css?raw";
 import counterCss from "./data/Counter.css?raw";
 import barGrowCss from "./data/BarGrow.css?raw";
@@ -23,6 +24,7 @@ import stepSequenceCss from "./reveal/StepSequence.css?raw";
 import decorDotCss from "./decor/DecorDot.css?raw";
 import decorBarCss from "./decor/DecorBar.css?raw";
 import decorRingCss from "./decor/DecorRing.css?raw";
+import stackedBlocksCss from "./decor/StackedBlocks.css?raw";
 import figureCss from "./media/Figure.css?raw";
 import typedTerminalCss from "./media/TypedTerminal.css?raw";
 import pathDrawCss from "./media/PathDraw.css?raw";
@@ -37,6 +39,7 @@ export const COMPONENT_CSS: Array<{ file: string; css: string }> = [
   { file: "text/Kicker.css", css: kickerCss },
   { file: "text/BodyCopy.css", css: bodyCopyCss },
   { file: "text/QuoteBlock.css", css: quoteBlockCss },
+  { file: "text/NumberPill.css", css: numberPillCss },
   { file: "data/HeroNumber.css", css: heroNumberCss },
   { file: "data/Counter.css", css: counterCss },
   { file: "data/BarGrow.css", css: barGrowCss },
@@ -53,6 +56,7 @@ export const COMPONENT_CSS: Array<{ file: string; css: string }> = [
   { file: "decor/DecorDot.css", css: decorDotCss },
   { file: "decor/DecorBar.css", css: decorBarCss },
   { file: "decor/DecorRing.css", css: decorRingCss },
+  { file: "decor/StackedBlocks.css", css: stackedBlocksCss },
   { file: "media/Figure.css", css: figureCss },
   { file: "media/TypedTerminal.css", css: typedTerminalCss },
   { file: "media/PathDraw.css", css: pathDrawCss },

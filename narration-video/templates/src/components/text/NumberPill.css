@@ -1,0 +1,22 @@
+.cdp-number-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--text);
+  border-radius: var(--r-pill);
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  line-height: 1;
+  color: var(--text);
+}
+
+.cdp-number-pill-accent {
+  background: var(--accent-1);
+  color: var(--surface);
+}
+
+.cdp-number-pill-invert {
+  background: var(--surface-3);
+  color: var(--surface);
+}

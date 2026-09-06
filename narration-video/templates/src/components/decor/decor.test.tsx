@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
-import { DecorDot, DecorBar, DecorRing } from "./";
+import { DecorDot, DecorBar, DecorRing, StackedBlocks } from "./";
 
 beforeEach(() => setRenderMode(false));
 afterEach(() => setRenderMode(false));
@@ -38,5 +38,11 @@ describe("装饰组", () => {
     expect(registrySize()).toBeGreaterThan(0);
     unmount();
     expect(registrySize()).toBe(0);
+  });
+
+  it("StackedBlocks 渲染 4 方块 + 类名约定", () => {
+    const { getByTestId } = render(<StackedBlocks data-testid="stack" />);
+    expect(getByTestId("stack").className).toContain("cdp-stacked-blocks");
+    expect(getByTestId("stack").querySelectorAll(".cdp-stacked-block")).toHaveLength(4);
   });
 });

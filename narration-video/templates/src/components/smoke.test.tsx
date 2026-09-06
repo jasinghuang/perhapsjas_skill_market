@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { setRenderMode } from "../engine/animationRuntime";
 import {
-  HeroTitle, Kicker, BodyCopy, QuoteBlock,
+  HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill,
   HeroNumber, Counter, BarGrow, DonutMeter, StatCard,
   Card, Rule, Grid, StagePad, Table,
   RevealText, RevealList, StepSequence,
-  DecorDot, DecorBar, DecorRing,
+  DecorDot, DecorBar, DecorRing, StackedBlocks,
   Figure, TypedTerminal, PathDraw,
   SeededParticles, Breathe, KenBurns,
   TimelineTrack, ProgressDots,
@@ -14,14 +14,14 @@ import {
 
 // 终审 M3：逐组件 presence 断言——统一出口每个组件必须在画布真实渲染，
 // 只查 ".cdp" 根类会漏掉「组件已导出但从未渲染」的假绿。
-// 全部 28 组件（Plan 2 十四 + Plan 3 十四，磁盘实数为准）。
+// 全部 30 组件（28 + 十轮 F3/F4 收编 StackedBlocks / NumberPill）。
 const ALL_NAMES = [
   "stage-pad",
-  "hero-title", "kicker", "body-copy", "quote-block",
+  "hero-title", "kicker", "body-copy", "quote-block", "number-pill",
   "hero-number", "counter", "bar-grow", "donut", "stat-card",
   "card", "rule", "grid", "table",
   "reveal-text", "reveal-list", "step-seq",
-  "decor-dot", "decor-bar", "decor-ring",
+  "decor-dot", "decor-bar", "decor-ring", "stacked-blocks",
   "figure", "terminal", "path-draw",
   "particles", "breathe", "kenburns",
   "timeline", "progress-dots",
@@ -46,7 +46,7 @@ afterEach(() => {
 
 describe("双画布冒烟（§11.2 组件契约测试）", () => {
   for (const dims of STAGE_SIZES) {
-    it(`全部 28 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
+    it(`全部 30 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
       const { container } = render(
         <div style={{ width: dims.width, height: dims.height }}>
           <StagePad>
@@ -55,7 +55,8 @@ describe("双画布冒烟（§11.2 组件契约测试）", () => {
             <RevealText text="逐词 揭示 测试" />
             <RevealList items={["一", "二"]} activeCount={1} />
             <StepSequence steps={[{ title: "一" }, { title: "二" }]} currentStep={0} />
-            <DecorDot /> <DecorBar /> <DecorRing />
+            <DecorDot /> <DecorBar /> <DecorRing /> <StackedBlocks />
+            <NumberPill number="01" />
             <Figure caption="图" />
             <TypedTerminal lines={["line"]} />
             <PathDraw d="M0 0 L50 50" />

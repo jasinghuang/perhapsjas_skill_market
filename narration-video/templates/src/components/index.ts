@@ -1,11 +1,12 @@
 // 组件统一出口（§6.2 章节层唯一合法零件来源）+ 组件 CSS 装配（Ruling P2-4）
 // Ruling P2-4：主题 CSS 随组件统一出口装配——章节层 import components 即得全部样式。
-// 共 28 份组件 CSS（Plan 2 十四 + Plan 3 十四，磁盘实数为准）。
+// 共 30 份组件 CSS（28 + 十轮 F3/F4 收编 StackedBlocks / NumberPill，磁盘实数为准）。
 import "../theme/tokens.css";
 import "./text/HeroTitle.css";
 import "./text/Kicker.css";
 import "./text/BodyCopy.css";
 import "./text/QuoteBlock.css";
+import "./text/NumberPill.css";
 import "./data/HeroNumber.css";
 import "./data/Counter.css";
 import "./data/BarGrow.css";
@@ -22,6 +23,7 @@ import "./reveal/StepSequence.css";
 import "./decor/DecorDot.css";
 import "./decor/DecorBar.css";
 import "./decor/DecorRing.css";
+import "./decor/StackedBlocks.css";
 import "./media/Figure.css";
 import "./media/TypedTerminal.css";
 import "./media/PathDraw.css";
@@ -31,11 +33,11 @@ import "./ambient/KenBurns.css";
 import "./function/TimelineTrack.css";
 import "./function/ProgressDots.css";
 
-export { HeroTitle, Kicker, BodyCopy, QuoteBlock } from "./text";
+export { HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill } from "./text";
 export { HeroNumber, Counter, BarGrow, DonutMeter, StatCard } from "./data";
 export { Card, Rule, Grid, StagePad, Table } from "./structure";
 export { RevealText, RevealList, StepSequence } from "./reveal";
-export { DecorDot, DecorBar, DecorRing } from "./decor";
+export { DecorDot, DecorBar, DecorRing, StackedBlocks } from "./decor";
 export { Figure, TypedTerminal, PathDraw } from "./media";
 export { SeededParticles, Breathe, KenBurns } from "./ambient";
 export { TimelineTrack, ProgressDots } from "./function";

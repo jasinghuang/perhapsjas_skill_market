@@ -1,10 +1,11 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
-// ?showcase=1 渲染：8 屏 1920×1080 slide deck——每屏带统一 chrome frame
+// ?showcase=1 渲染：11 屏 1920×1080 slide deck——每屏带统一 chrome frame
 // （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–934 + 字幕保留区 y[958,1038]；meta 页码条已删）。
-// 构图纪律（用户反馈终审）：九轮 F2 补齐参考模板全部 8 屏，逐屏复刻 creative-mode 构图——
-// S1=参考 s1 封面 / S2=参考 s2 章节开篇 / S3=参考 s3 数据屏（2×2 满幅零阴影网格）/ S4=参考 s4 系统示意（堆叠块）/
+// 构图纪律（用户反馈终审）：九轮补齐参考 8 屏 + 十轮 F5 扩到 11 屏——
+// S1=参考 s1 封面 / S2=参考 s2 章节开篇 / S3=参考 s3 数据屏（2×2 满幅零阴影网格）/ S4=参考 s4 系统示意（StackedBlocks 组件）/
 // S5=参考 s5 柱状图（4 行横向条）/ S6=参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）/
-// S7=参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）/ S8=参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
+// S7=参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）/ S8=媒体 3:4 素材（用户点名竖屏占位）/
+// S9=动效实验室（全部动效词汇）/ S10=语录宣言（情绪收束）/ S11=参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
 // （底边 ≤934 = 字幕区上缘 958 − 24；24px 阴影落点亦算占位，不越界）；③ 氛围背景层与 CaptionLayer 自身豁免。
 // ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 958 线，pointerEvents none）。
@@ -15,24 +16,31 @@ import { CaptionLayer } from "./engine/CaptionLayer";
 import {
   BarGrow,
   BodyCopy,
+  Breathe,
   Card,
   Counter,
   DecorBar,
   DecorDot,
+  DecorRing,
   DonutMeter,
+  Figure,
   Grid,
   HeroNumber,
   HeroTitle,
+  KenBurns,
   Kicker,
+  NumberPill,
   PathDraw,
   ProgressDots,
   QuoteBlock,
-  RevealList,
+  RevealText,
   Rule,
   SeededParticles,
+  StackedBlocks,
   StagePad,
   Table,
   TimelineTrack,
+  TypedTerminal,
 } from "./components";
 
 /** 局部 token 覆写：向子树注入 CSS 自定义属性（dev 页合法手段，不改组件本体） */
@@ -52,6 +60,8 @@ const SHOWCASE_TWEAKS = `
 .sg-compare-table thead th:first-child, .sg-compare-table tbody td:first-child { width: 30%; }
 .sg-compare-table tbody td:first-child { background: var(--surface); font-weight: 700; }
 .sg-bar-rows .cdp-bar-grow { height: 56px; }
+.sg-portrait .cdp-figure { height: 100%; }
+.sg-portrait .cdp-figure-placeholder { min-height: 0; height: 100%; }
 `;
 
 /* ── 安全框可视化（?showcase=1&guides=1 dev-only） ── */
@@ -101,7 +111,7 @@ function SafetyGuides({ color }: { color: string }) {
 
 /* ── chrome frame（每屏必有） ── */
 interface SlideShellProps {
-  index: string; // "01".."08"
+  index: string; // "01".."11"
   topbar: ReactNode;
   pill: string;
   caption: string; // 该屏口播台词（CaptionLayer 字幕保留区 y[972,1032]）
@@ -317,22 +327,32 @@ function CoverSlide() {
 
 /* ── Slide 2 · 章节开篇 = 参考 s2（强调色：green + orange） ── */
 
+const CHAPTER_POINTS = ["口播稿决定节奏", "组件构图决定视觉", "引擎驱动全部动效"];
+
 function ChapterSlide() {
   return (
     <SlideShell index="02" topbar="SECTION 01" pill="CHAPTER OPENER" caption="先说明一件事">
       <div style={{ flex: 1, display: "flex", gap: "var(--space-6)" }}>
-        {/* 左栏：headline + 开场白段落 + 三要点 */}
+        {/* 左栏：headline（display-2 96px）+ 开场白段落（--t-body 28px）+ 三要点（--t-h3 40px）。
+            十轮 F2：headline 与正文间距加大到 64px（容器 gap 32 + 标题 marginBottom 32） */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-          <HeroTitle style={{ fontSize: "var(--t-display-2)", lineHeight: 0.95 }}>先说明一件事。</HeroTitle>
+          <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--space-4)" }}>
+            先说明一件事。
+          </HeroTitle>
           <BodyCopy style={{ maxWidth: 760 }}>
             这是一套把口播稿变成会动网页的工作流。后面的数据、流程与对比，都是同一主题的不同切片。先记住一句话：节奏由稿子决定。
           </BodyCopy>
-          <RevealList
-            variant="numbered"
-            items={["口播稿决定节奏", "组件构图决定视觉", "引擎驱动全部动效"]}
-            activeCount={3}
-            data-testid="chapter-points"
-          />
+          {/* 三要点：NumberPill plain 序号（十轮 F4 收编——替代 RevealList numbered 的薄弱序号） */}
+          <div data-testid="chapter-points" style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            {CHAPTER_POINTS.map((point, i) => (
+              <div key={point} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                <NumberPill number={`0${i + 1}`} data-testid={`chapter-point-${i + 1}`} />
+                <span style={{ fontFamily: "var(--font-body)", fontSize: "var(--t-h3)", color: "var(--text)" }}>
+                  {point}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
         {/* 右栏：featured marker 块（green 底 cream 字 + 24px orange 硬阴影——S1 同款 featured 处理） */}
         <div style={{ width: 560, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -447,7 +467,7 @@ function DataSlide() {
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
         {/* headline 单行（视觉终审二轮 F1：右侧空间足够，display-2 96px 单行放下 9 字 + 2 标点） */}
-        <HeroTitle style={{ fontSize: "var(--t-display-2)", lineHeight: 0.95 }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95 }}>
           四个数字，一个故事。
         </HeroTitle>
         {/* 2×2 满幅网格：零阴影（--shadow-card-sm none）、格间隙 var(--grid-gutter) 28px */}
@@ -531,59 +551,44 @@ function DataSlide() {
 
 /* ── Slide 4 · 系统示意 = 参考 s4（强调色：pink + yellow + orange） ── */
 
-/** 堆叠方块（参考 s4 stacked-block：4px 墨框 + 18px 墨色硬阴影 + mono 层标签） */
-function StackBlock({ bg, tag, pos }: { bg: string; tag: string; pos: CSSProperties }) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        background: bg,
-        border: "4px solid var(--surface-3)",
-        boxShadow: "18px 18px 0 var(--surface-3)",
-        display: "flex",
-        alignItems: "flex-start",
-        ...pos,
-      }}
-    >
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.1em", padding: "10px 14px" }}>
-        {tag}
-      </span>
-    </div>
-  );
-}
+const LAYER_NAMES = ["引擎层 — 时间与步进", "组件层 — 构图与组件", "主题层 — token 与配色", "流程层 — 章节与成片"];
 
 function DiagramSlide() {
   return (
     <SlideShell index="04" topbar="SYSTEM DIAGRAM" pill="SCHEMATIC / A" caption="一层叠一层的结构">
-      <div style={{ flex: 1, display: "flex", gap: "var(--space-6)" }}>
-        {/* 左栏：headline + 描述 + 四层名单（reveal 编号走 orange——本屏强调色纪律 pink/yellow/orange） */}
-        <div
-          style={{ width: 700, display: "flex", flexDirection: "column", gap: "var(--space-4)", ...scope({ "--accent-1": "var(--accent-3)" }) }}
-        >
-          <HeroTitle style={{ fontSize: "var(--t-h1)", lineHeight: 0.95 }}>一层叠一层的结构。</HeroTitle>
-          <BodyCopy style={{ maxWidth: 640 }}>
-            四层各司其职：引擎层排时间，组件层出构图，主题层管配色，流程层串成片。每层只做一件事，叠起来就是一条流水线。
-          </BodyCopy>
-          <RevealList
-            variant="numbered"
-            items={["引擎层 — 时间与步进", "组件层 — 构图与组件", "主题层 — token 与配色", "流程层 — 章节与成片"]}
-            activeCount={4}
-            data-testid="layer-list"
-          />
-        </div>
-        {/* 右栏：大 panel + 4 方块错位叠放 + PathDraw 折线（ink 覆写，墨色连接线） */}
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Card variant="plain" data-testid="system-panel" style={{ width: 840, height: 640, padding: "var(--space-4)", position: "relative" }}>
-            <div data-testid="block-stack" style={{ position: "absolute", top: 32, left: 140, width: 560, height: 560 }}>
-              <StackBlock bg="var(--accent-2)" tag="LAYER / 01" pos={{ top: 50, left: 130, width: 300, height: 100 }} />
-              <StackBlock bg="var(--accent-4)" tag="LAYER / 02" pos={{ top: 170, left: 60, width: 380, height: 100 }} />
-              <StackBlock bg="var(--accent-3)" tag="LAYER / 03" pos={{ top: 290, left: 160, width: 300, height: 100 }} />
-              <StackBlock bg="var(--surface-2)" tag="LAYER / 04" pos={{ top: 410, left: 80, width: 340, height: 100 }} />
-              <div style={{ position: "absolute", inset: 0, ...scope({ "--accent-1": "var(--surface-3)" }) }}>
-                <PathDraw d="M 12 95 L 12 12 L 95 12" />
-              </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+        {/* 十轮 F1：headline 单行（display-2 96px 档，9 字实测放下） */}
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95 }}>一层叠一层的结构。</HeroTitle>
+        <div style={{ flex: 1, display: "flex", gap: "var(--space-6)" }}>
+          {/* 左栏：描述 + 四层名单（NumberPill accent 序号——十轮 F4；--accent-1 → orange 本屏纪律） */}
+          <div
+            style={{ width: 700, display: "flex", flexDirection: "column", gap: "var(--space-4)", ...scope({ "--accent-1": "var(--accent-3)" }) }}
+          >
+            <BodyCopy style={{ maxWidth: 640 }}>
+              四层各司其职：引擎层排时间，组件层出构图，主题层管配色，流程层串成片。每层只做一件事，叠起来就是一条流水线。
+            </BodyCopy>
+            <div data-testid="layer-list" style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+              {LAYER_NAMES.map((name, i) => (
+                <div key={name} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                  <NumberPill number={`0${i + 1}`} variant="accent" data-testid={`layer-pill-${i + 1}`} />
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: "var(--t-h3)", color: "var(--text)" }}>
+                    {name}
+                  </span>
+                </div>
+              ))}
             </div>
-          </Card>
+          </div>
+          {/* 右栏：大 panel + StackedBlocks 组件（十轮 F3 收编，4×160px 方块错位叠放）+ PathDraw 折线（ink 覆写） */}
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Card variant="plain" data-testid="system-panel" style={{ width: 840, height: 560, padding: "var(--space-4)", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ position: "relative" }}>
+                <StackedBlocks data-testid="stacked-blocks" />
+                <div style={{ position: "absolute", inset: 0, ...scope({ "--accent-1": "var(--surface-3)" }) }}>
+                  <PathDraw d="M 12 95 L 12 12 L 95 12" />
+                </div>
+              </div>
+            </Card>
+          </div>
         </div>
       </div>
     </SlideShell>
@@ -604,7 +609,7 @@ function ChartSlide() {
   return (
     <SlideShell index="05" topbar="QUARTERLY READOUT" pill="BARS" caption="季度读数">
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-        <HeroTitle style={{ fontSize: "var(--t-h1)", lineHeight: 0.95 }}>季度读数。</HeroTitle>
+        <HeroTitle size="h1" style={{ lineHeight: 0.95 }}>季度读数。</HeroTitle>
         {/* 4 行横向条形图（参考 s5：mono 标签 + BarGrow accent + mono 数值；行高 56px dev 微调） */}
         <div
           data-testid="bar-rows"
@@ -714,7 +719,7 @@ function FlowSlide() {
   return (
     <SlideShell index="06" topbar="HOW IT WORKS" pill="FOUR STEPS" caption="从稿子到成片，一共四步">
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-        <HeroTitle style={{ fontSize: "var(--t-display-2)", lineHeight: 0.95 }}>一个四步流程。</HeroTitle>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95 }}>一个四步流程。</HeroTitle>
         {/* 流程 slide 的 signature：3px dashed 墨线分隔（参考 s6 header-line） */}
         <Rule variant="dashed" data-testid="flow-rule" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-4)" })} />
         <Grid variant="even" columns={4} data-testid="step-cards" style={scope({ "--shadow-card-sm": "none" })}>
@@ -759,7 +764,7 @@ function CompareSlide() {
   return (
     <SlideShell index="07" topbar="SIDE BY SIDE" pill="COMPARISON" caption="三个选项，逐项对比">
       <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-        <HeroTitle style={{ fontSize: "var(--t-h1)", lineHeight: 0.95, maxWidth: 1100 }}>
+        <HeroTitle size="h1" style={{ lineHeight: 0.95, maxWidth: 1100 }}>
           三个选项，逐项对比。
         </HeroTitle>
         {/* 视觉终审三轮 F2：-4deg "选一个" 徽章已删除（用户拍板），headline 与表格保持现有布局 */}
@@ -785,12 +790,157 @@ function CompareSlide() {
   );
 }
 
-/* ── Slide 8 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
+/* ── Slide 8 · 媒体 3:4 素材 = 竖屏占位展示（十轮 F5；强调色：green 点缀） ── */
+
+const PORTRAIT_ITEMS = [
+  { id: "01", kind: "figure" as const },
+  { id: "02", kind: "figure" as const },
+  { id: "03", kind: "figure" as const },
+  { id: "04", kind: "kenburns" as const },
+];
+
+function MediaSlide() {
+  return (
+    <SlideShell index="08" topbar="MEDIA · PORTRAIT" pill="3:4 ASSETS" caption="竖屏素材，各归其位">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+        <HeroTitle size="h1" style={{ lineHeight: 0.95 }}>竖屏素材，各归其位。</HeroTitle>
+        {/* 3 个 3:4 竖屏 Figure placeholder（frame 变体，零阴影 scope）+ 第 4 个 KenBurns 无 src placeholder */}
+        <div
+          data-testid="portrait-row"
+          style={{ display: "flex", gap: "var(--space-4)", ...scope({ "--shadow-card": "none" }) }}
+        >
+          {PORTRAIT_ITEMS.map((item) => (
+            <div key={item.id} style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+              <div
+                className="sg-portrait"
+                style={{ width: 400, height: 533, boxSizing: "border-box", border: "4px solid var(--surface-3)" }}
+              >
+                {item.kind === "figure" ? (
+                  <Figure variant="frame" data-testid={`portrait-${item.id}`} />
+                ) : (
+                  <KenBurns duration="slow" data-testid="portrait-kenburns" />
+                )}
+              </div>
+              <span
+                style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.1em", color: "var(--text-mute)" }}
+              >
+                {item.kind === "figure" ? `素材 / ${item.id}` : "KEN BURNS · 缓推"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 9 · 动效实验室 = 全部动效词汇陈列（十轮 F5；强调色：green + pink 点缀） ── */
+
+function MotionCell({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div
+      style={{
+        background: "var(--surface)",
+        border: "4px solid var(--surface-3)",
+        padding: "var(--space-4)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-3)",
+      }}
+    >
+      <span
+        style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-mute)" }}
+      >
+        {label}
+      </span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>{children}</div>
+    </div>
+  );
+}
+
+function MotionLabSlide() {
+  return (
+    <SlideShell index="09" topbar="MOTION LAB" pill="PRESETS" caption="动效，各就各位">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+        <HeroTitle size="h1" style={{ lineHeight: 0.95 }}>动效，各就各位。</HeroTitle>
+        <Grid
+          variant="even"
+          columns={3}
+          data-testid="motion-grid"
+          style={{ flex: 1, ...scope({ "--shadow-card-sm": "none", "--shadow-card": "none" }) }}
+        >
+          <MotionCell label="COUNTER · 滚动计数">
+            <Counter to={47} />
+          </MotionCell>
+          <MotionCell label="COUNT UP · 大数字">
+            <HeroNumber value="+47%" countUp />
+          </MotionCell>
+          <MotionCell label="TYPEWRITER · 打字机">
+            <TypedTerminal lines={["motion-lab --presets", "6 presets · components"]} />
+          </MotionCell>
+          <MotionCell label="PATH DRAW · 折线自绘">
+            <div style={{ width: 200 }}>
+              <PathDraw d="M 8 88 L 30 20 L 55 60 L 92 12" />
+            </div>
+          </MotionCell>
+          <MotionCell label="BREATHE / DOTS · 呼吸与进度">
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+              <Breathe cycles={3} />
+              <ProgressDots total={5} current={2} />
+            </div>
+          </MotionCell>
+          <MotionCell label="BAR / DONUT · 条与环">
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", width: "100%" }}>
+              <div style={{ flex: 1 }}>
+                <BarGrow value={0.7} variant="accent" />
+              </div>
+              <DonutMeter value={0.42} label="42" />
+            </div>
+          </MotionCell>
+        </Grid>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 10 · 语录宣言 = 情绪收束（十轮 F5；强调色：pink + green 点缀） ── */
+
+function QuoteSlide() {
+  return (
+    <SlideShell index="10" topbar="MANIFESTO" pill="QUOTE" caption="一句话，就够了">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+        <HeroTitle size="h1" style={{ lineHeight: 0.95 }}>一句话，就够了。</HeroTitle>
+        {/* 大 QuoteBlock（pink 底墨字）——呼应 S2 文案 */}
+        <QuoteBlock
+          variant="block"
+          data-testid="manifesto-quote"
+          style={{ background: "var(--accent-2)", color: "var(--surface-3)", alignSelf: "flex-start", padding: "var(--space-5) var(--space-6)" }}
+        >
+          节奏由稿子决定。
+        </QuoteBlock>
+        {/* 逐词第二句 */}
+        <div data-testid="manifesto-reveal">
+          <RevealText text="口播稿 做成 会动的 网页" variant="words" />
+        </div>
+        {/* 装饰行（情绪收束） */}
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", marginTop: "auto" }}>
+          <DecorBar variant="accent" style={{ background: "var(--accent-2)" }} />
+          <DecorDot variant="glow" style={{ background: "var(--accent-2)", boxShadow: "0 0 var(--space-4) var(--accent-2)" }} />
+          <DecorBar variant="solid" />
+          <DecorRing variant="outline" />
+          <DecorRing variant="filled" />
+        </div>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 11 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
 
 function ClosingSlide() {
   return (
     <SlideShell
-      index="08"
+      index="11"
       topbar="END OF DECK"
       pill="FIN."
       caption="谢谢观看"
@@ -801,8 +951,8 @@ function ClosingSlide() {
         {/* 主标题（featured）：stamp 变体（墨底 cream 字）+ 24px pink 硬阴影——本屏 featured 独一份 */}
         <HeroTitle
           variant="stamp"
+          size="display-1"
           style={{
-            fontSize: "var(--t-display-1)",
             lineHeight: 1,
             alignSelf: "flex-start",
             marginTop: "var(--space-5)",
@@ -823,7 +973,7 @@ function ClosingSlide() {
         >
           把口播稿，做成会动的网页。这是 creative-mode 主题的完整视觉表达。
         </BodyCopy>
-        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "05/05" + "M2B"；
+        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "11/11" + "M2B"；
             内移 32px 使旋转 bbox 落回内容带 */}
         <div
           data-testid="closing-seal"
@@ -865,7 +1015,7 @@ function ClosingSlide() {
                 color: "var(--surface)",
               }}
             >
-              08/08
+              11/11
             </span>
             <span
               style={{
@@ -909,7 +1059,7 @@ export function ThemeShowcase() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 主题效果页 · 8 屏 slide deck · 对应参考模板全部构图 s1–s8
+          creative-mode · 主题效果页 · 11 屏 slide deck · 参考构图 s1–s8 + 素材/动效/语录
         </span>
         <span
           style={{
@@ -934,6 +1084,9 @@ export function ThemeShowcase() {
         <ChartSlide />
         <FlowSlide />
         <CompareSlide />
+        <MediaSlide />
+        <MotionLabSlide />
+        <QuoteSlide />
         <ClosingSlide />
       </main>
     </div>

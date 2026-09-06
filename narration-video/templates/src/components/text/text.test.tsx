@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
-import { HeroTitle, Kicker, BodyCopy, QuoteBlock } from "./";
+import { HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill } from "./";
 
 beforeEach(() => setRenderMode(false));
 afterEach(() => {
@@ -46,5 +46,34 @@ describe("文字组组件", () => {
     expect(registrySize()).toBeGreaterThan(0);
     unmount();
     expect(registrySize()).toBe(0);
+  });
+
+  it("HeroTitle size prop 映射字阶类名（默认 display-1）", () => {
+    const { getByTestId } = render(
+      <div>
+        <HeroTitle data-testid="s0">默认</HeroTitle>
+        <HeroTitle size="display-2" data-testid="s1">x</HeroTitle>
+        <HeroTitle size="h1" data-testid="s2">x</HeroTitle>
+        <HeroTitle size="h2" data-testid="s3">x</HeroTitle>
+      </div>,
+    );
+    expect(getByTestId("s0").className).toContain("cdp-hero-title-size-display-1");
+    expect(getByTestId("s1").className).toContain("cdp-hero-title-size-display-2");
+    expect(getByTestId("s2").className).toContain("cdp-hero-title-size-h1");
+    expect(getByTestId("s3").className).toContain("cdp-hero-title-size-h2");
+  });
+
+  it("NumberPill 三变体类名 + 数字渲染", () => {
+    const { getByTestId } = render(
+      <div>
+        <NumberPill number="01" data-testid="p1" />
+        <NumberPill number="02" variant="accent" data-testid="p2" />
+        <NumberPill number="03" variant="invert" data-testid="p3" />
+      </div>,
+    );
+    expect(getByTestId("p1").className).toContain("cdp-number-pill");
+    expect(getByTestId("p1").textContent).toBe("01");
+    expect(getByTestId("p2").className).toContain("cdp-number-pill-accent");
+    expect(getByTestId("p3").className).toContain("cdp-number-pill-invert");
   });
 });
