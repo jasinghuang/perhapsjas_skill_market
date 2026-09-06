@@ -532,7 +532,7 @@ function SemanticSection() {
             </div>
           </div>
         </SemItem>
-        <SemItem label="TABLE · 三变体（同数据 3 行；columns = 彩色列：pink 墨字 / green cream 字 / orange cream 字；展示页 S4 的表头高 96px/首列 30%/标签列 cream 底为参考 slide 7 构图级例外）" testid="semantic-table">
+        <SemItem label="TABLE · 三变体（同数据 3 行；columns = 彩色列：pink 墨字 / green cream 字 / orange cream 字；展示页 S4 的表头高 96px/首列 30%/标签列 cream 底为参考 slide 7 构图级例外；单元格衬垫 8/24 紧凑行高 = 安全边距规格语义豁免——三十二轮 F2 用户定稿）" testid="semantic-table">
           <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap", alignItems: "flex-start" }}>
             <div style={{ width: 420 }}>
               <Table
@@ -775,7 +775,7 @@ function ComponentsSection() {
           </Variant>
         </CompCell>
         <CompCell name="stat-inline">
-          <Variant label="default · BY THE NUMBERS 专用（三十一轮 F1 v3 定稿）· 大数字 + 墨底白字药丸标签同行顶对齐右贴缘 + desc 400 去粗无框 + 数字→desc 24px + 内衬 32px">
+          <Variant label="default · BY THE NUMBERS 专用（三十一轮 F1 v3 定稿；三十二轮 F1 药丸去填充）· 大数字 + 透明底 2px 墨框墨字药丸标签同行顶对齐右贴缘 + desc 400 去粗无框 + 数字→desc 24px + 内衬 32px">
             <StatInline value="42%" label="参与度提升" desc="参与度相对基线提升 42 个百分点。" data-testid="variant-stat-inline-default" />
           </Variant>
           <Variant label="filled · 对角绿填充变体（accent-1 绿底 + cream 字——S3 TL/BR 卡）">

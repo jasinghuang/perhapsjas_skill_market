@@ -113,8 +113,9 @@ const SHOWCASE_TWEAKS = `
 .sg-seg-rows .cdp-bar-grow { height: 56px; }
 /* S12 成对横条：48px 行高（同列双条同高——审计断言依据） */
 .sg-yoy-rows .cdp-bar-grow { height: 48px; }
-/* S11 ledger 表：mono 数据风格 + 首/末列定宽（三十一轮 F2：删 padding 4px 覆写——
-   单元格衬垫走组件级安全边距规格 var(--space-3) 24px 四周，零 dev 覆写） */
+/* S15 ledger 表：mono 数据风格 + 首/末列定宽（三十一轮 F2：删 padding 4px 覆写——
+   单元格衬垫走组件级规格；三十二轮 F2：组件规格 = 8px 垂直 / 24px 水平紧凑行高
+   （表格为安全边距规格的语义豁免），零 dev 覆写） */
 .sg-spec-table tbody td { font-family: var(--font-mono); font-size: var(--t-label); }
 .sg-spec-table thead th:first-child, .sg-spec-table tbody td:first-child { width: 120px; }
 .sg-spec-table thead th:last-child, .sg-spec-table tbody td:last-child { width: 120px; }
@@ -420,7 +421,8 @@ function ChapterSlide() {
     布局（用户拍板）：大数字（--t-display-2）与 Kicker 标签同一行（大数字左、标签右贴卡右缘）
     + desc 无底色框（--t-body 28px；三十一轮 F1 去粗 400）；无序号角标；
     三十一轮 F1 v3 定稿：对角绿填充恢复（filled 变体——TL/BR 绿底 cream 字，TR/BL cream 底墨字）、
-    墨底白字药丸标签顶对齐、数字→desc 24px、内衬 32px（卡高再高一点）。 */
+    数字→desc 24px、内衬 32px（卡高再高一点）；
+    三十二轮 F1：标签药丸去填充——透明底 2px 墨框墨字（Kicker pill 自然态；绿底卡上随 --text 为 cream），顶对齐保持。 */
 function DataSlide() {
   return (
     <SlideShell index="03" topbar="BY THE NUMBERS" pill="SHOWCASE / M2B" caption="四个数字，讲一个故事">
@@ -1375,7 +1377,8 @@ function SpecSheetSlide() {
     <SlideShell index="15" topbar="SPEC SHEET" pill="CATALOGUE" caption="一张规格表，说清一切">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* 三十一轮 F2：ledger 表 24px 单元格规格抬升行高，headline 下距 64 → 44 屏内回收 20px
-            （与二十八轮 S3 同款手法），表底回落 ≤ 934 */}
+            （与二十八轮 S3 同款手法），表底回落 ≤ 934；
+            三十二轮 F2：表格回紧凑 8/24（安全边距语义豁免），回收保留——表底仍锚 934，栏内余量增大 */}
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "calc(var(--headline-gap) - 20px)" }}>
           一张规格表，说清一切。
         </HeroTitle>
@@ -1399,7 +1402,8 @@ function SpecSheetSlide() {
           </div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
             {/* 三十一轮 F2：ledger 表单元格衬垫走组件级 24px 规格（删 4px dev 覆写）后行高抬升——
-               清单行 56 → 44 + 行距 16 → 8 屏内回收 112px，表底回落留出安全余量（≤934） */}
+               清单行 56 → 44 + 行距 16 → 8 屏内回收 112px，表底回落留出安全余量（≤934）；
+               三十二轮 F2：表格回紧凑 8/24 后行高回落，回收保留（栏内余量归 ledger 上方空隙） */}
             <div data-testid="spec-list" style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
               {SPEC_ROWS.map((row, i) => (
                 <div
