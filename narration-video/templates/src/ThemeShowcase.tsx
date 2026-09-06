@@ -425,17 +425,18 @@ function DataSlide() {
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* headline 单行（视觉终审二轮 F1：右侧空间足够，display-2 96px 单行放下 9 字 + 2 标点） */}
-        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "calc(var(--headline-gap) - 20px)" }}>
           四个数字，一个故事。
         </HeroTitle>
         {/* 2×2 满幅网格：StatCell 组件零阴影（组件级——网格单元纪律）、格间隙 var(--grid-gutter) 28px；
-            二十六轮审计：marginBottom space-3→space-2 使底部 BarGrow 条底落回内容带 ≤934（网格 1fr 行不收缩，条底原 935.3 越带 1.3px） */}
-
+            二十六轮审计：marginBottom space-3→space-2 使底部 BarGrow 条底落回内容带 ≤934（网格 1fr 行不收缩，条底原 935.3 越带 1.3px）；
+            二十八轮 F3 联动：desc 定稿 block（绿块 padding 8 上/下）使每行 min-content +16px、条底 931.3→967.3 越带，
+            屏内回收 36px（headline 下距 64→44 + 网格下距 16→8 + kicker-bar 距 16→8）恢复 ≤934 */}
         <Grid
           variant="even"
           columns={2}
           data-testid="stat-grid"
-          style={{ flex: 1, marginBottom: "var(--space-2)", gridTemplateRows: "1fr 1fr" }}
+          style={{ flex: 1, marginBottom: "var(--space-1)", gridTemplateRows: "1fr 1fr" }}
         >
           <StatCell
             index="/01"
@@ -469,9 +470,9 @@ function DataSlide() {
           />
         </Grid>
         {/* 底部一行（二十一轮 F3：只留动效完成度条——Counter 卡/DonutMeter 移除（用户拍板"不知道为什么放这里"），
-            BarGrow 全宽与网格同幅，视觉平衡） */}
+            BarGrow 全宽与网格同幅，视觉平衡）；二十八轮 F3 联动 kicker-bar 距 16→8（条底回收至 ≤934） */}
         <div style={{ display: "flex", alignItems: "flex-end", marginBottom: "var(--space-2)" }}>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
             <Kicker variant="block" style={{ alignSelf: "flex-start" }}>
               70% · 动效完成度
             </Kicker>
@@ -969,8 +970,9 @@ function PosterSlide() {
         </Kicker>
         {/* ② 主体大字区：display-1 双行——"口播视频" 墨 + "稿子成片" accent-3 橙底 cream 字（单强调色语义）；
             二十六轮 F1：行距 0.92 → 1.05（CJK 130px 视觉重叠修正）；第二行橙底色块（左右 padding --space-3）；
-            二十七轮 F1：色块改 flex 居中（height 176 + line-height 1——130px 文字 rect 中心与色块中心精确重合，
-            上下等距 23px，消除字体 ascent/descent 偏移造成的视觉不居中） */}
+            二十八轮 F2：光学居中——截图像素采样实测 ink 带（128px）在色块内上下边距 32/16（低 8px），
+            CJK 字形 ink 质量中心在 em 盒内偏下；改为显式 padding 上 15 / 下 31（比下少 16px = 2×8px 光学偏移，
+            height 176 = 15 + 130 行盒 + 31，ink 带上下边距对称 24/24） */}
         <div data-testid="poster-title" style={{ display: "flex", flexDirection: "column", marginTop: "var(--space-4)" }}>
           <HeroTitle size="display-1" data-testid="poster-line-1" style={{ lineHeight: 1.05 }}>
             口播视频
@@ -979,13 +981,12 @@ function PosterSlide() {
             size="display-1"
             data-testid="poster-line-2"
             style={{
-              display: "flex",
-              alignItems: "center",
+              boxSizing: "border-box",
               height: 176,
               lineHeight: 1,
               background: "var(--accent-3)",
               color: "var(--surface)",
-              padding: "0 var(--space-3)",
+              padding: "15px var(--space-3) 31px",
               alignSelf: "flex-start",
             }}
           >
@@ -1659,12 +1660,12 @@ function BriefingSlide() {
               三个读数，一级一阶。把关键数字排成可以扫读的阶梯，就是一张简报。
             </BodyCopy>
           </div>
-          {/* StepStairs 阶梯卡组（二十五轮 F4 收编；二十七轮 F3 重设计：无序号 + 卡高逐级递增 220/248/276
-              底部对齐顶部阶梯上升 + 卡间上升箭头）；--accent-1 → orange 使上升箭头走本屏单强调色；
+          {/* StepStairs 阶梯卡组（二十五轮 F4 收编；二十八轮 F4 v3 重设计：无序号 + 卡等高等宽 +
+              位置阶梯左低右高（逐卡 translateY 0/-24/-48）+ 顶部 accent-3 橙条 14px）；
               容器 alignItems flex-end 使阶梯组底缘贴行底（与左栏/FG 注对齐感） */}
           <div
             data-testid="brief-steps"
-            style={{ flex: 1, display: "flex", alignItems: "flex-end", justifyContent: "flex-end", ...scope({ "--accent-1": "var(--accent-3)" }) }}
+            style={{ flex: 1, display: "flex", alignItems: "flex-end", justifyContent: "flex-end" }}
           >
             <StepStairs items={BRIEF_BLOCKS} data-testid="brief-stairs" />
           </div>
@@ -1686,11 +1687,12 @@ function BriefingSlide() {
 
 /* ── Slide 20 · 核心指标 = 参考 emerald-editorial s7 + S3 同构统计格（KPI 四格 + delta 涨跌标签；涨橙跌绿语义） ── */
 
+/* 二十八轮 F3：descStyle 定稿——四卡全部 block（绿底无框，用户选定方案；pill/pillFilled 保留为组件能力仅 styleguide 展示） */
 const KPI_CELLS = [
   { index: "/01", label: "营业收入 · 百万元", value: "27,930", delta: "▲ +9.52%", desc: "收入规模稳步抬升，再上台阶。", descStyle: "block" as const },
-  { index: "/02", label: "归母净利 · 百万元", value: "13,702", delta: "▲ +42.18%", desc: "利润增速领跑，成色十足。", descStyle: "pill" as const },
-  { index: "/03", label: "总资产 · 百万元", value: "975,484", delta: "▲ +28.57%", desc: "资产盘子继续扩张，逼近万亿。", descStyle: "pillFilled" as const },
-  { index: "/04", label: "归母权益 · 百万元", value: "156,111", delta: "▲ +27.93%", desc: "股东权益同步增厚，家底更实。", descStyle: "plain" as const },
+  { index: "/02", label: "归母净利 · 百万元", value: "13,702", delta: "▲ +42.18%", desc: "利润增速领跑，成色十足。", descStyle: "block" as const },
+  { index: "/03", label: "总资产 · 百万元", value: "975,484", delta: "▲ +28.57%", desc: "资产盘子继续扩张，逼近万亿。", descStyle: "block" as const },
+  { index: "/04", label: "归母权益 · 百万元", value: "156,111", delta: "▲ +27.93%", desc: "股东权益同步增厚，家底更实。", descStyle: "block" as const },
 ];
 
 function KeyMetricsSlide() {
@@ -1703,7 +1705,7 @@ function KeyMetricsSlide() {
         {/* 2×2 满幅网格——与 S3 BY THE NUMBERS 同构 StatCell（二十四轮 M2b：角标/数字/标签/描述四件套 + delta 标签；
             二十五轮 F5 收编组件：delta 右置头行、up 橙字——A股涨橙语义）；
             cream 底（无对角填充——财报屏克制，涨跌语义色已由 delta 橙字承载）；
-            二十七轮 F4 descStyle 四档定型：卡 1 block 绿底 cream 字 / 卡 2 pill 4px 墨框药丸 / 卡 3 pillFilled 绿填充药丸 / 卡 4 plain 对照 */}
+            二十八轮 F3 descStyle 定稿：四卡统一 block 绿底 cream 字无框（pill/pillFilled/plain 仅存组件能力，styleguide 展示） */}
         <Grid
           variant="even"
           columns={2}
@@ -1928,7 +1930,8 @@ function BalanceSheetSlide() {
         </HeroTitle>
         {/* 结构条 + 三数字作为居中单元（flex:1 垂直居中）；note 行贴底 */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          {/* 两段式结构条：负债段墨 84.0% + 权益段绿 16.0%，4px 墨框（审计断言 84/16） */}
+          {/* 两段式结构条：负债段墨 84.0% + 权益段绿 16.0%，4px 墨框（审计断言 84/16）；
+              二十八轮 F1：段标签字阶 --t-label 24 → --t-body 28（+1 档） */}
           <div data-testid="bs-bar" style={{ display: "flex", height: 72, border: "4px solid var(--text)" }}>
             <div
               data-testid="bs-liab"
@@ -1941,7 +1944,7 @@ function BalanceSheetSlide() {
                 justifyContent: "center",
               }}
             >
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.08em" }}>负债 84.0%</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-body)", letterSpacing: "0.08em" }}>负债 84.0%</span>
             </div>
             <div
               data-testid="bs-equity"
@@ -1954,7 +1957,7 @@ function BalanceSheetSlide() {
                 justifyContent: "center",
               }}
             >
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.08em" }}>权益 16.0%</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-body)", letterSpacing: "0.08em" }}>权益 16.0%</span>
             </div>
           </div>
           {/* 三数字行：HeroNumber + mono 标签（总负债为按同比推算值，≈ 标注） */}

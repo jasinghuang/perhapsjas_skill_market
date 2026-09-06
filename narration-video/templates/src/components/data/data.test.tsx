@@ -86,17 +86,19 @@ describe("数据组组件", () => {
     expect(getByTestId("d").querySelector(".cdp-stat-cell-delta")!.className).toContain("cdp-stat-cell-delta-down");
   });
 
-  it("StatCell descStyle 四档类名：默认 plain 无档类、block/pill/pillFilled 加档类（二十七轮 F4）", () => {
+  it("StatCell descStyle 四档类名：默认 block 加档类、pill/pillFilled 加档类、plain 无档类（二十八轮 F3 默认改 block）", () => {
     const { getByTestId } = render(
       <div>
-        <StatCell index="/01" value="42%" label="参与度提升" desc="默认档。" data-testid="s-plain" />
+        <StatCell index="/01" value="42%" label="参与度提升" desc="默认 block 档。" data-testid="s-default" />
         <StatCell index="/02" value="27,930" label="营业收入" desc="绿底无框。" descStyle="block" data-testid="s-block" />
         <StatCell index="/03" value="9,637" label="归母净利" desc="4px 墨框药丸。" descStyle="pill" data-testid="s-pill" />
         <StatCell index="/04" value="975,484" label="总资产" desc="绿填充药丸。" descStyle="pillFilled" data-testid="s-pill-filled" />
+        <StatCell index="/05" value="9,637" label="归母净利" desc="无底无框。" descStyle="plain" data-testid="s-plain" />
       </div>,
     );
     const desc = (id: string) => getByTestId(id).querySelector(".cdp-stat-cell-desc");
-    expect(desc("s-plain")!.className).toBe("cdp-stat-cell-desc cdp-stat-cell-desc-plain");
+    // 二十八轮 F3：默认档 = block（用户选定方案）
+    expect(desc("s-default")!.className).toBe("cdp-stat-cell-desc cdp-stat-cell-desc-block");
     expect(desc("s-block")!.className).toContain("cdp-stat-cell-desc-block");
     expect(desc("s-block")!.className).not.toContain("cdp-stat-cell-desc-pill");
     expect(desc("s-pill")!.className).toContain("cdp-stat-cell-desc-pill");
@@ -104,5 +106,7 @@ describe("数据组组件", () => {
     expect(desc("s-pill")!.className).not.toContain("-filled");
     // pillFilled 映射 kebab 类名（descStyle camelCase 与 CSS 命名解耦）
     expect(desc("s-pill-filled")!.className).toBe("cdp-stat-cell-desc cdp-stat-cell-desc-pill-filled");
+    // plain 显式指定仍可用（组件能力保留）
+    expect(desc("s-plain")!.className).toBe("cdp-stat-cell-desc cdp-stat-cell-desc-plain");
   });
 });

@@ -1,14 +1,14 @@
-/* 阶梯卡组（二十五轮 F4 收编；二十六轮 F3 方向反转 + 同色；二十七轮 F3 阶梯感重设计）。
-   删除 NumberPill 序号；"上升"感 = 卡片高度逐级递增（220/248/276——组件层 inline 注入，
-   逐卡增高 28px 审计依据）+ 底部对齐（卡片底缘共线、顶部阶梯上升）。
-   卡间上升箭头 = CSS 几何（横竖短线折线 + 45° 旋转角头），位于相邻卡之间 gap 内（24px 宽，
-   不压邻卡）、由低卡顶沿升至邻卡顶沿（rise 框高 = 28px 步进同源）。
-   箭头颜色走 --accent-1（主题绿；S19 消费端经 scope 覆写为 --accent-3 橙单强调色）。
+/* 阶梯卡组（二十五轮 F4 收编；二十六轮 F3 方向反转 + 同色；二十八轮 F4 v3 位置阶梯重设计）。
+   无序号、无上升箭头；卡片等高等宽（flex: 1 + 组件层统一 220px 高）。
+   "上升"感 = 位置高度阶梯：左低右高——逐卡 translateY(0/-24/-48) 上抬（组件层 inline 注入，
+   24px 步进审计依据）；容器底部锚定（卡 0 底贴容器底）。
+   每卡顶部 accent-3 橙条 14px 高（::before 零元素，贴卡内上缘、4px 墨框内、横贯卡顶）；
+   卡内文字经 padding-top 预留（橙条高 + --space-3）向下避让。
    Card 风格 4px 墨框 + 全卡同色 cream 底（--card-bg）+ 零阴影（网格单元纪律）。 */
 .cdp-step-stairs {
   width: 100%;
   display: flex;
-  /* 底部对齐：卡片底缘共线，顶部随高度逐级上升（二十七轮 F3 阶梯感审计依据） */
+  /* 底部锚定：卡 0 底贴容器底，右卡逐级 translateY 上抬（左低右高——二十八轮 F4 v3 审计依据） */
   align-items: flex-end;
   gap: var(--space-4);
 }
@@ -17,48 +17,27 @@
   flex: 1;
   min-width: 0;
   box-sizing: border-box;
-  position: relative; /* 上升箭头锚点（left:100% = 卡右缘内，箭头伸入 gap） */
+  position: relative; /* 顶部橙条锚点（padding box 上缘 = 4px 墨框内上缘） */
   border: var(--card-border);
   background: var(--card-bg);
   box-shadow: none;
-  padding: var(--space-4);
+  /* 文字向下避让顶部橙条：橙条高 14px（与 ::before 同值，审计依据） + --space-3 净空 */
+  padding: calc(14px + var(--space-3)) var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
 
-/* 上升箭头（二十七轮 F3）：末卡无箭头；::before = 底横线（低卡顶沿）+ 右竖线（升至 28px =
-   邻卡顶沿）折线；::after = 12px 方块 top/left 3px 边 rotate(45deg) → 向上角头 */
-.cdp-step-stairs-rise {
+/* 顶部橙条（二十八轮 F4 v3）：::before 零元素，top/left/right 0 贴 padding box 上缘
+   （= 4px 墨框内上缘），横贯卡顶；高 14px 与卡内 padding-top 预留一致 */
+.cdp-step-stairs-card::before {
+  content: "";
   position: absolute;
-  left: 100%;
   top: 0;
-  width: 24px;
-  height: 28px;
-  pointer-events: none;
-}
-
-.cdp-step-stairs-rise::before {
-  content: "";
-  position: absolute;
   left: 0;
-  bottom: 0;
-  width: 14px;
-  height: 28px;
-  border-top: 3px solid var(--accent-1);
-  border-right: 3px solid var(--accent-1);
-}
-
-.cdp-step-stairs-rise::after {
-  content: "";
-  position: absolute;
-  left: 11px;
-  top: -1px;
-  width: 12px;
-  height: 12px;
-  border-left: 3px solid var(--accent-1);
-  border-top: 3px solid var(--accent-1);
-  transform: rotate(45deg);
+  right: 0;
+  height: 14px;
+  background: var(--accent-3);
 }
 
 .cdp-step-stairs-note {

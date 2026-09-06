@@ -760,16 +760,16 @@ function ComponentsSection() {
           <Variant label="accent"><StatCard number="+47%" label="打开率" variant="accent" data-testid="variant-stat-card-accent" /></Variant>
         </CompCell>
         <CompCell name="stat-cell">
-          <Variant label="descStyle block · 绿底 cream 字无框（二十七轮 F4）">
+          <Variant label="descStyle block · 绿底 cream 字无框 · 默认档（二十八轮 F3 定稿）">
             <StatCell index="/01" value="42%" label="参与度提升" desc="一句描述，突出样式。" descStyle="block" data-testid="variant-stat-cell-block" />
           </Variant>
-          <Variant label="descStyle pill · 4px 墨框药丸 · 600 · delta up 涨橙">
+          <Variant label="descStyle pill · 4px 墨框药丸 · 600 · delta up 涨橙（组件能力）">
             <StatCell index="/02" value="27,930" label="营业收入 · 百万元" desc="收入规模稳步抬升。" descStyle="pill" delta="▲ +9.52%" deltaTone="up" data-testid="variant-stat-cell-pill" />
           </Variant>
-          <Variant label="descStyle pillFilled · 绿填充药丸 cream 字（二十七轮 F4）">
+          <Variant label="descStyle pillFilled · 绿填充药丸 cream 字（组件能力）">
             <StatCell index="/03" value="975,484" label="总资产 · 百万元" desc="资产盘子继续扩张。" descStyle="pillFilled" data-testid="variant-stat-cell-pill-filled" />
           </Variant>
-          <Variant label="descStyle plain · 无底无框 · delta down 跌绿">
+          <Variant label="descStyle plain · 无底无框 · delta down 跌绿（组件能力）">
             <StatCell index="/04" value="9,637" label="归母净利 · 百万元" desc="回调一档，落袋为安。" descStyle="plain" delta="▼ -3.20%" deltaTone="down" data-testid="variant-stat-cell-plain" />
           </Variant>
         </CompCell>
@@ -877,7 +877,7 @@ function ComponentsSection() {
           <Variant label="default · 4×160 错位叠放"><StackedBlocks data-testid="variant-stacked-blocks-default" /></Variant>
         </CompCell>
         <CompCell name="step-stairs">
-          <Variant label="default · 无序号 · 卡高递增 220/248/276 底对齐 · 上升箭头（二十七轮 F3）">
+          <Variant label="default · 无序号 · 等高等宽 · 左低右高 translateY 0/-24/-48 · 顶部橙条（二十八轮 F4 v3）">
             <StepStairs
               data-testid="variant-step-stairs-default"
               items={[

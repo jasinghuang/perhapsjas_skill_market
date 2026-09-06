@@ -11,8 +11,9 @@ export interface StatCellProps {
   label: string;
   /** 描述一句（--t-body 28px；二十六轮 F4：font-weight 600 → 400 去粗） */
   desc: string;
-  /** 描述样式四档（二十七轮 F4 迭代）：plain = 现状无底无框 / block = accent-1 绿底 cream 字（无边框）
-      / pill = 4px 墨框药丸（--r-pill 999）+ 600 加粗 / pillFilled = accent-1 绿填充药丸 cream 字（无边框）。默认 plain */
+  /** 描述样式四档（二十七轮 F4 迭代；二十八轮 F3 定稿）：block = accent-1 绿底 cream 字（无边框，用户选定方案，
+      默认档） / pill = 4px 墨框药丸（--r-pill 999）+ 600 加粗 / pillFilled = accent-1 绿填充药丸 cream 字（无边框）
+      / plain = 无底无框。pill/pillFilled 保留为组件能力（styleguide 展示），展示页不再使用 */
   descStyle?: "plain" | "block" | "pill" | "pillFilled";
   /** 涨跌标签（可选；头行右置，与角标同一行右侧） */
   delta?: string;
@@ -40,7 +41,7 @@ export function StatCell({
   value,
   label,
   desc,
-  descStyle = "plain",
+  descStyle = "block",
   delta,
   deltaTone = "up",
   className = "",
