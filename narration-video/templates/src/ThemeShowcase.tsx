@@ -74,10 +74,6 @@ const SHOWCASE_TWEAKS = `
 .sg-bar-rows .cdp-bar-grow { height: 56px; }
 /* S12 成对横条：48px 行高（同列双条同高——审计断言依据） */
 .sg-yoy-rows .cdp-bar-grow { height: 48px; }
-/* S12 去年条（二十轮 F1）：surface-2 浅档填充 + track 归 canvas 同色（浅档填充可读；
-   var scope 别名会在使用点解析失效，tweak 直指类名是既有手法） */
-.sg-yoy-last { background: var(--surface); }
-.sg-yoy-last .cdp-bar-grow-fill { background: var(--surface-2); }
 /* S11 ledger 表：mono 数据风格 + 紧凑行高 + 首/末列定宽 */
 .sg-spec-table tbody td { font-family: var(--font-mono); font-size: var(--t-label); }
 .sg-spec-table th, .sg-spec-table td { padding: 4px var(--space-3); }
@@ -379,10 +375,10 @@ function ChapterSlide() {
   );
 }
 
-/* ── Slide 3 · 数据冲击 = 参考 s3（二十轮 F3 双色对角收敛：green + pink；orange 不出场） ── */
+/* ── Slide 3 · 数据冲击 = 参考 s3（二十一轮 F3 单填充色对角收敛：pink + cream；green/orange 不出场） ── */
 
 /** 数据格（参考 s3 cell）：mono 角标 /0N（右上）+ 大数字 + mono 标签 + 一句描述；
-    二十轮 F3 配色 = 双色对角——TL/BR pink 底墨字、TR/BL green 底 cream 字 */
+    二十一轮 F3 配色 = 一种填充色 + 无填充——TL/BR pink 填充墨字、TR/BL 无填充（bg 不传 = Card plain 自然态 cream 墨字） */
 function StatCell({
   corner,
   value,
@@ -396,7 +392,7 @@ function StatCell({
   value: string;
   label: string;
   desc: string;
-  bg: string;
+  bg?: string;
   ink?: boolean;
   testid?: string;
 }) {
@@ -476,8 +472,6 @@ function DataSlide() {
             value="2.7×"
             label="吞吐倍数"
             desc="同一份口播稿的产出吞吐提升 2.7 倍。"
-            bg="var(--accent-1)"
-            ink={false}
             testid="stat-cell-2"
           />
           <StatCell
@@ -485,8 +479,6 @@ function DataSlide() {
             value="118"
             label="活跃占位"
             desc="活跃占位组件 118 个，随稿迭代。"
-            bg="var(--accent-1)"
-            ink={false}
             testid="stat-cell-3"
           />
           <StatCell
@@ -498,37 +490,15 @@ function DataSlide() {
             testid="stat-cell-4"
           />
         </Grid>
-        {/* 底部一行（宽松 gap 48，只放 3 个）：动效完成度条 + 帧计数器 + 转化率环 */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-end",
-            gap: 48,
-            marginBottom: "var(--space-2)", // 12px 卡片阴影落点收在内容带内（阴影 ≤ 字幕线 958——既有审计规则）
-          }}
-        >
+        {/* 底部一行（二十一轮 F3：只留动效完成度条——Counter 卡/DonutMeter 移除（用户拍板"不知道为什么放这里"），
+            BarGrow 全宽与网格同幅，视觉平衡） */}
+        <div style={{ display: "flex", alignItems: "flex-end", marginBottom: "var(--space-2)" }}>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
             <Kicker variant="block" style={{ alignSelf: "flex-start" }}>
               70% · 动效完成度
             </Kicker>
             <BarGrow value={0.7} variant="accent" />
           </div>
-          <div style={scope({ "--t-display-2": "48px" })}>
-            <Card
-              variant="plain"
-              data-testid="frames-card"
-              style={{
-                padding: "var(--space-3)",
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--space-2)",
-              }}
-            >
-              <Kicker variant="block">FRAMES</Kicker>
-              <Counter to={47} />
-            </Card>
-          </div>
-          <DonutMeter value={0.42} label="转化率" />
         </div>
       </div>
     </SlideShell>
@@ -1188,26 +1158,22 @@ function QuarterlyReviewSlide() {
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           今年，比去年快一点。
         </HeroTitle>
-        {/* 列头式图例（十九轮 F3）：仅第一对条上方放列头，与条列水平对齐——
-            与数据行同一 flex 骨架（96 标签 + 双 flex 条列 + 双 64 数值列），左缘精确对齐 */}
+        {/* 列头式图例（十九轮 F3；二十一轮 F2 补色块——图例色块与条色同步：今年绿/去年墨）：
+            仅第一对条上方放列头，与条列水平对齐——与数据行同一 flex 骨架，组左缘精确对齐 */}
         <div
           data-testid="yoy-colheads"
           style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-2)" }}
         >
           <span style={{ width: 96 }} />
-          <div style={{ flex: 1 }}>
-            <span
-              data-testid="yoy-colhead-this"
-              style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}
-            >
+          <div data-testid="yoy-colhead-this" style={{ flex: 1, display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+            <div style={{ width: 16, height: 16, background: "var(--accent-1)", border: "2px solid var(--text)" }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}>
               THIS YEAR
             </span>
           </div>
-          <div style={{ flex: 1 }}>
-            <span
-              data-testid="yoy-colhead-last"
-              style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}
-            >
+          <div data-testid="yoy-colhead-last" style={{ flex: 1, display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+            <div style={{ width: 16, height: 16, background: "var(--surface-3)", border: "2px solid var(--text)" }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", color: "var(--text-mute)" }}>
               LAST YEAR
             </span>
           </div>
@@ -1230,15 +1196,9 @@ function QuarterlyReviewSlide() {
               <div style={{ flex: 1 }}>
                 <BarGrow value={row.thisYear} variant="accent" data-testid={`yoy-bar-${row.label}-this`} />
               </div>
-              {/* 去年条：surface-2 浅档（二十轮 F1——与图例色块同档；.sg-yoy-last tweak 让填充浅档可读：
-                  填充 surface-2、track 归 canvas 同色——scope 覆写 var 别名会在使用点解析失效，改 dev tweak 直指） */}
+              {/* 去年条：二十一轮 F2 改墨色（solid 自然态 = surface-3——与图例色块同步，今年绿/去年墨对比鲜明） */}
               <div style={{ flex: 1 }}>
-                <BarGrow
-                  value={row.lastYear}
-                  variant="solid"
-                  className="sg-yoy-last"
-                  data-testid={`yoy-bar-${row.label}-last`}
-                />
+                <BarGrow value={row.lastYear} variant="solid" data-testid={`yoy-bar-${row.label}-last`} />
               </div>
               <span
                 style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", width: 64, textAlign: "right", color: "var(--accent-1)" }}
