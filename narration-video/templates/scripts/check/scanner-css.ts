@@ -1,0 +1,212 @@
+/**
+ * scanner-css：章节层 CSS 扫描器（M3a 静态门禁，§11.1 / §12b V4）。
+ *
+ * 规则（Finding.rule → severity）：
+ *   禁硬编码色   blocker  #2    hex/rgb()/hsl()/命名色裸值；white/black 豁免（命名 + hex 形式）
+ *   禁硬编码字体 blocker  #3    裸 font-family（须走 var(--font-*)）
+ *   禁裸动画时长 blocker  #4    animation-duration/transition-duration 裸值（须走 var(--dur-*)）
+ *   禁裸紫粉渐变 warning  #6    手写 gradient() 内含紫粉色相（hue ∈ [250°, 350°)）裸色；token 化渐变豁免
+ *   禁emoji      warning  #6b   Unicode Extended_Pictographic 范围（注释内同样计）
+ *   字阶成员     warning  #5    font-size 裸 px ≥24 且 ∉ tokens.css 字阶集合
+ *   最小字号     warning  V4    font-size 裸 px <24（低于 --t-label 24px 档）
+ *   间距成员     warning  #5b   margin/padding/gap 裸 px ∉ tokens.css --space 集合（0 豁免）
+ *
+ * 字阶/间距集合从 src/theme/tokens.css 以 `?raw` 导入解析（Ruling P4-1——与主题同源，
+ * 主题改档门禁自动跟随）。色/字体/时长基查与 contract-lint 的 lintCssText 同型正则；
+ * 本层自实现核心的取舍（结构化 Finding 输出、white/black 豁免、防误伤紫色主题）见 task-2-report。
+ *
+ * 纯 TS、无 DOM 依赖——tsx（node）与 vitest 双环境消费。
+ */
+
+import tokensCss from "../../src/theme/tokens.css?raw";
+import type { Finding } from "./findings";
+
+// ── 主题同源集合（Ruling P4-1） ──
+
+function parsePxValues(css: string, re: RegExp): Set<number> {
+  const values = new Set<number>();
+  for (const m of css.matchAll(re)) values.add(parseFloat(m[1]));
+  return values;
+}
+
+const TYPE_SCALE = parsePxValues(tokensCss, /--t-[\w-]*\s*:\s*([\d.]+)px/g);
+const SPACE_SCALE = parsePxValues(tokensCss, /--space-\d+\s*:\s*([\d.]+)px/g);
+
+// 护栏：`?raw` 被 stub 成空串时（vitest test.css 未开启）宁可炸掉也不假绿/误报（终审 C1 教训）
+if (TYPE_SCALE.size === 0 || SPACE_SCALE.size === 0) {
+  throw new Error(
+    "scanner-css：tokens.css 字阶/间距集合解析为空（`?raw` 导入被 stub？vitest 需 test.css=true）",
+  );
+}
+
+const TYPE_SCALE_LABEL = [...TYPE_SCALE].sort((a, b) => a - b).join("/");
+const SPACE_SCALE_LABEL = [...SPACE_SCALE].sort((a, b) => a - b).join("/");
+
+// ── 规则正则（色/字体/时长与 contract-lint lintCssText 同型） ──
+
+const VAR_RE = /var\([^)]*\)/g; // 剥离 var() 引用段——token 化豁免
+const WHITE_BLACK_HEX_RE = /#(?:fff|ffffff|000|000000)\b/gi; // white/black 豁免（hex 形式）
+const HEX_RE_G = /#[0-9a-fA-F]{3,8}\b/g; // match/matchAll 用（全局）
+const RGB_RE = /rgba?\(/;
+const HSL_RE = /hsla?\(/;
+// white/black 豁免（§11.1 #2）；transparent 按设计稿同样禁止；
+// (?<!-) 防 --purple-* 类 token 引用误报（防误伤紫色主题）。
+const NAMED_COLOR_RE =
+  /(?<!-)\b(red|blue|green|yellow|orange|purple|pink|cyan|magenta|tomato|gold|silver|transparent)\b/;
+// 负向前瞻必须写成 (?!\s*var\() 形式——写成 \s*(?!var\() 可回溯成零宽，
+// 导致 `font-family: var(--font-body)` 类合规声明被误报（contract-lint 注释钉出的坑）。
+const FONT_RE = /font-family\s*:(?!\s*var\()/;
+const DUR_RE = /animation-duration\s*:(?!\s*var\()/;
+const TRANSITION_DUR_RE = /transition-duration\s*:(?!\s*var\()/;
+const GRADIENT_RE = /(?:linear|radial|conic)-gradient\s*\(/;
+const EMOJI_RE = /\p{Extended_Pictographic}/u;
+const FONT_SIZE_RE = /font-size\s*:\s*([\d.]+)px/g;
+const SPACING_DECL_RE = /(margin|padding|gap)(?:-[a-z]+)?\s*:\s*([^;{}]+)/g;
+const PX_VALUE_RE = /(-?[\d.]+)px/g;
+
+const PURPLE_PINK_HUE_MIN = 250; // 紫（270）— 品红（300）— 粉（333，主题 --accent-2）窗口
+const PURPLE_PINK_HUE_MAX = 350; // 不含上界；纯蓝 240、纯红 0 均在窗外
+const MIN_FONT_PX = 24; // V4：--t-label 全局最小字号
+
+// ── 色相检测（§11.1 #6 "色相检测"） ──
+
+function hueFromRgb(r: number, g: number, b: number): number | undefined {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max === min) return undefined; // 灰阶无色相
+  const d = max - min;
+  let h: number;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h *= 60;
+  return h < 0 ? h + 360 : h;
+}
+
+function hueFromHex(hex: string): number | undefined {
+  const h = hex.slice(1);
+  const full =
+    h.length >= 6 ? h.slice(0, 6) : h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  return hueFromRgb(
+    parseInt(full.slice(0, 2), 16),
+    parseInt(full.slice(2, 4), 16),
+    parseInt(full.slice(4, 6), 16),
+  );
+}
+
+/** 在已剥离 var() 的行上收集紫粉色相（hex/rgb()/hsl() 三种裸值）。 */
+function purplePinkHuesOnLine(line: string): number[] {
+  const hues: number[] = [];
+  for (const m of line.matchAll(HEX_RE_G)) {
+    const h = hueFromHex(m[0]);
+    if (h !== undefined && !Number.isNaN(h)) hues.push(h);
+  }
+  for (const m of line.matchAll(/rgba?\(\s*(\d{1,3})[,\s]+(\d{1,3})[,\s]+(\d{1,3})/g)) {
+    const h = hueFromRgb(Number(m[1]), Number(m[2]), Number(m[3]));
+    if (h !== undefined) hues.push(h);
+  }
+  for (const m of line.matchAll(/hsla?\(\s*([\d.]+)/g)) hues.push(parseFloat(m[1]) % 360);
+  return hues.filter(
+    (h) => !Number.isNaN(h) && h >= PURPLE_PINK_HUE_MIN && h < PURPLE_PINK_HUE_MAX,
+  );
+}
+
+// ── 扫描 ──
+
+function pushFinding(
+  findings: Finding[],
+  rule: string,
+  severity: "blocker" | "warning",
+  location: string,
+  message: string,
+): void {
+  findings.push({ rule, severity, location, message });
+}
+
+function scanLine(path: string, lineNo: number, line: string, findings: Finding[]): void {
+  const loc = `${path}:${lineNo}`;
+
+  // 声明区切片：色值只查声明部分（最后一个 { 或 } 之后），防 `.purple-card` 类选择器误报
+  const lastBrace = Math.max(line.lastIndexOf("{"), line.lastIndexOf("}"));
+  const declPart = lastBrace >= 0 ? line.slice(lastBrace + 1) : line;
+  const colorLine = declPart.replace(VAR_RE, ""); // 剥离 var() 引用——token 化豁免
+
+  // #2 禁硬编码色（white/black 豁免：命名 + hex 形式）
+  const noWhiteBlack = colorLine.replace(WHITE_BLACK_HEX_RE, "");
+  if (
+    noWhiteBlack.match(HEX_RE_G) !== null ||
+    RGB_RE.test(colorLine) ||
+    HSL_RE.test(colorLine) ||
+    NAMED_COLOR_RE.test(colorLine)
+  ) {
+    pushFinding(findings, "禁硬编码色", "blocker", loc, "裸色值（须走 var(--*) token，white/black 豁免）");
+  }
+
+  // #3 禁硬编码字体
+  if (FONT_RE.test(line)) {
+    pushFinding(findings, "禁硬编码字体", "blocker", loc, "裸 font-family（须走 var(--font-*)）");
+  }
+
+  // #4 禁裸动画时长（CSS 部分）
+  if (DUR_RE.test(line) || TRANSITION_DUR_RE.test(line)) {
+    pushFinding(findings, "禁裸动画时长", "blocker", loc, "裸动画时长（须走 var(--dur-*)）");
+  }
+
+  // #6 禁裸紫粉渐变（token 化渐变豁免：var() 已剥离，手写渐变仅对裸色做色相检测）
+  if (GRADIENT_RE.test(line)) {
+    const hues = purplePinkHuesOnLine(colorLine);
+    if (hues.length > 0) {
+      pushFinding(
+        findings,
+        "禁裸紫粉渐变",
+        "warning",
+        loc,
+        `手写渐变含紫粉色相（hue ${hues.map((h) => Math.round(h)).join("/")}）——渐变须走 var(--gradient-*) token`,
+      );
+    }
+  }
+
+  // #6b 禁 emoji（Unicode Extended_Pictographic 范围；注释内同样计）
+  if (EMOJI_RE.test(line)) {
+    pushFinding(findings, "禁emoji", "warning", loc, "出现 emoji 字符（Unicode Extended_Pictographic）");
+  }
+
+  // #5 字阶成员 + V4 最小字号（合并判断：<24 → 最小字号；≥24 且 ∉ 字阶 → 字阶成员）
+  for (const m of line.matchAll(FONT_SIZE_RE)) {
+    const v = parseFloat(m[1]);
+    if (v < MIN_FONT_PX) {
+      pushFinding(findings, "最小字号", "warning", loc, `字号 ${v}px 低于最小字号 ${MIN_FONT_PX}px（V4）`);
+    } else if (!TYPE_SCALE.has(v)) {
+      pushFinding(findings, "字阶成员", "warning", loc, `字号 ${v}px 不在字阶集合（${TYPE_SCALE_LABEL}）`);
+    }
+  }
+
+  // #5b 间距成员（margin/padding/gap 裸 px 须 ∈ --space 集合；0 豁免）
+  for (const m of line.matchAll(SPACING_DECL_RE)) {
+    for (const p of m[2].matchAll(PX_VALUE_RE)) {
+      const v = Math.abs(parseFloat(p[1]));
+      if (v === 0) continue;
+      if (!SPACE_SCALE.has(v)) {
+        pushFinding(
+          findings,
+          "间距成员",
+          "warning",
+          loc,
+          `间距 ${p[1]}px 不在 --space 集合（${SPACE_SCALE_LABEL}）`,
+        );
+      }
+    }
+  }
+}
+
+export function scanChapterCss(cssFiles: Array<{ path: string; css: string }>): Finding[] {
+  if (cssFiles.length === 0) {
+    throw new Error("scanChapterCss：css 数组为空（非空护栏，空输入不扫描）");
+  }
+  const findings: Finding[] = [];
+  for (const { path, css } of cssFiles) {
+    const lines = css.split("\n");
+    lines.forEach((line, i) => scanLine(path, i + 1, line, findings));
+  }
+  return findings;
+}
