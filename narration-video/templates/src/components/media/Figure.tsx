@@ -5,6 +5,8 @@ export interface FigureProps {
   src?: string;
   caption?: string;
   variant?: "frame" | "plain";
+  /** 宽高比（组件级 aspect 处理，如 "3 / 4"）：高度由 width 与 ratio 决定，placeholder 撑满 */
+  ratio?: string;
   reveal?: "fade" | "rise" | "wipe";
   duration?: "fast" | "mid" | "slow";
   className?: string;
@@ -17,9 +19,16 @@ const Base = createPrimitive("figure", {
   defaultVariant: "frame",
 });
 
-export function Figure({ src, caption, variant = "frame", reveal, duration, className, ...rest }: FigureProps) {
+export function Figure({ src, caption, variant = "frame", ratio, reveal, duration, className = "", ...rest }: FigureProps) {
   return (
-    <Base variant={variant} reveal={reveal} duration={duration} className={className} data-testid={rest["data-testid"]}>
+    <Base
+      variant={variant}
+      reveal={reveal}
+      duration={duration}
+      className={[className, ratio ? "cdp-figure-ratio" : ""].filter(Boolean).join(" ")}
+      style={ratio ? { aspectRatio: ratio } : undefined}
+      data-testid={rest["data-testid"]}
+    >
       {src ? (
         <img className="cdp-figure-img" src={src} alt={caption ?? ""} />
       ) : (

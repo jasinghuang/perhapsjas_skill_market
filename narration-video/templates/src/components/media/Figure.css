@@ -2,6 +2,18 @@
   margin: 0;
 }
 
+/* 宽高比档（十三轮一致性：组件级 aspect 处理，替代 dev 页高度覆写） */
+.cdp-figure-ratio {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.cdp-figure-ratio .cdp-figure-placeholder {
+  flex: 1;
+  min-height: 0;
+}
+
 .cdp-figure-frame {
   border: var(--border-w) solid var(--text);
   box-shadow: var(--shadow-card);

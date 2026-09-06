@@ -6,6 +6,13 @@
   display: inline-block;
 }
 
+/* plain：透明底无衬垫，颜色继承（十三轮一致性：showcase 不再用 inline 覆写伪造无底标签） */
+.cdp-kicker-plain {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
 .cdp-kicker-block {
   background: var(--surface-3);
   color: var(--surface);

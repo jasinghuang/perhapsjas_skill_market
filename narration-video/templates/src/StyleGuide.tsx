@@ -99,6 +99,7 @@ function Section({ index, title, children }: { index: string; title: string; chi
           border: "4px solid var(--text)",
           boxSizing: "border-box",
           padding: "var(--space-5) 96px",
+          color: "var(--text)", // 颜色链给继承型变体（Kicker plain 等）——十三轮一致性
         }}
       >
         {children}
@@ -506,7 +507,7 @@ function SemanticSection() {
   return (
     <Section index="05" title="语义组件 SEMANTIC">
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-        <SemItem label="CARD · 三变体（plain 保留 12px 硬阴影语义；featured 24px 档归 marker/数据主角）" testid="semantic-card">
+        <SemItem label="CARD · 三变体（plain 保留 12px 硬阴影语义；featured 24px 档归 marker/数据主角；展示页网格内零阴影/配色覆写属构图级例外）" testid="semantic-card">
           <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap" }}>
             <Card variant="plain" style={cardRowStyle}>
               <MonoLabel size={12}>PLAIN</MonoLabel>
@@ -526,7 +527,7 @@ function SemanticSection() {
             </div>
           </div>
         </SemItem>
-        <SemItem label="TABLE · 三变体（同数据 3 行；columns = 彩色列：pink 墨字 / green cream 字 / orange cream 字）" testid="semantic-table">
+        <SemItem label="TABLE · 三变体（同数据 3 行；columns = 彩色列：pink 墨字 / green cream 字 / orange cream 字；展示页 S4 的表头高 96px/首列 30%/标签列 cream 底为参考 slide 7 构图级例外）" testid="semantic-table">
           <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap", alignItems: "flex-start" }}>
             <div style={{ width: 480 }}>
               <Table
@@ -599,13 +600,13 @@ function SemanticSection() {
             </div>
           </div>
         </SemItem>
-        <SemItem label="FIGURE · frame / plain（placeholder）" testid="semantic-figure">
-          <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap", alignItems: "flex-start", ...scope({ "--shadow-card": "none" }) }}>
+        <SemItem label="FIGURE · frame / plain（placeholder；frame 保留 24px 硬阴影自然态——展示页 S8 同款；06 格内为目录密度压缩）" testid="semantic-figure">
+          <div style={{ display: "flex", gap: "var(--space-6)", flexWrap: "wrap", alignItems: "flex-start" }}>
             <div style={{ width: 260 }}>
-              <Figure variant="frame" className="sg-figure-short" data-testid="semantic-figure-frame" />
+              <Figure variant="frame" data-testid="semantic-figure-frame" />
             </div>
             <div style={{ width: 260 }}>
-              <Figure variant="plain" className="sg-figure-short" data-testid="semantic-figure-plain" />
+              <Figure variant="plain" data-testid="semantic-figure-plain" />
             </div>
           </div>
         </SemItem>
@@ -705,8 +706,10 @@ function ComponentsSection() {
         <CompCell name="hero-title">
           <Variant label="plain"><HeroTitle data-testid="variant-hero-title-plain" style={{ fontSize: 56, lineHeight: 0.92 }}>口播视频</HeroTitle></Variant>
           <Variant label="stamp"><HeroTitle variant="stamp" data-testid="variant-hero-title-stamp" style={{ fontSize: 28, lineHeight: 1, padding: "8px 14px" }}>口播视频</HeroTitle></Variant>
+          <MonoLabel color="var(--text-faint)" size={12}>构图级例外：展示页 stamp 阴影色按 featured 纪律覆写（每屏 2-3 强调色）</MonoLabel>
         </CompCell>
         <CompCell name="kicker">
+          <Variant label="plain"><Kicker variant="plain" data-testid="variant-kicker-plain">CHAPTER 01</Kicker></Variant>
           <Variant label="block"><Kicker variant="block" data-testid="variant-kicker-block">CHAPTER 01</Kicker></Variant>
           <Variant label="pill"><Kicker variant="pill" data-testid="variant-kicker-pill">CHAPTER 01</Kicker></Variant>
         </CompCell>
@@ -731,10 +734,12 @@ function ComponentsSection() {
         </CompCell>
         <CompCell name="counter">
           <Variant label="default · 挂载滚动 0→47"><Counter to={47} data-testid="variant-counter-default" /></Variant>
+          <MonoLabel color="var(--text-faint)" size={12}>构图级例外：展示页 S3 底部小卡 --t-display-2 48px 档（密度裁量）</MonoLabel>
         </CompCell>
         <CompCell name="bar-grow">
           <Variant label="solid"><div style={{ width: 240 }}><BarGrow value={0.7} variant="solid" data-testid="variant-bar-grow-solid" /></div></Variant>
           <Variant label="accent"><div style={{ width: 240 }}><BarGrow value={0.7} variant="accent" data-testid="variant-bar-grow-accent" /></div></Variant>
+          <MonoLabel color="var(--text-faint)" size={12}>构图级例外：展示页 S5 柱状图行高 56px（图表密度 dev 微调），组件原生 24px</MonoLabel>
         </CompCell>
         <CompCell name="donut-meter">
           <Variant label="default · value 0.42"><DonutMeter value={0.42} label="转化率" data-testid="variant-donut-meter-default" /></Variant>
@@ -832,6 +837,7 @@ function ComponentsSection() {
         <CompCell name="figure">
           <Variant label="frame"><div style={{ width: 220 }}><Figure variant="frame" className="sg-figure-short" data-testid="variant-figure-frame" /></div></Variant>
           <Variant label="plain"><div style={{ width: 220 }}><Figure variant="plain" className="sg-figure-short" data-testid="variant-figure-plain" /></div></Variant>
+          <Variant label="ratio 3 / 4（组件级 aspect）"><div style={{ width: 140 }}><Figure variant="frame" ratio="3 / 4" data-testid="variant-figure-ratio" /></div></Variant>
         </CompCell>
         <CompCell name="typed-terminal">
           <Variant label="default · 打字挂载即播">

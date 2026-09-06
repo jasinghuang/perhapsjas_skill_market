@@ -67,8 +67,6 @@ const SHOWCASE_TWEAKS = `
 .sg-compare-table thead th:first-child, .sg-compare-table tbody td:first-child { width: 30%; }
 .sg-compare-table tbody td:first-child { background: var(--surface); font-weight: 700; }
 .sg-bar-rows .cdp-bar-grow { height: 56px; }
-.sg-portrait .cdp-figure { height: 100%; }
-.sg-portrait .cdp-figure-placeholder { min-height: 0; height: 100%; }
 `;
 
 /* ── 安全框可视化（?showcase=1&guides=1 dev-only） ── */
@@ -374,9 +372,10 @@ function ChapterSlide() {
               flexDirection: "column",
               alignItems: "center",
               gap: "var(--space-2)",
+              color: "var(--surface)",
             }}
           >
-            <Kicker style={{ background: "none", color: "var(--surface)", padding: 0 }}>FLIP THE SWITCH.</Kicker>
+            <Kicker variant="plain">FLIP THE SWITCH.</Kicker>
             <div
               style={{
                 fontFamily: "var(--font-display-cn)",
@@ -428,34 +427,29 @@ function StatCell({
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          padding: "20px 28px", // 十一轮 F1：收紧使 64px headline-gap 下网格不撑破内容带
-          background: bg,
+          background: bg, // 十三轮一致性：内衬回归组件默认（--space-4 32px），仅配色覆写（每屏纪律）
         }}
       >
         <Kicker
+          variant="plain"
           style={{
             position: "absolute",
-            top: 20,
-            right: 28,
-            background: "none",
-            color: "inherit",
-            padding: 0,
+            top: "var(--space-4)",
+            right: "var(--space-4)",
             fontSize: 24,
             letterSpacing: "0.1em",
           }}
         >
           {corner}
         </Kicker>
-        <div style={{ paddingTop: 16 }}>
+        <div>
           <HeroNumber value={value} />
         </div>
         <div>
-          <Kicker
-            style={{ background: "none", color: "inherit", padding: 0, fontSize: 24, letterSpacing: "0.12em" }}
-          >
+          <Kicker variant="plain" style={{ fontSize: 24, letterSpacing: "0.12em" }}>
             {label}
           </Kicker>
-          <BodyCopy style={{ fontSize: 24, lineHeight: 1.3, marginTop: 4, maxWidth: 520 }}>{desc}</BodyCopy>
+          <BodyCopy style={{ fontSize: 24, lineHeight: 1.3, marginTop: 2, maxWidth: 520 }}>{desc}</BodyCopy>
         </div>
       </Card>
     </div>
@@ -601,7 +595,7 @@ function DiagramSlide() {
               data-testid="system-panel"
               style={{ width: 820, padding: "var(--space-4)", display: "flex", flexDirection: "column", gap: "var(--space-3)" }}
             >
-              <Kicker style={{ background: "none", padding: 0, color: "var(--text)", fontSize: "var(--t-label)" }}>
+              <Kicker variant="plain" style={{ fontSize: "var(--t-label)" }}>
                 SCHEMATIC / A
               </Kicker>
               <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-3)" })} />
@@ -732,10 +726,8 @@ function StepCard({ def }: { def: StepDef }) {
         {def.n}
       </span>
       <Kicker
+        variant="plain" // 十三轮一致性：plain 变体颜色继承（green 卡 accent 变体自动 cream 字）
         style={{
-          background: "none",
-          color: creamText ? "var(--surface)" : "var(--text)",
-          padding: 0,
           fontSize: 34,
           lineHeight: 1,
           fontWeight: 700,
@@ -840,27 +832,25 @@ function MediaSlide() {
     <SlideShell index="08" topbar="MEDIA · PORTRAIT" pill="3:4 ASSETS" caption="竖屏素材，各归其位">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="h1" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>竖屏素材，各归其位。</HeroTitle>
-        {/* 3 个 3:4 竖屏 Figure placeholder（frame 变体，零阴影 scope）+ 第 4 个 KenBurns 无 src placeholder。
+        {/* 3 个 3:4 竖屏 Figure placeholder（frame 变体 + ratio="3 / 4" 组件级 aspect——十三轮一致性零覆写，
+            自然 24px 硬阴影保留；gap 32 容纳阴影落点）+ 第 4 个 KenBurns 无 src placeholder（布局容器控尺寸）。
             十二轮 F3：StaggerRow 逐个错峰 rise 入场，KenBurns 保持 slow 缓推 */}
         <StaggerRow
           stagger
           reveal="rise"
           duration="mid"
           data-testid="portrait-row"
-          style={{ display: "flex", gap: "var(--space-4)", ...scope({ "--shadow-card": "none" }) }}
+          style={{ display: "flex", gap: "var(--space-4)", alignItems: "flex-start" }}
         >
           {PORTRAIT_ITEMS.map((item) => (
-            <div key={item.id} style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-              <div
-                className="sg-portrait"
-                style={{ width: 400, height: 533, boxSizing: "border-box", border: "4px solid var(--surface-3)" }}
-              >
-                {item.kind === "figure" ? (
-                  <Figure variant="frame" data-testid={`portrait-${item.id}`} />
-                ) : (
+            <div key={item.id} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)", width: 400 }}>
+              {item.kind === "figure" ? (
+                <Figure variant="frame" ratio="3 / 4" data-testid={`portrait-${item.id}`} />
+              ) : (
+                <div style={{ width: 400, height: 533, boxSizing: "border-box", border: "4px solid var(--surface-3)" }}>
                   <KenBurns duration="slow" data-testid="portrait-kenburns" />
-                )}
-              </div>
+                </div>
+              )}
               <span
                 style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.1em", color: "var(--text-mute)" }}
               >
@@ -991,7 +981,7 @@ function QuoteSlide() {
         {/* 左侧窄栏（~280px 垂直贯穿）：序号 + 栏名 + hairline + 期号 + 专栏小目录 */}
         <div data-testid="manifesto-sidebar" style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
           <NumberPill number="01" variant="accent" />
-          <Kicker style={{ background: "none", padding: 0, color: "var(--text)", fontSize: "var(--t-label)" }}>
+          <Kicker variant="plain" style={{ fontSize: "var(--t-label)" }}>
             MANIFESTO · 宣言
           </Kicker>
           <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "var(--space-2) 0 var(--space-3)" })} />
