@@ -1,5 +1,5 @@
 // 样式词典页（M2b 验收工具；dev-only，不入章节层）。
-// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 32 组件全变体目录。
+// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 34 组件全变体目录。
 // 页面壳：深色 shell 底（var(--shell)）、1920 居中；每区段 mono 区段头（cream，编号 + 标题）
 // + 全幅 cream 内容面板（4px 墨框、水平内衬 96px——与安全框规格一致）。
 // 布局纪律：区段内容水平 ≥96px 内；无横向溢出；组件格容器只允许 inline 布局属性，
@@ -38,7 +38,9 @@ import {
   StackedBlocks,
   StagePad,
   StatCard,
+  StatCell,
   StepSequence,
+  StepStairs,
   Table,
   TimelineTrack,
   TypedTerminal,
@@ -638,7 +640,7 @@ function SemanticSection() {
   );
 }
 
-/* ── 06 · 组件全览 COMPONENTS（32 组件 × 全变体） ── */
+/* ── 06 · 组件全览 COMPONENTS（34 组件 × 全变体） ── */
 
 /** 组件格：cream 底 + 4px 墨框 + 字阶压缩 scope；容器仅 inline 布局属性（零裸色） */
 function CompCell({ name, extraScope, children }: {
@@ -735,7 +737,7 @@ function ComponentsSection() {
           <Variant label="invert"><NumberPill number="03" variant="invert" data-testid="variant-number-pill-invert" /></Variant>
         </CompCell>
       </CompGroup>
-      <CompGroup label="DATA · 数据（5）">
+      <CompGroup label="DATA · 数据（6）">
         <CompCell name="hero-number">
           <Variant label="plain"><HeroNumber value="+47%" variant="plain" data-testid="variant-hero-number-plain" /></Variant>
           <Variant label="accent"><HeroNumber value="+47%" variant="accent" data-testid="variant-hero-number-accent" /></Variant>
@@ -756,6 +758,17 @@ function ComponentsSection() {
           <Variant label="plain"><StatCard number="+47%" label="打开率" variant="plain" data-testid="variant-stat-card-plain" /></Variant>
           <Variant label="invert"><StatCard number="+47%" label="打开率" variant="invert" data-testid="variant-stat-card-invert" /></Variant>
           <Variant label="accent"><StatCard number="+47%" label="打开率" variant="accent" data-testid="variant-stat-card-accent" /></Variant>
+        </CompCell>
+        <CompCell name="stat-cell">
+          <Variant label="plain · 无 delta（二十五轮 F5）">
+            <StatCell index="/01" value="42%" label="参与度提升" desc="一句描述，突出样式。" data-testid="variant-stat-cell-plain" />
+          </Variant>
+          <Variant label="delta up · 涨橙（A股语义）">
+            <StatCell index="/02" value="27,930" label="营业收入 · 百万元" desc="收入规模稳步抬升。" delta="▲ +9.52%" deltaTone="up" data-testid="variant-stat-cell-up" />
+          </Variant>
+          <Variant label="delta down · 跌绿（A股语义）">
+            <StatCell index="/03" value="9,637" label="归母净利 · 百万元" desc="回调一档，落袋为安。" delta="▼ -3.20%" deltaTone="down" data-testid="variant-stat-cell-down" />
+          </Variant>
         </CompCell>
       </CompGroup>
       <CompGroup label="STRUCTURE · 结构（6）">
@@ -846,7 +859,7 @@ function ComponentsSection() {
           <Variant label="cards"><StepSequence steps={stepData} currentStep={1} variant="cards" data-testid="variant-step-sequence-cards" /></Variant>
         </CompCell>
       </CompGroup>
-      <CompGroup label="DECOR · 装饰（5）">
+      <CompGroup label="DECOR · 装饰（6）">
         <CompCell name="decor-dot">
           <Variant label="plain"><DecorDot variant="plain" data-testid="variant-decor-dot-plain" /></Variant>
           <Variant label="glow"><DecorDot variant="glow" data-testid="variant-decor-dot-glow" /></Variant>
@@ -861,6 +874,18 @@ function ComponentsSection() {
         </CompCell>
         <CompCell name="stacked-blocks">
           <Variant label="default · 4×160 错位叠放"><StackedBlocks data-testid="variant-stacked-blocks-default" /></Variant>
+        </CompCell>
+        <CompCell name="step-stairs">
+          <Variant label="default · 左高右低 24px 步进（二十五轮 F4）">
+            <StepStairs
+              data-testid="variant-step-stairs-default"
+              items={[
+                { label: "01", value: "42%", note: "参与度提升" },
+                { label: "02", value: "2.7×", note: "吞吐倍数" },
+                { label: "03", value: "25", note: "屏数" },
+              ]}
+            />
+          </Variant>
         </CompCell>
         <CompCell name="marker-block">
           <Variant label="plain"><MarkerBlock data-testid="variant-marker-block-plain"><BodyCopy>奶油底 · 墨字</BodyCopy></MarkerBlock></Variant>
@@ -877,7 +902,7 @@ function ComponentsSection() {
         </CompCell>
         <CompCell name="typed-terminal">
           <Variant label="default · 打字挂载即播">
-            <TypedTerminal lines={["styleguide --mode creative", "28 components · variants"]} data-testid="variant-typed-terminal-default" />
+            <TypedTerminal lines={["styleguide --mode creative", "34 components · variants"]} data-testid="variant-typed-terminal-default" />
           </Variant>
         </CompCell>
         <CompCell name="path-draw">
@@ -960,7 +985,7 @@ export function StyleGuide() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 样式词典 · 全部 token 视觉表达 + 32 组件目录
+          creative-mode · 样式词典 · 全部 token 视觉表达 + 34 组件目录
         </span>
         <span
           style={{

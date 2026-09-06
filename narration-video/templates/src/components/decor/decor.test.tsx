@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
-import { DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock } from "./";
+import { DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock, StepStairs } from "./";
 
 beforeEach(() => setRenderMode(false));
 afterEach(() => setRenderMode(false));
@@ -61,5 +61,35 @@ describe("装饰组", () => {
     expect(getByTestId("m2").textContent).toBe("创意模式");
     expect(getByTestId("m3").className).toContain("cdp-marker-block-invert");
     expect(getByTestId("m3").textContent).toBe("墨底");
+  });
+
+  it("StepStairs 渲染 N 卡 + 左高右低阶梯 24px 步进 + 墨/cream 底交替 + 卡内三件套（二十五轮 F4）", () => {
+    const { getByTestId } = render(
+      <StepStairs
+        data-testid="stairs"
+        items={[
+          { label: "01", value: "42%", note: "参与度提升" },
+          { label: "02", value: "2.7×" },
+          { label: "03", value: "25", note: "屏数" },
+        ]}
+      />,
+    );
+    const root = getByTestId("stairs");
+    expect(root.className).toContain("cdp-step-stairs");
+    const cards = root.querySelectorAll(".cdp-step-stairs-card");
+    expect(cards).toHaveLength(3);
+    // 左高右低阶梯：逐卡 marginTop 0/24/48（审计断言依据——computed y 逐卡递增 24px）
+    expect((cards[0] as HTMLElement).style.marginTop).toBe("0px");
+    expect((cards[1] as HTMLElement).style.marginTop).toBe("24px");
+    expect((cards[2] as HTMLElement).style.marginTop).toBe("48px");
+    // 首卡墨、墨/cream 交替（类名审计依据）
+    expect(cards[0].className).toContain("cdp-step-stairs-card-ink");
+    expect(cards[1].className).not.toContain("cdp-step-stairs-card-ink");
+    expect(cards[2].className).toContain("cdp-step-stairs-card-ink");
+    // 卡内三件套：NumberPill 序号 + HeroNumber 值 + mono 注（note 可选）
+    expect(cards[0].querySelector(".cdp-number-pill")).toHaveTextContent("01");
+    expect(cards[0].querySelector(".cdp-hero-number-value")).toHaveTextContent("42%");
+    expect(cards[0].querySelector(".cdp-step-stairs-note")).toHaveTextContent("参与度提升");
+    expect(cards[1].querySelector(".cdp-step-stairs-note")).toBeNull();
   });
 });

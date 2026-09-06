@@ -5,17 +5,21 @@
 // 二十三轮新增 6 屏（财报解读系列，真实年报数据）→ 二十四轮（M2b showcase refine）：
 // 删财报封面（用户拍板复用 S1 封面排版）、S15 KEY METRICS 改 S3 同构 2×2 统计格、A股涨橙跌绿语义落地、
 // 新增 6 创意屏（A 菜单 / B 海报 / C 终端 / D 路线图 / E 墨底 / F 简报）——共 25 屏，序号连续 1-25。
+// 二十五轮（视觉终审）：S11 海报重设为信息流五段式（Kicker 眉标 + display-1 双行大标题单强调色 + hairline/lede
+// + 底部 mono 注 + 徽章弱化为 NO.01，删四行逐词堆叠）；S14 路线图下移（节点行中心 ≈ y480）；
+// S19 简报标题行净空 + 阶梯卡组收编 StepStairs（左高右低 24px 步进、墨/cream 交替）；
+// S3/S20 统计格收编 StatCell（delta 右置头行、up 橙 down 绿）；SplitCompare 中分界 3px→4px。
 // S1=参考 s1 封面 / S2=参考 s2 章节开篇 / S3=参考 s3 数据屏（2×2 满幅零阴影网格）/ S4=参考 s4 系统示意（StackedBlocks 组件）/
 // S5=参考 s5 柱状图（4 行横向条）/ S6=参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）/
 // S7=参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）/ S8=媒体 3:4 素材（用户点名竖屏占位）/
 // S9=动效实验室（全部动效词汇）/
 // S10=新屏 A 内容菜单（supper-club 菜单排版：mono 编号 + 条目 + 虚线引导 + 价格式数值）/
-// S11=新屏 B 海报宣言（bold-poster 超大堆叠标题逐词放大 + -4deg 徽章）/ S12=新屏 C 复古终端（窗口面板 + TypedTerminal + 状态行 + 网格底）/
+// S11=新屏 B 海报宣言（bold-poster 信息流五段式——二十五轮 F1 重设：Kicker 眉标 + display-1 双行单强调色 + hairline/lede + mono 注 + NO.01 徽章）/ S12=新屏 C 复古终端（窗口面板 + TypedTerminal + 状态行 + 网格底）/
 // S13=参考 scatterbrain s1 便签墙（5 便签微旋转 + 图钉 + 底部 mono 注）/
-// S14=新屏 D 路线图（pin-and-paper：图钉 + CSS 虚线串联 5 节点药丸）/ S15=参考 sakura-chroma s3/s7 规格清单（产品图 + SC-01 + 6 行规格 JIS 勾选框 + 底部 ledger 表）/
+// S14=新屏 D 路线图（pin-and-paper：图钉 + CSS 虚线串联 5 节点药丸；二十五轮 F3 下移——节点行中心 ≈ y480）/ S15=参考 sakura-chroma s3/s7 规格清单（产品图 + SC-01 + 6 行规格 JIS 勾选框 + 底部 ledger 表）/
 // S16=参考 editorial-forest s5/s7 季度回顾（图例 + 4 行成对横条 + KPI 大数字行）/
 // S17=参考 scatterbrain s9 Before/After（左右分屏 + 中缝 VS 圆章）/
-// S18=新屏 E 墨底大字（整屏反色 surface-3 + cream 标语 + 单强调色条）/ S19=新屏 F 研究简报（cobalt-grid 网格底 + 阶梯数据块 + FIG 注）/
+// S18=新屏 E 墨底大字（整屏反色 surface-3 + cream 标语 + 单强调色条）/ S19=新屏 F 研究简报（cobalt-grid 网格底 + StepStairs 阶梯卡组 + FIG 注；二十五轮 F4 标题行净空 + 卡组下移）/
 // S20=核心指标（S3 同构 2×2 统计格：角标/数字/标签/描述四件套 + 涨跌标签橙字——A股红涨语义）/
 // S21=参考 emerald-editorial s5 双年对比（双色柱组 + y 轴刻度 + 图例）/ S22=业务分部（分类条形逐类一色——季度规则复用）/
 // S23=资产负债表速览（结构条 84/16 两段 + 三数字）/ S24=参考 monochrome s6 年度亮点（有序列表 + 页边注窄栏）/
@@ -57,6 +61,8 @@ import {
   SplitCompare,
   StackedBlocks,
   StagePad,
+  StatCell,
+  StepStairs,
   Table,
   TimelineTrack,
   TypedTerminal,
@@ -393,84 +399,9 @@ function ChapterSlide() {
 
 /* ── Slide 3 · 数据冲击 = 参考 s3（二十二轮 F3 单填充色对角收敛：green + cream） ── */
 
-/** 数据格（参考 s3 cell）：mono 角标 /0N（右上）+ 大数字 + mono 标签 + 一句描述；
-    二十二轮 F3 配色 = 一种填充色 + 无填充——TL/BR accent-1 green 填充 cream 字、TR/BL 无填充（bg 不传 = Card plain 自然态 cream 墨字）。
-    delta 可选（S20 核心指标）：mono 涨跌标签 accent-3 橙字（二十四轮 A股红涨语义——涨橙/跌绿规则，控制器同步设计文档 §12） */
-function StatCell({
-  corner,
-  value,
-  label,
-  desc,
-  bg,
-  ink = true,
-  delta,
-  testid,
-  deltaTestid,
-}: {
-  corner: string;
-  value: string;
-  label: string;
-  desc: string;
-  bg?: string;
-  ink?: boolean;
-  delta?: string;
-  testid?: string;
-  deltaTestid?: string;
-}) {
-  const textScope = ink ? {} : scope({ "--text": "var(--surface)", "--text-2": "var(--surface)" });
-  return (
-    <div style={{ display: "flex", ...textScope }}>
-      <Card
-        variant="plain"
-        data-testid={testid}
-        style={{
-          position: "relative",
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          background: bg, // 十三轮一致性：内衬回归组件默认（--space-4 32px），仅配色覆写（每屏纪律）
-        }}
-      >
-        <Kicker
-          variant="plain"
-          style={{
-            position: "absolute",
-            top: "var(--space-4)",
-            right: "var(--space-4)",
-            fontSize: 24,
-            letterSpacing: "0.1em",
-          }}
-        >
-          {corner}
-        </Kicker>
-        <div>
-          <HeroNumber value={value} />
-        </div>
-        <div>
-          <Kicker variant="plain" style={{ fontSize: 24, letterSpacing: "0.12em" }}>
-            {label}
-          </Kicker>
-          <BodyCopy style={{ fontSize: 24, lineHeight: 1.3, marginTop: 2, maxWidth: 520 }}>{desc}</BodyCopy>
-        </div>
-        {delta ? (
-          <span
-            data-testid={deltaTestid}
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 24,
-              letterSpacing: "0.06em",
-              color: "var(--accent-3)", // 涨橙（A股红涨语义；跌为 accent-1 绿——本 deck 无跌例）
-            }}
-          >
-            {delta}
-          </span>
-        ) : null}
-      </Card>
-    </div>
-  );
-}
-
+/** 数据格 = StatCell 组件（二十五轮 F5 收编——原本地 StatCell 函数组件化）。
+    二十二轮 F3 配色 = 一种填充色 + 无填充——TL/BR accent-1 green 填充 cream 字（scope 注入 --text* 反色，组件本体不改）、
+    TR/BL 无填充（StatCell 自然态 cream 墨字）。S3 四格无 delta。 */
 function DataSlide() {
   return (
     <SlideShell index="03" topbar="BY THE NUMBERS" pill="SHOWCASE / M2B" caption="四个数字，讲一个故事">
@@ -486,44 +417,42 @@ function DataSlide() {
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           四个数字，一个故事。
         </HeroTitle>
-        {/* 2×2 满幅网格：零阴影（--shadow-card-sm none）、格间隙 var(--grid-gutter) 28px */}
+        {/* 2×2 满幅网格：StatCell 组件零阴影（组件级——网格单元纪律）、格间隙 var(--grid-gutter) 28px */}
         <Grid
           variant="even"
           columns={2}
           data-testid="stat-grid"
-          style={{ flex: 1, marginBottom: "var(--space-3)", gridTemplateRows: "1fr 1fr", ...scope({ "--shadow-card-sm": "none" }) }}
+          style={{ flex: 1, marginBottom: "var(--space-3)", gridTemplateRows: "1fr 1fr" }}
         >
           <StatCell
-            corner="/01"
+            index="/01"
             value="42%"
             label="参与度提升"
             desc="参与度相对基线提升 42 个百分点。"
-            bg="var(--accent-1)"
-            ink={false}
-            testid="stat-cell-1"
+            data-testid="stat-cell-1"
+            style={{ background: "var(--accent-1)", ...scope({ "--text": "var(--surface)", "--text-2": "var(--surface)", "--text-mute": "var(--surface)" }) }}
           />
           <StatCell
-            corner="/02"
+            index="/02"
             value="2.7×"
             label="吞吐倍数"
             desc="同一份口播稿的产出吞吐提升 2.7 倍。"
-            testid="stat-cell-2"
+            data-testid="stat-cell-2"
           />
           <StatCell
-            corner="/03"
+            index="/03"
             value="118"
             label="活跃占位"
             desc="活跃占位组件 118 个，随稿迭代。"
-            testid="stat-cell-3"
+            data-testid="stat-cell-3"
           />
           <StatCell
-            corner="/04"
+            index="/04"
             value="$9.4M"
             label="样本总值"
             desc="样本数据总值 940 万美元。"
-            bg="var(--accent-1)"
-            ink={false}
-            testid="stat-cell-4"
+            data-testid="stat-cell-4"
+            style={{ background: "var(--accent-1)", ...scope({ "--text": "var(--surface)", "--text-2": "var(--surface)", "--text-mute": "var(--surface)" }) }}
           />
         </Grid>
         {/* 底部一行（二十一轮 F3：只留动效完成度条——Counter 卡/DonutMeter 移除（用户拍板"不知道为什么放这里"），
@@ -992,21 +921,14 @@ function MenuSlide() {
   );
 }
 
-/* ── Slide 11 · 海报宣言 = 新屏 B（bold-poster 超大堆叠标题；强调色：orange 单色） ── */
-
-const POSTER_LINES = [
-  { text: "口播", size: "var(--t-h2)", indent: 0 },
-  { text: "视频", size: "var(--t-h1)", indent: "var(--space-6)" },
-  { text: "稿子", size: "var(--t-display-2)", indent: "calc(var(--space-6) * 2)" },
-  { text: "成片", size: "var(--t-display-1)", indent: "calc(var(--space-6) * 3)" },
-];
+/* ── Slide 11 · 海报宣言 = 新屏 B（bold-poster 信息流五段式——二十五轮 F1 重设；强调色：orange 单色） ── */
 
 function PosterSlide() {
   return (
     <SlideShell index="11" topbar="POSTER" pill="MANIFESTO" caption="大字，就要大声">
       <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column" }}>
-        {/* 右上 -4deg 旋转徽章（NumberPill 式 CSS 徽章：999 圆角 2px 墨框 + 橙底 cream 字；
-            内移 32px 使旋转 bbox（约 ±21px 扩展）落回内容带） */}
+        {/* ⑤ 右上 -4deg 旋转徽章（装饰弱化，不抢信息流：透明底 2px 墨框 mono "NO.01"；
+            内移 32px 使旋转 bbox 落回内容带） */}
         <div
           data-testid="poster-badge"
           style={{
@@ -1016,8 +938,8 @@ function PosterSlide() {
             transform: "rotate(-4deg)",
             border: "2px solid var(--surface-3)",
             borderRadius: 999,
-            background: "var(--accent-3)",
-            color: "var(--surface)",
+            background: "transparent",
+            color: "var(--text)",
             fontFamily: "var(--font-mono)",
             fontSize: 24,
             lineHeight: 1,
@@ -1026,42 +948,31 @@ function PosterSlide() {
             whiteSpace: "nowrap",
           }}
         >
-          POSTER NO.01
+          NO.01
         </div>
-        {/* 四行超大堆叠标题（逐词放大 + 逐行错位缩进——海报式不对称编排） */}
-        <div data-testid="poster-lines" style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-          {POSTER_LINES.map((line, i) => (
-            <span
-              key={line.text}
-              data-testid={`poster-line-${i + 1}`}
-              style={{
-                fontFamily: "var(--font-display-cn)",
-                fontWeight: 900,
-                fontSize: line.size,
-                lineHeight: 0.95,
-                color: "var(--text)",
-                marginLeft: line.indent,
-              }}
-            >
-              {line.text}
-            </span>
-          ))}
+        {/* ① 顶部 Kicker mono 眉标 */}
+        <Kicker variant="plain" data-testid="poster-kicker" style={{ fontSize: "var(--t-label)", letterSpacing: "0.14em" }}>
+          MANIFESTO · POSTER NO.01
+        </Kicker>
+        {/* ② 主体大字区：display-1 双行——"口播视频" 墨 + "稿子成片" accent-3 橙（单强调色语义）；行距紧凑 0.92 */}
+        <div data-testid="poster-title" style={{ display: "flex", flexDirection: "column", marginTop: "var(--space-4)" }}>
+          <HeroTitle size="display-1" data-testid="poster-line-1" style={{ lineHeight: 0.92 }}>
+            口播视频
+          </HeroTitle>
+          <HeroTitle size="display-1" data-testid="poster-line-2" style={{ lineHeight: 0.92, color: "var(--accent-3)" }}>
+            稿子成片
+          </HeroTitle>
         </div>
-        {/* 单强调色橙字一行 */}
-        <span
-          data-testid="poster-accent-line"
-          style={{
-            fontFamily: "var(--font-display-cn)",
-            fontWeight: 900,
-            fontSize: "var(--t-h1)",
-            lineHeight: 0.95,
-            color: "var(--accent-3)",
-            marginTop: "var(--space-3)",
-          }}
-        >
-          让稿子动起来
-        </span>
-        {/* 底部小字 mono 注 */}
+        {/* ③ 大字下 3px hairline + BodyCopy lede 一句副题 */}
+        <Rule
+          variant="solid"
+          data-testid="poster-rule"
+          style={scope({ "--rule-w": "3px", margin: "var(--space-4) 0 var(--space-3)" })}
+        />
+        <BodyCopy variant="lede" data-testid="poster-lede" style={{ maxWidth: 760 }}>
+          从一份稿子，到一条会动的视频。
+        </BodyCopy>
+        {/* ④ 底部 mono 注 */}
         <span
           data-testid="poster-note"
           style={{
@@ -1074,7 +985,7 @@ function PosterSlide() {
             alignSelf: "flex-start",
           }}
         >
-          POSTER — 海报宣言 · 大字排版
+          POSTER · 2026
         </span>
       </div>
     </SlideShell>
@@ -1300,17 +1211,18 @@ function RoadmapSlide() {
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           一条线，串起五站。
         </HeroTitle>
-        {/* 水平路线图：3px dashed 墨线横向贯穿（串联各站图钉），5 节点列 space-between 均布 */}
+        {/* 水平路线图：3px dashed 墨线横向贯穿（串联各站图钉），5 节点列 space-between 均布。
+            二十五轮 F3：整体下移——route top 48→136 / nodes top 40→128，节点行中心落在页面垂直中点偏上（≈ y480） */}
         <div data-testid="roadmap" style={{ position: "relative", flex: 1 }}>
           <div
             data-testid="roadmap-route"
-            style={{ position: "absolute", top: 48, left: "var(--space-5)", right: "var(--space-5)", borderTop: "3px dashed var(--text)" }}
+            style={{ position: "absolute", top: 136, left: "var(--space-5)", right: "var(--space-5)", borderTop: "3px dashed var(--text)" }}
           />
           <div
             data-testid="roadmap-nodes"
             style={{
               position: "absolute",
-              top: 40,
+              top: 128,
               left: "var(--space-5)",
               right: "var(--space-5)",
               display: "flex",
@@ -1677,12 +1589,12 @@ function InkSlide() {
   );
 }
 
-/* ── Slide 19 · 研究简报 = 新屏 F（cobalt-grid 图纸网格 + 阶梯数据块；强调色：orange 单色） ── */
+/* ── Slide 19 · 研究简报 = 新屏 F（cobalt-grid 图纸网格 + StepStairs 阶梯卡组；强调色：orange 单色） ── */
 
 const BRIEF_BLOCKS = [
-  { n: "01", value: "42%", note: "参与度提升" },
-  { n: "02", value: "2.7×", note: "吞吐倍数" },
-  { n: "03", value: "25", note: "屏数 · 本套" },
+  { label: "01", value: "42%", note: "参与度提升" },
+  { label: "02", value: "2.7×", note: "吞吐倍数" },
+  { label: "03", value: "25", note: "屏数 · 本套" },
 ];
 
 function BriefingSlide() {
@@ -1702,12 +1614,13 @@ function BriefingSlide() {
         }}
       />
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        {/* 左栏 headline 与导语 + 右栏阶梯式数据块 */}
-        <div style={{ flex: 1, display: "flex", gap: "var(--space-6)", minHeight: 0 }}>
+        {/* 二十五轮 F4：标题行净空——headline 独占整行（右侧无任何元素），间距 --headline-gap */}
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          研究简报。
+        </HeroTitle>
+        {/* 下方行：左栏 Kicker/导语 + 右栏阶梯卡组（整体再下沉一个 --space-3——距 headline = --headline-gap + --space-3） */}
+        <div style={{ flex: 1, display: "flex", gap: "var(--space-6)", minHeight: 0, marginTop: "var(--space-3)" }}>
           <div style={{ width: 620, display: "flex", flexDirection: "column" }}>
-            <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
-              研究简报。
-            </HeroTitle>
             <Kicker variant="plain" data-testid="brief-kicker" style={{ fontSize: 24, letterSpacing: "0.12em", color: "var(--text-mute)" }}>
               BRIEF — 数据速读
             </Kicker>
@@ -1715,34 +1628,13 @@ function BriefingSlide() {
               三个读数，一级一阶。把关键数字排成可以扫读的阶梯，就是一张简报。
             </BodyCopy>
           </div>
-          {/* 三个错落阶梯方块（4px 墨框 + 24px 步进错落）：NumberPill + 数字 + mono 注 */}
+          {/* StepStairs 阶梯卡组（二十五轮 F4 收编组件：左高右低 24px 步进 + 墨/cream 交替 + 零阴影）；
+              --accent-1 → orange 使 NumberPill accent 走本屏单强调色 */}
           <div
             data-testid="brief-steps"
-            style={{ flex: 1, display: "flex", alignItems: "flex-start", justifyContent: "flex-end", gap: "var(--space-4)", ...scope({ "--accent-1": "var(--accent-3)" }) }}
+            style={{ flex: 1, display: "flex", alignItems: "flex-start", justifyContent: "flex-end", ...scope({ "--accent-1": "var(--accent-3)" }) }}
           >
-            {BRIEF_BLOCKS.map((block, i) => (
-              <div
-                key={block.n}
-                data-testid={`brief-block-${i + 1}`}
-                style={{
-                  width: 300,
-                  boxSizing: "border-box",
-                  marginTop: i * 24, // 阶梯错落 24px 步进
-                  border: "4px solid var(--surface-3)",
-                  background: "var(--surface)",
-                  padding: "var(--space-4)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "var(--space-2)",
-                }}
-              >
-                <NumberPill number={block.n} variant="accent" data-testid={`brief-pill-${i + 1}`} />
-                <HeroNumber value={block.value} data-testid={`brief-value-${i + 1}`} />
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, lineHeight: 1, letterSpacing: "0.06em", color: "var(--text-mute)" }}>
-                  {block.note}
-                </span>
-              </div>
-            ))}
+            <StepStairs items={BRIEF_BLOCKS} data-testid="brief-stairs" />
           </div>
         </div>
         {/* 底部 hairline 数据注 */}
@@ -1760,13 +1652,13 @@ function BriefingSlide() {
   );
 }
 
-/* ── Slide 20 · 核心指标 = 参考 emerald-editorial s7 + S3 同构统计格（KPI 四格 + 涨跌标签；涨橙跌绿语义） ── */
+/* ── Slide 20 · 核心指标 = 参考 emerald-editorial s7 + S3 同构统计格（KPI 四格 + delta 涨跌标签；涨橙跌绿语义） ── */
 
 const KPI_CELLS = [
-  { corner: "/01", label: "营业收入 · 百万元", value: "27,930", delta: "▲ +9.52%", desc: "收入规模稳步抬升，再上台阶。" },
-  { corner: "/02", label: "归母净利 · 百万元", value: "13,702", delta: "▲ +42.18%", desc: "利润增速领跑，成色十足。" },
-  { corner: "/03", label: "总资产 · 百万元", value: "975,484", delta: "▲ +28.57%", desc: "资产盘子继续扩张，逼近万亿。" },
-  { corner: "/04", label: "归母权益 · 百万元", value: "156,111", delta: "▲ +27.93%", desc: "股东权益同步增厚，家底更实。" },
+  { index: "/01", label: "营业收入 · 百万元", value: "27,930", delta: "▲ +9.52%", desc: "收入规模稳步抬升，再上台阶。" },
+  { index: "/02", label: "归母净利 · 百万元", value: "13,702", delta: "▲ +42.18%", desc: "利润增速领跑，成色十足。" },
+  { index: "/03", label: "总资产 · 百万元", value: "975,484", delta: "▲ +28.57%", desc: "资产盘子继续扩张，逼近万亿。" },
+  { index: "/04", label: "归母权益 · 百万元", value: "156,111", delta: "▲ +27.93%", desc: "股东权益同步增厚，家底更实。" },
 ];
 
 function KeyMetricsSlide() {
@@ -1776,24 +1668,25 @@ function KeyMetricsSlide() {
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           四个数字，看懂一年。
         </HeroTitle>
-        {/* 2×2 满幅零阴影网格——与 S3 BY THE NUMBERS 同构统计格（二十四轮 M2b：角标/数字/标签/描述四件套 + delta 标签）；
+        {/* 2×2 满幅网格——与 S3 BY THE NUMBERS 同构 StatCell（二十四轮 M2b：角标/数字/标签/描述四件套 + delta 标签；
+            二十五轮 F5 收编组件：delta 右置头行、up 橙字——A股涨橙语义）；
             cream 底（无对角填充——财报屏克制，涨跌语义色已由 delta 橙字承载） */}
         <Grid
           variant="even"
           columns={2}
           data-testid="kpi-grid"
-          style={{ flex: 1, marginBottom: "var(--space-3)", gridTemplateRows: "1fr 1fr", ...scope({ "--shadow-card-sm": "none" }) }}
+          style={{ flex: 1, marginBottom: "var(--space-3)", gridTemplateRows: "1fr 1fr" }}
         >
           {KPI_CELLS.map((cell, i) => (
             <StatCell
               key={cell.label}
-              corner={cell.corner}
+              index={cell.index}
               value={cell.value}
               label={cell.label}
               desc={cell.desc}
               delta={cell.delta}
-              testid={`kpi-cell-${i + 1}`}
-              deltaTestid={`kpi-delta-${i + 1}`}
+              deltaTone="up"
+              data-testid={`kpi-cell-${i + 1}`}
             />
           ))}
         </Grid>

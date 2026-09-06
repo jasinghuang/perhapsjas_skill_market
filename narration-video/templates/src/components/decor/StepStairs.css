@@ -1,0 +1,44 @@
+/* 阶梯卡组（二十五轮 F4 收编）：N 卡横向排布，左高右低阶梯
+   （每卡 marginTop 步进 24px——由组件层 inline 注入，逐卡 computed y 递增 24px 审计依据）；
+   Card 风格 4px 墨框 + 墨/cream 底交替（首卡墨）+ 零阴影（网格单元纪律）。 */
+.cdp-step-stairs {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.cdp-step-stairs-card {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  border: var(--card-border);
+  background: var(--surface);
+  box-shadow: none;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* 墨底卡（首卡墨，墨/cream 交替） */
+.cdp-step-stairs-card-ink {
+  background: var(--surface-3);
+}
+
+/* 墨卡上子元素反色：HeroNumber 值 + mono 注（NumberPill accent 自带 cream 字零覆写） */
+.cdp-step-stairs-card-ink .cdp-hero-number-value {
+  color: var(--surface);
+}
+
+.cdp-step-stairs-card-ink .cdp-step-stairs-note {
+  color: var(--surface);
+}
+
+.cdp-step-stairs-note {
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: var(--text-mute);
+}

@@ -1,4 +1,4 @@
-/* 分屏对比（十九轮 F4 收编；二十轮 F2 修正）：单一面板 + 两半之间 3px 墨分界线（VS 圆章压其上）+ 中央 VS 圆章。
+/* 分屏对比（十九轮 F4 收编；二十轮 F2 修正；二十五轮 F6 分界线 3px→4px）：单一面板 + 两半之间 4px 墨分界线（VS 圆章压其上）+ 中央 VS 圆章。
    投影层单色橙整块（24px 偏移硬阴影——单色、无双层描边、无中缝痕迹）。
    面板尺寸由消费端容器决定（showcase 1560×560；styleguide 由格内容器约束）。 */
 .cdp-split-compare {
@@ -23,8 +23,8 @@
 
 .cdp-split-compare-before {
   background: var(--surface-2);
-  /* 二十轮 F2：两半交界恢复 3px 墨分界线（--table-border 3px 墨） */
-  border-right: var(--table-border);
+  /* 二十轮 F2：两半交界恢复墨分界线；二十五轮 F6：3px → 4px（--border-w，与画布/卡片墨框同宽） */
+  border-right: var(--border-w) solid var(--text);
 }
 
 .cdp-split-compare-after {

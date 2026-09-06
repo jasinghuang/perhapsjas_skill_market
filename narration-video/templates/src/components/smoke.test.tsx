@@ -3,10 +3,10 @@ import { render } from "@testing-library/react";
 import { setRenderMode } from "../engine/animationRuntime";
 import {
   HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill,
-  HeroNumber, Counter, BarGrow, DonutMeter, StatCard,
+  HeroNumber, Counter, BarGrow, DonutMeter, StatCard, StatCell,
   Card, Rule, Grid, StagePad, Table, SplitCompare,
   RevealText, RevealList, StepSequence,
-  DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock,
+  DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock, StepStairs,
   Figure, TypedTerminal, PathDraw,
   SeededParticles, Breathe, KenBurns,
   TimelineTrack, ProgressDots,
@@ -14,14 +14,14 @@ import {
 
 // 终审 M3：逐组件 presence 断言——统一出口每个组件必须在画布真实渲染，
 // 只查 ".cdp" 根类会漏掉「组件已导出但从未渲染」的假绿。
-// 全部 31 组件（28 + 十轮 F3/F4 收编 StackedBlocks / NumberPill + 十九轮 F4 SplitCompare）。
+// 全部 34 组件（28 + 十轮 F3/F4 收编 StackedBlocks / NumberPill + 十九轮 F4 SplitCompare + 二十五轮 F4 StepStairs + 二十五轮 F5 StatCell）。
 const ALL_NAMES = [
   "stage-pad",
   "hero-title", "kicker", "body-copy", "quote-block", "number-pill",
-  "hero-number", "counter", "bar-grow", "donut", "stat-card",
+  "hero-number", "counter", "bar-grow", "donut", "stat-card", "stat-cell",
   "card", "rule", "grid", "table", "split-compare",
   "reveal-text", "reveal-list", "step-seq",
-  "decor-dot", "decor-bar", "decor-ring", "stacked-blocks", "marker-block",
+  "decor-dot", "decor-bar", "decor-ring", "stacked-blocks", "marker-block", "step-stairs",
   "figure", "terminal", "path-draw",
   "particles", "breathe", "kenburns",
   "timeline", "progress-dots",
@@ -46,7 +46,7 @@ afterEach(() => {
 
 describe("双画布冒烟（§11.2 组件契约测试）", () => {
   for (const dims of STAGE_SIZES) {
-    it(`全部 31 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
+    it(`全部 34 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
       const { container } = render(
         <div style={{ width: dims.width, height: dims.height }}>
           <StagePad>
@@ -56,6 +56,7 @@ describe("双画布冒烟（§11.2 组件契约测试）", () => {
             <RevealList items={["一", "二"]} activeCount={1} />
             <StepSequence steps={[{ title: "一" }, { title: "二" }]} currentStep={0} />
             <DecorDot /> <DecorBar /> <DecorRing /> <StackedBlocks />
+            <StepStairs items={[{ label: "01", value: "42%", note: "参与度提升" }, { label: "02", value: "2.7×" }]} />
             <MarkerBlock>主角</MarkerBlock>
             <SplitCompare before={["散落"]} after={["清晰"]} />
             <NumberPill number="01" />
@@ -68,6 +69,7 @@ describe("双画布冒烟（§11.2 组件契约测试）", () => {
             <TimelineTrack points={["A", "B"]} activeIndex={0} />
             <ProgressDots total={3} current={1} />
             <Grid variant="half"><StatCard number="47" label="增长" /><Card>卡</Card></Grid>
+            <StatCell index="/01" value="+47%" label="增长" desc="一句描述。" delta="▲ +9.52%" deltaTone="up" />
             <HeroNumber value="+47%" /><Counter to={47} /><BarGrow value={0.7} />
             <DonutMeter value={0.42} label="转化率" /><Rule />
             <Table header={["A", "B"]} rows={[["1", "2"]]} />

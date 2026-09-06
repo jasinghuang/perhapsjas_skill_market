@@ -1,7 +1,7 @@
 // 组件契约 lint（§11.1 #9 内核）：组件 CSS 只消费 token——禁裸色值、禁裸 font-family、禁裸动画时长。
 // M3a 门禁与本章节测试共用同一实现。
 // Ruling P2-8：不用 node:fs + __dirname（ESM 无 __dirname、无 @types/node，tsc 必挂），
-// 改用 Vite `?raw` 显式导入 32 个组件 CSS，lint 扫描这些字符串。
+// 改用 Vite `?raw` 显式导入 34 个组件 CSS，lint 扫描这些字符串。
 
 import heroTitleCss from "./text/HeroTitle.css?raw";
 import kickerCss from "./text/Kicker.css?raw";
@@ -13,6 +13,7 @@ import counterCss from "./data/Counter.css?raw";
 import barGrowCss from "./data/BarGrow.css?raw";
 import donutMeterCss from "./data/DonutMeter.css?raw";
 import statCardCss from "./data/StatCard.css?raw";
+import statCellCss from "./data/StatCell.css?raw";
 import cardCss from "./structure/Card.css?raw";
 import ruleCss from "./structure/Rule.css?raw";
 import gridCss from "./structure/Grid.css?raw";
@@ -27,6 +28,7 @@ import decorBarCss from "./decor/DecorBar.css?raw";
 import decorRingCss from "./decor/DecorRing.css?raw";
 import stackedBlocksCss from "./decor/StackedBlocks.css?raw";
 import markerBlockCss from "./decor/MarkerBlock.css?raw";
+import stepStairsCss from "./decor/StepStairs.css?raw";
 import figureCss from "./media/Figure.css?raw";
 import typedTerminalCss from "./media/TypedTerminal.css?raw";
 import pathDrawCss from "./media/PathDraw.css?raw";
@@ -47,6 +49,7 @@ export const COMPONENT_CSS: Array<{ file: string; css: string }> = [
   { file: "data/BarGrow.css", css: barGrowCss },
   { file: "data/DonutMeter.css", css: donutMeterCss },
   { file: "data/StatCard.css", css: statCardCss },
+  { file: "data/StatCell.css", css: statCellCss },
   { file: "structure/Card.css", css: cardCss },
   { file: "structure/Rule.css", css: ruleCss },
   { file: "structure/Grid.css", css: gridCss },
@@ -61,6 +64,7 @@ export const COMPONENT_CSS: Array<{ file: string; css: string }> = [
   { file: "decor/DecorRing.css", css: decorRingCss },
   { file: "decor/StackedBlocks.css", css: stackedBlocksCss },
   { file: "decor/MarkerBlock.css", css: markerBlockCss },
+  { file: "decor/StepStairs.css", css: stepStairsCss },
   { file: "media/Figure.css", css: figureCss },
   { file: "media/TypedTerminal.css", css: typedTerminalCss },
   { file: "media/PathDraw.css", css: pathDrawCss },
