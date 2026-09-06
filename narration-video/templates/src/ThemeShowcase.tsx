@@ -1,14 +1,21 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
-// ?showcase=1 渲染：14 屏 1920×1080 slide deck——每屏带统一 chrome frame
+// ?showcase=1 渲染：21 屏 1920×1080 slide deck——每屏带统一 chrome frame
 // （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–934 + 字幕保留区 y[958,1038]；meta 页码条已删）。
-// 构图纪律（用户反馈终审）：十五轮 F3 定稿 10 屏 + 十八轮新增 4 屏（外挂模板构图灵感，本主题 token/组件渲染）——
+// 构图纪律（用户反馈终审）：十五轮 F3 定稿 10 屏 + 十八轮新增 4 屏（外挂模板构图灵感，本主题 token/组件渲染）+
+// 二十三轮新增 6 屏（财报解读系列，真实年报数据）——
 // S1=参考 s1 封面 / S2=参考 s2 章节开篇 / S3=参考 s3 数据屏（2×2 满幅零阴影网格）/ S4=参考 s4 系统示意（StackedBlocks 组件）/
 // S5=参考 s5 柱状图（4 行横向条）/ S6=参考 s6 流程屏（4 步卡 + dashed 线，箭头已按用户拍板删除）/
 // S7=参考 s7 对比屏（彩色列表格，徽章已按用户拍板删除）/ S8=媒体 3:4 素材（用户点名竖屏占位）/
 // S9=动效实验室（全部动效词汇）/ S10=参考 scatterbrain s1 便签墙（5 便签微旋转 + 图钉 + 底部 mono 注）/
 // S11=参考 sakura-chroma s3/s7 规格清单（产品图 + SC-01 + 6 行规格 JIS 勾选框 + 底部 ledger 表）/
 // S12=参考 editorial-forest s5/s7 季度回顾（图例 + 4 行成对横条 + KPI 大数字行）/
-// S13=参考 scatterbrain s9 Before/After（左右分屏 + 中缝 VS 圆章）/ S14=参考 s8 收尾屏（绿底 + stamp 标题 + 印章）。
+// S13=参考 scatterbrain s9 Before/After（左右分屏 + 中缝 VS 圆章）/
+// S15=参考 signal s1 年报封面（双语大标题 + Rule 上下关键数字带）/ S16=参考 emerald-editorial s7 核心指标（KPI 四格 + 涨跌标签）/
+// S17=参考 emerald-editorial s5 双年对比（双色柱组 + y 轴刻度 + 图例）/ S18=业务分部（分类条形逐类一色——季度规则复用）/
+// S19=资产负债表速览（结构条 84/16 两段 + 三数字）/ S20=参考 monochrome s6 年度亮点（有序列表 + 页边注窄栏）/
+// S21=参考 s8 收尾屏（绿底 + stamp 标题 + 印章 21/21）。
+// 序号说明：财报系列按用户口径编号 S15–S20、收尾顺延 S21（索引 14 空缺——现 deck 14 屏 + 6 新 = 20 物理屏；
+// 用户口径 21 屏与 14+6 差一，交付按口径编号、物理数见报告）。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
 // （底边 ≤934 = 字幕区上缘 958 − 24；24px 阴影落点亦算占位，不越界）；③ 氛围背景层与 CaptionLayer 自身豁免。
 // ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 958 线，pointerEvents none）。
@@ -72,6 +79,8 @@ const SHOWCASE_TWEAKS = `
 .sg-compare-table thead th:first-child, .sg-compare-table tbody td:first-child { width: 30%; }
 .sg-compare-table tbody td:first-child { background: var(--surface); font-weight: 700; }
 .sg-bar-rows .cdp-bar-grow { height: 56px; }
+/* S18 分部条：56px 行高（同 S5 季度条节奏） */
+.sg-seg-rows .cdp-bar-grow { height: 56px; }
 /* S12 成对横条：48px 行高（同列双条同高——审计断言依据） */
 .sg-yoy-rows .cdp-bar-grow { height: 48px; }
 /* S11 ledger 表：mono 数据风格 + 紧凑行高 + 首/末列定宽 */
@@ -128,7 +137,7 @@ function SafetyGuides({ color }: { color: string }) {
 
 /* ── chrome frame（每屏必有） ── */
 interface SlideShellProps {
-  index: string; // "01".."14"
+  index: string; // "01".."21"
   topbar: ReactNode;
   pill: string;
   caption: string; // 该屏口播台词（CaptionLayer 字幕保留区 y[972,1032]）
@@ -1273,12 +1282,420 @@ function BeforeAfterSlide() {
   );
 }
 
-/* ── Slide 14 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
+/* ── Slide 15 · 年报封面 = 参考 signal s1（机构封面；强调色：green） ── */
+
+function AnnualCoverSlide() {
+  return (
+    <SlideShell index="15" topbar="ANNUAL REPORT · 2025" pill="GF SECURITIES" caption="广发证券，2025 年度报告">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+        {/* signal s1 封面的 session stamp：mono 小标一行 */}
+        <Kicker
+          variant="plain"
+          style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.12em", color: "var(--text-mute)" }}
+        >
+          年度报告 · H 股 · 示例解读
+        </Kicker>
+        {/* 主标题：HeroTitle 双语双行（display-1 160px 实测放得下）——封面主角块不包 MarkerBlock（signal 封面直排标题，无粉块） */}
+        <HeroTitle size="display-1" latin="GF SECURITIES" cn="广发证券" data-testid="annual-title" />
+        <BodyCopy variant="lede" style={{ maxWidth: 980 }}>
+          一份 2025 年度报告的解读预览，数据取自公开年报。
+        </BodyCopy>
+        {/* 关键数字带（Rule 上下）：总资产（墨）+ 净利同比（绿 accent）——本屏唯一强调色 */}
+        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column" }}>
+          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-3)" })} />
+          <div data-testid="annual-numbers" style={{ display: "flex", gap: "var(--space-6)", alignItems: "flex-end" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+              <HeroNumber value="9,754.84 亿" />
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.1em", color: "var(--text-mute)" }}>
+                总资产
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+              <HeroNumber value="+42.18%" variant="accent" />
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.1em", color: "var(--text-mute)" }}>
+                净利同比
+              </span>
+            </div>
+          </div>
+          <Rule variant="solid" style={scope({ "--rule-w": "3px", margin: "var(--space-3) 0 var(--space-3)" })} />
+          {/* 数据诚实纪律：每屏 mono 小注 */}
+          <span
+            data-testid="annual-note"
+            style={{ fontFamily: "var(--font-mono)", fontSize: 18, letterSpacing: "0.06em", color: "var(--text-faint)" }}
+          >
+            数据取自 2025 年年度报告 · 示例解读
+          </span>
+        </div>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 16 · 核心指标 = 参考 emerald-editorial s7（KPI 四格 + 涨跌标签；强调色：green） ── */
+
+const KPI_CELLS = [
+  { label: "营业收入 · 百万元", value: "27,930", delta: "▲ +9.52%" },
+  { label: "归母净利 · 百万元", value: "13,702", delta: "▲ +42.18%" },
+  { label: "总资产 · 百万元", value: "975,484", delta: "▲ +28.57%" },
+  { label: "归母权益 · 百万元", value: "156,111", delta: "▲ +27.93%" },
+];
+
+function KeyMetricsSlide() {
+  return (
+    <SlideShell index="16" topbar="KEY METRICS" pill="FY2025" caption="四个数字，看懂一年">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          四个数字，看懂一年。
+        </HeroTitle>
+        {/* 2×2 Card plain 零阴影网格（参考 s7 kpi-grid：标签 → 大数字 → 涨跌标签） */}
+        <Grid
+          variant="even"
+          columns={2}
+          data-testid="kpi-grid"
+          style={{ flex: 1, marginBottom: "var(--space-3)", gridTemplateRows: "1fr 1fr", ...scope({ "--shadow-card-sm": "none" }) }}
+        >
+          {KPI_CELLS.map((cell, i) => (
+            <Card
+              key={cell.label}
+              variant="plain"
+              data-testid={`kpi-cell-${i + 1}`}
+              style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}
+            >
+              <Kicker variant="plain" style={{ fontSize: 24, letterSpacing: "0.12em" }}>
+                {cell.label}
+              </Kicker>
+              <HeroNumber value={cell.value} />
+              {/* 涨跌标签：mono 小标，涨用 accent-1 绿字（本屏四格全为涨，无跌例） */}
+              <span
+                data-testid={`kpi-delta-${i + 1}`}
+                style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.06em", color: "var(--accent-1)" }}
+              >
+                {cell.delta}
+              </span>
+            </Card>
+          ))}
+        </Grid>
+        {/* 底部数据来源小注 */}
+        <BodyCopy data-testid="kpi-source" style={{ fontSize: 24, lineHeight: 1.3, marginBottom: "var(--space-2)", color: "var(--text-mute)" }}>
+          数据取自 2025 年年度报告 · 示例解读。
+        </BodyCopy>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 17 · 双年对比柱状图 = 参考 emerald-editorial s5（双色柱组 + y 轴 + 图例；强调色：green） ── */
+
+const YOY_GROUPS = [
+  { group: "营业收入", year24: 25502, year25: 27930 },
+  { group: "归母净利", year24: 9637, year25: 13702 },
+];
+const YOY_MAX = 30000; // 千元上限：y 轴 0/10,000/20,000/30,000 百万元
+const YOY_TICKS = [0, 10000, 20000, 30000];
+
+/** 双年柱组：2024 灰 surface-2 柱 + 2025 绿 accent-1 柱（4px 墨框）；柱高 = 数值 / YOY_MAX（审计断言依据）。
+    组容器须显式 height 100%（% 柱高的解析基准——父级 flex 不撑高会致 % 解析为 0） */
+function YearBarGroup({ group }: { group: (typeof YOY_GROUPS)[number] }) {
+  const slug = group.group === "营业收入" ? "rev" : "profit";
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-2)", height: "100%" }}>
+      <div
+        data-testid={`yoy-bar-${slug}-24`}
+        style={{ width: 140, height: `${(group.year24 / YOY_MAX) * 100}%`, background: "var(--surface-2)", border: "4px solid var(--text)" }}
+      />
+      <div
+        data-testid={`yoy-bar-${slug}-25`}
+        style={{ width: 140, height: `${(group.year25 / YOY_MAX) * 100}%`, background: "var(--accent-1)", border: "4px solid var(--text)" }}
+      />
+    </div>
+  );
+}
+
+function YearOverYearSlide() {
+  return (
+    <SlideShell index="17" topbar="YEAR ON YEAR" pill="2024 VS 2025" caption="两年对比，看增长成色">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          两年对比，看增长成色。
+        </HeroTitle>
+        {/* 图表区（flex:1）：左 y 轴 mono 刻度（0/10,000/20,000/30,000 百万元）+ 右绘图区（网格线 + 两组双柱） */}
+        <div data-testid="yoy-chart" style={{ flex: 1, position: "relative" }}>
+          <span
+            style={{
+              position: "absolute",
+              top: -32,
+              left: 0,
+              width: 150,
+              fontFamily: "var(--font-mono)",
+              fontSize: 18,
+              letterSpacing: "0.08em",
+              color: "var(--text-mute)",
+            }}
+          >
+            百万元
+          </span>
+          {/* y 轴刻度：与网格线同 top% 定位（0%/33.33%/66.67%/100%），translateY(-50%) 居中于线 */}
+          <div data-testid="yoy-axis" style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: 150 }}>
+            {YOY_TICKS.map((v, i) => (
+              <span
+                key={v}
+                style={{
+                  position: "absolute",
+                  top: `${i * (100 / (YOY_TICKS.length - 1))}%`,
+                  right: 0,
+                  transform: "translateY(-50%)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 24,
+                  letterSpacing: "0.04em",
+                  color: "var(--text-mute)",
+                }}
+              >
+                {v.toLocaleString("en-US")}
+              </span>
+            ))}
+          </div>
+          {/* 绘图区：left 170（轴区 150 + 20 间隙）；网格线 3px surface-2 + 柱组 space-around 贴底 */}
+          <div data-testid="yoy-plot" style={{ position: "absolute", top: 0, bottom: 0, left: 170, right: 0 }}>
+            {YOY_TICKS.map((_, i) => (
+              <div
+                key={i}
+                style={{ position: "absolute", top: `${i * (100 / (YOY_TICKS.length - 1))}%`, left: 0, right: 0, borderTop: "3px solid var(--surface-2)" }}
+              />
+            ))}
+            <div style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "space-around", alignItems: "flex-end" }}>
+              {YOY_GROUPS.map((g) => (
+                <YearBarGroup key={g.group} group={g} />
+              ))}
+            </div>
+          </div>
+        </div>
+        {/* x 轴组标：与柱组同骨架（paddingLeft 170 + space-around），组标居中对齐柱组中心 */}
+        <div style={{ display: "flex", justifyContent: "space-around", paddingLeft: 170, marginTop: "var(--space-2)" }}>
+          {YOY_GROUPS.map((g) => (
+            <span
+              key={g.group}
+              style={{ width: 288, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.1em", color: "var(--text)" }}
+            >
+              {g.group}
+            </span>
+          ))}
+        </div>
+        {/* 图例行：2024 灰块 / 2025 绿块（16px 色块 + 2px 墨框，S4 图例格式）+ mono 标签 */}
+        <div
+          data-testid="yoy-legend"
+          style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "var(--space-5)", marginTop: "var(--space-3)" }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+            <div data-testid="yoy-legend-24" style={{ width: 16, height: 16, background: "var(--surface-2)", border: "2px solid var(--text)" }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.08em", color: "var(--text-mute)" }}>2024 年</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+            <div data-testid="yoy-legend-25" style={{ width: 16, height: 16, background: "var(--accent-1)", border: "2px solid var(--text)" }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.08em", color: "var(--text-mute)" }}>2025 年</span>
+          </div>
+        </div>
+        {/* 图注：2024 推算值 + 数据诚实小注 */}
+        <span
+          data-testid="yoy-note"
+          style={{
+            display: "block",
+            marginTop: "var(--space-3)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 24,
+            letterSpacing: "0.06em",
+            color: "var(--text-mute)",
+          }}
+        >
+          2024 为按同比推算值 · 数据取自 2025 年年度报告 · 示例解读
+        </span>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 18 · 业务分部 = 分类条形逐类一色（季度规则复用；强调色：四色序列语义） ── */
+
+const SEG_ROWS = [
+  // 分类/季度类条形图每季一色（二十二轮 F2 规则，优先于每屏 2-3 强调色纪律）；tone = null 吃默认 accent-1 绿
+  { label: "经纪及财富管理", value: 0.38, text: "38%", tone: null }, // 绿
+  { label: "投资银行", value: 0.22, text: "22%", tone: "var(--accent-2)" }, // 粉
+  { label: "资产管理", value: 0.26, text: "26%", tone: "var(--accent-3)" }, // 橙
+  { label: "自营投资", value: 0.14, text: "14%", tone: "var(--accent-4)" }, // 黄
+];
+
+function BusinessSegmentsSlide() {
+  return (
+    <SlideShell index="18" topbar="BUSINESS SEGMENTS" pill="FOUR LINES" caption="四条业务线，各撑一片天">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          四条业务线，各撑一片天。
+        </HeroTitle>
+        {/* 4 行横向条形图：mono 标签 + BarGrow accent（逐类一色 scope）+ mono 占比数值；行高 56px（.sg-seg-rows） */}
+        <div
+          data-testid="seg-rows"
+          className="sg-seg-rows"
+          style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "var(--space-3)" }}
+        >
+          {SEG_ROWS.map((row, i) => (
+            <div key={row.label} data-testid={`seg-row-${i + 1}`} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.08em", width: 240, color: "var(--text)" }}>
+                {row.label}
+              </span>
+              <div style={{ flex: 1, ...(row.tone ? scope({ "--accent-1": row.tone }) : undefined) }}>
+                <BarGrow value={row.value} variant="accent" />
+              </div>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, width: 64, textAlign: "right", color: "var(--text)" }}>
+                {row.text}
+              </span>
+            </div>
+          ))}
+        </div>
+        {/* 底部 mono 注（占比口径 + 数据诚实小注） */}
+        <span
+          data-testid="seg-note"
+          style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.06em", color: "var(--text-mute)", marginTop: "var(--space-3)" }}
+        >
+          收入贡献占比 · 示例数据 · 数据取自 2025 年年度报告
+        </span>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 19 · 资产负债表速览 = 结构条 84/16 两段 + 三数字（强调色：green） ── */
+
+const BS_NUMBERS = [
+  { value: "975,484", label: "总资产 · 百万元" },
+  { value: "≈819,373", label: "总负债 · 百万元 · 按同比推算" },
+  { value: "156,111", label: "归母权益 · 百万元" },
+];
+
+function BalanceSheetSlide() {
+  return (
+    <SlideShell index="19" topbar="BALANCE SHEET" pill="SNAPSHOT" caption="资产负债，一眼看清">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          资产负债，一眼看清。
+        </HeroTitle>
+        {/* 结构条 + 三数字作为居中单元（flex:1 垂直居中）；note 行贴底 */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          {/* 两段式结构条：负债段墨 84.0% + 权益段绿 16.0%，4px 墨框（审计断言 84/16） */}
+          <div data-testid="bs-bar" style={{ display: "flex", height: 72, border: "4px solid var(--text)" }}>
+            <div
+              data-testid="bs-liab"
+              style={{
+                width: "84%",
+                background: "var(--surface-3)",
+                color: "var(--surface)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.08em" }}>负债 84.0%</span>
+            </div>
+            <div
+              data-testid="bs-equity"
+              style={{
+                flex: 1,
+                background: "var(--accent-1)",
+                color: "var(--surface)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.08em" }}>权益 16.0%</span>
+            </div>
+          </div>
+          {/* 三数字行：HeroNumber + mono 标签（总负债为按同比推算值，≈ 标注） */}
+          <div data-testid="bs-numbers" style={{ display: "flex", gap: "var(--space-6)", marginTop: "var(--space-5)" }}>
+            {BS_NUMBERS.map((n) => (
+              <div key={n.value} style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                <HeroNumber value={n.value} />
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.08em", color: "var(--text-mute)" }}>
+                  {n.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* note 行：杠杆比率 + 数据诚实小注 */}
+        <span
+          data-testid="bs-note"
+          style={{ fontFamily: "var(--font-mono)", fontSize: 24, letterSpacing: "0.06em", color: "var(--text-mute)", marginTop: "var(--space-3)" }}
+        >
+          净资产/负债比率 27.93% · 净资本/负债 20.00% · 数据取自 2025 年年度报告
+        </span>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 20 · 年度亮点与展望 = 参考 monochrome s6（有序列表 + 页边注窄栏；强调色：green） ── */
+
+const HIGHLIGHT_ITEMS = [
+  { title: "净利 +42.18%", desc: "增幅领跑。" },
+  { title: "每股收益 1.68 元", desc: "同比 +46.09%。" },
+  { title: "总资产 975,484 百万元", desc: "逼近万亿。" },
+  { title: "ROE 10.16%", desc: "稳步向上。" },
+  { title: "每股权益 17.07 元", desc: "扣永续债口径。" },
+];
+
+function HighlightsSlide() {
+  return (
+    <SlideShell index="20" topbar="HIGHLIGHTS & OUTLOOK" pill="FIVE NOTES" caption="五个亮点，一个展望">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          五个亮点，一个展望。
+        </HeroTitle>
+        {/* 主体：五条有序列表（NumberPill accent 1-5 + Kicker 标题 + BodyCopy 一句）+ 右侧页边注窄栏 */}
+        <div style={{ flex: 1, display: "flex", gap: "var(--space-5)", alignItems: "stretch" }}>
+          <div data-testid="hl-list" style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "var(--space-4)" }}>
+            {HIGHLIGHT_ITEMS.map((item, i) => (
+              <div key={item.title} data-testid={`hl-item-${i + 1}`} style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-3)" }}>
+                <NumberPill number={`0${i + 1}`} variant="accent" data-testid={`hl-pill-${i + 1}`} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <Kicker variant="plain" style={{ fontSize: 34, lineHeight: 1, fontWeight: 700, letterSpacing: "0.04em" }}>
+                    {item.title}
+                  </Kicker>
+                  <BodyCopy style={{ fontSize: 24, lineHeight: 1.4, color: "var(--text-2)" }}>{item.desc}</BodyCopy>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* 页边注窄栏：280px（hairline 3px 墨左边线 + mono 小注） */}
+          <aside
+            data-testid="hl-sidebar"
+            style={{
+              width: 280,
+              boxSizing: "border-box", // 页边注窄栏实测 280px（含 3px hairline + 内衬——审计断言依据）
+              borderLeft: "3px solid var(--text)",
+              paddingLeft: "var(--space-3)",
+              display: "flex",
+              alignItems: "flex-start",
+            }}
+          >
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, lineHeight: 1.6, letterSpacing: "0.04em", color: "var(--text-mute)" }}>
+              注：数据取自 2025 年年度报告，供示例解读使用
+            </span>
+          </aside>
+        </div>
+        {/* 底部展望一行 */}
+        <BodyCopy data-testid="hl-outlook" style={{ marginTop: "var(--space-4)" }}>
+          展望：财富管理转型与国际化布局，仍是主线。
+        </BodyCopy>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 21 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
 
 function ClosingSlide() {
   return (
     <SlideShell
-      index="14"
+      index="21"
       topbar="END OF DECK"
       pill="FIN."
       caption="谢谢观看"
@@ -1311,7 +1728,7 @@ function ClosingSlide() {
         >
           把口播稿，做成会动的网页。这是 creative-mode 主题的完整视觉表达。
         </BodyCopy>
-        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "14/14" + "M2B"；
+        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "21/21" + "M2B"；
             内移 32px 使旋转 bbox 落回内容带 */}
         <div
           data-testid="closing-seal"
@@ -1353,7 +1770,7 @@ function ClosingSlide() {
                 color: "var(--surface)",
               }}
             >
-              14/14
+              21/21
             </span>
             <span
               style={{
@@ -1403,7 +1820,7 @@ export function ThemeShowcase() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 主题效果页 · 14 屏 slide deck · 参考构图 s1–s8 + scatterbrain / sakura-chroma / editorial-forest · 动画每 8 秒循环重播
+          creative-mode · 主题效果页 · 21 屏 slide deck · 参考构图 s1–s8 + scatterbrain / sakura-chroma / editorial-forest / signal / emerald-editorial / monochrome · 动画每 8 秒循环重播
         </span>
         <span
           style={{
@@ -1434,6 +1851,12 @@ export function ThemeShowcase() {
         <SpecSheetSlide />
         <QuarterlyReviewSlide />
         <BeforeAfterSlide />
+        <AnnualCoverSlide />
+        <KeyMetricsSlide />
+        <YearOverYearSlide />
+        <BusinessSegmentsSlide />
+        <BalanceSheetSlide />
+        <HighlightsSlide />
         <ClosingSlide />
       </main>
     </div>
