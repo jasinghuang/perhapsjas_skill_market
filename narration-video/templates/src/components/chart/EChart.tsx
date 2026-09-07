@@ -8,10 +8,11 @@
 // tokens 改档 → ECharts 主题自动跟随（换主题零手工同步）。
 //
 // 动效策略（§12c ④）：ECharts 本体永远 animation: false——图表动效由引擎入场
-// 动画提供（确定性/成片同源/seek 兼容），组件在 setOption 时强制覆盖。
+// 动画提供（确定性/成片同源/seek 兼容），组件在 setOption 时深度强制
+// （forceStaticAnimation：series 级 animation* 键同样清零——Ruling P45T2-fix）。
 import { useEffect, useRef } from "react";
 import { init, registerTheme, use } from "echarts/core";
-import type { EChartsType } from "echarts/core";
+import type { EChartsCoreOption, EChartsType } from "echarts/core";
 import { BarChart, LineChart, PieChart } from "echarts/charts";
 import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
@@ -51,6 +52,34 @@ function assertOption(option: object): void {
   }
 }
 
+/** 平对象判定：仅深走字面量对象（TypedArray/Date/类实例等原样保留，不做展开复制）。 */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * §12c ④ 深度强制（Ruling P45T2-fix）：ECharts series 级 animation: true 会穿透全局
+ * animation: false——本体动画被静默复活。递归遍历对象与数组，对所有 animation*
+ * 前缀键（animation / animationDuration / animationEasing / animationDelay…）强制
+ * false；浅拷贝路径对象，不突变调用方 option。
+ */
+export function forceStaticAnimation(option: object): object {
+  const walk = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(walk);
+    if (isPlainObject(value)) {
+      const out: Record<string, unknown> = {};
+      for (const [key, v] of Object.entries(value)) {
+        out[key] = key.startsWith("animation") ? false : walk(v);
+      }
+      return out;
+    }
+    return value;
+  };
+  return walk(option) as object;
+}
+
 export function EChart({
   option,
   reveal,
@@ -86,10 +115,14 @@ export function EChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 受控更新：option 变化 → setOption(notMerge: true)。本体动画恒 false（§12c ④），
-  // 展开复制不突变调用方 option。
+  // 受控更新：option 变化 → setOption(notMerge: true)。本体动画恒 false（§12c ④）——
+  // forceStaticAnimation 深度强制（series 级 animation: true 会穿透全局开关），
+  // 浅拷贝路径对象不突变调用方 option。
   useEffect(() => {
-    chartRef.current?.setOption({ ...option, animation: false }, { notMerge: true });
+    chartRef.current?.setOption(
+      forceStaticAnimation(option) as EChartsCoreOption,
+      { notMerge: true },
+    );
   }, [option]);
 
   return (

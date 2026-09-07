@@ -1,7 +1,7 @@
 // 组件契约 lint（§11.1 #9 内核）：组件 CSS 只消费 token——禁裸色值、禁裸 font-family、禁裸动画时长。
 // M3a 门禁与本章节测试共用同一实现。
 // Ruling P2-8：不用 node:fs + __dirname（ESM 无 __dirname、无 @types/node，tsc 必挂），
-// 改用 Vite `?raw` 显式导入 35 个组件 CSS，lint 扫描这些字符串。
+// 改用 Vite `?raw` 显式导入 36 个组件 CSS，lint 扫描这些字符串。
 
 import heroTitleCss from "./text/HeroTitle.css?raw";
 import kickerCss from "./text/Kicker.css?raw";
@@ -38,6 +38,7 @@ import breatheCss from "./ambient/Breathe.css?raw";
 import kenBurnsCss from "./ambient/KenBurns.css?raw";
 import timelineTrackCss from "./function/TimelineTrack.css?raw";
 import progressDotsCss from "./function/ProgressDots.css?raw";
+import eChartCss from "./chart/EChart.css?raw";
 
 export const COMPONENT_CSS: Array<{ file: string; css: string }> = [
   { file: "text/HeroTitle.css", css: heroTitleCss },
@@ -75,6 +76,7 @@ export const COMPONENT_CSS: Array<{ file: string; css: string }> = [
   { file: "ambient/KenBurns.css", css: kenBurnsCss },
   { file: "function/TimelineTrack.css", css: timelineTrackCss },
   { file: "function/ProgressDots.css", css: progressDotsCss },
+  { file: "chart/EChart.css", css: eChartCss },
 ];
 
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/;

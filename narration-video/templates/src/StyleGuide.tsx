@@ -1,5 +1,5 @@
 // 样式词典页（M2b 验收工具；dev-only，不入章节层）。
-// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 35 组件全变体目录。
+// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 36 组件全变体目录。
 // 页面壳：深色 shell 底（var(--shell)）、1920 居中；每区段 mono 区段头（cream，编号 + 标题）
 // + 全幅 cream 内容面板（4px 墨框、水平内衬 96px——与安全框规格一致）。
 // 布局纪律：区段内容水平 ≥96px 内；无横向溢出；组件格容器只允许 inline 布局属性，
@@ -19,6 +19,7 @@ import {
   DecorDot,
   DecorRing,
   DonutMeter,
+  EChart,
   Figure,
   Grid,
   HeroNumber,
@@ -641,7 +642,7 @@ function SemanticSection() {
   );
 }
 
-/* ── 06 · 组件全览 COMPONENTS（35 组件 × 全变体） ── */
+/* ── 06 · 组件全览 COMPONENTS（36 组件 × 全变体） ── */
 
 /** 组件格：cream 底 + 4px 墨框 + 字阶压缩 scope；容器仅 inline 布局属性（零裸色） */
 function CompCell({ name, extraScope, children }: {
@@ -912,7 +913,7 @@ function ComponentsSection() {
         </CompCell>
         <CompCell name="typed-terminal">
           <Variant label="default · 打字挂载即播">
-            <TypedTerminal lines={["styleguide --mode creative", "35 components · variants"]} data-testid="variant-typed-terminal-default" />
+            <TypedTerminal lines={["styleguide --mode creative", "36 components · variants"]} data-testid="variant-typed-terminal-default" />
           </Variant>
         </CompCell>
         <CompCell name="path-draw">
@@ -950,6 +951,29 @@ function ComponentsSection() {
         <CompCell name="progress-dots">
           <Variant label="dots"><ProgressDots total={5} current={2} variant="dots" data-testid="variant-progress-dots-dots" /></Variant>
           <Variant label="bars"><ProgressDots total={5} current={2} variant="bars" data-testid="variant-progress-dots-bars" /></Variant>
+        </CompCell>
+      </CompGroup>
+      <CompGroup label="CHART · 图表（1）">
+        {/* EChart 真渲染（dev 页同 showcase）：SVGRenderer 在真实浏览器可用；主题 "cm" 由
+            模块级 registerTheme 注入——系列色 = 主题色板 [accent-1, accent-2, accent-3, accent-4]。 */}
+        <CompCell name="echart">
+          <Variant label="default · bar + line（主题色板自动分配）">
+            <div style={{ width: 420, height: 280 }}>
+              <EChart
+                data-testid="variant-echart-default"
+                option={{
+                  xAxis: { type: "category", data: ["2024", "2025"] },
+                  yAxis: { type: "value" },
+                  series: [
+                    { name: "营业收入 2024", type: "bar", data: [25502, null] },
+                    { name: "营业收入 2025", type: "bar", data: [null, 27930] },
+                    { name: "归母净利", type: "line", data: [9637, 13702] },
+                  ],
+                }}
+              />
+            </div>
+          </Variant>
+          <MonoLabel color="var(--text-faint)" size={12}>动效策略：ECharts 本体 animation 恒 false——动效由引擎入场动画提供</MonoLabel>
         </CompCell>
       </CompGroup>
     </Section>
@@ -995,7 +1019,7 @@ export function StyleGuide() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 样式词典 · 全部 token 视觉表达 + 35 组件目录
+          creative-mode · 样式词典 · 全部 token 视觉表达 + 36 组件目录
         </span>
         <span
           style={{

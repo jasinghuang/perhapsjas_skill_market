@@ -1,5 +1,5 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
-// ?showcase=1 渲染：25 屏 1920×1080 slide deck——每屏带统一 chrome frame
+// ?showcase=1 渲染：26 屏 1920×1080 slide deck——每屏带统一 chrome frame
 // （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–934 + 字幕保留区 y[958,1038]；meta 页码条已删）。
 // 构图纪律（用户反馈终审）：十五轮 F3 定稿 10 屏 + 十八轮新增 4 屏（外挂模板构图灵感，本主题 token/组件渲染）+
 // 二十三轮新增 6 屏（财报解读系列，真实年报数据）→ 二十四轮（M2b showcase refine）：
@@ -34,12 +34,16 @@
 // S20=核心指标（S3 同构 2×2 统计格：角标/数字/标签/描述四件套 + 涨跌标签橙字——A股红涨语义）/
 // S21=参考 emerald-editorial s5 双年对比（双色柱组 + y 轴刻度 + 图例）/ S22=业务分部（分类条形逐类一色——季度规则复用）/
 // S23=资产负债表速览（结构条 84/16 两段 + 三数字）/ S24=参考 monochrome s6 年度亮点（二十六轮 F5 两列数据版：年度亮点 + 经营数据 + 页边注窄栏 + 展望强调块）/
-// S25=参考 s8 收尾屏（绿底 + stamp 标题 + 印章 25/25）。
+// S25=真实图表屏（EChart 柱状+折线组合——真实 echarts 渲染，系列色主题色板自动分配）/
+// S26=参考 s8 收尾屏（绿底 + stamp 标题 + 印章 26/26）。
 // 二十九轮（视觉终审）：F1 S3 BY THE NUMBERS 改 StatInline 组件（大数字标签同行右对齐 + desc 600 加粗无框 + 无角标——
 // 删对角绿填充与 /01 角标，纯奶油墨字四格）；F2 StepStairs v4（底缘共线 + 卡高 180/220/260 逐级 +40 顶部阶梯轮廓 + 橙条保留）；
 // F3 TimelineTrack 累计点亮（i <= activeIndex——HOW IT WORKS 屏 activeIndex=3 亮 4 暗 1）。
 // 三十轮（视觉终审）：F1 StepStairs 卡内安全边距规格（四周统一 24px）+ 卡高重算 200/240/280（最短卡内容底距 ≥24）；
 // F2 StatInline v2（标签 Kicker pill 药丸 + 数字→desc 8px 收紧 + 卡高自然高 + 24px——S3 行高 1fr → auto 顶对齐）。
+// 三十三轮（M4.5 ECharts 收编）：新增 S25 真实图表屏（EChart 柱状+折线组合——真实 echarts 渲染；
+// 系列色不写死走主题色板自动分配 green/pink/orange，图例/轴色 tokens 同源；本体动画深度强制 false）；
+// S26 收尾印章 26/26——总屏数 26。
 // 用色语义规则（二十四轮入册，控制器同步设计文档 §12）：财报/金融数据语义色——上涨 = 红色系
 // （本主题 accent-3 橙 #E85A1F）、下跌 = 绿色系（accent-1）；delta 标签 / KPI 附注统一按此（涨橙/跌绿），
 // 系列色（年份柱/分类条）非涨跌语义不受影响。
@@ -61,6 +65,7 @@ import {
   DecorBar,
   DecorDot,
   DonutMeter,
+  EChart,
   Figure,
   Grid,
   HeroNumber,
@@ -168,7 +173,7 @@ function SafetyGuides({ color }: { color: string }) {
 
 /* ── chrome frame（每屏必有） ── */
 interface SlideShellProps {
-  index: string; // "01".."25"
+  index: string; // "01".."26"
   topbar: ReactNode;
   pill: string;
   caption: string; // 该屏口播台词（CaptionLayer 字幕保留区 y[972,1032]）
@@ -2117,12 +2122,61 @@ function HighlightsSlide() {
   );
 }
 
-/* ── Slide 25 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
+/* ── Slide 25 · 真实图表 = EChart 柱状+折线组合（真实 echarts 渲染；系列色主题色板自动分配） ── */
+
+/**
+ * 真实图表 option：xAxis 两年；两条 bar（2024/2025 营收——palette[0] 绿 / palette[1] 粉）
+ * + 一条 line（归母净利——palette[2] 橙）。颜色不写死——主题 "cm" 色板自动分配
+ * （§12c 主题同源：tokens 改档图表随动）；本体动画由组件深度强制 false。
+ */
+const REAL_CHART_OPTION = {
+  grid: { left: 96, right: 48, top: 96, bottom: 64 },
+  legend: { top: 8 },
+  xAxis: { type: "category", data: ["2024", "2025"] },
+  yAxis: { type: "value", max: 30000, interval: 10000 },
+  series: [
+    { name: "营业收入 2024", type: "bar", data: [25502, null] },
+    { name: "营业收入 2025", type: "bar", data: [null, 27930] },
+    { name: "归母净利", type: "line", data: [9637, 13702] },
+  ],
+};
+
+function RealChartSlide() {
+  return (
+    <SlideShell index="25" topbar="REAL CHART" pill="ECHARTS" caption="真实图表，主题自动适配。">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          真实图表，主题适配。
+        </HeroTitle>
+        {/* 图表区：EChart 真渲染（SVGRenderer）；入场动效由引擎 reveal 提供（本体动画 false） */}
+        <div data-testid="real-chart" style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <EChart option={REAL_CHART_OPTION} data-testid="real-chart-echart" reveal="rise" />
+        </div>
+        {/* mono 图注：数据诚实（与 S21/S24 同口径） */}
+        <span
+          data-testid="real-chart-note"
+          style={{
+            display: "block",
+            marginTop: "var(--space-3)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 24,
+            letterSpacing: "0.06em",
+            color: "var(--text-mute)",
+          }}
+        >
+          数据取自 2025 年年度报告（2024 为推算值）
+        </span>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 26 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
 
 function ClosingSlide() {
   return (
     <SlideShell
-      index="25"
+      index="26"
       topbar="END OF DECK"
       pill="FIN."
       caption="谢谢观看"
@@ -2155,7 +2209,7 @@ function ClosingSlide() {
         >
           把口播稿，做成会动的网页。这是 creative-mode 主题的完整视觉表达。
         </BodyCopy>
-        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "25/25" + "M2B"；
+        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "26/26" + "M2B"；
             二十六轮 F6：内移 32px + 底抬 48px（space-4 → space-5）使旋转 bbox 完全落回内容带（原 bbox 底 919.2 距 934 仅 14.8px 过紧） */}
         <div
           data-testid="closing-seal"
@@ -2197,7 +2251,7 @@ function ClosingSlide() {
                 color: "var(--surface)",
               }}
             >
-              25/25
+              26/26
             </span>
             <span
               style={{
@@ -2247,7 +2301,7 @@ export function ThemeShowcase() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 主题效果页 · 25 屏 slide deck · 参考构图 s1–s8 + scatterbrain / sakura-chroma / editorial-forest / emerald-editorial / monochrome + supper-club / bold-poster / retro-windows / pin-and-paper / studio / cobalt-grid · 动画每 8 秒循环重播
+          creative-mode · 主题效果页 · 26 屏 slide deck · 参考构图 s1–s8 + scatterbrain / sakura-chroma / editorial-forest / emerald-editorial / monochrome + supper-club / bold-poster / retro-windows / pin-and-paper / studio / cobalt-grid · 动画每 8 秒循环重播
         </span>
         <span
           style={{
@@ -2289,6 +2343,7 @@ export function ThemeShowcase() {
         <BusinessSegmentsSlide />
         <BalanceSheetSlide />
         <HighlightsSlide />
+        <RealChartSlide />
         <ClosingSlide />
       </main>
     </div>

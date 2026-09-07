@@ -142,6 +142,53 @@ describe("EChart 受控组件", () => {
     expect(callerOption.animation).toBe(true);
   });
 
+  // P45T2-fix（Ruling）：series 级 animation: true 会穿透全局 false——§12c ④ 被静默破坏。
+  // T4 落地深度强制：setOption 收到的 series 对象 animation === false 且调用方不被突变。
+  it("P45T2-fix 深度强制：series 级 animation: true 被覆盖为 false，调用方对象不被突变", () => {
+    const callerOption = {
+      xAxis: { type: "category", data: ["A", "B"] },
+      yAxis: { type: "value" },
+      series: [{ type: "bar", animation: true, data: [1, 2] }],
+    };
+    render(<EChart option={callerOption} />);
+    const received = echartsMock.instance.setOption.mock.calls[0][0] as {
+      series: Array<{ animation: boolean }>;
+    };
+    expect(received.series[0].animation).toBe(false);
+    expect(callerOption.series[0].animation).toBe(true);
+  });
+
+  it("P45T2-fix 深度强制：animation* 前缀键（duration/easing/delay）一律 false，嵌套数组内对象同样覆盖", () => {
+    const callerOption = {
+      xAxis: { type: "category", data: ["A", "B"] },
+      series: [
+        {
+          type: "bar",
+          animationDuration: 500,
+          animationEasing: "easeInOut",
+          animationDelay: 120,
+          data: [{ value: 1, animationDuration: 300 }],
+        },
+      ],
+    };
+    render(<EChart option={callerOption} />);
+    const received = echartsMock.instance.setOption.mock.calls[0][0] as {
+      series: Array<{
+        animationDuration: boolean;
+        animationEasing: boolean;
+        animationDelay: boolean;
+        data: Array<{ animationDuration: boolean }>;
+      }>;
+    };
+    expect(received.series[0].animationDuration).toBe(false);
+    expect(received.series[0].animationEasing).toBe(false);
+    expect(received.series[0].animationDelay).toBe(false);
+    expect(received.series[0].data[0].animationDuration).toBe(false);
+    // 调用方原对象保持原值（不突变）
+    expect(callerOption.series[0].animationDuration).toBe(500);
+    expect(callerOption.series[0].data[0].animationDuration).toBe(300);
+  });
+
   it("unmount → dispose，且 ResizeObserver disconnect", () => {
     const { unmount } = render(<EChart option={baseOption} />);
     expect(echartsMock.instance.dispose).not.toHaveBeenCalled();

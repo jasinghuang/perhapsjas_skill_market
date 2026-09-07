@@ -9,8 +9,13 @@
  *   color               = [--accent-1, --accent-2, --accent-3, --accent-4]
  *   backgroundColor     = 'transparent'（容器背景由主题 CSS 承担）
  *   textStyle.fontFamily= --font-body（去引号）
- *   axisLine.lineStyle  = --rule（墨）
- *   splitLine.lineStyle = --surface-2
+ *   categoryAxis / valueAxis（P45T4-fix：轴主题必须嵌套轴类型键——echarts 轴模型
+ *     只读 theme[axisType + "Axis"]，顶层 axisLine/splitLine 是死键，真渲染
+ *     会静默穿透 echarts 默认色）：
+ *     axisLine.lineStyle  = --rule（墨）
+ *     axisTick.lineStyle  = --rule（墨）
+ *     axisLabel.color     = --text-mute（与 S21 手绘轴刻度同色语言）
+ *     splitLine.lineStyle = --surface-2
  *   legend.textStyle    = --text-2
  *   itemStyle.borderRadius = 0（主题零圆角语言）
  *
@@ -18,12 +23,20 @@
  * var() 间接引用递归解包（循环/缺失/过深 → throw）。
  */
 
+/** 轴主题段（categoryAxis / valueAxis 共用结构）。 */
+export interface EChartsAxisTheme {
+  axisLine: { lineStyle: { color: string } };
+  axisTick: { lineStyle: { color: string } };
+  axisLabel: { color: string };
+  splitLine: { lineStyle: { color: string } };
+}
+
 export interface EChartsTheme {
   color: string[];
   backgroundColor: string;
   textStyle: { fontFamily: string };
-  axisLine: { lineStyle: { color: string } };
-  splitLine: { lineStyle: { color: string } };
+  categoryAxis: EChartsAxisTheme;
+  valueAxis: EChartsAxisTheme;
   legend: { textStyle: { color: string } };
   itemStyle: { borderRadius: number };
 }
@@ -96,6 +109,14 @@ export function buildEchartsTheme(tokensCss: string): EChartsTheme {
   }
   const map = parseTokenMap(stripCssComments(tokensCss));
   const token = (name: string): string => resolveToken(map, name, []);
+  // P45T4-fix：轴主题嵌套 categoryAxis/valueAxis（echarts 轴模型只读
+  // theme[axisType + "Axis"]——axisModelCreator mergeDefaultAndTheme 实测）
+  const axisTheme = (): EChartsAxisTheme => ({
+    axisLine: { lineStyle: { color: token("--rule") } },
+    axisTick: { lineStyle: { color: token("--rule") } },
+    axisLabel: { color: token("--text-mute") },
+    splitLine: { lineStyle: { color: token("--surface-2") } },
+  });
   return {
     color: [
       token("--accent-1"),
@@ -105,8 +126,8 @@ export function buildEchartsTheme(tokensCss: string): EChartsTheme {
     ],
     backgroundColor: "transparent",
     textStyle: { fontFamily: stripQuotes(token("--font-body")) },
-    axisLine: { lineStyle: { color: token("--rule") } },
-    splitLine: { lineStyle: { color: token("--surface-2") } },
+    categoryAxis: axisTheme(),
+    valueAxis: axisTheme(),
     legend: { textStyle: { color: token("--text-2") } },
     itemStyle: { borderRadius: 0 },
   };

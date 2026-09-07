@@ -25,6 +25,7 @@ const FIXTURE_A = `:root {
   --accent-4: #f5c518;
   --surface-2: #e4dcc4;
   --text-2: #2a2a2a;
+  --text-mute: #5c574c;
   --rule: #0f0f0f;
   --font-body: "Space Grotesk", "Noto Sans SC", sans-serif;
 }`;
@@ -37,6 +38,7 @@ const FIXTURE_B = `:root {
   --accent-4: #fedcba;
   --surface-2: #eeeeee;
   --text-2: #3b3b3b;
+  --text-mute: #4d4d4d;
   --rule: #101010;
   --font-body: "JetBrains Mono", monospace;
 }`;
@@ -74,11 +76,24 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
     expect(theme.textStyle.fontFamily).not.toMatch(/["']/);
   });
 
-  it("token 映射：axisLine 墨色 = --rule；splitLine = --surface-2；legend = --text-2", () => {
+  // P45T4-fix：轴主题必须嵌套在 categoryAxis/valueAxis 下——echarts 轴模型只读
+  // theme[axisType + "Axis"]，顶层 axisLine/splitLine 是死键（真渲染审计实测
+  // 默认色穿透：axisLine #6E7079 / splitLine #E0E6F1）。
+  it("token 映射：轴色嵌套 categoryAxis/valueAxis（axisLine 墨 = --rule；splitLine = --surface-2；axisLabel = --text-mute；axisTick 墨；legend = --text-2）", () => {
     const theme = buildEchartsTheme(FIXTURE_A);
-    expect(theme.axisLine.lineStyle.color).toBe("#0f0f0f");
-    expect(theme.splitLine.lineStyle.color).toBe("#e4dcc4");
+    for (const axis of [theme.categoryAxis, theme.valueAxis]) {
+      expect(axis.axisLine.lineStyle.color).toBe("#0f0f0f");
+      expect(axis.splitLine.lineStyle.color).toBe("#e4dcc4");
+      expect(axis.axisTick.lineStyle.color).toBe("#0f0f0f");
+      expect(axis.axisLabel.color).toBe("#5c574c");
+    }
     expect(theme.legend.textStyle.color).toBe("#2a2a2a");
+  });
+
+  it("死键护栏：顶层无 axisLine/splitLine（echarts 不消费——宁炸不假绿）", () => {
+    const theme = buildEchartsTheme(FIXTURE_A) as unknown as Record<string, unknown>;
+    expect("axisLine" in theme).toBe(false);
+    expect("splitLine" in theme).toBe(false);
   });
 
   it("主题语言：backgroundColor transparent（容器背景由主题 CSS 承担）、borderRadius 0（零圆角）", () => {
@@ -92,10 +107,11 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
     const b = buildEchartsTheme(FIXTURE_B);
     expect(b.color).toEqual(["#123456", "#abcdef", "#654321", "#fedcba"]);
     expect(b.textStyle.fontFamily).toContain("JetBrains Mono");
-    expect(b.axisLine.lineStyle.color).toBe("#101010");
+    expect(b.valueAxis.axisLine.lineStyle.color).toBe("#101010");
+    expect(b.categoryAxis.axisLabel.color).toBe("#4d4d4d");
     // 对照：两套输出不得雷同（防「恒等输出」假绿）
     expect(b.color).not.toEqual(a.color);
-    expect(b.axisLine.lineStyle.color).not.toBe(a.axisLine.lineStyle.color);
+    expect(b.valueAxis.axisLine.lineStyle.color).not.toBe(a.valueAxis.axisLine.lineStyle.color);
     expect(b.textStyle.fontFamily).not.toBe(a.textStyle.fontFamily);
   });
 
@@ -108,6 +124,7 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
     "--rule",
     "--surface-2",
     "--text-2",
+    "--text-mute",
   ])("缺失 token %s → throw（防假绿）", (token) => {
     expect(() => buildEchartsTheme(dropToken(FIXTURE_B, token))).toThrow(token);
   });
@@ -141,6 +158,7 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
       --accent-4: #f5c518;
       --surface-2: #e4dcc4;
       --text-2: #2a2a2a;
+      --text-mute: #5c574c;
       --rule: #0f0f0f;
       --font-body: "Space Grotesk", sans-serif;
     }`;
@@ -167,12 +185,14 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
 });
 
 describe("真实 tokens.css 同源（主题改档门禁自动跟随）", () => {
-  it("真实 tokens.css 可生成主题：四色精确相等、fontFamily 含 Space Grotesk、axisLine 墨", () => {
+  it("真实 tokens.css 可生成主题：四色精确相等、fontFamily 含 Space Grotesk、轴色嵌套（axisLine 墨/splitLine surface-2/axisLabel text-mute）", () => {
     const theme = buildEchartsTheme(realTokensCss);
     expect(theme.color).toEqual(["#1f8a4c", "#f06ca8", "#e85a1f", "#f5c518"]);
     expect(theme.textStyle.fontFamily).toContain("Space Grotesk");
-    expect(theme.axisLine.lineStyle.color).toBe("#0f0f0f");
-    expect(theme.splitLine.lineStyle.color).toBe("#e4dcc4");
+    expect(theme.valueAxis.axisLine.lineStyle.color).toBe("#0f0f0f");
+    expect(theme.valueAxis.splitLine.lineStyle.color).toBe("#e4dcc4");
+    expect(theme.categoryAxis.axisLine.lineStyle.color).toBe("#0f0f0f");
+    expect(theme.categoryAxis.axisLabel.color).toBe("#5c574c");
     expect(theme.legend.textStyle.color).toBe("#2a2a2a");
   });
 

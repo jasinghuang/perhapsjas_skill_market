@@ -10,11 +10,37 @@ import {
   Figure, TypedTerminal, PathDraw,
   SeededParticles, Breathe, KenBurns,
   TimelineTrack, ProgressDots,
+  EChart,
 } from "./index";
+
+// EChart 在 jsdom 无 SVG 布局能力（T2 预检自洽结论）：与 EChart.test.tsx 同型的
+// vi.mock stub 四个 echarts 入口模块——init 返回记录对象，模块级 registerTheme/use
+// 安全可调。冒烟只验证 presence，echarts 内部由其自身测试覆盖。
+const echartsMock = vi.hoisted(() => {
+  const instance = { setOption: vi.fn(), resize: vi.fn(), dispose: vi.fn() };
+  return { init: vi.fn(), use: vi.fn(), registerTheme: vi.fn(), instance };
+});
+
+vi.mock("echarts/core", () => ({
+  init: echartsMock.init,
+  use: echartsMock.use,
+  registerTheme: echartsMock.registerTheme,
+}));
+vi.mock("echarts/charts", () => ({
+  BarChart: { kind: "BarChart" },
+  LineChart: { kind: "LineChart" },
+  PieChart: { kind: "PieChart" },
+}));
+vi.mock("echarts/components", () => ({
+  GridComponent: { kind: "GridComponent" },
+  TooltipComponent: { kind: "TooltipComponent" },
+  LegendComponent: { kind: "LegendComponent" },
+}));
+vi.mock("echarts/renderers", () => ({ SVGRenderer: { kind: "SVGRenderer" } }));
 
 // 终审 M3：逐组件 presence 断言——统一出口每个组件必须在画布真实渲染，
 // 只查 ".cdp" 根类会漏掉「组件已导出但从未渲染」的假绿。
-// 全部 35 组件（28 + 十轮 F3/F4 收编 StackedBlocks / NumberPill + 十九轮 F4 SplitCompare + 二十五轮 F4 StepStairs + 二十五轮 F5 StatCell + 二十九轮 F1 StatInline）。
+// 全部 36 组件（35 + 三十三轮 M4.5 EChart）。
 const ALL_NAMES = [
   "stage-pad",
   "hero-title", "kicker", "body-copy", "quote-block", "number-pill",
@@ -25,6 +51,7 @@ const ALL_NAMES = [
   "figure", "terminal", "path-draw",
   "particles", "breathe", "kenburns",
   "timeline", "progress-dots",
+  "echart",
 ];
 
 const STAGE_SIZES = [
@@ -38,6 +65,8 @@ beforeEach(() => {
   // 返回 null——SeededParticles 有 `if (!ctx) return` 空安全护栏，
   // 绘制行为由 ambient.test.tsx 的 FakeCtx2d 覆盖，冒烟只验证 presence。
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  // EChart stub：init 返回记录对象（echarts 模块级 vi.mock 见文件头）
+  echartsMock.init.mockReturnValue(echartsMock.instance);
 });
 afterEach(() => {
   setRenderMode(false);
@@ -46,7 +75,7 @@ afterEach(() => {
 
 describe("双画布冒烟（§11.2 组件契约测试）", () => {
   for (const dims of STAGE_SIZES) {
-    it(`全部 35 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
+    it(`全部 36 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
       const { container } = render(
         <div style={{ width: dims.width, height: dims.height }}>
           <StagePad>
@@ -75,6 +104,9 @@ describe("双画布冒烟（§11.2 组件契约测试）", () => {
             <DonutMeter value={0.42} label="转化率" /><Rule />
             <Table header={["A", "B"]} rows={[["1", "2"]]} />
             <BodyCopy>正文</BodyCopy><QuoteBlock>引用</QuoteBlock>
+            <div style={{ width: 320, height: 200 }}>
+              <EChart option={{ series: [{ type: "bar", data: [1, 2, 3] }] }} data-testid="smoke-echart" />
+            </div>
           </StagePad>
         </div>,
       );
