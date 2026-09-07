@@ -3,7 +3,8 @@
 // ctx，注册即驱动，是 App 级"含帧函数组件的步骤能自动推进"测试的最小可行载体。
 import { KenBurns } from "../../components";
 
-export const exampleNarrations = ["这是第一句口播。", "这是第二句口播。", ""];
+// Ruling P4-4：示例章节即门禁标杆——narrations 结尾不带标点（V3 字幕结尾禁句号等）
+export const exampleNarrations = ["这是第一句口播", "这是第二句口播", ""];
 
 export function ExampleChapter({ step }: { step: number }) {
   if (step === 0)

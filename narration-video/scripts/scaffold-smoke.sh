@@ -15,6 +15,13 @@ grep -q 'width: 1920' "$TMP/demo/src/engine/runtime-config.ts"
 grep -q '"dev": "vite"' "$TMP/demo/package.json"
 grep -q '"test": "vitest run"' "$TMP/demo/package.json"
 
+# 1b. 静态门禁接线（M3a 收口）：check 脚本随模板全量拷贝（含 __fixtures__——
+#     fixtures.test.ts 依赖夹具），scaffold 产物上 npm run check exit 0
+#     （零 blocker——模板自身是合规标杆；warning 允许：未合成音频是脚手架合法态）
+test -f "$TMP/demo/scripts/check/check-fast.ts"
+test -d "$TMP/demo/scripts/check/__fixtures__"
+(cd "$TMP/demo" && npm run check >/dev/null)
+
 # 2. 3:4 场景
 bash "$SKILL_DIR/scripts/scaffold.sh" "$TMP/tall" --slug tall --stage 3:4 >/dev/null
 grep -q 'width: 1080' "$TMP/tall/src/engine/runtime-config.ts"

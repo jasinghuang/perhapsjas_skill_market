@@ -72,11 +72,12 @@ cat <<EOF
 ✅ 项目已创建: $TARGET
    舞台: ${STAGE}（${DIMS}）
    引擎版本: $ENGINE_VERSION
+   环境要求: Node ≥ 22.15（package.json engines 已声明——check 的 registerHooks 依赖）
 
 下一步:
    cd $TARGET && npm run dev     # 预览（浏览器即播放器，?auto=1 全自动）
-   npm run test                  # 引擎单测
-   npm run check                 # 静态门禁（M3a 实现中，当前占位）
+   npm run test                  # 引擎单测 + 门禁自检
+   npm run check                 # 静态门禁：章节/文本/资源/主题/组件扫描 + 防失同步/清单断言（零 blocker 才算过）
    npm run render                # 渲染导出（M5 实现中，当前占位）
 
 章节开发前必读: 渐进式文件读取表（SKILL.md）+ CHAPTER-CRAFT.md

@@ -21,6 +21,8 @@
  * 模块作用域经 node:module registerHooks 注册 .css 文本加载钩子（仅非 vitest 环境：
  * vitest 走 Vite 管线原生支持，且钩子会干扰测试管线）。scanner-css 自身已按
  * Ruling P4-6 弃 ?raw 改 fs（见 scanner-css.ts 头注释）。
+ * registerHooks 需 Node ≥ 22.15——package.json engines 已声明该下限（engines 是
+ * npm 在安装期唯一能提示 Node 版本的机制；package.json 不能写注释，说明记于此）。
  *
  * CLI 入口：`import.meta.url` 与 `process.argv[1]`（realpath 对齐）比对判断是否
  * CLI 直跑——被 import 时不触发 process.exit（测试可安全 import）。

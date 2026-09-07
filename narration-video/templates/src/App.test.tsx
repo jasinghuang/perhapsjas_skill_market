@@ -49,14 +49,14 @@ describe("App 装配", () => {
   it("渲染当前章节场景 + 框架层字幕", () => {
     render(<App />);
     expect(screen.getByTestId("scene-0")).toBeInTheDocument();
-    expect(screen.getByTestId("caption-layer")).toHaveTextContent("这是第一句口播。");
+    expect(screen.getByTestId("caption-layer")).toHaveTextContent("这是第一句口播");
   });
 
   it("方向键推进场景（开发调试，藏在无 UI 模式之外不影响）", () => {
     render(<App />);
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(screen.getByTestId("scene-1")).toBeInTheDocument();
-    expect(screen.getByTestId("caption-layer")).toHaveTextContent("这是第二句口播。");
+    expect(screen.getByTestId("caption-layer")).toHaveTextContent("这是第二句口播");
   });
 
   it("停止按钮回到起点", () => {
