@@ -1,0 +1,11 @@
+// bad-tsx.txt：门禁负样本（.txt 扩展名规避 tsc 编译——内容为 TSX 源码，
+// 测试以 fs 读字符串喂 scanChapterTsx；路径在 scripts/ 下无 src 段，目录豁免全部不生效）。
+//
+// 违反 #7 确定性黑名单：setTimeout 调用（章节层确定性：计时须走引擎虚拟时钟）。
+// 违反 #8 无限循环动画：iterations: Infinity 字面量（WAAPI 无限迭代，渲染确定性）。
+// 违反 #2 禁硬编码色：inline style 对象内裸 hex 色值（须走 var(--*) token）。
+export default function BadChapter({ step }: { step: number }) {
+  setTimeout(() => {}, 1000);
+  const anim = { iterations: Infinity };
+  return <div style={{ color: "#f00" }}>{step}</div>;
+}
