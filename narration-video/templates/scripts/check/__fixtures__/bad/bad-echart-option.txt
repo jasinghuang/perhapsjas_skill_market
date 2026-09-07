@@ -1,0 +1,17 @@
+// bad-echart-option.txt：门禁负样本（.txt 扩展名规避 tsc 编译——内容为 TSX 源码，
+// 测试以 fs 读字符串喂 scanChapterTsx；路径在 scripts/ 下无 src 段，目录豁免全部不生效）。
+//
+// 违反「ECharts option 裸色/裸字体」（Plan 4.5 门禁新条目，blocker）：
+//   - option 内 color: "#f00" 裸 hex 色值（色须走注册主题——章节层 option 不写颜色字面量）；
+//   - option 内 textStyle.fontFamily "Arial" 裸字体（须走 var(--font-*)）。
+export default function BadChart({ step }: { step: number }) {
+  return (
+    <EChart
+      option={{
+        color: "#f00",
+        textStyle: { fontFamily: "Arial" },
+        series: [{ type: "bar", data: [step] }],
+      }}
+    />
+  );
+}

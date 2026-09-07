@@ -21,6 +21,10 @@
  *   无限循环动画 blocker  #8      iterations: Infinity / -1 / -Infinity 字面量（WAAPI 负 iterations = 无限）
  *   禁裸缓动     blocker  终审    字符串/模板串内 cubic-bezier( 裸值（须走 var(--ease-*) token）——
  *                                engine/ 与 components/ 目录豁免（P4-7）
+ *   ECharts option 裸色/裸字体 blocker P4.5-T3 <EChart option={{...}}> 对象字面量内 color:/textStyle.fontFamily
+ *                                裸值（hex/rgb/命名色、非 var(--font-*) 字体串——white/black 豁免口径同 #2，
+ *                                数组色板与嵌套 itemStyle/textStyle 一并遍历）；components/ 目录豁免
+ *                                （组件库代码，showcase 消费 EChart）
  *
  * 实现取舍（任务要求报告）：typescript compiler API AST 遍历，非正则。理由：
  *   1. 属性名精确匹配——fillOpacity/strokeWidth 等前缀属性零误报，正则做不到（startsWith 必炸）；
@@ -173,7 +177,7 @@ interface ScanCtx {
   findings: Finding[];
   seen: Set<string>; // `${rule}|${line}` 去重——单行同规则最多一条（与 scanner-css 粒度一致）
   exemptDeterminism: boolean; // P4-7：仅 src/engine/（组件同为库代码不豁免）
-  exemptEasing: boolean; // P4-7：src/engine/ 或 src/components/
+  exemptEasing: boolean; // P4-7：src/engine/ 或 src/components/（P4.5-T3 EChart option 规则同用——组件库代码豁免）
 }
 
 function pushFinding(
@@ -315,6 +319,80 @@ function checkSvgFontSizeAttribute(ctx: ScanCtx, attr: ts.JsxAttribute): void {
   }
 }
 
+// ── Plan 4.5：EChart option 裸色/裸字体 ──
+
+/** option 内 textStyle 对象：fontFamily 裸字体（var(--font-*) 豁免）→ blocker。 */
+function checkEChartTextStyle(ctx: ScanCtx, obj: ts.ObjectLiteralExpression): void {
+  for (const p of obj.properties) {
+    if (!ts.isPropertyAssignment(p)) continue;
+    const key = ts.isIdentifier(p.name) || ts.isStringLiteral(p.name) ? p.name.text : "";
+    if (key !== "fontFamily") continue;
+    const v = p.initializer;
+    if (isStringish(v)) {
+      for (const text of literalTexts(v)) {
+        if (isBareFontFamily(text)) {
+          pushFinding(
+            ctx,
+            "ECharts option 裸色/裸字体",
+            v,
+            "EChart option 裸 fontFamily（须走 var(--font-*)）",
+          );
+        }
+      }
+    }
+  }
+}
+
+/** option 对象字面量递归：color 键裸色值（含数组色板/嵌套 itemStyle/textStyle）→ blocker。 */
+function checkEChartOptionObject(ctx: ScanCtx, obj: ts.ObjectLiteralExpression): void {
+  for (const p of obj.properties) {
+    if (!ts.isPropertyAssignment(p)) continue;
+    const key = ts.isIdentifier(p.name) || ts.isStringLiteral(p.name) ? p.name.text : "";
+    const v = p.initializer;
+    if (key === "color") {
+      const texts: string[] = [];
+      if (isStringish(v)) {
+        texts.push(...literalTexts(v));
+      } else if (ts.isArrayLiteralExpression(v)) {
+        for (const el of v.elements) {
+          if (isStringish(el)) texts.push(...literalTexts(el));
+        }
+      }
+      for (const text of texts) {
+        if (containsBareColor(text)) {
+          pushFinding(
+            ctx,
+            "ECharts option 裸色/裸字体",
+            v,
+            "EChart option color 裸值（色须走注册主题，white/black 豁免）",
+          );
+        }
+      }
+    } else if (key === "textStyle" && ts.isObjectLiteralExpression(v)) {
+      checkEChartTextStyle(ctx, v);
+    }
+    // 嵌套遍历：对象值递归（itemStyle/label 等）、数组元素为对象时递归（series/colorStops）
+    if (ts.isObjectLiteralExpression(v)) {
+      checkEChartOptionObject(ctx, v);
+    } else if (ts.isArrayLiteralExpression(v)) {
+      for (const el of v.elements) {
+        if (ts.isObjectLiteralExpression(el)) checkEChartOptionObject(ctx, el);
+      }
+    }
+  }
+}
+
+/** <EChart option={{...}}>：对象字面量 → 裸色/裸字体检查（components/ 目录豁免——与 easing 同旗标）。 */
+function checkEChartOpening(ctx: ScanCtx, node: ts.JsxOpeningElement | ts.JsxSelfClosingElement): void {
+  if (!ts.isIdentifier(node.tagName) || node.tagName.text !== "EChart") return;
+  for (const a of node.attributes.properties) {
+    if (!ts.isJsxAttribute(a) || a.name.getText(ctx.sf) !== "option") continue;
+    const init = a.initializer;
+    if (init === undefined || !ts.isJsxExpression(init) || init.expression === undefined) continue;
+    if (ts.isObjectLiteralExpression(init.expression)) checkEChartOptionObject(ctx, init.expression);
+  }
+}
+
 // ── 遍历 ──
 
 function walk(ctx: ScanCtx, node: ts.Node): void {
@@ -324,6 +402,11 @@ function walk(ctx: ScanCtx, node: ts.Node): void {
     else if (name === "fill" || name === "stroke") checkSvgColorAttribute(ctx, node, name);
     else if (name === "fontFamily" || name === "font-family") checkSvgFontFamilyAttribute(ctx, node);
     else if (name === "fontSize" || name === "font-size") checkSvgFontSizeAttribute(ctx, node);
+  } else if (
+    (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+    !ctx.exemptEasing
+  ) {
+    checkEChartOpening(ctx, node);
   } else if ((ts.isCallExpression(node) || ts.isNewExpression(node)) && !ctx.exemptDeterminism) {
     const hit = determinismHit(node);
     if (hit !== undefined) {

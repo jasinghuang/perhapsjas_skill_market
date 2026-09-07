@@ -160,6 +160,19 @@ describe("bad/ 负样本：逐文件至少一条 blocker", () => {
     expect(r.every((x) => x.location.startsWith(`${f.path}:`))).toBe(true);
   });
 
+  it("bad/bad-echart-option.txt → EChart option 裸色 + 裸字体 → 同规则两条 blocker（色/字体各一）", () => {
+    const f = readFixture("bad/bad-echart-option.txt");
+    const r = scanChapterTsx([{ path: f.path, source: f.text }]);
+    expect(new Set(r.map((x) => x.rule))).toEqual(new Set(["ECharts option 裸色/裸字体"]));
+    const hits = r.filter((x) => x.rule === "ECharts option 裸色/裸字体");
+    expect(hits).toHaveLength(2); // color "#f00" 一条 + textStyle fontFamily "Arial" 一条
+    expect(hits.every((x) => x.severity === "blocker")).toBe(true);
+    expect(hits.every((x) => x.location.startsWith(`${f.path}:`))).toBe(true);
+    // 双维度消息钉死（防实现只查色或只查字体仍过数）
+    expect(hits.some((x) => x.message.includes("color"))).toBe(true);
+    expect(hits.some((x) => x.message.includes("fontFamily"))).toBe(true);
+  });
+
   it("bad/bad-text.txt → manifest 一致性 blocker（steps 错配）+ 反 AI 味 + 结尾标点 warning", () => {
     // #1 导入坏数据状态：steps 故意 ≠ narrations.length
     const narrations = narrationsFrom("bad/bad-text.txt");
@@ -250,6 +263,11 @@ describe("good/ false-positive 集：零 finding 护栏", () => {
     expect(scanChapterTsx([{ path: f.path, source: f.text }])).toEqual([]);
   });
 
+  it("good/good-echart-option.txt → var() 色板 + var(--font-body) 字体 + white 豁免零 finding", () => {
+    const f = readFixture("good/good-echart-option.txt");
+    expect(scanChapterTsx([{ path: f.path, source: f.text }])).toEqual([]);
+  });
+
   it("good/good-chapter.css → token 化色/渐变/字体/时长 + 合法字阶间距 + /* pink */ 注释零 finding", () => {
     const f = readFixture("good/good-chapter.css");
     expect(scanChapterCss([{ path: f.path, css: f.text }])).toEqual([]);
@@ -293,13 +311,21 @@ describe("夹具清单同步护栏", () => {
 
   it("bad/ 夹具文件与本测试预期清单一致（防新增夹具漏断言）", () => {
     expect(listFiles("bad", ".css")).toEqual(["bad-color.css", "bad-gradient.css"]);
-    expect(listFiles("bad", ".txt")).toEqual(["bad-text.txt", "bad-tsx.txt"]);
+    expect(listFiles("bad", ".txt")).toEqual([
+      "bad-echart-option.txt",
+      "bad-text.txt",
+      "bad-tsx.txt",
+    ]);
     expect(listFiles("bad/docs", ".md")).toEqual(["bad-link.md"]);
   });
 
   it("good/ 夹具文件与本测试预期清单一致（防新增夹具漏断言）", () => {
     expect(listFiles("good", ".css")).toEqual(["good-chapter.css"]);
-    expect(listFiles("good", ".txt")).toEqual(["good-chapter.txt", "good-narrations.txt"]);
+    expect(listFiles("good", ".txt")).toEqual([
+      "good-chapter.txt",
+      "good-echart-option.txt",
+      "good-narrations.txt",
+    ]);
     expect(listFiles("good/docs", ".md")).toEqual(["good-docs.md"]);
   });
 });

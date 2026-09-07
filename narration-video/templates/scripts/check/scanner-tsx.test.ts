@@ -326,3 +326,108 @@ export function Ok() {
     expect(r.some((f) => f.rule === "禁硬编码色" && f.severity === "blocker")).toBe(true);
   });
 });
+
+// Plan 4.5 门禁新条目：章节层 <EChart option={{...}}> 对象字面量内 color:/textStyle.fontFamily
+// 裸值 → blocker（色须走注册主题；var(--x) 与 white/black 豁免口径同 #2）。
+describe("章节层 TSX 扫描器 · ECharts option 裸色/裸字体（P4.5-T3）", () => {
+  it("负样本：color 裸色（hex/命名色/rgb/数组色板/嵌套 itemStyle）与 fontFamily 裸字体（字符串/模板串/嵌套 textStyle）全命中", () => {
+    const r = scanChapterTsx([
+      {
+        path: CH,
+        source: `
+export function Bad() {
+  return (
+    <EChart
+      option={{
+        color: "#f00",
+        textStyle: { fontFamily: "Arial" },
+        series: [
+          {
+            type: "bar",
+            color: ["#0f0", "rebeccapurple"],
+            itemStyle: { color: "rgb(1,2,3)" },
+            label: { textStyle: { fontFamily: \`Georgia\` } },
+          },
+        ],
+      }}
+    />
+  );
+}
+`,
+      },
+    ]);
+    expect(new Set(r.map((f) => f.rule))).toEqual(new Set(["ECharts option 裸色/裸字体"]));
+    expect(r.every((f) => f.severity === "blocker")).toBe(true);
+    // 每处独立定位（同规则不同行各一条）：hex/数组色板/itemStyle/两个 textStyle 共 5 条
+    expect(r).toHaveLength(5);
+    expect(r.every((f) => /^src\/chapters\/01-bad\/index\.tsx:\d+$/.test(f.location))).toBe(true);
+  });
+
+  it("定位断言：color 与 textStyle.fontFamily 各指向准确行号（path:line）", () => {
+    const r = scanChapterTsx([
+      {
+        path: CH,
+        source: [
+          "export function Loc() {",
+          "  return (",
+          "    <EChart option={{",
+          '      color: "#f00",',
+          '      textStyle: { fontFamily: "Arial" },',
+          "    }} />",
+          "  );",
+          "}",
+        ].join("\n"),
+      },
+    ]);
+    expect(r.map((f) => f.location)).toEqual([
+      "src/chapters/01-bad/index.tsx:4",
+      "src/chapters/01-bad/index.tsx:5",
+    ]);
+  });
+
+  it("false-positive：var()/white-black 豁免、非 EChart 组件 option 不查、option 非对象字面量不查、components 目录豁免", () => {
+    const legal = scanChapterTsx([
+      {
+        path: CH,
+        source: `
+export function Ok() {
+  return (
+    <EChart
+      option={{
+        color: ["var(--accent-1)", "white", "#fff"],
+        textStyle: { fontFamily: "var(--font-body)" },
+        series: [{ type: "bar", data: [1] }],
+      }}
+    />
+  );
+}
+`,
+      },
+    ]);
+    expect(legal).toEqual([]);
+
+    // 非 EChart 组件（OtherChart/EChart2 名字相似）的 option 属性不查；
+    // option 为调用/标识符（非对象字面量）不查
+    const other = scanChapterTsx([
+      {
+        path: CH,
+        source: `
+export const A = <OtherChart option={{ color: "#f00", textStyle: { fontFamily: "Arial" } }} />;
+export const B = <EChart2 option={{ color: "#f00" }} />;
+export const C = <EChart option={buildOption()} />;
+export const D = <EChart {...props} />;
+`,
+      },
+    ]);
+    expect(other).toEqual([]);
+
+    // components/ 目录豁免（组件库代码——showcase 消费 EChart）
+    const components = scanChapterTsx([
+      {
+        path: "src/components/showcase/ThemeShowcase.tsx",
+        source: `export const s = <EChart option={{ color: "#f00", textStyle: { fontFamily: "Arial" } }} />;`,
+      },
+    ]);
+    expect(components).toEqual([]);
+  });
+});
