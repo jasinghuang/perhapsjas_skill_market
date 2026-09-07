@@ -1,0 +1,5 @@
+/* EChart 容器：撑满父级（尺寸由父级排版决定，零裸值——Ruling 布局零裸值） */
+.cdp-echart {
+  width: 100%;
+  height: 100%;
+}
