@@ -96,3 +96,46 @@ describe("章节层 CSS 扫描器 · 核心可靠性", () => {
     expect(r).toEqual([]);
   });
 });
+
+// 终审修复回归钉死：I-1（animation/transition 缩写时长 + CSS 侧 infinite）与
+// M-1（全量 CSS 命名色表）。
+describe("章节层 CSS 扫描器 · 终审修复（I-1 / M-1）", () => {
+  it("负样本：animation/transition 缩写值内裸时长各命中禁裸动画时长 blocker（I-1）", () => {
+    const r = scanChapterCss([{
+      path: "c.css",
+      css: "animation: spin 2s linear infinite;\ntransition: all 300ms ease;",
+    }]);
+    expect(r.filter((f) => f.rule === "禁裸动画时长" && f.severity === "blocker")).toHaveLength(2);
+  });
+
+  it("负样本：animation 缩写含 infinite / animation-iteration-count: infinite 各命中禁无限循环动画 blocker（I-1）", () => {
+    const r = scanChapterCss([{
+      path: "c.css",
+      css: "animation: spin 2s linear infinite;\nanimation-iteration-count: infinite;",
+    }]);
+    expect(r.filter((f) => f.rule === "禁无限循环动画" && f.severity === "blocker")).toHaveLength(2);
+  });
+
+  it("false-positive：缩写 token 化时长 / 有限迭代 / 带数字 keyframe 名全部通过（I-1）", () => {
+    const r = scanChapterCss([{
+      path: "c.css",
+      css: [
+        "animation: var(--dur-mid) var(--ease-out);",
+        "animation-iteration-count: 3;",
+        "transition: var(--dur-fast) ease;",
+        "animation: spin2 var(--dur-mid);",
+      ].join("\n"),
+    }]);
+    expect(r).toEqual([]);
+  });
+
+  it("负样本：navy/teal 全量命名色表命中禁硬编码色 blocker（M-1）", () => {
+    const r = scanChapterCss([{ path: "c.css", css: "color: navy;\nbackground: teal;" }]);
+    expect(r.filter((f) => f.rule === "禁硬编码色" && f.severity === "blocker")).toHaveLength(2);
+  });
+
+  it("false-positive：--teal-500 token 名与 var(--teal-500) 引用不误报（M-1）", () => {
+    const r = scanChapterCss([{ path: "c.css", css: "--teal-500: var(--ink); color: var(--teal-500);" }]);
+    expect(r).toEqual([]);
+  });
+});

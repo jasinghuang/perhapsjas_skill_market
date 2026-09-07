@@ -17,7 +17,7 @@ import * as path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import type { ChapterDef } from "../../src/chapters/manifest";
-import { runCheckFast } from "./check-fast";
+import { formatCrashMessage, runCheckFast } from "./check-fast";
 
 // ── 夹具 ──
 
@@ -213,5 +213,29 @@ describe("CLI 入口判断", () => {
     expect(mod.runCheckFast).toBeTypeOf("function");
     expect(exitSpy).not.toHaveBeenCalled();
     exitSpy.mockRestore();
+  });
+});
+
+// ── CLI 崩溃转可读报告（终审 M-6：资产 import 兜底——非裸栈、含指引） ──
+
+describe("CLI 异常转可读报告（formatCrashMessage，终审 M-6）", () => {
+  it("未知文件扩展名错误 → 资产 import 指引（含 public/ 口径，不泄裸栈）", () => {
+    const m = formatCrashMessage(new Error('Unknown file extension ".webp" for /x/hero.webp'));
+    expect(m).toContain("public/");
+    expect(m).toContain("资产");
+    expect(m).not.toContain("    at ");
+  });
+
+  it("文件缺失错误 → 导入文件缺失指引 + 原始错误透传", () => {
+    const m = formatCrashMessage(new Error("Cannot find module './hero.png'"));
+    expect(m).toContain("缺失");
+    expect(m).toContain("原始错误");
+    expect(m).toContain("./hero.png");
+  });
+
+  it("其他异常 → 门禁执行异常通用报告（原始错误透传）", () => {
+    const m = formatCrashMessage(new Error("扫描器炸了"));
+    expect(m).toContain("门禁");
+    expect(m).toContain("扫描器炸了");
   });
 });

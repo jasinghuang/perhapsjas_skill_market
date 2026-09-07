@@ -166,6 +166,21 @@ describe("#12 禁外部网络资源（blocker）", () => {
     const r = scanAssets(fix.root, [chapter("one", "01-one", [])]);
     expect(r.filter((f) => f.rule === "禁外部网络资源")).toHaveLength(0);
   });
+
+  it("false-positive：*.test.* 测试文件豁免（mock URL 不报，终审 I-3 与 check-fast 入口口径一致）", () => {
+    const fix = makeRepo();
+    writeBase(fix);
+    fix.write(
+      "src/chapters/01-one/index.test.tsx",
+      [
+        "// 测试文件的 mock 外链 URL：与 check-fast 文件收集口径一致豁免",
+        'const mock = "https://cdn.example.com/mock.png";',
+        "export default mock;",
+      ].join("\n"),
+    );
+    const r = scanAssets(fix.root, [chapter("one", "01-one", [])]);
+    expect(r.filter((f) => f.rule === "禁外部网络资源")).toHaveLength(0);
+  });
 });
 
 // ── #13 音频完整性 ──

@@ -118,7 +118,11 @@ function checkExternalUrls(repoRoot: string, findings: Finding[]): void {
       `scanAssets：src/chapters 目录不存在（${chaptersDir}）——章节层无法扫描，宁炸不假绿`,
     );
   }
-  const files = walkFiles(chaptersDir).filter((f) => f.endsWith(".tsx") || f.endsWith(".css"));
+  // *.test.* 豁免（终审 I-3）：测试文件 mock URL 不报——与 check-fast 章节文件收集
+  // 口径一致（collectChapterFiles 同样排除 *.test.*）
+  const files = walkFiles(chaptersDir).filter(
+    (f) => (f.endsWith(".tsx") || f.endsWith(".css")) && !path.basename(f).includes(".test."),
+  );
   if (files.length === 0) {
     throw new Error(
       "scanAssets：src/chapters 下零 tsx/css 文件（非空护栏，空输入不扫描）",

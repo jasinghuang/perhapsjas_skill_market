@@ -251,3 +251,78 @@ export const dyn = \`color: #f\${"0"}0\`;
     expect(r.filter((f) => f.rule === "禁硬编码色")).toHaveLength(0);
   });
 });
+
+// 终审修复回归钉死：I-2（inline style/SVG 字体字号维度 + style 动画时长）与
+// M-1（全量 CSS 命名色表）。
+describe("章节层 TSX 扫描器 · 终审修复（I-2 / M-1）", () => {
+  it("负样本：style 对象 fontFamily/fontSize/transition 各命中（I-2，severity 钉死）", () => {
+    const r = scanChapterTsx([
+      {
+        path: CH,
+        source: `
+export function Bad() {
+  return <div style={{ fontFamily: "Georgia", fontSize: 18, transition: "all 2s" }} />;
+}
+`,
+      },
+    ]);
+    expect(new Set(r.map((f) => f.rule))).toEqual(
+      new Set(["禁硬编码字体", "最小字号", "禁裸动画时长"]),
+    );
+    expect(
+      r
+        .filter((f) => f.rule === "禁硬编码字体" || f.rule === "禁裸动画时长")
+        .every((f) => f.severity === "blocker"),
+    ).toBe(true);
+    expect(r.filter((f) => f.rule === "最小字号").every((f) => f.severity === "warning")).toBe(true);
+  });
+
+  it("负样本：SVG text fontFamily/font-family/fontSize（字符串与数字表达式）各命中（I-2）", () => {
+    const r = scanChapterTsx([
+      {
+        path: CH,
+        source: `
+export function Bad() {
+  return (
+    <svg>
+      <text fontFamily="Georgia" fontSize="16" />
+      <text font-family="serif" fontSize={29} />
+    </svg>
+  );
+}
+`,
+      },
+    ]);
+    expect(new Set(r.map((f) => f.rule))).toEqual(
+      new Set(["禁硬编码字体", "最小字号", "字阶成员"]),
+    );
+    expect(r.filter((f) => f.rule === "禁硬编码字体").every((f) => f.severity === "blocker")).toBe(true);
+    expect(r.filter((f) => f.rule !== "禁硬编码字体").every((f) => f.severity === "warning")).toBe(true);
+  });
+
+  it("false-positive：token 化 fontFamily/fontSize/transition 与合法字阶数字全部通过（I-2）", () => {
+    const r = scanChapterTsx([
+      {
+        path: CH,
+        source: `
+export function Ok() {
+  return (
+    <div>
+      <div style={{ fontSize: "var(--t-h3)", fontFamily: "var(--font-body)", transition: "var(--dur-fast) ease" }} />
+      <div style={{ fontSize: 28 }} />
+    </div>
+  );
+}
+`,
+      },
+    ]);
+    expect(r).toEqual([]);
+  });
+
+  it("负样本：navy 全量命名色表 inline style 命中（M-1）", () => {
+    const r = scanChapterTsx([
+      { path: CH, source: `export const x = <div style={{ color: "navy" }} />;` },
+    ]);
+    expect(r.some((f) => f.rule === "禁硬编码色" && f.severity === "blocker")).toBe(true);
+  });
+});

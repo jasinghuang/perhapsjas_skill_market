@@ -2,9 +2,13 @@
  * scanner-css：章节层 CSS 扫描器（M3a 静态门禁，§11.1 / §12b V4）。
  *
  * 规则（Finding.rule → severity）：
- *   禁硬编码色   blocker  #2    hex/rgb()/hsl()/命名色裸值；white/black 豁免（命名 + hex 形式）
+ *   禁硬编码色   blocker  #2    hex/rgb()/hsl()/命名色裸值（全量 CSS 命名色表，终审 M-1）；
+ *                               white/black 豁免（命名 + hex 形式）
  *   禁硬编码字体 blocker  #3    裸 font-family（须走 var(--font-*)）
- *   禁裸动画时长 blocker  #4    animation-duration/transition-duration 裸值（须走 var(--dur-*)）
+ *   禁裸动画时长 blocker  #4    animation-duration/transition-duration 裸值 +
+ *                               animation:/transition: 缩写值内时长（终审 I-1，须走 var(--dur-*)）
+ *   禁无限循环动画 blocker #8   animation: 缩写值含 infinite / animation-iteration-count:
+ *                               infinite（终审 I-1——与 scanner-tsx #8 同规则名）
  *   禁裸紫粉渐变 warning  #6    手写 gradient() 内含紫粉色相（hue ∈ [250°, 350°)）裸色；token 化渐变豁免
  *   禁emoji      warning  #6b   Unicode Extended_Pictographic 范围（注释内同样计——原文上判，不剥离注释）
  *   字阶成员     warning  #5    font-size 裸 px ≥24 且 ∉ tokens.css 字阶集合
@@ -27,48 +31,9 @@
  * 纯 TS、无 DOM 依赖——tsx（node）与 vitest 双环境消费。
  */
 
-import { readFileSync } from "node:fs";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Finding } from "./findings";
-
-// ── 主题同源集合（Ruling P4-1 + P4-6） ──
-
-function parsePxValues(css: string, re: RegExp): Set<number> {
-  const values = new Set<number>();
-  for (const m of css.matchAll(re)) values.add(parseFloat(m[1]));
-  return values;
-}
-
-// 模块相对路径：脚手架复制后脚本随项目走，指向被检项目自身的 tokens.css。
-// 注意不用 `new URL(rel, import.meta.url)`——vitest 的 jsdom 全局 URL 对 file: 基址
-// 会解析成 http://localhost:3000 虚拟 origin；fileURLToPath + path 双环境皆稳。
-const TOKENS_CSS_FILE = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../src/theme/tokens.css",
-);
-let tokensCss: string;
-try {
-  tokensCss = readFileSync(TOKENS_CSS_FILE, "utf8");
-} catch (e) {
-  throw new Error(
-    `scanner-css：无法读取 src/theme/tokens.css（${TOKENS_CSS_FILE}）——` +
-      `宁炸不假绿（${e instanceof Error ? e.message : String(e)}）`,
-  );
-}
-
-const TYPE_SCALE = parsePxValues(tokensCss, /--t-[\w-]*\s*:\s*([\d.]+)px/g);
-const SPACE_SCALE = parsePxValues(tokensCss, /--space-\d+\s*:\s*([\d.]+)px/g);
-
-// 护栏：tokens.css 读取成功但字阶/间距集合解析为空时宁可炸掉也不假绿/误报（终审 C1 教训）
-if (TYPE_SCALE.size === 0 || SPACE_SCALE.size === 0) {
-  throw new Error(
-    `scanner-css：tokens.css 字阶/间距集合解析为空（${TOKENS_CSS_FILE}）——主题档位契约破坏，宁炸不假绿`,
-  );
-}
-
-const TYPE_SCALE_LABEL = [...TYPE_SCALE].sort((a, b) => a - b).join("/");
-const SPACE_SCALE_LABEL = [...SPACE_SCALE].sort((a, b) => a - b).join("/");
+import { NAMED_COLOR_RE } from "./named-colors";
+import { MIN_FONT_PX, SPACE_SCALE, SPACE_SCALE_LABEL, TYPE_SCALE, TYPE_SCALE_LABEL } from "./token-scale";
 
 // ── 规则正则（色/字体/时长与 contract-lint lintCssText 同型） ──
 
@@ -99,15 +64,20 @@ const WHITE_BLACK_HEX_RE = /#(?:fff|ffffff|000|000000)\b/gi; // white/black 豁�
 const HEX_RE_G = /#[0-9a-fA-F]{3,8}\b/g; // match/matchAll 用（全局）
 const RGB_RE = /rgba?\(/;
 const HSL_RE = /hsla?\(/;
-// white/black 豁免（§11.1 #2）；transparent 按设计稿同样禁止；
-// (?<!-) 防 --purple-* 类 token 引用误报（防误伤紫色主题）。
-const NAMED_COLOR_RE =
-  /(?<!-)\b(red|blue|green|yellow|orange|purple|pink|cyan|magenta|tomato|gold|silver|transparent)\b/;
+// 全量命名色表见 named-colors（终审 M-1）：white/black 豁免在表外，transparent 禁止。
 // 负向前瞻必须写成 (?!\s*var\() 形式——写成 \s*(?!var\() 可回溯成零宽，
 // 导致 `font-family: var(--font-body)` 类合规声明被误报（contract-lint 注释钉出的坑）。
 const FONT_RE = /font-family\s*:(?!\s*var\()/;
 const DUR_RE = /animation-duration\s*:(?!\s*var\()/;
 const TRANSITION_DUR_RE = /transition-duration\s*:(?!\s*var\()/;
+// 终审 I-1：animation:/transition: 缩写值内的时长提取（长属性由 DUR_RE 覆盖）。
+// (?<![\w.-]) 防 spin2 / fade-2s 类 keyframe 名内数字+单位误报（前邻词字符/点/连字符不报）。
+const SHORTHAND_ANIM_RE = /(?:animation|transition)\s*:\s*([^;{}]+)/g;
+const SHORTHAND_TIME_RE = /(?<![\w.-])[\d.]+(?:ms|s)\b/;
+// 终审 I-1：CSS 侧无限循环动画（#8 补全）——animation: 缩写值含 infinite 或
+// animation-iteration-count: infinite。var() 先剥离（防 var(--spin-infinite) token 名误报）。
+const CSS_INFINITE_RE =
+  /(?:\banimation\s*:\s*[^;{}]*\binfinite\b|animation-iteration-count\s*:\s*[^;{}]*\binfinite\b)/;
 const GRADIENT_RE = /(?:linear|radial|conic)-gradient\s*\(/;
 const EMOJI_RE = /\p{Extended_Pictographic}/u;
 const FONT_SIZE_RE = /font-size\s*:\s*([\d.]+)px/g;
@@ -116,7 +86,6 @@ const PX_VALUE_RE = /(-?[\d.]+)px/g;
 
 const PURPLE_PINK_HUE_MIN = 250; // 紫（270）— 品红（300）— 粉（333，主题 --accent-2）窗口
 const PURPLE_PINK_HUE_MAX = 350; // 不含上界；纯蓝 240、纯红 0 均在窗外
-const MIN_FONT_PX = 24; // V4：--t-label 全局最小字号
 
 // ── 色相检测（§11.1 #6 "色相检测"） ──
 
@@ -207,9 +176,28 @@ function scanLine(
     pushFinding(findings, "禁硬编码字体", "blocker", loc, "裸 font-family（须走 var(--font-*)）");
   }
 
-  // #4 禁裸动画时长（CSS 部分）
+  // #4 禁裸动画时长（CSS 部分）：长属性 + animation:/transition: 缩写值内时长（终审 I-1）
   if (DUR_RE.test(declPart) || TRANSITION_DUR_RE.test(declPart)) {
     pushFinding(findings, "禁裸动画时长", "blocker", loc, "裸动画时长（须走 var(--dur-*)）");
+  }
+  // 缩写值内时长：var() 引用剥离后仍含时间即报（token 化时长豁免）
+  const noVarDecl = declPart.replace(VAR_RE, "");
+  for (const m of noVarDecl.matchAll(SHORTHAND_ANIM_RE)) {
+    if (SHORTHAND_TIME_RE.test(m[1])) {
+      pushFinding(findings, "禁裸动画时长", "blocker", loc, "裸动画时长（须走 var(--dur-*)）");
+    }
+  }
+
+  // #8 无限循环动画（CSS 部分，终审 I-1）：animation: 缩写值含 infinite /
+  // animation-iteration-count: infinite → blocker（与 scanner-tsx #8 同规则名）
+  if (CSS_INFINITE_RE.test(noVarDecl)) {
+    pushFinding(
+      findings,
+      "禁无限循环动画",
+      "blocker",
+      loc,
+      "infinite 无限循环动画（渲染确定性：动画须有限周期，氛围循环走引擎时钟）",
+    );
   }
 
   // #6 禁裸紫粉渐变（token 化渐变豁免：var() 已剥离，手写渐变仅对裸色做色相检测）

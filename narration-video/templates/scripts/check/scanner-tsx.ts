@@ -1,11 +1,20 @@
 /**
  * scanner-tsx：章节层 TSX/AST 扫描器（M3a 静态门禁，§11.1）。
  *
- * 规则（Finding.rule → severity，全部 blocker）：
- *   禁硬编码色   blocker  #2      style 属性（对象/字符串/模板串）内 hex/rgb()/hsl()/命名色裸值；
- *                                white/black 豁免（命名 + hex 形式）、var(--x)/url() 豁免
+ * 规则（Finding.rule → severity）：
+ *   禁硬编码色   blocker  #2      style 属性（对象/字符串/模板串）内 hex/rgb()/hsl()/命名色裸值
+ *                                （全量 CSS 命名色表，终审 M-1）；white/black 豁免（命名 + hex 形式）、
+ *                                var(--x)/url() 豁免
  *   SVG属性色值  blocker  #2      fill=/stroke= 属性（JSX 属性或表达式内字符串）裸色值；
  *                                none/white/black 豁免、var(--x) 豁免
+ *   禁硬编码字体 blocker  #3      style 对象 fontFamily / SVG fontFamily=/font-family= 属性
+ *                                裸字体（终审 I-2；var(--font-*) 豁免）
+ *   禁裸动画时长 blocker  #4      style 对象 transition/animation（含 *Duration 变体）值内
+ *                                含 ms/s（终审 I-2；var() 豁免）
+ *   最小字号     warning  V4      style 对象 fontSize / SVG fontSize=/font-size= 裸 px <24
+ *                                （终审 I-2）
+ *   字阶成员     warning  #5      style 对象 fontSize / SVG fontSize=/font-size= 裸 px ∉
+ *                                tokens.css 字阶集合（终审 I-2）
  *   确定性黑名单 blocker  #7      setTimeout/setInterval/Math.random/Date.now/performance.now/
  *                                requestAnimationFrame/new Date() 调用——engine/ 目录豁免
  *                                （P4-7：组件同为库代码不豁免，同样要确定性）
@@ -25,6 +34,8 @@
 
 import ts from "typescript";
 import type { Finding } from "./findings";
+import { NAMED_COLOR_RE } from "./named-colors";
+import { MIN_FONT_PX, TYPE_SCALE, TYPE_SCALE_LABEL } from "./token-scale";
 
 // ── 目录豁免 ──
 
@@ -46,10 +57,7 @@ const WHITE_BLACK_HEX_RE = /#(?:fff|ffffff|000|000000)\b/gi; // white/black 豁�
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/;
 const RGB_RE = /rgba?\(/;
 const HSL_RE = /hsla?\(/;
-// white/black 豁免（§11.1 #2）；transparent 按设计稿同样禁止；
-// (?<!-) 防 --purple-* 类 token 引用误报（与 scanner-css 同型）。
-const NAMED_COLOR_RE =
-  /(?<!-)\b(red|blue|green|yellow|orange|purple|pink|cyan|magenta|tomato|gold|silver|transparent)\b/;
+// 全量命名色表见 named-colors（终审 M-1）：white/black 豁免在表外，transparent 禁止。
 const VAR_OR_URL_RE = /(?:var|url)\([^)]*\)/g; // 剥离 var()/url() 段——token 化与资源名豁免
 
 function containsBareColor(text: string): boolean {
@@ -60,6 +68,45 @@ function containsBareColor(text: string): boolean {
     HSL_RE.test(stripped) ||
     NAMED_COLOR_RE.test(stripped)
   );
+}
+
+// ── 字体 / 字号 / 动画时长（终审 I-2：inline style 对象与 SVG 属性共用） ──
+
+const FONT_FAMILY_KEYS = new Set(["fontFamily", "font-family"]);
+const FONT_SIZE_KEYS = new Set(["fontSize", "font-size"]);
+const DURATION_KEYS = new Set(["transition", "animation", "transitionDuration", "animationDuration"]);
+
+// 时长值判定：(?<![\w.-]) 防 "spin2s" / "fade-2s" 类名称内数字+单位误报（与 scanner-css 同型）
+const BARE_TIME_RE = /(?<![\w.-])[\d.]+(?:ms|s)\b/;
+
+/** fontFamily/font-family 裸字体判定：token 化（var(--font-*)）豁免，其余字面量报 blocker。 */
+function isBareFontFamily(text: string): boolean {
+  const t = text.trim();
+  return t !== "" && !t.startsWith("var(");
+}
+
+/** fontSize 裸 px 解析："18" / "18px" → 18；"var(...)"/em/rem/calc 等 → undefined（不查）。 */
+function pxFontSize(text: string): number | undefined {
+  const t = text.trim();
+  if (t.includes("var(")) return undefined;
+  const px = /^([\d.]+)px$/.exec(t);
+  if (px !== null) return parseFloat(px[1]);
+  return /^[\d.]+$/.test(t) ? parseFloat(t) : undefined;
+}
+
+/** fontSize 字阶维度：< MIN_FONT_PX → 最小字号 warning；∉ 字阶集合 → 字阶成员 warning。 */
+function fontSizeFindings(ctx: ScanCtx, value: number, node: ts.Node): void {
+  if (value < MIN_FONT_PX) {
+    pushFinding(
+      ctx,
+      "最小字号",
+      node,
+      `字号 ${value}px 低于最小字号 ${MIN_FONT_PX}px（V4）`,
+      "warning",
+    );
+  } else if (!TYPE_SCALE.has(value)) {
+    pushFinding(ctx, "字阶成员", node, `字号 ${value}px 不在字阶集合（${TYPE_SCALE_LABEL}）`, "warning");
+  }
 }
 
 // ── 缓动 / 黑名单 ──
@@ -129,12 +176,18 @@ interface ScanCtx {
   exemptEasing: boolean; // P4-7：src/engine/ 或 src/components/
 }
 
-function pushFinding(ctx: ScanCtx, rule: string, node: ts.Node, message: string): void {
+function pushFinding(
+  ctx: ScanCtx,
+  rule: string,
+  node: ts.Node,
+  message: string,
+  severity: "blocker" | "warning" = "blocker",
+): void {
   const line = ctx.sf.getLineAndCharacterOfPosition(node.getStart(ctx.sf)).line + 1;
   const key = `${rule}|${line}`;
   if (ctx.seen.has(key)) return;
   ctx.seen.add(key);
-  ctx.findings.push({ rule, severity: "blocker", location: `${ctx.path}:${line}`, message });
+  ctx.findings.push({ rule, severity, location: `${ctx.path}:${line}`, message });
 }
 
 // ── 各规则检查 ──
@@ -162,17 +215,44 @@ function checkStyleAttribute(ctx: ScanCtx, attr: ts.JsxAttribute): void {
   }
 }
 
-/** style 对象逐属性值查色（嵌套对象递归；动态表达式/数字/布尔跳过）。 */
+/** 裸字体文本检查：token 化（var(--font-*)）豁免，其余字面量 blocker（消息由调用方语境提供）。 */
+function checkBareFontFamily(ctx: ScanCtx, text: string, node: ts.Node, message: string): void {
+  if (isBareFontFamily(text)) pushFinding(ctx, "禁硬编码字体", node, message);
+}
+
+/** 时长文本检查：var()/url() 剥离后仍含 ms/s → blocker 禁裸动画时长（终审 I-2）。 */
+function checkBareDuration(ctx: ScanCtx, text: string, node: ts.Node, message: string): void {
+  const stripped = text.replace(VAR_OR_URL_RE, "");
+  if (BARE_TIME_RE.test(stripped)) pushFinding(ctx, "禁裸动画时长", node, message);
+}
+
+/** 字号文本检查：裸 px 值 → 最小字号/字阶成员 warning（var() 与 em/rem 不查）。 */
+function checkBareFontSize(ctx: ScanCtx, text: string, node: ts.Node): void {
+  const v = pxFontSize(text);
+  if (v !== undefined) fontSizeFindings(ctx, v, node);
+}
+
+/** style 对象逐属性值检查（终审 I-2：色/字体/字号/动画时长；嵌套对象递归）。 */
 function checkStyleObject(ctx: ScanCtx, obj: ts.ObjectLiteralExpression): void {
   for (const p of obj.properties) {
     if (!ts.isPropertyAssignment(p)) continue;
+    const key = ts.isIdentifier(p.name) || ts.isStringLiteral(p.name) ? p.name.text : "";
     const v = p.initializer;
     if (isStringish(v)) {
       for (const text of literalTexts(v)) {
         if (containsBareColor(text)) {
           pushFinding(ctx, "禁硬编码色", v, "inline style 裸色值（须走 var(--*) token，white/black 豁免）");
         }
+        if (FONT_FAMILY_KEYS.has(key)) {
+          checkBareFontFamily(ctx, text, v, "inline style 裸 font-family（须走 var(--font-*)）");
+        }
+        if (DURATION_KEYS.has(key)) {
+          checkBareDuration(ctx, text, v, "inline style 裸动画时长（须走 var(--dur-*)）");
+        }
+        if (FONT_SIZE_KEYS.has(key)) checkBareFontSize(ctx, text, v);
       }
+    } else if (ts.isNumericLiteral(v) && FONT_SIZE_KEYS.has(key)) {
+      fontSizeFindings(ctx, parseFloat(v.text), v);
     } else if (ts.isObjectLiteralExpression(v)) {
       checkStyleObject(ctx, v);
     }
@@ -201,6 +281,40 @@ function checkSvgColorText(ctx: ScanCtx, text: string, node: ts.Node, attrName: 
   }
 }
 
+/** #3 旁路（终审 I-2）：SVG fontFamily=/font-family= 属性裸字体（var(--font-*) 豁免）。 */
+function checkSvgFontFamilyAttribute(ctx: ScanCtx, attr: ts.JsxAttribute): void {
+  const init = attr.initializer;
+  if (init === undefined) return;
+  if (ts.isStringLiteral(init)) {
+    checkBareFontFamily(ctx, init.text, init, "SVG fontFamily 裸字体（须走 var(--font-*)）");
+    return;
+  }
+  if (!ts.isJsxExpression(init) || init.expression === undefined) return;
+  const expr = init.expression;
+  if (isStringish(expr)) {
+    for (const text of literalTexts(expr)) {
+      checkBareFontFamily(ctx, text, expr, "SVG fontFamily 裸字体（须走 var(--font-*)）");
+    }
+  }
+}
+
+/** 字号维度旁路（终审 I-2）：SVG fontSize=/font-size= 属性（字符串/数字表达式）。 */
+function checkSvgFontSizeAttribute(ctx: ScanCtx, attr: ts.JsxAttribute): void {
+  const init = attr.initializer;
+  if (init === undefined) return;
+  if (ts.isStringLiteral(init)) {
+    checkBareFontSize(ctx, init.text, init);
+    return;
+  }
+  if (!ts.isJsxExpression(init) || init.expression === undefined) return;
+  const expr = init.expression;
+  if (isStringish(expr)) {
+    for (const text of literalTexts(expr)) checkBareFontSize(ctx, text, expr);
+  } else if (ts.isNumericLiteral(expr)) {
+    fontSizeFindings(ctx, parseFloat(expr.text), expr);
+  }
+}
+
 // ── 遍历 ──
 
 function walk(ctx: ScanCtx, node: ts.Node): void {
@@ -208,6 +322,8 @@ function walk(ctx: ScanCtx, node: ts.Node): void {
     const name = node.name.getText(ctx.sf);
     if (name === "style") checkStyleAttribute(ctx, node);
     else if (name === "fill" || name === "stroke") checkSvgColorAttribute(ctx, node, name);
+    else if (name === "fontFamily" || name === "font-family") checkSvgFontFamilyAttribute(ctx, node);
+    else if (name === "fontSize" || name === "font-size") checkSvgFontSizeAttribute(ctx, node);
   } else if ((ts.isCallExpression(node) || ts.isNewExpression(node)) && !ctx.exemptDeterminism) {
     const hit = determinismHit(node);
     if (hit !== undefined) {

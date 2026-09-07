@@ -17,54 +17,31 @@
  *   8. Ruling P4-9：public/audio-durations.json 存在时条目数 === 总非空 narrations 数，
  *      不等 → blocker（在入口层做——跨章聚合是编排层关注点，scanner-assets 不动）
  *
- * tsx（node）不能解析 Vite 的 `?raw`/`.css` 导入（ERR_UNKNOWN_FILE_EXTENSION）——
- * 模块作用域经 node:module registerHooks 注册 .css 文本加载钩子（仅非 vitest 环境：
- * vitest 走 Vite 管线原生支持，且钩子会干扰测试管线）。scanner-css 自身已按
- * Ruling P4-6 弃 ?raw 改 fs（见 scanner-css.ts 头注释）。
- * registerHooks 需 Node ≥ 22.15——package.json engines 已声明该下限（engines 是
- * npm 在安装期唯一能提示 Node 版本的机制；package.json 不能写注释，说明记于此）。
+ * tsx（node）不能解析 Vite 的 `?raw`/`.css`/资产导入（ERR_UNKNOWN_FILE_EXTENSION）——
+ * 模块作用域经 loader-hooks 注册 .css 文本 + png/svg/jpg/jpeg 占位 + json 解析
+ * 加载钩子（仅非 vitest 环境注册；细节与边界见 loader-hooks.ts 头注释）。
+ * scanner-css 自身已按 Ruling P4-6 弃 ?raw 改 fs（见 scanner-css.ts 头注释）。
  *
  * CLI 入口：`import.meta.url` 与 `process.argv[1]`（realpath 对齐）比对判断是否
- * CLI 直跑——被 import 时不触发 process.exit（测试可安全 import）。
+ * CLI 直跑——被 import 时不触发 process.exit（测试可安全 import）。CLI 直跑时
+ * 异常经 try/catch 转可读报告（formatCrashMessage）——资产 import 等 import 链
+ * 崩溃不再泄裸栈（终审 M-6 兜底）。
  *
  * 纯 TS、无 DOM 依赖——tsx（node）与 vitest 双环境消费。
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { registerHooks } from "node:module";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import type { ChapterDef } from "../../src/chapters/manifest";
 import { validateTheme } from "../../src/theme/theme-validate";
 import { FindingBag, type Finding } from "./findings";
+import "./loader-hooks"; // 模块副作用：非 vitest 环境注册资产/样式加载钩子（终审 M-6）
 import { scanChapterCss } from "./scanner-css";
 import { scanChapterTsx } from "./scanner-tsx";
 import { scanNarrations } from "./scanner-text";
 import { scanAssets } from "./scanner-assets";
-
-// ── tsx（node）CSS 钩子：.css 文件按"默认导出文本"加载（?raw 与副作用 import 皆通） ──
-
-if (!process.env.VITEST) {
-  if (typeof registerHooks !== "function") {
-    throw new Error(
-      "check-fast：node:module.registerHooks 不可用（需 Node ≥ 22.15）——tsx 运行需 CSS 钩子加载 React 链",
-    );
-  }
-  registerHooks({
-    load(url, context, nextLoad) {
-      const clean = url.split("?")[0];
-      if (url.startsWith("file:") && clean.endsWith(".css")) {
-        return {
-          format: "module",
-          source: `export default ${JSON.stringify(fs.readFileSync(fileURLToPath(clean), "utf8"))}`,
-          shortCircuit: true,
-        };
-      }
-      return nextLoad(url, context);
-    },
-  });
-}
 
 // ── 常量 ──
 
@@ -377,10 +354,31 @@ function isCliEntry(): boolean {
   }
 }
 
+// ── CLI 崩溃转可读报告（终审 M-6 兜底：资产 import 等 import 链崩溃不泄裸栈） ──
+
+/** 未知扩展名/模块缺失类错误 → 资产 import 指引；其余异常 → 门禁执行异常通用报告。 */
+export function formatCrashMessage(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  const isImportChainCrash =
+    /ERR_UNKNOWN_FILE_EXTENSION|ERR_MODULE_NOT_FOUND|Unknown file extension|Cannot find module/i.test(
+      msg,
+    );
+  const hint = isImportChainCrash
+    ? "章节 import 链加载失败——资产 import 暂不支持（图片/音频等资产请走 public/ 目录引用；" +
+      "css/png/svg/jpg/jpeg/json 已内置占位加载），或导入的文件缺失。"
+    : "门禁执行异常（扫描器或 import 链崩溃）。";
+  return `静态门禁异常终止：${hint}\n原始错误：${msg}`;
+}
+
 if (isCliEntry()) {
   void (async () => {
-    const bag = await runCheckFast();
-    console.log(bag.render());
-    process.exit(bag.exitCode());
+    try {
+      const bag = await runCheckFast();
+      console.log(bag.render());
+      process.exit(bag.exitCode());
+    } catch (e) {
+      console.error(formatCrashMessage(e));
+      process.exit(1);
+    }
   })();
 }
