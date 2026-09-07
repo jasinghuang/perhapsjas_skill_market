@@ -1038,7 +1038,7 @@ function PosterSlide() {
 
 /* ── Slide 12 · 复古终端 = 新屏 C（retro-windows 窗口面板；强调色：三色小方块装饰） ── */
 
-const TERMINAL_LINES = ["$ m2b render --theme creative-mode", "compiling slides ... 25 found", "export ./out/demo.mp4 — done"];
+const TERMINAL_LINES = ["$ m2b render --theme creative-mode", "compiling slides ... 26 found", "export ./out/demo.mp4 — done"];
 
 function TerminalSlide() {
   return (
