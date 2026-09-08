@@ -953,14 +953,15 @@ function ComponentsSection() {
           <Variant label="bars"><ProgressDots total={5} current={2} variant="bars" data-testid="variant-progress-dots-bars" /></Variant>
         </CompCell>
       </CompGroup>
-      <CompGroup label="CHART · 图表（1）">
+      <CompGroup label="CHART · 图表（3）">
         {/* EChart 真渲染（dev 页同 showcase）：SVGRenderer 在真实浏览器可用；主题 "cm" 由
-            模块级 registerTheme 注入——系列色 = 主题色板 [accent-1, accent-2, accent-3, accent-4]。 */}
-        <CompCell name="echart">
-          <Variant label="default · bar + line（主题色板自动分配）">
+            模块级 registerTheme 注入——三格 option 零 color / 零 textStyle：系列色 = 主题色板
+            [accent-1, accent-2, accent-3, accent-4] 自动分配（bar 色板序 / line 第一色 / pie 扇区序）。 */}
+        <CompCell name="echart-bar">
+          <Variant label="bar · 柱状图（保留现有演示数据）">
             <div style={{ width: 420, height: 280 }}>
               <EChart
-                data-testid="variant-echart-default"
+                data-testid="variant-echart-bar"
                 option={{
                   xAxis: { type: "category", data: ["2024", "2025"] },
                   yAxis: { type: "value" },
@@ -974,6 +975,41 @@ function ComponentsSection() {
             </div>
           </Variant>
           <MonoLabel color="var(--text-faint)" size={12}>动效策略：ECharts 本体 animation 恒 false——动效由引擎入场动画提供</MonoLabel>
+        </CompCell>
+        <CompCell name="echart-line">
+          <Variant label="line · 折线图（主题色板第一色）">
+            <div style={{ width: 420, height: 280 }}>
+              <EChart
+                data-testid="variant-echart-line"
+                option={{
+                  xAxis: { type: "category" },
+                  yAxis: { type: "value" },
+                  series: [{ type: "line", data: [3, 5, 4, 6, 7] }],
+                }}
+              />
+            </div>
+          </Variant>
+        </CompCell>
+        <CompCell name="echart-pie">
+          <Variant label="pie · 饼图 · 中文标签（主题色板扇区）">
+            <div style={{ width: 420, height: 280 }}>
+              <EChart
+                data-testid="variant-echart-pie"
+                option={{
+                  series: [
+                    {
+                      type: "pie",
+                      data: [
+                        { name: "甲", value: 40 },
+                        { name: "乙", value: 35 },
+                        { name: "丙", value: 25 },
+                      ],
+                    },
+                  ],
+                }}
+              />
+            </div>
+          </Variant>
         </CompCell>
       </CompGroup>
     </Section>
