@@ -1,5 +1,5 @@
 // 主题效果页（M2b 验收用；dev-only，不入章节层）。
-// ?showcase=1 渲染：26 屏 1920×1080 slide deck——每屏带统一 chrome frame
+// ?showcase=1 渲染：27 屏 1920×1080 slide deck——每屏带统一 chrome frame
 // （topbar 48px/64px + 内容带 96px gutter、垂直 y 112–934 + 字幕保留区 y[958,1038]；meta 页码条已删）。
 // 构图纪律（用户反馈终审）：十五轮 F3 定稿 10 屏 + 十八轮新增 4 屏（外挂模板构图灵感，本主题 token/组件渲染）+
 // 二十三轮新增 6 屏（财报解读系列，真实年报数据）→ 二十四轮（M2b showcase refine）：
@@ -34,8 +34,9 @@
 // S20=核心指标（S3 同构 2×2 统计格：角标/数字/标签/描述四件套 + 涨跌标签橙字——A股红涨语义）/
 // S21=参考 emerald-editorial s5 双年对比（双色柱组 + y 轴刻度 + 图例）/ S22=业务分部（分类条形逐类一色——季度规则复用）/
 // S23=资产负债表速览（结构条 84/16 两段 + 三数字）/ S24=参考 monochrome s6 年度亮点（二十六轮 F5 两列数据版：年度亮点 + 经营数据 + 页边注窄栏 + 展望强调块）/
-// S25=真实图表屏（EChart 柱状+折线组合——真实 echarts 渲染，系列色主题色板自动分配）/
-// S26=参考 s8 收尾屏（绿底 + stamp 标题 + 印章 26/26）。
+// S25=图表类型屏（六种图表 3×2 网格——bar/line/pie/area/radar/doughnut，六图 option 零 color/零 textStyle）/
+// S26=真实图表屏（EChart 柱状+折线组合——真实 echarts 渲染，系列色主题色板自动分配）/
+// S27=参考 s8 收尾屏（绿底 + stamp 标题 + 印章 27/27）。
 // 二十九轮（视觉终审）：F1 S3 BY THE NUMBERS 改 StatInline 组件（大数字标签同行右对齐 + desc 600 加粗无框 + 无角标——
 // 删对角绿填充与 /01 角标，纯奶油墨字四格）；F2 StepStairs v4（底缘共线 + 卡高 180/220/260 逐级 +40 顶部阶梯轮廓 + 橙条保留）；
 // F3 TimelineTrack 累计点亮（i <= activeIndex——HOW IT WORKS 屏 activeIndex=3 亮 4 暗 1）。
@@ -44,6 +45,11 @@
 // 三十三轮（M4.5 ECharts 收编）：新增 S25 真实图表屏（EChart 柱状+折线组合——真实 echarts 渲染；
 // 系列色不写死走主题色板自动分配 green/pink/orange，图例/轴色 tokens 同源；本体动画深度强制 false）；
 // S26 收尾印章 26/26——总屏数 26。
+// 三十四轮（M4.5 ECharts 图表类型）：新增 S25 图表类型屏（六种图表 3×2 网格真实构图——
+// bar/line/pie/area/radar/doughnut，六图 option 零 color 键/零 textStyle 键，色板与字体全部由主题
+// "cm" 自动分配——六图共用同一主题的验证；图表背景透明 slide 底色透出；组件侧注册 RadarChart +
+// RadarComponent（按需注册 4 图表 + 4 组件））；原 S25 真实图表顺延 S26、S26 收尾顺延 S27（印章
+// 27/27）——总屏数 27。
 // 用色语义规则（二十四轮入册，控制器同步设计文档 §12）：财报/金融数据语义色——上涨 = 红色系
 // （本主题 accent-3 橙 #E85A1F）、下跌 = 绿色系（accent-1）；delta 标签 / KPI 附注统一按此（涨橙/跌绿），
 // 系列色（年份柱/分类条）非涨跌语义不受影响。
@@ -173,7 +179,7 @@ function SafetyGuides({ color }: { color: string }) {
 
 /* ── chrome frame（每屏必有） ── */
 interface SlideShellProps {
-  index: string; // "01".."26"
+  index: string; // "01".."27"
   topbar: ReactNode;
   pill: string;
   caption: string; // 该屏口播台词（CaptionLayer 字幕保留区 y[972,1032]）
@@ -1038,7 +1044,7 @@ function PosterSlide() {
 
 /* ── Slide 12 · 复古终端 = 新屏 C（retro-windows 窗口面板；强调色：三色小方块装饰） ── */
 
-const TERMINAL_LINES = ["$ m2b render --theme creative-mode", "compiling slides ... 26 found", "export ./out/demo.mp4 — done"];
+const TERMINAL_LINES = ["$ m2b render --theme creative-mode", "compiling slides ... 27 found", "export ./out/demo.mp4 — done"];
 
 function TerminalSlide() {
   return (
@@ -2122,7 +2128,162 @@ function HighlightsSlide() {
   );
 }
 
-/* ── Slide 25 · 真实图表 = EChart 柱状+折线组合（真实 echarts 渲染；系列色主题色板自动分配） ── */
+/* ── Slide 25 · 图表类型 = 六种图表 3×2 网格（真实 echarts 渲染；六图 option 零 color / 零 textStyle） ── */
+
+/**
+ * 六图 option：零 color 键、零 textStyle 键——系列色/扇区色/字体全部由主题 "cm" 自动分配
+ * （palette = accent-1 绿 #1f8a4c / accent-2 粉 #f06ca8 / accent-3 橙 #e85a1f / accent-4 黄 #f5c518），
+ * 图表背景透明（主题 backgroundColor: transparent）——slide cream 底透出。
+ * 双系列图（bar/radar）带图例（主题 legend 色 --text-2 自动分配）；单系列/自标注图靠上方 mono 标注点名。
+ * 饼图中文标签走 ECharts 默认（PieView inheritColor——标签继承扇区色，零写死）。
+ */
+const CHART_TYPES_CELLS: Array<{ id: string; label: string; option: Record<string, unknown> }> = [
+  {
+    id: "bar",
+    label: "BAR · 柱状",
+    option: {
+      grid: { left: 48, right: 24, top: 40, bottom: 32 },
+      legend: { top: 0 },
+      xAxis: { type: "category", data: ["Q1", "Q2"] },
+      yAxis: { type: "value", max: 8, interval: 4 },
+      series: [
+        { name: "今年", type: "bar", data: [5, 8] },
+        { name: "去年", type: "bar", data: [4, 6] },
+      ],
+    },
+  },
+  {
+    id: "line",
+    label: "LINE · 折线",
+    option: {
+      grid: { left: 48, right: 24, top: 24, bottom: 32 },
+      xAxis: { type: "category", data: ["1", "2", "3", "4", "5"] },
+      yAxis: { type: "value" },
+      series: [{ name: "趋势", type: "line", data: [3, 5, 4, 6, 7] }],
+    },
+  },
+  {
+    id: "pie",
+    label: "PIE · 饼图",
+    option: {
+      series: [
+        {
+          type: "pie",
+          radius: "55%",
+          data: [
+            { value: 40, name: "写稿" },
+            { value: 35, name: "分镜" },
+            { value: 25, name: "动效" },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: "area",
+    label: "AREA · 面积",
+    option: {
+      grid: { left: 48, right: 24, top: 24, bottom: 32 },
+      xAxis: { type: "category", data: ["1", "2", "3", "4", "5"] },
+      yAxis: { type: "value" },
+      series: [{ name: "面积", type: "line", data: [2, 4, 3, 5, 6], areaStyle: {} }],
+    },
+  },
+  {
+    id: "radar",
+    label: "RADAR · 雷达",
+    option: {
+      legend: { top: 0 },
+      radar: {
+        radius: "58%",
+        center: ["50%", "58%"],
+        indicator: [
+          { name: "增速", max: 100 },
+          { name: "规模", max: 100 },
+          { name: "质量", max: 100 },
+          { name: "效率", max: 100 },
+          { name: "稳定", max: 100 },
+        ],
+      },
+      series: [
+        {
+          type: "radar",
+          data: [
+            { value: [80, 62, 74, 58, 90], name: "今年" },
+            { value: [66, 78, 60, 84, 72], name: "去年" },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: "doughnut",
+    label: "DOUGHNUT · 环形",
+    option: {
+      series: [
+        {
+          type: "pie",
+          radius: ["40%", "70%"],
+          label: { show: false },
+          data: [
+            { value: 25, name: "写稿" },
+            { value: 25, name: "分镜" },
+            { value: 25, name: "动效" },
+            { value: 25, name: "成片" },
+          ],
+        },
+      ],
+    },
+  },
+];
+
+function ChartTypesSlide() {
+  return (
+    <SlideShell index="25" topbar="CHART TYPES" pill="SIX FORMS" caption="六种图表，同一主题。">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
+          六种图表，同一主题。
+        </HeroTitle>
+        {/* 3×2 网格：六图共用主题 "cm"（零 color/零 textStyle——色板与字体自动分配）；
+            每格 = mono 类型标注 + EChart 真渲染（背景透明，slide 底色透出）；
+            gap var(--grid-gutter) 28、行高 1fr 1fr（图表吃满剩余高度——安全框验收在案） */}
+        <Grid
+          variant="even"
+          columns={3}
+          data-testid="chart-types-grid"
+          style={{ flex: 1, minHeight: 0, gridTemplateRows: "1fr 1fr" }}
+        >
+          {CHART_TYPES_CELLS.map((cell) => (
+            <div
+              key={cell.id}
+              data-testid={`chart-cell-${cell.id}`}
+              style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", minWidth: 0, minHeight: 0 }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--t-label)",
+                  lineHeight: 1,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "var(--text-mute)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {cell.label}
+              </span>
+              <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+                <EChart option={cell.option} data-testid={`chart-types-${cell.id}`} />
+              </div>
+            </div>
+          ))}
+        </Grid>
+      </div>
+    </SlideShell>
+  );
+}
+
+/* ── Slide 26 · 真实图表 = EChart 柱状+折线组合（真实 echarts 渲染；系列色主题色板自动分配） ── */
 
 /**
  * 真实图表 option：xAxis 两年；两条 bar（2024/2025 营收——palette[0] 绿 / palette[1] 粉）
@@ -2143,7 +2304,7 @@ const REAL_CHART_OPTION = {
 
 function RealChartSlide() {
   return (
-    <SlideShell index="25" topbar="REAL CHART" pill="ECHARTS" caption="真实图表，主题自动适配。">
+    <SlideShell index="26" topbar="REAL CHART" pill="ECHARTS" caption="真实图表，主题自动适配。">
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <HeroTitle size="display-2" style={{ lineHeight: 0.95, marginBottom: "var(--headline-gap)" }}>
           真实图表，主题适配。
@@ -2171,12 +2332,12 @@ function RealChartSlide() {
   );
 }
 
-/* ── Slide 26 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
+/* ── Slide 27 · 收尾 = 参考 s8（整屏绿底；强调色：pink 印章） ── */
 
 function ClosingSlide() {
   return (
     <SlideShell
-      index="26"
+      index="27"
       topbar="END OF DECK"
       pill="FIN."
       caption="谢谢观看"
@@ -2209,7 +2370,7 @@ function ClosingSlide() {
         >
           把口播稿，做成会动的网页。这是 creative-mode 主题的完整视觉表达。
         </BodyCopy>
-        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "26/26" + "M2B"；
+        {/* 印章（参考 s8 stamp）：pink 方块 -6deg + cream 圆环内框 + mono "27/27" + "M2B"；
             二十六轮 F6：内移 32px + 底抬 48px（space-4 → space-5）使旋转 bbox 完全落回内容带（原 bbox 底 919.2 距 934 仅 14.8px 过紧） */}
         <div
           data-testid="closing-seal"
@@ -2251,7 +2412,7 @@ function ClosingSlide() {
                 color: "var(--surface)",
               }}
             >
-              26/26
+              27/27
             </span>
             <span
               style={{
@@ -2301,7 +2462,7 @@ export function ThemeShowcase() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 主题效果页 · 26 屏 slide deck · 参考构图 s1–s8 + scatterbrain / sakura-chroma / editorial-forest / emerald-editorial / monochrome + supper-club / bold-poster / retro-windows / pin-and-paper / studio / cobalt-grid · 动画每 8 秒循环重播
+          creative-mode · 主题效果页 · 27 屏 slide deck · 参考构图 s1–s8 + scatterbrain / sakura-chroma / editorial-forest / emerald-editorial / monochrome + supper-club / bold-poster / retro-windows / pin-and-paper / studio / cobalt-grid · 动画每 8 秒循环重播
         </span>
         <span
           style={{
@@ -2343,6 +2504,7 @@ export function ThemeShowcase() {
         <BusinessSegmentsSlide />
         <BalanceSheetSlide />
         <HighlightsSlide />
+        <ChartTypesSlide />
         <RealChartSlide />
         <ClosingSlide />
       </main>

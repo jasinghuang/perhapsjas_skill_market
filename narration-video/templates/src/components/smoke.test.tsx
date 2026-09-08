@@ -30,11 +30,13 @@ vi.mock("echarts/charts", () => ({
   BarChart: { kind: "BarChart" },
   LineChart: { kind: "LineChart" },
   PieChart: { kind: "PieChart" },
+  RadarChart: { kind: "RadarChart" },
 }));
 vi.mock("echarts/components", () => ({
   GridComponent: { kind: "GridComponent" },
   TooltipComponent: { kind: "TooltipComponent" },
   LegendComponent: { kind: "LegendComponent" },
+  RadarComponent: { kind: "RadarComponent" },
 }));
 vi.mock("echarts/renderers", () => ({ SVGRenderer: { kind: "SVGRenderer" } }));
 

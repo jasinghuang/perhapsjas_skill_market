@@ -13,21 +13,23 @@
 import { useEffect, useRef } from "react";
 import { init, registerTheme, use } from "echarts/core";
 import type { EChartsCoreOption, EChartsType } from "echarts/core";
-import { BarChart, LineChart, PieChart } from "echarts/charts";
-import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
+import { BarChart, LineChart, PieChart, RadarChart } from "echarts/charts";
+import { GridComponent, LegendComponent, RadarComponent, TooltipComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
 import tokensCss from "../../theme/tokens.css?raw";
 import { MotionDuration, RevealPreset, revealAnim } from "../motion";
 import { buildEchartsTheme } from "./echarts-theme";
 
-// 按需注册（模块级一次）：3 图表 + 3 组件 + SVGRenderer（Ruling P4.5-1）。
+// 按需注册（模块级一次）：4 图表 + 4 组件 + SVGRenderer（Ruling P4.5-1）。
 use([
   BarChart,
   LineChart,
   PieChart,
+  RadarChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
+  RadarComponent,
   SVGRenderer,
 ]);
 

@@ -7,8 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
 import tokensCss from "../../theme/tokens.css?raw";
-import { BarChart, LineChart, PieChart } from "echarts/charts";
-import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
+import { BarChart, LineChart, PieChart, RadarChart } from "echarts/charts";
+import { GridComponent, LegendComponent, RadarComponent, TooltipComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
 import { buildEchartsTheme, EChartsTheme } from "./echarts-theme";
 import { EChart } from "./";
@@ -31,11 +31,13 @@ vi.mock("echarts/charts", () => ({
   BarChart: { kind: "BarChart" },
   LineChart: { kind: "LineChart" },
   PieChart: { kind: "PieChart" },
+  RadarChart: { kind: "RadarChart" },
 }));
 vi.mock("echarts/components", () => ({
   GridComponent: { kind: "GridComponent" },
   TooltipComponent: { kind: "TooltipComponent" },
   LegendComponent: { kind: "LegendComponent" },
+  RadarComponent: { kind: "RadarComponent" },
 }));
 vi.mock("echarts/renderers", () => ({ SVGRenderer: { kind: "SVGRenderer" } }));
 
@@ -99,14 +101,14 @@ describe("EChart 受控组件", () => {
     expect(themeCalls[0].theme).toEqual(buildEchartsTheme(tokensCss));
   });
 
-  it("按需注册（模块级一次）：use 传入 3 图表 + 3 组件 + SVGRenderer", () => {
+  it("按需注册（模块级一次）：use 传入 4 图表 + 4 组件 + SVGRenderer", () => {
     expect(useCalls).toHaveLength(1);
     const installed = useCalls[0];
-    expect(installed).toHaveLength(7);
+    expect(installed).toHaveLength(9);
     expect(installed).toEqual(
       expect.arrayContaining([
-        BarChart, LineChart, PieChart,
-        GridComponent, TooltipComponent, LegendComponent,
+        BarChart, LineChart, PieChart, RadarChart,
+        GridComponent, TooltipComponent, LegendComponent, RadarComponent,
         SVGRenderer,
       ]),
     );

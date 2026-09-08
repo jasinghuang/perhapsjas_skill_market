@@ -24,6 +24,7 @@ const FIXTURE_A = `:root {
   --accent-3: #e85a1f;
   --accent-4: #f5c518;
   --surface-2: #e4dcc4;
+  --text: #0f0f0f;
   --text-2: #2a2a2a;
   --text-mute: #5c574c;
   --rule: #0f0f0f;
@@ -37,6 +38,7 @@ const FIXTURE_B = `:root {
   --accent-3: #654321;
   --accent-4: #fedcba;
   --surface-2: #eeeeee;
+  --text: #1b1b1b;
   --text-2: #3b3b3b;
   --text-mute: #4d4d4d;
   --rule: #101010;
@@ -69,17 +71,20 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
     expect(theme.color).toEqual(["#1f8a4c", "#f06ca8", "#e85a1f", "#f5c518"]);
   });
 
-  it("token 映射：textStyle.fontFamily = --font-body 去引号（含 Space Grotesk）", () => {
+  it("token 映射：textStyle.fontFamily = --font-body 去引号（含 Space Grotesk）+ textStyle.color = --text（默认文字墨色，防 echarts 默认 #333 穿透）", () => {
     const theme = buildEchartsTheme(FIXTURE_A);
     expect(theme.textStyle.fontFamily).toContain("Space Grotesk");
     // 引号已剥离：ECharts 接受裸 font-family 串
     expect(theme.textStyle.fontFamily).not.toMatch(/["']/);
+    expect(theme.textStyle.color).toBe("#0f0f0f");
   });
 
   // P45T4-fix：轴主题必须嵌套在 categoryAxis/valueAxis 下——echarts 轴模型只读
   // theme[axisType + "Axis"]，顶层 axisLine/splitLine 是死键（真渲染审计实测
   // 默认色穿透：axisLine #6E7079 / splitLine #E0E6F1）。
-  it("token 映射：轴色嵌套 categoryAxis/valueAxis（axisLine 墨 = --rule；splitLine = --surface-2；axisLabel = --text-mute；axisTick 墨；legend = --text-2）", () => {
+  // P4.5-radar：雷达网格同源嵌套 theme.radar（真渲染实测 radar 默认 splitLine
+  // #E0E6F1 / 灰蓝 splitArea 带穿透）。
+  it("token 映射：轴色嵌套 categoryAxis/valueAxis（axisLine 墨 = --rule；splitLine = --surface-2；axisLabel = --text-mute；axisTick 墨；legend = --text-2）+ radar 网格同源（辐条 --rule / 环线 --surface-2 / 指标名 --text-mute / splitArea 关闭）", () => {
     const theme = buildEchartsTheme(FIXTURE_A);
     for (const axis of [theme.categoryAxis, theme.valueAxis]) {
       expect(axis.axisLine.lineStyle.color).toBe("#0f0f0f");
@@ -88,6 +93,12 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
       expect(axis.axisLabel.color).toBe("#5c574c");
     }
     expect(theme.legend.textStyle.color).toBe("#2a2a2a");
+    expect(theme.radar.axisLine.lineStyle.color).toBe("#0f0f0f");
+    expect(theme.radar.splitLine.lineStyle.color).toBe("#e4dcc4");
+    expect(theme.radar.axisName.color).toBe("#5c574c");
+    expect(theme.radar.axisName.textStyle.color).toBe("#5c574c");
+    expect(theme.radar.splitArea.show).toBe(false);
+    expect(theme.pie.label.color).toBe("#0f0f0f");
   });
 
   it("死键护栏：顶层无 axisLine/splitLine（echarts 不消费——宁炸不假绿）", () => {
@@ -107,12 +118,18 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
     const b = buildEchartsTheme(FIXTURE_B);
     expect(b.color).toEqual(["#123456", "#abcdef", "#654321", "#fedcba"]);
     expect(b.textStyle.fontFamily).toContain("JetBrains Mono");
+    expect(b.textStyle.color).toBe("#1b1b1b");
     expect(b.valueAxis.axisLine.lineStyle.color).toBe("#101010");
     expect(b.categoryAxis.axisLabel.color).toBe("#4d4d4d");
+    expect(b.radar.axisLine.lineStyle.color).toBe("#101010");
+    expect(b.radar.splitLine.lineStyle.color).toBe("#eeeeee");
+    expect(b.radar.axisName.color).toBe("#4d4d4d");
+    expect(b.pie.label.color).toBe("#1b1b1b");
     // 对照：两套输出不得雷同（防「恒等输出」假绿）
     expect(b.color).not.toEqual(a.color);
     expect(b.valueAxis.axisLine.lineStyle.color).not.toBe(a.valueAxis.axisLine.lineStyle.color);
     expect(b.textStyle.fontFamily).not.toBe(a.textStyle.fontFamily);
+    expect(b.radar.splitLine.lineStyle.color).not.toBe(a.radar.splitLine.lineStyle.color);
   });
 
   it.each([
@@ -157,6 +174,7 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
       --accent-3: #e85a1f;
       --accent-4: #f5c518;
       --surface-2: #e4dcc4;
+      --text: #0f0f0f;
       --text-2: #2a2a2a;
       --text-mute: #5c574c;
       --rule: #0f0f0f;
@@ -176,6 +194,7 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
       --accent-3: #e85a1f;
       --accent-4: #f5c518;
       --surface-2: #e4dcc4;
+      --text: #0f0f0f;
       --text-2: #2a2a2a;
       --rule: #0f0f0f;
       --font-body: "Space Grotesk", sans-serif;

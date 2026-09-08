@@ -9,6 +9,8 @@
  *   color               = [--accent-1, --accent-2, --accent-3, --accent-4]
  *   backgroundColor     = 'transparent'（容器背景由主题 CSS 承担）
  *   textStyle.fontFamily= --font-body（去引号）
+ *   textStyle.color     = --text（默认文字墨色——饼图 label 等未显式设色文本
+ *     吃全局默认，真渲染实测 echarts 默认 #333 穿透）
  *   categoryAxis / valueAxis（P45T4-fix：轴主题必须嵌套轴类型键——echarts 轴模型
  *     只读 theme[axisType + "Axis"]，顶层 axisLine/splitLine 是死键，真渲染
  *     会静默穿透 echarts 默认色）：
@@ -18,6 +20,14 @@
  *     splitLine.lineStyle = --surface-2
  *   legend.textStyle    = --text-2
  *   itemStyle.borderRadius = 0（主题零圆角语言）
+ *   radar（P4.5-radar：雷达网格同源——真渲染实测 radar 默认 splitLine #E0E6F1 /
+ *     灰蓝 splitArea 带穿透，与 P45T4 同类死键问题）：
+ *     axisLine.lineStyle   = --rule（墨辐条）
+ *     axisName.color/textStyle.color = --text-mute（指标名）
+ *     splitLine.lineStyle  = --surface-2（环线与 valueAxis 同色语言）
+ *     splitArea.show = false（交替色带关闭——cream 底直接透出）
+ *   pie.label.color = --text（扇区标签墨色——attached 文本不读全局 textStyle，
+ *     真渲染实测 echarts 默认 #333 穿透）
  *
  * 解析顺序：剥离 /* *​/ 注释（防注释内色值污染）→ 收集 --name: value 映射 →
  * var() 间接引用递归解包（循环/缺失/过深 → throw）。
@@ -31,14 +41,24 @@ export interface EChartsAxisTheme {
   splitLine: { lineStyle: { color: string } };
 }
 
+/** 雷达主题段（P4.5-radar：radar 模型只读 theme.radar——轴段嵌套是同一机制）。 */
+export interface EChartsRadarTheme {
+  axisLine: { lineStyle: { color: string } };
+  axisName: { color: string; textStyle: { color: string } };
+  splitLine: { lineStyle: { color: string } };
+  splitArea: { show: boolean };
+}
+
 export interface EChartsTheme {
   color: string[];
   backgroundColor: string;
-  textStyle: { fontFamily: string };
+  textStyle: { fontFamily: string; color: string };
   categoryAxis: EChartsAxisTheme;
   valueAxis: EChartsAxisTheme;
   legend: { textStyle: { color: string } };
   itemStyle: { borderRadius: number };
+  radar: EChartsRadarTheme;
+  pie: { label: { color: string } };
 }
 
 /** var() 递归解包深度上限（防循环/恶意嵌套）。 */
@@ -125,10 +145,23 @@ export function buildEchartsTheme(tokensCss: string): EChartsTheme {
       token("--accent-4"),
     ],
     backgroundColor: "transparent",
-    textStyle: { fontFamily: stripQuotes(token("--font-body")) },
+    textStyle: {
+      fontFamily: stripQuotes(token("--font-body")),
+      color: token("--text"),
+    },
     categoryAxis: axisTheme(),
     valueAxis: axisTheme(),
     legend: { textStyle: { color: token("--text-2") } },
     itemStyle: { borderRadius: 0 },
+    radar: {
+      axisLine: { lineStyle: { color: token("--rule") } },
+      axisName: {
+        color: token("--text-mute"),
+        textStyle: { color: token("--text-mute") },
+      },
+      splitLine: { lineStyle: { color: token("--surface-2") } },
+      splitArea: { show: false },
+    },
+    pie: { label: { color: token("--text") } },
   };
 }
