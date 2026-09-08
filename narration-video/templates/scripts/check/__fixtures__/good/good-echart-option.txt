@@ -4,14 +4,22 @@
 // 已知豁免场景（「ECharts option 裸色/裸字体」规则）：
 //   - option 内 color 数组走 var(--*) token + white 豁免（#2 同口径）——
 //     不误报裸色；
-//   - option 内 textStyle.fontFamily "var(--font-body)" token 化字体——不误报裸字体。
+//   - option 内 textStyle.fontFamily "var(--font-body)" token 化字体——不误报裸字体；
+//   - 嵌套 lineStyle.color "var(--text)"（屏级 AREA 墨线规则）——CSS 变量字符串
+//     非裸色，零豁免（var() 剥离后无裸色即通过）。
 export default function GoodChart({ step }: { step: number }) {
   return (
     <EChart
       option={{
         color: ["var(--accent-1)", "var(--accent-2)", "white"],
         textStyle: { fontFamily: "var(--font-body)" },
-        series: [{ type: "bar", data: [step] }],
+        series: [
+          {
+            type: "line",
+            data: [step],
+            lineStyle: { color: "var(--text)", width: 3 },
+          },
+        ],
       }}
     />
   );

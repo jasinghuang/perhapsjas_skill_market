@@ -34,7 +34,8 @@
 // S20=核心指标（S3 同构 2×2 统计格：角标/数字/标签/描述四件套 + 涨跌标签橙字——A股红涨语义）/
 // S21=参考 emerald-editorial s5 双年对比（双色柱组 + y 轴刻度 + 图例）/ S22=业务分部（分类条形逐类一色——季度规则复用）/
 // S23=资产负债表速览（结构条 84/16 两段 + 三数字）/ S24=参考 monochrome s6 年度亮点（二十六轮 F5 两列数据版：年度亮点 + 经营数据 + 页边注窄栏 + 展望强调块）/
-// S25=图表类型屏（六种图表 3×2 网格——bar/line/pie/area/radar/doughnut，六图 option 零 color/零 textStyle）/
+// S25=图表类型屏（六种图表 3×2 网格——bar/line/pie/area/radar/doughnut，六图 option 零 color/零 textStyle；
+// 唯一例外 AREA 顶部走势线 lineStyle color "var(--text)" 墨色 width 3——屏级规则，CSS 变量字符串非裸色）/
 // S26=真实图表屏（EChart 柱状+折线组合——真实 echarts 渲染，系列色主题色板自动分配）/
 // S27=参考 s8 收尾屏（绿底 + stamp 标题 + 印章 27/27）。
 // 二十九轮（视觉终审）：F1 S3 BY THE NUMBERS 改 StatInline 组件（大数字标签同行右对齐 + desc 600 加粗无框 + 无角标——
@@ -43,7 +44,7 @@
 // 三十轮（视觉终审）：F1 StepStairs 卡内安全边距规格（四周统一 24px）+ 卡高重算 200/240/280（最短卡内容底距 ≥24）；
 // F2 StatInline v2（标签 Kicker pill 药丸 + 数字→desc 8px 收紧 + 卡高自然高 + 24px——S3 行高 1fr → auto 顶对齐）。
 // 三十三轮（M4.5 ECharts 收编）：新增 S25 真实图表屏（EChart 柱状+折线组合——真实 echarts 渲染；
-// 系列色不写死走主题色板自动分配 green/pink/orange，图例/轴色 tokens 同源；本体动画深度强制 false）；
+// 系列色不写死走主题色板自动分配 green/orange/yellow，图例/轴色 tokens 同源；本体动画深度强制 false）；
 // S26 收尾印章 26/26——总屏数 26。
 // 三十四轮（M4.5 ECharts 图表类型）：新增 S25 图表类型屏（六种图表 3×2 网格真实构图——
 // bar/line/pie/area/radar/doughnut，六图 option 零 color 键/零 textStyle 键，色板与字体全部由主题
@@ -2132,10 +2133,13 @@ function HighlightsSlide() {
 
 /**
  * 六图 option：零 color 键、零 textStyle 键——系列色/扇区色/字体全部由主题 "cm" 自动分配
- * （palette = accent-1 绿 #1f8a4c / accent-2 粉 #f06ca8 / accent-3 橙 #e85a1f / accent-4 黄 #f5c518），
+ * （palette 序 = accent-1 绿 #1f8a4c / accent-3 橙 #e85a1f / accent-4 黄 #f5c518 /
+ *   accent-2 粉 #f06ca8——粉垫底最后选用，用户拍板），
  * 图表背景透明（主题 backgroundColor: transparent）——slide cream 底透出。
  * 双系列图（bar/radar）带图例（主题 legend 色 --text-2 自动分配）；单系列/自标注图靠上方 mono 标注点名。
  * 饼图中文标签走 ECharts 默认（PieView inheritColor——标签继承扇区色，零写死）。
+ * 唯一例外：AREA 顶部走势线 lineStyle color "var(--text)"（CSS 变量字符串——墨色语言，
+ * 运行时 token 覆写跟随；非裸色，门禁零豁免）。
  */
 const CHART_TYPES_CELLS: Array<{ id: string; label: string; option: Record<string, unknown> }> = [
   {
@@ -2183,10 +2187,23 @@ const CHART_TYPES_CELLS: Array<{ id: string; label: string; option: Record<strin
     id: "area",
     label: "AREA · 面积",
     option: {
-      grid: { left: 48, right: 24, top: 24, bottom: 32 },
+      // bottom 32→40：24px 轴标签（V4 最小字号）比 echarts 默认 12px 高——
+      // 本格位于网格底行（图表底 = 内容带底 934），标签底会溢出 934 安全框
+      // （实测 937.1），40 让标签底回到 929
+      grid: { left: 48, right: 24, top: 24, bottom: 40 },
       xAxis: { type: "category", data: ["1", "2", "3", "4", "5"] },
       yAxis: { type: "value" },
-      series: [{ name: "面积", type: "line", data: [2, 4, 3, 5, 6], areaStyle: {} }],
+      series: [
+        {
+          name: "面积",
+          type: "line",
+          data: [2, 4, 3, 5, 6],
+          areaStyle: {},
+          // 顶部走势线墨色（屏级规则）：CSS 变量字符串——ECharts 5.3+ style 支持
+          // CSS 变量解析；非裸色，门禁零豁免；运行时 token 覆写跟随
+          lineStyle: { color: "var(--text)", width: 3 },
+        },
+      ],
     },
   },
   {
@@ -2286,9 +2303,9 @@ function ChartTypesSlide() {
 /* ── Slide 26 · 真实图表 = EChart 柱状+折线组合（真实 echarts 渲染；系列色主题色板自动分配） ── */
 
 /**
- * 真实图表 option：xAxis 两年；两条 bar（2024/2025 营收——palette[0] 绿 / palette[1] 粉）
- * + 一条 line（归母净利——palette[2] 橙）。颜色不写死——主题 "cm" 色板自动分配
- * （§12c 主题同源：tokens 改档图表随动）；本体动画由组件深度强制 false。
+ * 真实图表 option：xAxis 两年；两条 bar（2024/2025 营收——palette[0] 绿 / palette[1] 橙）
+ * + 一条 line（归母净利——palette[2] 黄）。颜色不写死——主题 "cm" 色板自动分配
+ * （§12c 主题同源：tokens 改档图表随动；色板序 绿橙黄粉）；本体动画由组件深度强制 false。
  */
 const REAL_CHART_OPTION = {
   grid: { left: 96, right: 48, top: 96, bottom: 64 },

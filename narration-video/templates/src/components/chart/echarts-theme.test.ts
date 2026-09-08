@@ -28,10 +28,11 @@ const FIXTURE_A = `:root {
   --text-2: #2a2a2a;
   --text-mute: #5c574c;
   --rule: #0f0f0f;
+  --t-label: 24px;
   --font-body: "Space Grotesk", "Noto Sans SC", sans-serif;
 }`;
 
-/** FIXTURE_B：另一组已知值（换主题随动对照）。 */
+/** FIXTURE_B：另一组已知值（换主题随动对照；--t-label 28px 与 A 区分）。 */
 const FIXTURE_B = `:root {
   --accent-1: #123456;
   --accent-2: #abcdef;
@@ -42,6 +43,7 @@ const FIXTURE_B = `:root {
   --text-2: #3b3b3b;
   --text-mute: #4d4d4d;
   --rule: #101010;
+  --t-label: 28px;
   --font-body: "JetBrains Mono", monospace;
 }`;
 
@@ -66,17 +68,18 @@ function dropToken(css: string, token: string): string {
 }
 
 describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
-  it("token 映射：color = 四强调色解析值（精确相等）", () => {
+  it("token 映射：color = 四强调色解析值（精确相等；色板序 绿橙黄粉——粉垫底）", () => {
     const theme = buildEchartsTheme(FIXTURE_A);
-    expect(theme.color).toEqual(["#1f8a4c", "#f06ca8", "#e85a1f", "#f5c518"]);
+    expect(theme.color).toEqual(["#1f8a4c", "#e85a1f", "#f5c518", "#f06ca8"]);
   });
 
-  it("token 映射：textStyle.fontFamily = --font-body 去引号（含 Space Grotesk）+ textStyle.color = --text（默认文字墨色，防 echarts 默认 #333 穿透）", () => {
+  it("token 映射：textStyle.fontFamily = --font-body 去引号（含 Space Grotesk）+ textStyle.color = --text（默认文字墨色，防 echarts 默认 #333 穿透）+ textStyle.fontSize = --t-label 解析 24（V4 最小字号延伸到图表）", () => {
     const theme = buildEchartsTheme(FIXTURE_A);
     expect(theme.textStyle.fontFamily).toContain("Space Grotesk");
     // 引号已剥离：ECharts 接受裸 font-family 串
     expect(theme.textStyle.fontFamily).not.toMatch(/["']/);
     expect(theme.textStyle.color).toBe("#0f0f0f");
+    expect(theme.textStyle.fontSize).toBe(24);
   });
 
   // P45T4-fix：轴主题必须嵌套在 categoryAxis/valueAxis 下——echarts 轴模型只读
@@ -91,6 +94,8 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
       expect(axis.splitLine.lineStyle.color).toBe("#e4dcc4");
       expect(axis.axisTick.lineStyle.color).toBe("#0f0f0f");
       expect(axis.axisLabel.color).toBe("#5c574c");
+      // axisDefault 顶档 fontSize:12 遮蔽全局 fallback——轴标签字号须显式 24
+      expect(axis.axisLabel.fontSize).toBe(24);
     }
     expect(theme.legend.textStyle.color).toBe("#2a2a2a");
     expect(theme.radar.axisLine.lineStyle.color).toBe("#0f0f0f");
@@ -99,37 +104,51 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
     expect(theme.radar.axisName.textStyle.color).toBe("#5c574c");
     expect(theme.radar.splitArea.show).toBe(false);
     expect(theme.pie.label.color).toBe("#0f0f0f");
+    // pie 默认 label.fontSize:12——独立默认字号须显式设 24
+    expect(theme.pie.label.fontSize).toBe(24);
   });
 
-  it("死键护栏：顶层无 axisLine/splitLine（echarts 不消费——宁炸不假绿）", () => {
+  it("死键护栏：顶层无 axisLine/splitLine/itemStyle（echarts 不消费——宁炸不假绿）", () => {
     const theme = buildEchartsTheme(FIXTURE_A) as unknown as Record<string, unknown>;
     expect("axisLine" in theme).toBe(false);
     expect("splitLine" in theme).toBe(false);
+    // Series.mergeDefaultAndTheme 只读 theme[subType]——顶层 itemStyle 是死键
+    expect("itemStyle" in theme).toBe(false);
   });
 
-  it("主题语言：backgroundColor transparent（容器背景由主题 CSS 承担）、borderRadius 0（零圆角）", () => {
+  it("主题语言：backgroundColor transparent（容器背景由主题 CSS 承担）、墨描边嵌套 bar/pie（borderRadius 0 零圆角、borderColor --rule、borderWidth 2）", () => {
     const theme = buildEchartsTheme(FIXTURE_A);
     expect(theme.backgroundColor).toBe("transparent");
-    expect(theme.itemStyle.borderRadius).toBe(0);
+    for (const series of [theme.bar, theme.pie]) {
+      expect(series.itemStyle.borderRadius).toBe(0);
+      expect(series.itemStyle.borderColor).toBe("#0f0f0f");
+      expect(series.itemStyle.borderWidth).toBe(2);
+    }
   });
 
-  it("换主题随动：注入另一组 tokens → 输出随动（两套 tokensCss 对照）", () => {
+  it("换主题随动：注入另一组 tokens → 输出随动（两套 tokensCss 对照；--t-label 24→28 随动）", () => {
     const a = buildEchartsTheme(FIXTURE_A);
     const b = buildEchartsTheme(FIXTURE_B);
-    expect(b.color).toEqual(["#123456", "#abcdef", "#654321", "#fedcba"]);
+    expect(b.color).toEqual(["#123456", "#654321", "#fedcba", "#abcdef"]);
     expect(b.textStyle.fontFamily).toContain("JetBrains Mono");
     expect(b.textStyle.color).toBe("#1b1b1b");
+    expect(b.textStyle.fontSize).toBe(28);
     expect(b.valueAxis.axisLine.lineStyle.color).toBe("#101010");
     expect(b.categoryAxis.axisLabel.color).toBe("#4d4d4d");
+    expect(b.categoryAxis.axisLabel.fontSize).toBe(28);
+    expect(b.bar.itemStyle.borderColor).toBe("#101010");
+    expect(b.pie.itemStyle.borderColor).toBe("#101010");
     expect(b.radar.axisLine.lineStyle.color).toBe("#101010");
     expect(b.radar.splitLine.lineStyle.color).toBe("#eeeeee");
     expect(b.radar.axisName.color).toBe("#4d4d4d");
     expect(b.pie.label.color).toBe("#1b1b1b");
+    expect(b.pie.label.fontSize).toBe(28);
     // 对照：两套输出不得雷同（防「恒等输出」假绿）
     expect(b.color).not.toEqual(a.color);
     expect(b.valueAxis.axisLine.lineStyle.color).not.toBe(a.valueAxis.axisLine.lineStyle.color);
     expect(b.textStyle.fontFamily).not.toBe(a.textStyle.fontFamily);
     expect(b.radar.splitLine.lineStyle.color).not.toBe(a.radar.splitLine.lineStyle.color);
+    expect(b.textStyle.fontSize).not.toBe(a.textStyle.fontSize);
   });
 
   it.each([
@@ -142,6 +161,7 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
     "--surface-2",
     "--text-2",
     "--text-mute",
+    "--t-label",
   ])("缺失 token %s → throw（防假绿）", (token) => {
     expect(() => buildEchartsTheme(dropToken(FIXTURE_B, token))).toThrow(token);
   });
@@ -178,6 +198,7 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
       --text-2: #2a2a2a;
       --text-mute: #5c574c;
       --rule: #0f0f0f;
+      --t-label: 24px;
       --font-body: "Space Grotesk", sans-serif;
     }`;
     expect(buildEchartsTheme(css).color[0]).toBe("#11aa22");
@@ -197,6 +218,7 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
       --text: #0f0f0f;
       --text-2: #2a2a2a;
       --rule: #0f0f0f;
+      --t-label: 24px;
       --font-body: "Space Grotesk", sans-serif;
     }`;
     expect(() => buildEchartsTheme(cyclic)).toThrow();
@@ -204,15 +226,24 @@ describe("buildEchartsTheme 主题生成器（tokens 注入式）", () => {
 });
 
 describe("真实 tokens.css 同源（主题改档门禁自动跟随）", () => {
-  it("真实 tokens.css 可生成主题：四色精确相等、fontFamily 含 Space Grotesk、轴色嵌套（axisLine 墨/splitLine surface-2/axisLabel text-mute）", () => {
+  it("真实 tokens.css 可生成主题：四色精确相等（绿橙黄粉）、fontFamily 含 Space Grotesk、字号 24（--t-label）、轴色嵌套（axisLine 墨/splitLine surface-2/axisLabel text-mute）、墨描边 --rule/2", () => {
     const theme = buildEchartsTheme(realTokensCss);
-    expect(theme.color).toEqual(["#1f8a4c", "#f06ca8", "#e85a1f", "#f5c518"]);
+    expect(theme.color).toEqual(["#1f8a4c", "#e85a1f", "#f5c518", "#f06ca8"]);
     expect(theme.textStyle.fontFamily).toContain("Space Grotesk");
+    expect(theme.textStyle.fontSize).toBe(24);
     expect(theme.valueAxis.axisLine.lineStyle.color).toBe("#0f0f0f");
     expect(theme.valueAxis.splitLine.lineStyle.color).toBe("#e4dcc4");
     expect(theme.categoryAxis.axisLine.lineStyle.color).toBe("#0f0f0f");
     expect(theme.categoryAxis.axisLabel.color).toBe("#5c574c");
+    expect(theme.categoryAxis.axisLabel.fontSize).toBe(24);
+    expect(theme.valueAxis.axisLabel.fontSize).toBe(24);
     expect(theme.legend.textStyle.color).toBe("#2a2a2a");
+    expect(theme.bar.itemStyle.borderColor).toBe("#0f0f0f");
+    expect(theme.bar.itemStyle.borderWidth).toBe(2);
+    expect(theme.pie.itemStyle.borderColor).toBe("#0f0f0f");
+    expect(theme.pie.itemStyle.borderWidth).toBe(2);
+    expect(theme.pie.label.color).toBe("#0f0f0f");
+    expect(theme.pie.label.fontSize).toBe(24);
   });
 
   it("护栏：真实 tokens.css 读取非空（防 ?raw/读取 stub 假绿）", () => {
