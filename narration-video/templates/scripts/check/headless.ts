@@ -51,16 +51,30 @@
  *     字体加载**跨步累积**，逐 step 采会读出半张脸；中止（游标失配）时**不判**：
  *     部分步的使用面会造出"加载了没人用"的假 blocker（读数额外标注）。
  *
+ * ## Task 9 追加的两条（§11.1 #17 / #19 节奏检查）
+ *
+ * 判据在 `tempo.ts`（纯函数，单测面）；本文件只负责"给数据"与"归袋"：
+ *   · **#19 音频段 ≥15s**（warning，durations 扫描）——**开浏览器之前**先跑（不需要浏览器），
+ *     故"无 step 可跑"的早退路径照样出结论；
+ *   · **#17 动画窗口 vs 音频**（warning）——逐 step 采集 `audit().windowMs`（帧键 = `frameKey`），
+ *     全套步跑完后判一次（与 #14 同款"跑完再判"）。口径是**声明面比较**（注册表声明上界 vs
+ *     音频时长；render 冻结态下无从实测播放时长）——见 tempo.ts 文件头。
+ * 音频对位**与分镜同源**（`resolveAudioMs` 从 storyboard/data.ts 外提导出）；durations 缺失 =
+ * 合法态（两条都静默不报）；文件读坏 = 读数 + 跳过（真因归 fast 层的音频完整性条目，不两处判级）。
+ *
  * ## 环境前置
  *
  * 需要 Chromium（`npx playwright install chromium`，snapshot 在 session.ts 的错误文案里）；
  * 默认**自起** Vite，从不探活复用外部服务（见 serve.ts 文件头的实测教训）。
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { Page } from "playwright";
 import type { ChapterDef } from "../../src/chapters/manifest";
 import type { AnimationAudit } from "../../src/engine/cursorBridge";
 import { stageConfig } from "../../src/engine/runtime-config";
+import { normalizeDurations, resolveAudioMs, type AudioDurations } from "../storyboard/data";
 import {
   assertCursorMatch,
   auditAnimations,
@@ -92,6 +106,14 @@ import {
 } from "./collectors";
 import { FindingBag, type Finding } from "./findings";
 import { startServe, type ServeHandle } from "./serve";
+import {
+  MIN_SEGMENT_MS,
+  audioTempoStats,
+  checkAnimationWindow,
+  checkAudioTempo,
+  frameKey,
+  type TempoFrame,
+} from "./tempo";
 
 // ── 接口（接口约定 3：跨任务冻结面） ──
 
@@ -488,6 +510,30 @@ async function collectOverflow(page: Page): Promise<CollectorResult> {
   return collectFrom(page, COLLECT_OVERFLOW_SRC, COLLECT_ARGS);
 }
 
+// ── #17/#19 的数据面（Task 9） ──
+
+/**
+ * `public/audio-durations.json` 读取（#17/#19 的音频对位输入）。
+ *   缺文件 → null（未跑 TTS 的合法态：两条都不报，读数里如实标注）；
+ *   读坏（JSON / 形态非法）→ null + 一条**读数**——**不在此判级**：同一事实（#13/Ruling P4-9）
+ *   的真因与 blocker 判定在 fast 层的"音频完整性"条目，两处判红只会等级打架。
+ */
+function loadAudioDurations(repoRoot: string, bag: FindingBag): AudioDurations | null {
+  const p = path.join(repoRoot, "public", "audio-durations.json");
+  if (!fs.existsSync(p)) return null;
+  try {
+    return normalizeDurations(JSON.parse(fs.readFileSync(p, "utf8")));
+  } catch (e) {
+    bag.addNote(
+      `#17/#19 音频对位跳过：public/audio-durations.json 读取失败` +
+        `（${e instanceof Error ? e.message : String(e)}）——该文件的真因与判定由 fast 层的` +
+        `"音频完整性"条目负责（同一事实不两处判级）`,
+      "readout",
+    );
+    return null;
+  }
+}
+
 /**
  * 无头 pass 主流程（返回 FindingBag——接口约定 3 冻结面；info 走 `addNote`）。
  * `specs` 为空（chapters 空 / only 过滤后空）→ 不开浏览器，返回空袋 + 一条 note。
@@ -497,6 +543,30 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
   const chapterIds = opts.chapters.map((c) => c.id);
   const all = expandSpecs(opts.chapters);
   const specs = opts.only === undefined ? all : all.filter((s) => opts.only!.includes(s.chapter));
+
+  // ── #17/#19 的数据面（Task 9）：**早退之前**先跑，故"无 step 可跑"的路径照样出 #19 结论 ──
+  // 对位与分镜页同源（resolveAudioMs 外提导出）：空 narration 步不吃条目；数据警示
+  // （条目数对不上 / 缺章节键）在这里是**读数**——条目数的 blocker 由 fast 层 P4-9 负责判级；
+  // 而"缺章节键"（fast 层只看总数、不看键名）只能在这里露面：它正是"该章被判成无音频"的
+  // 唯一线索，读数上报告才不至于让 #17/#19 的静默变成无法审计的缺席。
+  const alignWarnings: string[] = [];
+  const audioByChapter = resolveAudioMs(
+    opts.chapters,
+    loadAudioDurations(opts.repoRoot, bag),
+    alignWarnings,
+  );
+  for (const w of alignWarnings) bag.addNote(`#17/#19 音频对位读数：${w}`, "readout");
+  bag.addAll(checkAudioTempo(opts.chapters, audioByChapter, { minSegmentMs: MIN_SEGMENT_MS }));
+  const tempoStats = audioTempoStats(audioByChapter);
+  bag.addNote(
+    tempoStats === null
+      ? `#19 音频节奏读数：扫描 0 段（public/audio-durations.json 缺失或全未合成——合法态，不报；` +
+          `下限 ${MIN_SEGMENT_MS}ms）`
+      : `#19 音频节奏读数：扫描 ${tempoStats.segments} 段（min ${tempoStats.minMs}ms / ` +
+          `max ${tempoStats.maxMs}ms，下限 ${MIN_SEGMENT_MS}ms）`,
+    "readout",
+  );
+
   if (specs.length === 0) {
     bag.addNote(
       "#16 无头 pass：无 step 可跑（chapters 为空或 only 过滤后为空）——未开浏览器",
@@ -512,6 +582,8 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
   const examinedBy = { overflow: 0, safeMargins: 0, contrast: 0 };
   // #14 的使用面逐帧切片（跑完后求并集）+ 采样面累计（修复轮 1 / C1）
   const fontUsedSets: string[][] = [];
+  // #17 的逐帧采集面（帧键 → 注册表声明窗口；跑完后与音频对位比对一次）
+  const windowByFrame = new Map<string, number>();
   let fontExamined = 0;
   let blockerMsgs = 0;
   let infoMsgs = 0;
@@ -572,6 +644,7 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
       const contrast = await collectFrom(page, COLLECT_CONTRAST_SRC, CONTRAST_ARGS);
       const fontsSample = (await collectFrom(page, COLLECT_FONTS_SRC, {})) as FontsSample;
       const audit = await auditAnimations(page);
+      windowByFrame.set(frameKey(spec.chapter, spec.step), audit.windowMs); // #17 采集面
       const events = window.drain();
 
       const triage = triageConsoleEvents(events, pageUrl);
@@ -621,6 +694,23 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
       );
     }
 
+    // #17 动画窗口 vs 音频（Task 9）：**逐帧采集完、全套步跑完后判一次**（与 #14 同款"跑完再判"）。
+    // 判据吃的是已采到的帧——中止时只比已采部分（未跑到的帧按"未采集"不报，不在读数外假装查过）。
+    const tempoFrames: TempoFrame[] = specs.map((s) => ({
+      chapter: s.chapter,
+      step: s.step,
+      chapterId: chapterIds[s.chapter] ?? `#${s.chapter}`,
+    }));
+    bag.addAll(checkAnimationWindow(tempoFrames, windowByFrame, audioByChapter));
+    const windowValues = [...windowByFrame.values()];
+    bag.addNote(
+      `#17 动画窗口读数：已采 ${windowByFrame.size} 帧的注册表声明窗口` +
+        `（最大 ${windowValues.length === 0 ? 0 : Math.max(...windowValues)}ms）` +
+        `——无音频的帧不参与比较（未合成 / 无声过场是合法态）` +
+        (aborted === null ? "" : `；pass 在 ${aborted} 中止，未跑到的帧未被采集`),
+      "readout",
+    );
+
     if (aborted !== null) {
       bag.addNote(
         `#16 无头 pass：在 ${aborted} 中止（游标失配后，其余步的逐 step 归因不再可信）——已跑 ${stepsRun} 步`,
@@ -628,8 +718,9 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
       );
     }
     // 非空护栏按**收集器级别**判定（Task 8）：三个逐 step 收集器各要一次自己的护栏。
-    // #14 不在此列：它的 examined === 0（全 deck 无主题字体文本）由收集器自己判成 info
-    // ——示例章节正文走 UA 默认字体，那不是缺陷态，是读数为零（见 collectors.ts）。
+    // #14 不在此列：它的逃逸口已重推为"加载面为空 → info"（修复轮 1 / C1）——判定在 Node 侧
+    // `fontsVerdict`（不在收集器里），且示例章节实测 loaded 1 / used 并集 4 → 连 info 都没有；
+    // 故这里既不需要、也不该给它加"examined === 0"的护栏（详见 collectors.ts 与 fontsVerdict）。
     for (const guard of [
       examinedGuard(examinedBy.overflow),
       collectorExaminedGuard(SAFE_MARGIN_RULE, examinedBy.safeMargins, "文本元素"),

@@ -410,7 +410,9 @@ describe("#16 归因窗口（ConsoleWindow）", () => {
     expect(w.drain()).toHaveLength(2);
   });
 
-  it("clear 丢弃（开场/框架期与中止路径：这些消息不得计入任何一步）", () => {
+  // 用例名随窗口语义更正（T7 复审 nit）：修复轮 1 / I1 后已无"开场/框架期"专属窗口——装载期
+  // 消息归首步（(0,0)），故 clear 的消费面只剩**中止路径**。
+  it("clear 丢弃（中止路径：这些消息不得计入任何一步）", () => {
     const w = new ConsoleWindow();
     w.push(ev("boot"));
     w.clear();

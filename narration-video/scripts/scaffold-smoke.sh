@@ -19,12 +19,16 @@ grep -q 'safeArea: deriveSafeArea(' "$TMP/demo/src/engine/runtime-config.ts"
 grep -q '"dev": "vite"' "$TMP/demo/package.json"
 grep -q '"test": "vitest run"' "$TMP/demo/package.json"
 
-# 1b. 静态门禁接线（M3a 收口）：check 脚本随模板全量拷贝（含 __fixtures__——
-#     fixtures.test.ts 依赖夹具），scaffold 产物上 npm run check exit 0
-#     （零 blocker——模板自身是合规标杆；warning 允许：未合成音频是脚手架合法态）
+# 1b. 门禁接线（M3a 静态层 + M3b 全量入口）：check 脚本随模板全量拷贝（含 __fixtures__——
+#     fixtures.test.ts 依赖夹具），scaffold 产物上 npm run check:fast exit 0
+#     （零 blocker——模板自身是合规标杆；warning 允许：未合成音频是脚手架合法态）。
+#     冒烟只跑 check:fast：**全量 check 需 Chromium + 自起 Vite（十秒级），冒烟不跑**
+#     （前置 `npx playwright install chromium`）——全量入口的接线由下面的 package.json 断言钉住。
 test -f "$TMP/demo/scripts/check/check-fast.ts"
+test -f "$TMP/demo/scripts/check/check.ts"
 test -d "$TMP/demo/scripts/check/__fixtures__"
-(cd "$TMP/demo" && npm run check >/dev/null)
+(cd "$TMP/demo" && npm run check:fast >/dev/null)
+grep -q '"check": "tsx scripts/check/check.ts"' "$TMP/demo/package.json"
 
 # 1c. 时间机器接线（M4 收口）：截图模块 + storyboard 生成器随模板全量拷贝，
 #     package.json 有 storyboard 入口（只断言产物存在与接线——真跑要 dev server + Chromium）

@@ -263,8 +263,12 @@ function readAnnotation(
 /**
  * 逐章解析音频时长（按非空 narration 顺序对位）。
  * 返回每章一张 `(number|null)[]`（与 narrations 等长，空 narration 位恒 null）。
+ *
+ * **外提并导出（M3b Task 9）**：无头门禁的 #17（动画窗口 vs 音频）/#19（音频段 ≥15s）要吃
+ * 同一份对位结果——另抄一份必漂移，故本函数从模块私有改为导出（名称/参数/warnings 出参
+ * **逐字保留**，`buildStoryboardData` 的调用点不动）。分镜页的 warnings 依赖不变。
  */
-function resolveAudioMs(
+export function resolveAudioMs(
   chapters: readonly StoryboardChapter[],
   durations: AudioDurations | null,
   warnings: string[],

@@ -88,14 +88,15 @@ cat <<EOF
 下一步:
    cd $TARGET && npm run dev     # 预览（浏览器即播放器，?auto=1 全自动）
    npm run test                  # 引擎单测 + 门禁自检
-   npm run check                 # 静态门禁：章节/文本/资源/主题/组件扫描 + 防失同步/清单断言（零 blocker 才算过）
+   npm run check:fast            # 静态门禁（秒级，迭代用）：章节/文本/资源/主题/组件扫描 + 防失同步/清单断言
    npm run storyboard            # Phase 3 静态分镜：逐帧截图 + storyboard/index.html + storyboard.json
                                  #   + 零动画门禁（帧数=总 step 数；氛围微动按步 timing.json 声明 ambient 豁免）
                                  #   加 --verify-sequential：顺序推进 vs 独立 mount 逐字节一致性校验
    npm run render                # 渲染导出（M5 实现中，当前占位）
 
-截图/渲染类命令前置（仅这些命令需要，浏览器不进 npm install）:
+截图/渲染/全量门禁类命令前置（仅这些命令需要，浏览器不进 npm install）:
    npx playwright install chromium   # 首次执行一次；之后走缓存（跨项目复用）
+   npm run check                 # 全量门禁（= check:fast + 无头 pass）：自起 Vite + Chromium 逐 step 跑，十秒级；零 blocker 才算过
    dev server 需先运行（npm run dev）——storyboard 连不上会给指引，不自动起服
 
 章节开发前必读: 渐进式文件读取表（SKILL.md）+ CHAPTER-CRAFT.md
