@@ -56,12 +56,15 @@
 // 系列色（年份柱/分类条）非涨跌语义不受影响。
 // 安全框规格（用户终审裁定）：① chrome 元素水平距边缘 ≥64px；② 内容元素落在内容带内
 // （底边 ≤934 = 字幕区上缘 958 − 24；24px 阴影落点亦算占位，不越界）；③ 氛围背景层与 CaptionLayer 自身豁免。
-// ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 958 线，pointerEvents none）。
+// ?showcase=1&guides=1 叠加安全框参考线（96 内容带 + 64 chrome 带 + 字幕区 958 线，pointerEvents none）——
+// 参考线坐标全量由 engine/safe-area.ts 派生（单一数字源）+ 画布 4px 边框纠偏（见 SafetyGuides）。
 // 严守用色纪律（每屏 2-3 个强调色）；舞台尺寸 / chrome frame / 印章等 dev 工具页家具用 inline style；
 // 场景内构图与配色走组件 + token，需要局部配色时用 scope() 注入 CSS 自定义属性（token 覆写，不改组件本体）。
 import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { CaptionLayer } from "./engine/CaptionLayer";
+import { deriveSafeArea } from "./engine/safe-area";
+import type { SafeArea } from "./engine/safe-area";
 import {
   BarGrow,
   BodyCopy,
@@ -137,42 +140,163 @@ const SHOWCASE_TWEAKS = `
 /** 模块加载时读一次查询参数（与 main.tsx 的 showcase 短路同级，dev 页专用） */
 const GUIDES_ON = new URLSearchParams(window.location.search).has("guides");
 
+/* 画布几何（参考线 / chrome frame 的单一依据——规格值一律走 engine/safe-area.ts） */
+
+/** showcase 画布尺寸（27 屏同尺寸）。 */
+const SLIDE_DIMS = { width: 1920, height: 1080 };
+
+/** 画布边框宽：与 SlideShell 的 `border` 值同源。
+    参考线 overlay 的包含块是 slide 的 **padding box**（slide 为 boxSizing:"border-box" + 此宽边框），
+    即 overlay 的 (0,0) 落在画布 (borderW, borderW) —— 参考线定位必须按此换算（见 SafetyGuides）。 */
+const SLIDE_BORDER_W = 4;
+
+/** 安全框：**单一数字源派生**（engine/safe-area.ts）——此处不手写 64/96/112/934/958。 */
+const SLIDE_SAFE_AREA = deriveSafeArea(SLIDE_DIMS);
+
+/** topbar 底缘 y：**chrome 布局细节，非安全框规格**——§12b V1 只规定 chrome 水平 ≥64，未规定 topbar 高度；
+    故**不入 SafeArea**（5 字段形状冻结，不得增删），在 ThemeShowcase 内保留为具名局部常量。 */
+const TOPBAR_BOTTOM = 48;
+
+/* 参考线 mono 标注的排版量（纯排版槽位，非规格值） */
+const GUIDE_LABEL_SIZE = 16; // 标注字号（lineHeight 1 → 亦即标注行盒高）
+const GUIDE_LABEL_ROW_TOP = 8; // 顶部标注行的画布 y
+const GUIDE_LABEL_GAP = 4; // 标注与所贴参考线的间隙
+const GUIDE_LABEL_SLOT_X = 256; // 顶部第二个标注的槽位 x（避开前者，与规格无关）
+
 /**
- * 安全框参考线：96px 内容带（x 96/1824 · y 112/934）+ 字幕保留区线 958（CAPTION）+ 64px chrome 带（x 64/1856 · topbar 48）。
+ * 安全框参考线：chrome 带（x 64/1856）+ 内容带（x 96/1824 · y 112/934）+ 字幕保留区线 958 + topbar 上沿线 48。
+ * 全部坐标由 SLIDE_SAFE_AREA / TOPBAR_BOTTOM **派生**（本文件内已无手写规格值）。
+ *
+ * **画布边框纠偏（M3b Task 4）**：overlay 的包含块是 slide 的 padding box（起点 = 画布 (borderW, borderW)），
+ * 故 顶/左锚点 = `值 − borderW`、右锚点 = `距画布右缘的值 − borderW`、
+ * 底锚点 = `dims.height − borderW − 值`（值 = 该线**底缘**的画布绝对 y）。
+ * 纠偏前四条竖线与两条顶锚横线整体偏 +4px（左线画在 x=68 而非 64）；底锚两条因公式等价而恰好正确。
+ *
+ * 注：SlideShell 内 chrome 元素的定位值是 **padding-box 偏移**（如 topbar 的 top:48 实际画布顶 = 52、
+ * 左缘 = 68）——本任务只把参考线纠到画布坐标，两套坐标系相差 borderW 属既有布局事实，未动（不在裁定内）。
+ *
  * 纯视觉叠加层：pointerEvents none，不参与布局、不遮挡交互。
  */
-function SafetyGuides({ color }: { color: string }) {
+function SafetyGuides({
+  color,
+  safeArea,
+  dims,
+  borderW,
+}: {
+  color: string;
+  safeArea: SafeArea;
+  dims: { width: number; height: number };
+  borderW: number;
+}) {
   if (!GUIDES_ON) return null;
   const line: CSSProperties = { position: "absolute", pointerEvents: "none" };
   const label: CSSProperties = {
     position: "absolute",
     fontFamily: "var(--font-mono)",
-    fontSize: 16,
+    fontSize: GUIDE_LABEL_SIZE,
     lineHeight: 1,
     color,
     pointerEvents: "none",
     whiteSpace: "nowrap",
   };
+  // 画布绝对坐标 → overlay inset（见上"画布边框纠偏"）
+  const insetX = (x: number) => x - borderW; // left；right 传"距画布右缘的距离"，同式
+  const insetTop = (y: number) => y - borderW;
+  const insetBottom = (y: number) => dims.height - borderW - y; // y = 元素**底缘**的画布绝对 y
   return (
     <div data-testid="safety-guides" style={{ position: "absolute", inset: 0, zIndex: 3, pointerEvents: "none" }}>
-      {/* chrome 带 64：两侧竖线 + topbar 上沿线（meta 页码条已删除，底部归字幕保留区） */}
-      <div style={{ ...line, top: 0, bottom: 0, left: 64, borderLeft: `2px dashed ${color}` }} />
-      <div style={{ ...line, top: 0, bottom: 0, right: 64, borderRight: `2px dashed ${color}` }} />
-      <div style={{ ...line, top: 48, left: 64, right: 64, borderTop: `2px dashed ${color}` }} />
-      {/* 内容带 96：两侧竖线 + 顶 112 / 底 934 限位线 + 字幕保留区 958（字幕区上缘 958 − 24 = 内容底 934） */}
-      <div style={{ ...line, top: 0, bottom: 0, left: 96, borderLeft: `2px dashed ${color}` }} />
-      <div style={{ ...line, top: 0, bottom: 0, right: 96, borderRight: `2px dashed ${color}` }} />
-      <div style={{ ...line, top: 112, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
-      <div style={{ ...line, bottom: 118, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
-      <div style={{ ...line, bottom: 142, left: 96, right: 96, borderTop: `2px dashed ${color}` }} />
-      {/* mono 小标注 */}
-      <span style={{ ...label, top: 8, left: 68 }}>CHROME 64</span>
-      <span style={{ ...label, top: 8, left: 252 }}>CONTENT 96</span>
-      <span style={{ ...label, top: 8, right: 68 }}>64</span>
-      <span style={{ ...label, top: 8, right: 100 }}>96</span>
-      <span style={{ ...label, top: 96, left: 100 }}>112</span>
-      <span style={{ ...label, bottom: 102, left: 100 }}>CAPTION 958</span>
-      <span style={{ ...label, bottom: 122, left: 100 }}>934</span>
+      {/* chrome 带：两侧竖线 + topbar 上沿线（meta 页码条已删除，底部归字幕保留区） */}
+      <div
+        data-testid="guide-chrome-left"
+        style={{ ...line, top: 0, bottom: 0, left: insetX(safeArea.chrome), borderLeft: `2px dashed ${color}` }}
+      />
+      <div
+        data-testid="guide-chrome-right"
+        style={{ ...line, top: 0, bottom: 0, right: insetX(safeArea.chrome), borderRight: `2px dashed ${color}` }}
+      />
+      <div
+        data-testid="guide-topbar"
+        style={{
+          ...line,
+          top: insetTop(TOPBAR_BOTTOM),
+          left: insetX(safeArea.chrome),
+          right: insetX(safeArea.chrome),
+          borderTop: `2px dashed ${color}`,
+        }}
+      />
+      {/* 内容带：两侧竖线 + 顶/底限位线 + 字幕保留区线（字幕区上缘 − 24 = 内容底） */}
+      <div
+        data-testid="guide-content-left"
+        style={{ ...line, top: 0, bottom: 0, left: insetX(safeArea.content), borderLeft: `2px dashed ${color}` }}
+      />
+      <div
+        data-testid="guide-content-right"
+        style={{ ...line, top: 0, bottom: 0, right: insetX(safeArea.content), borderRight: `2px dashed ${color}` }}
+      />
+      <div
+        data-testid="guide-content-top"
+        style={{
+          ...line,
+          top: insetTop(safeArea.top),
+          left: insetX(safeArea.content),
+          right: insetX(safeArea.content),
+          borderTop: `2px dashed ${color}`,
+        }}
+      />
+      <div
+        data-testid="guide-caption-top"
+        style={{
+          ...line,
+          bottom: insetBottom(safeArea.captionTop),
+          left: insetX(safeArea.content),
+          right: insetX(safeArea.content),
+          borderTop: `2px dashed ${color}`,
+        }}
+      />
+      <div
+        data-testid="guide-content-bottom"
+        style={{
+          ...line,
+          bottom: insetBottom(safeArea.contentBottom),
+          left: insetX(safeArea.content),
+          right: insetX(safeArea.content),
+          borderTop: `2px dashed ${color}`,
+        }}
+      />
+      {/* mono 小标注（数值随安全框派生；位置为画布坐标换算后的排版槽位） */}
+      <span style={{ ...label, top: insetTop(GUIDE_LABEL_ROW_TOP), left: insetX(safeArea.chrome + GUIDE_LABEL_GAP) }}>
+        CHROME {safeArea.chrome}
+      </span>
+      <span style={{ ...label, top: insetTop(GUIDE_LABEL_ROW_TOP), left: insetX(GUIDE_LABEL_SLOT_X) }}>
+        CONTENT {safeArea.content}
+      </span>
+      <span style={{ ...label, top: insetTop(GUIDE_LABEL_ROW_TOP), right: insetX(safeArea.chrome + GUIDE_LABEL_GAP) }}>
+        {safeArea.chrome}
+      </span>
+      <span style={{ ...label, top: insetTop(GUIDE_LABEL_ROW_TOP), right: insetX(safeArea.content + GUIDE_LABEL_GAP) }}>
+        {safeArea.content}
+      </span>
+      <span style={{ ...label, top: insetTop(safeArea.top - GUIDE_LABEL_SIZE), left: insetX(safeArea.content + GUIDE_LABEL_GAP) }}>
+        {safeArea.top}
+      </span>
+      <span
+        style={{
+          ...label,
+          bottom: insetBottom(safeArea.captionTop + GUIDE_LABEL_SIZE),
+          left: insetX(safeArea.content + GUIDE_LABEL_GAP),
+        }}
+      >
+        CAPTION {safeArea.captionTop}
+      </span>
+      <span
+        style={{
+          ...label,
+          bottom: insetBottom(safeArea.contentBottom + GUIDE_LABEL_SIZE + GUIDE_LABEL_GAP),
+          left: insetX(safeArea.content + GUIDE_LABEL_GAP),
+        }}
+      >
+        {safeArea.contentBottom}
+      </span>
     </div>
   );
 }
@@ -204,12 +328,12 @@ function SlideShell({
       style={{
         ...scope({ "--font-mono": MONO_CN }),
         position: "relative",
-        width: 1920,
-        height: 1080,
+        width: SLIDE_DIMS.width,
+        height: SLIDE_DIMS.height,
         flexShrink: 0,
         boxSizing: "border-box",
         background: bg,
-        border: "4px solid var(--surface-3)", // 画布边框（非投影；画布无彩色投影——F2 裁定）
+        border: `${SLIDE_BORDER_W}px solid var(--surface-3)`, // 画布边框（非投影；画布无彩色投影——F2 裁定）
         overflow: "hidden",
       }}
     >
@@ -276,8 +400,8 @@ function SlideShell({
           九轮 F1：白底墨字墨边在任何屏底色上均成立（S8 绿底亦然）——无需覆写；
           真实章节深色 slide 的对比度由 M3b 门禁 #18 兜底 */}
       <CaptionLayer text={caption} />
-      {/* 安全框可视化（?showcase=1&guides=1） */}
-      <SafetyGuides color={chrome} />
+      {/* 安全框可视化（?showcase=1&guides=1）——几何全量派生，见 SafetyGuides */}
+      <SafetyGuides color={chrome} safeArea={SLIDE_SAFE_AREA} dims={SLIDE_DIMS} borderW={SLIDE_BORDER_W} />
     </section>
   );
 }

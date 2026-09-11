@@ -12,6 +12,10 @@ test -f "$TMP/demo/.engine-version"
 test -f "$TMP/demo/src/engine/runtime-config.ts"
 grep -q 'slug: "demo"' "$TMP/demo/src/engine/runtime-config.ts"
 grep -q 'width: 1920' "$TMP/demo/src/engine/runtime-config.ts"
+# 安全框单一源（M3b Task 4）：engine/safe-area.ts 随模板全量拷贝，生成的运行时配置消费它
+# （16:9 基准值本身由 src/engine/safe-area.test.ts 钉死，此处只断言接线）
+test -f "$TMP/demo/src/engine/safe-area.ts"
+grep -q 'safeArea: deriveSafeArea(' "$TMP/demo/src/engine/runtime-config.ts"
 grep -q '"dev": "vite"' "$TMP/demo/package.json"
 grep -q '"test": "vitest run"' "$TMP/demo/package.json"
 
@@ -40,6 +44,9 @@ test ! -e "$TMP/demo/storyboard"
 bash "$SKILL_DIR/scripts/scaffold.sh" "$TMP/tall" --slug tall --stage 3:4 >/dev/null
 grep -q 'width: 1080' "$TMP/tall/src/engine/runtime-config.ts"
 grep -q 'height: 1440' "$TMP/tall/src/engine/runtime-config.ts"
+# 3:4 档案：safeArea **随 dims 折算**（不是 16:9 照抄）——真跑生成配置读实测折算值
+SAFE_34="$(cd "$TMP/tall" && npx tsx -e 'import { stageConfig } from "./src/engine/runtime-config.ts"; console.log(JSON.stringify(stageConfig.safeArea))')"
+test "$SAFE_34" = '{"chrome":36,"content":54,"top":149,"contentBottom":1245,"captionTop":1277}'
 
 # 3. 目标已存在 → 拒绝覆盖
 if bash "$SKILL_DIR/scripts/scaffold.sh" "$TMP/demo" --slug again --stage 16:9 >/dev/null 2>&1; then

@@ -45,19 +45,28 @@ esac
 cp -R "$TEMPLATE_DIR" "$TARGET"
 rm -rf "$TARGET/node_modules" "$TARGET/dist" "$TARGET/storyboard"
 
-# 2. 写运行时配置（slug + 舞台尺寸 = 档案最小参数）
+# 2. 写运行时配置（slug + 舞台尺寸 = 档案最小参数；安全框由尺寸折算，不手写绝对值）
 cat > "$TARGET/src/engine/runtime-config.ts" <<EOF
 // 运行时配置：由 scaffold 按档案参数生成（--slug / --stage），勿手改
+// 安全框（safeArea）走单一数字源 deriveSafeArea 派生——档案绝对值由基准比例折算得出，
+// 不在此处手写（竖版/小红书档案的绝对值待 M7 档案定稿时由用户确认）。
+import type { SafeArea } from "./safe-area";
+import { deriveSafeArea } from "./safe-area";
 import type { StageDims } from "./useStageScale";
 
 export interface RuntimeConfig {
   slug: string;
   dims: StageDims;
+  /** 安全框（档案绝对值由基准比例折算得出，见 engine/safe-area.ts） */
+  safeArea: SafeArea;
 }
+
+const dims: StageDims = $DIMS;
 
 export const stageConfig: RuntimeConfig = {
   slug: "$SLUG",
-  dims: $DIMS,
+  dims,
+  safeArea: deriveSafeArea(dims),
 };
 EOF
 
