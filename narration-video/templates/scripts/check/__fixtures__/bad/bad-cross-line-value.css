@@ -1,0 +1,11 @@
+/* bad-cross-line-value.css：门禁负样本——违反 #2 禁硬编码色（blocker），K-10 跨行声明值。
+ * 裸 rgba() 写在 box-shadow 的续行：行级预处理（逐行"最后一个 `{` 之后"切片 +
+ * includes(":") 弱门）在续行上找不到冒号 → 整行跳过 → 违规逃逸。
+ * 声明级分词器把整条声明作为一个 token 段，违规归属「声明起始行」（stylelint 同款）：
+ * finding 定位落在 box-shadow 所在行，而不是裸色所在的续行
+ * （fixtures.test.ts 按夹具内容现算两行行号并断言，不写死数字）。 */
+
+.bad-cross-line {
+  box-shadow:
+    4px 4px 0 rgba(0, 0, 0, 0.2);
+}

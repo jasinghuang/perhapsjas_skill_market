@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scanChapterCss } from "./scanner-css";
+import { scanChapterCss, tokenizeCss } from "./scanner-css";
 
 describe("章节层 CSS 扫描器", () => {
   it("非空护栏：输入 css 数组非空才扫描，空数组报错", () => {
@@ -137,5 +137,54 @@ describe("章节层 CSS 扫描器 · 终审修复（I-1 / M-1）", () => {
   it("false-positive：--teal-500 token 名与 var(--teal-500) 引用不误报（M-1）", () => {
     const r = scanChapterCss([{ path: "c.css", css: "--teal-500: var(--ink); color: var(--teal-500);" }]);
     expect(r).toEqual([]);
+  });
+});
+
+// M3b 门禁可信度收紧：声明级状态机（K-10 跨行值不逃逸 / K-12 字符串内 /* 不置注释态）。
+// 前两条为新增判别力用例（行级预处理下必红）；后三条为回退护栏（既有语义等价保留，必须绿）。
+describe("章节层 CSS 扫描器 · 声明级状态机（M3b）", () => {
+  it("跨行声明值：续行的裸色不逃逸（K-10）", () => {
+    const css = `.cdp-x {\n  box-shadow:\n    4px 4px 0 rgba(0, 0, 0, 0.2);\n}`;
+    const f = scanChapterCss([{ path: "a.css", css }]);
+    // 归属 = 声明起始行（stylelint 同款）：违规值在第 3 行，报告落在第 2 行
+    expect(f.some((x) => x.rule === "禁硬编码色" && x.location === "a.css:2")).toBe(true);
+  });
+
+  it("字符串内的 /* 不置注释态：后续声明照常检查（K-12）", () => {
+    const css = `.cdp-x {\n  content: "/*";\n  color: #ff0000;\n}`;
+    const f = scanChapterCss([{ path: "a.css", css }]);
+    expect(f.some((x) => x.rule === "禁硬编码色" && x.location === "a.css:3")).toBe(true);
+  });
+
+  it("注释内的裸色仍不误报", () => {
+    const css = `/* box-shadow: 0 0 0 rgba(0,0,0,.2); */\n.cdp-x { color: var(--ink); }`;
+    expect(scanChapterCss([{ path: "a.css", css }])).toEqual([]);
+  });
+
+  it("选择器/规则头不参与色值判定（假阳性钉死——pink/orange/purple/gold 都在命名色表内）", () => {
+    expect(scanChapterCss([{ path: "a.css", css: `.purple-card { color: var(--text); }` }])).toEqual([]);
+    expect(scanChapterCss([{ path: "a.css", css: `.pink-card { background: var(--surface); }` }])).toEqual([]);
+    expect(scanChapterCss([{ path: "a.css", css: `.orange-bar { color: var(--ink); }` }])).toEqual([]);
+    expect(scanChapterCss([{ path: "a.css", css: `#gold { color: var(--ink); }` }])).toEqual([]);
+  });
+
+  it("tokenizeCss 非空护栏：空输入产出空数组（不抛）", () => {
+    expect(tokenizeCss("")).toEqual([]);
+  });
+
+  // 接手实现者审读补钉（超出 brief 字面 5 用例，理由见 task-1-report「审读发现」）：
+  // ① 行号逐字符跟随——段内多行注释的换行不得被漏计（重数段文本会少算注释里的换行）。
+  it("声明起始行归属：段内多行注释的换行同样计数（行号跟随扫描，不重数段文本）", () => {
+    const css = `.cdp-x {\n  /* 说明\n     续行 */\n  color: #ff0000;\n}`;
+    expect(tokenizeCss(css).map((d) => d.line)).toEqual([4]);
+    const f = scanChapterCss([{ path: "a.css", css }]);
+    expect(f.filter((x) => x.rule === "禁硬编码色").map((x) => x.location)).toEqual(["a.css:4"]);
+  });
+
+  // ② 未闭合引号（CSS bad-string）不得吞掉后续声明——抑制泄漏不越过一行（行级旧管线同款）。
+  it("未闭合字符串只吞到行末：后续规则/声明照常检查", () => {
+    const css = `.cdp-x {\n  content: "oops\n}\n.cdp-y { color: #ff0000; }`;
+    const f = scanChapterCss([{ path: "a.css", css }]);
+    expect(f.filter((x) => x.rule === "禁硬编码色").map((x) => x.location)).toEqual(["a.css:4"]);
   });
 });

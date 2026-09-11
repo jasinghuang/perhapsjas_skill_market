@@ -1,0 +1,11 @@
+/* bad-string-comment-leak.css：门禁负样本——违反 #2 禁硬编码色（blocker），K-12 注释态泄漏。
+ * `content: "/*"` 里的 `/*` 只是字符串字面量，不是注释开头——若它误置注释态（行级旧管线的
+ * openers/closers 逐行计数即如此），紧随其后的 color: #ff0000 会被整体吞掉（漏检）。
+ * 本夹具钉死的正是这条：content 里的字符串不得置注释态，紧随其后的 color: #ff0000
+ * 必须仍被报（fixtures.test.ts 按夹具内容现算两行行号：唯一 finding 定位 = color 行）。
+ * 另一面：字符串内容本身不参与结构化判定（`content: "gold"` 不是裸色声明，见 good/）。 */
+
+.bad-badge::after {
+  content: "/*";
+  color: #ff0000;
+}

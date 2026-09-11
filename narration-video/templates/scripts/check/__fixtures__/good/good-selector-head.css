@@ -1,0 +1,24 @@
+/* good-selector-head.css：false-positive 夹具——规则头/At 规则前导不参与声明判定
+ * （scanChapterCss 零 finding）。pink / purple / orange / gold 全在 named-colors 147 词表内：
+ * 规则头一旦进入结构化判定即 blocker 误报（前导剥离 + 非声明段跳过两条语义等价保留的实证）。
+ * 覆盖：多行选择器表、:hover 伪类、id 选择器、@media 嵌套（括号内的冒号不是声明冒号）。 */
+
+.pink-card,
+.purple-card:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+#gold {
+  color: var(--ink);
+}
+
+.orange-bar {
+  color: var(--ink);
+}
+
+@media (min-width: 900px) {
+  .pink-card {
+    color: var(--text);
+  }
+}

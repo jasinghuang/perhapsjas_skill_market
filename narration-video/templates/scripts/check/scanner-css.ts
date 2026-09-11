@@ -15,12 +15,28 @@
  *   最小字号     warning  V4    font-size 裸 px <24（低于 --t-label 24px 档）
  *   间距成员     warning  #5b   margin/padding/gap 裸 px ∉ tokens.css --space 集合（0 豁免）
  *
- * 行预处理管线（评审修复）：
- *   1) 注释剥离状态机（/*…*\/ 跨行追踪）——注释内 pink/font-family/font-size 不误报；
- *   2) 声明区切片只取最后一个 `{` 之后——单行规则 `.x { color: #f00; }` 不漏检，
- *      `.purple-card {`（无声明）→ 空串安全；
- *   3) 色值判定前再剥离 var() 引用与 url() 内容；无冒号行（选择器/注释/At 规则头）跳过色值判定。
- * emoji 检查单独用原文行（brief 负样本钉死注释内 emoji 仍报）。
+ * 预处理管线（M3b 门禁可信度收紧——行级预处理 → 声明级状态机，K-10 / K-12）：
+ *   1) tokenizeCss 单遍状态机（`inComment` / `inString`（`\` 转义）/ `parenDepth`）把源码
+ *      切成声明段：`/*` 仅在非字符串非注释时开注释、`*\/` 仅注释态闭合——字符串内的 `/*`
+ *      （K-12）不再把后续声明吞进注释态；注释内容整体丢弃。字符串内的裸换行即终止字符串
+ *      （CSS bad-string：字符串不得含有裸换行）——未闭合引号只吞到行末，不吞后续声明
+ *      （行级旧管线下后续行照常检查，此处语义等价保留：抑制泄漏不得越过一行）。
+ *   2) `{` `}` `;`（parenDepth === 0）皆为 token 边界（`{` 为边界 ⇒ 段内不含规则头选择器）；
+ *      每条声明 = 一个 token 段的文本 + 起始行。行号在扫描时逐字符跟随（首个非空白字符入段
+ *      时的当前行——注释内换行同样计数），不做"文本内换行重数"：注释字符整体丢弃，重数会
+ *      把注释里的换行漏掉、把声明误标到注释行上。跨行声明值（K-10）整体参与判定，
+ *      违规落声明起始行而非续行（stylelint 同款）。
+ *   3) 前导剥离（等价现网 lastBrace 切片）：段终止于 `{` 即规则头/At 规则前导——
+ *      "丢弃最后一个顶层 `{` 之前的文本"整段丢弃（不产出声明），判定式即
+ *      `顶层 : 的下标 > 该段最后一个顶层 { 的下标`。单行规则 `.x { color: #f00; }`
+ *      不漏检，`.purple-card {` 不误报。
+ *   4) 非声明段跳过（等价现网 includes(":") 弱门，但由分词器判定）：段内顶层 `:`
+ *      （括号/字符串外）不存在 → 不产出声明——`@media (min-width: 900px)` 的冒号在
+ *      括号内，选择器/At 规则头因此不参与结构化判定（named-colors 147 词表含
+ *      purple/pink/orange/gold，规则头一旦进入判定即误报）。
+ *   5) 结构化判定前剥离字符串字面量（内容保留在声明文本里但不参与判定）、var() 引用
+ *      （token 化豁免）与 url() 内容（防 pink.png 类资源名误报）。
+ * emoji 检查不走分词管线——原文行上判（注释内 emoji 仍计，负样本钉死）。
  *
  * 字阶/间距集合从 src/theme/tokens.css 解析（Ruling P4-1——与主题同源，主题改档门禁
  * 自动跟随）。Ruling P4-6（T6 落地）：弃 `?raw` 改 node:fs 读取——tsx（node 环境）
@@ -39,27 +55,8 @@ import { MIN_FONT_PX, SPACE_SCALE, SPACE_SCALE_LABEL, TYPE_SCALE, TYPE_SCALE_LAB
 
 const VAR_RE = /var\([^)]*\)/g; // 剥离 var() 引用段——token 化豁免
 const URL_RE = /url\([^)]*\)/g; // 剥离 url() 内容——防 pink.png 类资源名误报
-const COMMENT_RE = /\/\*[\s\S]*?(?:\*\/|$)/g; // 行内注释剥离（未闭合 `/*` 剥到行尾）
-
-/** 注释剥离状态机：`/*…*\/` 跨行追踪，注释行整体返回空串（emoji 检查不走此管线）。 */
-interface CommentState {
-  on: boolean;
-}
-
-function stripCommentLine(line: string, state: CommentState): string {
-  let s = line;
-  if (state.on) {
-    const end = s.indexOf("*/");
-    if (end === -1) return ""; // 整行仍在注释中（状态保持 on）
-    s = s.slice(end + 2);
-    state.on = false;
-  }
-  const stripped = s.replace(COMMENT_RE, "");
-  const openers = (s.match(/\/\*/g) ?? []).length;
-  const closers = (s.match(/\*\//g) ?? []).length;
-  if (openers > closers) state.on = true;
-  return stripped;
-}
+// 字符串字面量（含未闭合到行尾/文件尾的容错形态）——内容保留在声明文本里但不参与结构化判定
+const STRING_LITERAL_RE = /"(?:[^"\\]|\\.)*(?:"|$)|'(?:[^'\\]|\\.)*(?:'|$)/g;
 const WHITE_BLACK_HEX_RE = /#(?:fff|ffffff|000|000000)\b/gi; // white/black 豁免（hex 形式）
 const HEX_RE_G = /#[0-9a-fA-F]{3,8}\b/g; // match/matchAll 用（全局）
 const RGB_RE = /rgba?\(/;
@@ -130,6 +127,142 @@ function purplePinkHuesOnLine(line: string): number[] {
   );
 }
 
+// ── 声明级分词器（M3b：K-10 跨行值 / K-12 字符串内 `/*`） ──
+
+/** 一条声明段：text = 注释已整体丢弃、跨行折叠为空格、首尾修剪的声明文本。 */
+export interface CssDeclaration {
+  text: string;
+  /** 声明起始行（1 起；该声明首个非空白字符所在行）——Finding.location 的 `:N` 取此行。 */
+  line: number;
+}
+
+/**
+ * 段内顶层标记（顶层 = 非字符串、括号外）：最后一个 `{` 与首个 `:` 的下标（-1 = 无）。
+ * 前导剥离判定的依据（等价现网 `lastBrace` 切片）：字符串/括号内的 `{` 不参与
+ * （防 `content: "{"` 被误切），`@media (min-width: 900px)` 的冒号在括号内亦不计。
+ */
+function topLevelMarkers(seg: string): { brace: number; colon: number } {
+  let brace = -1;
+  let colon = -1;
+  let depth = 0;
+  let quote = "";
+  for (let i = 0; i < seg.length; i++) {
+    const ch = seg[i];
+    if (quote !== "") {
+      if (ch === "\\") i++; // 转义：跳过被转义字符
+      else if (ch === quote) quote = "";
+      continue;
+    }
+    if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === "(") depth++;
+    else if (ch === ")") {
+      if (depth > 0) depth--;
+    } else if (depth === 0) {
+      if (ch === "{") brace = i;
+      else if (ch === ":" && colon === -1) colon = i;
+    }
+  }
+  return { brace, colon };
+}
+
+/**
+ * tokenizeCss：单遍状态机把 CSS 源码切成声明段（M3b）。
+ *
+ * 状态：`inComment` / `inString`（`"` `'`，`\` 转义；裸换行即终止 = CSS bad-string）/
+ * `parenDepth`；`/*` 仅在非字符串非注释时开注释，`*\/` 仅注释态生效。`{` `}` `;`
+ * 在 parenDepth === 0 时皆为 token 边界。每段产出一条声明的条件（等价现网
+ * "前导剥离 + includes(':') 弱门"两条语义）：
+ *   ① 段终止于 `{` 者（规则头/At 规则前导）被前导剥离整段丢弃（补入的 `{` 是该段
+ *      最后一个顶层 `{`，顶层 `:` 必在它之前 ⇒ 判定式 `colon > brace` 不成立）；
+ *   ② 段内顶层 `:` 不存在 → 非声明段，跳过一切结构化判定。
+ * 行号 = 该声明首个非空白字符所在行（跨行值归属声明起始行，stylelint 同款）：扫描时
+ * 逐字符跟随（注释内换行计数），不在段文本上重数换行——注释字符已丢弃，重数会漏计。
+ */
+export function tokenizeCss(css: string): CssDeclaration[] {
+  const decls: CssDeclaration[] = [];
+  let text = ""; // 当前 token 段（注释已丢弃；字符串内容保留）
+  let line = 1; // 当前扫描位置所在行
+  let firstLine = 0; // 当前段首个非空白字符所在行（0 = 段内尚无非空白字符）
+  let inComment = false;
+  let quote = ""; // 非空 = 字符串态（值为当前引号）
+  let parenDepth = 0;
+
+  /** 入段：记录首个非空白字符的行（声明归属行的唯一真相源），再追加字符。 */
+  const put = (ch: string): void => {
+    if (firstLine === 0 && !/\s/.test(ch)) firstLine = line;
+    text += ch;
+  };
+
+  const flush = (terminator: string): void => {
+    // 前导剥离：`{` 是 token 边界，段终止于 `{` 即规则头/At 规则前导——把段终止符一并
+    // 计入"最后一个顶层 `{`"，该段整体丢弃（等价现网 lastBrace 切片）。
+    const seg = terminator === "{" ? `${text}{` : text;
+    const { brace, colon } = topLevelMarkers(seg);
+    // 非声明段跳过：段内无顶层 `:`（或冒号落在被丢弃的前导内）→ 不产出声明。
+    // 产出声明时必有 brace === -1（分词器保证顶层 `{` 一律是边界）⇒ 声明文本即整段文本。
+    if (colon > brace && firstLine > 0) {
+      decls.push({ text: text.replace(/\s+/g, " ").trim(), line: firstLine });
+    }
+    text = "";
+    firstLine = 0;
+  };
+
+  for (let i = 0; i < css.length; i++) {
+    const ch = css[i];
+    if (inComment) {
+      if (ch === "*" && css[i + 1] === "/") {
+        inComment = false;
+        i++;
+      } else if (ch === "\n") line++;
+      continue; // 注释内容整体丢弃
+    }
+    if (quote !== "") {
+      put(ch); // 字符串内容保留在声明文本里（结构化判定前剥离）
+      if (ch === "\\" && css[i + 1] !== undefined) {
+        if (css[i + 1] === "\n") line++;
+        put(css[i + 1]); // 转义序列整体入文本（`\` + 换行 = 续行，字符串态保持）
+        i++;
+      } else if (ch === quote) {
+        quote = "";
+      } else if (ch === "\n") {
+        // CSS 字符串不得含裸换行（bad-string）：未闭合引号在行末终止——抑制泄漏
+        // 不越过一行，后续声明照常检查（行级旧管线同款边界）。
+        line++;
+        quote = "";
+      }
+      continue;
+    }
+    if (ch === "/" && css[i + 1] === "*") {
+      inComment = true; // 仅在非字符串非注释态开注释（K-12）
+      i++;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      put(ch);
+      continue;
+    }
+    if (ch === "(") {
+      parenDepth++;
+      put(ch);
+      continue;
+    }
+    if (ch === ")") {
+      if (parenDepth > 0) parenDepth--;
+      put(ch);
+      continue;
+    }
+    if (parenDepth === 0 && (ch === "{" || ch === "}" || ch === ";")) {
+      flush(ch); // token 边界
+      continue;
+    }
+    if (ch === "\n") line++;
+    put(ch);
+  }
+  flush(""); // 文件尾残余段
+  return decls;
+}
+
 // ── 扫描 ──
 
 function pushFinding(
@@ -142,46 +275,40 @@ function pushFinding(
   findings.push({ rule, severity, location, message });
 }
 
-function scanLine(
-  path: string,
-  lineNo: number,
-  rawLine: string,
-  declLine: string,
-  findings: Finding[],
-): void {
-  const loc = `${path}:${lineNo}`;
+function scanDeclaration(path: string, decl: CssDeclaration, findings: Finding[]): void {
+  const loc = `${path}:${decl.line}`;
 
-  // 声明区切片（评审修复）：只取最后一个 `{` 之后——单行规则 `.x { color: #f00; }`
-  // 的声明不能被 `}` 切掉；`.purple-card {`（无声明）→ 空串安全。
-  const lastBrace = declLine.lastIndexOf("{");
-  const declPart = lastBrace >= 0 ? declLine.slice(lastBrace + 1) : declLine;
-  // 剥离 var() 引用（token 化豁免）与 url() 内容（防 pink.png 类资源名误报）
-  const colorLine = declPart.replace(VAR_RE, "").replace(URL_RE, "");
+  // 声明段文本：分词器已保证段内有顶层 `:` 且无规则头（非声明段不进入本函数）。
+  const declPart = decl.text;
+  // 结构化判定前剥离字符串字面量（内容保留在声明文本里但不参与判定）、var() 引用
+  // （token 化豁免）与 url() 内容（防 pink.png 类资源名误报）
+  const structPart = declPart.replace(STRING_LITERAL_RE, "");
+  const colorLine = structPart.replace(VAR_RE, "").replace(URL_RE, "");
 
   // #2 禁硬编码色（white/black 豁免：命名 + hex 形式）。
-  // 无冒号行 = 非声明行（注释/选择器/At 规则头），跳过——防 .purple-card / #gold 误报（评审修复）。
+  // 无冒号段 = 非声明段（注释/选择器/At 规则头），已由 tokenizeCss 挡在门外——
+  // 防 .purple-card / #gold 误报（评审修复语义等价保留）。
   const noWhiteBlack = colorLine.replace(WHITE_BLACK_HEX_RE, "");
   if (
-    colorLine.includes(":") &&
-    (noWhiteBlack.match(HEX_RE_G) !== null ||
-      RGB_RE.test(colorLine) ||
-      HSL_RE.test(colorLine) ||
-      NAMED_COLOR_RE.test(colorLine))
+    noWhiteBlack.match(HEX_RE_G) !== null ||
+    RGB_RE.test(colorLine) ||
+    HSL_RE.test(colorLine) ||
+    NAMED_COLOR_RE.test(colorLine)
   ) {
     pushFinding(findings, "禁硬编码色", "blocker", loc, "裸色值（须走 var(--*) token，white/black 豁免）");
   }
 
   // #3 禁硬编码字体
-  if (FONT_RE.test(declPart)) {
+  if (FONT_RE.test(structPart)) {
     pushFinding(findings, "禁硬编码字体", "blocker", loc, "裸 font-family（须走 var(--font-*)）");
   }
 
   // #4 禁裸动画时长（CSS 部分）：长属性 + animation:/transition: 缩写值内时长（终审 I-1）
-  if (DUR_RE.test(declPart) || TRANSITION_DUR_RE.test(declPart)) {
+  if (DUR_RE.test(structPart) || TRANSITION_DUR_RE.test(structPart)) {
     pushFinding(findings, "禁裸动画时长", "blocker", loc, "裸动画时长（须走 var(--dur-*)）");
   }
   // 缩写值内时长：var() 引用剥离后仍含时间即报（token 化时长豁免）
-  const noVarDecl = declPart.replace(VAR_RE, "");
+  const noVarDecl = structPart.replace(VAR_RE, "");
   for (const m of noVarDecl.matchAll(SHORTHAND_ANIM_RE)) {
     if (SHORTHAND_TIME_RE.test(m[1])) {
       pushFinding(findings, "禁裸动画时长", "blocker", loc, "裸动画时长（须走 var(--dur-*)）");
@@ -201,7 +328,7 @@ function scanLine(
   }
 
   // #6 禁裸紫粉渐变（token 化渐变豁免：var() 已剥离，手写渐变仅对裸色做色相检测）
-  if (GRADIENT_RE.test(declPart)) {
+  if (GRADIENT_RE.test(structPart)) {
     const hues = purplePinkHuesOnLine(colorLine);
     if (hues.length > 0) {
       pushFinding(
@@ -214,13 +341,10 @@ function scanLine(
     }
   }
 
-  // #6b 禁 emoji（Unicode Extended_Pictographic 范围；判原文——注释内 emoji 仍计，负样本钉死）
-  if (EMOJI_RE.test(rawLine)) {
-    pushFinding(findings, "禁emoji", "warning", loc, "出现 emoji 字符（Unicode Extended_Pictographic）");
-  }
+  // #6b 禁 emoji 不在此函数——不走分词管线，原文行上判（见 scanChapterCss）
 
   // #5 字阶成员 + V4 最小字号（合并判断：<24 → 最小字号；≥24 且 ∉ 字阶 → 字阶成员）
-  for (const m of declPart.matchAll(FONT_SIZE_RE)) {
+  for (const m of structPart.matchAll(FONT_SIZE_RE)) {
     const v = parseFloat(m[1]);
     if (v < MIN_FONT_PX) {
       pushFinding(findings, "最小字号", "warning", loc, `字号 ${v}px 低于最小字号 ${MIN_FONT_PX}px（V4）`);
@@ -230,7 +354,7 @@ function scanLine(
   }
 
   // #5b 间距成员（margin/padding/gap 裸 px 须 ∈ --space 集合；0 豁免）
-  for (const m of declPart.matchAll(SPACING_DECL_RE)) {
+  for (const m of structPart.matchAll(SPACING_DECL_RE)) {
     for (const p of m[2].matchAll(PX_VALUE_RE)) {
       const v = Math.abs(parseFloat(p[1]));
       if (v === 0) continue;
@@ -253,10 +377,20 @@ export function scanChapterCss(cssFiles: Array<{ path: string; css: string }>): 
   }
   const findings: Finding[] = [];
   for (const { path, css } of cssFiles) {
-    const commentState: CommentState = { on: false };
-    const lines = css.split("\n");
-    lines.forEach((line, i) => {
-      scanLine(path, i + 1, line, stripCommentLine(line, commentState), findings);
+    // 声明级状态机：注释/字符串/括号三态 + token 边界切段（K-10 / K-12）
+    for (const decl of tokenizeCss(css)) scanDeclaration(path, decl, findings);
+    // #6b 禁 emoji（Unicode Extended_Pictographic 范围）：不走分词管线——原文行上判，
+    // 注释内 emoji 仍计、定位落 emoji 所在行（既有负样本钉死，M3b 保持不变）。
+    css.split("\n").forEach((rawLine, i) => {
+      if (EMOJI_RE.test(rawLine)) {
+        pushFinding(
+          findings,
+          "禁emoji",
+          "warning",
+          `${path}:${i + 1}`,
+          "出现 emoji 字符（Unicode Extended_Pictographic）",
+        );
+      }
     });
   }
   return findings;

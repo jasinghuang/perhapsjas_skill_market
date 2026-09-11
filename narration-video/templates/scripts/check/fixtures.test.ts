@@ -61,6 +61,17 @@ function narrationsFrom(file: string): string[] {
 
 const NOOP = (() => null) as unknown as ChapterDef["Component"];
 
+/**
+ * 夹具正文行（剔除头注释块的行——头注释里写着规则说明与示例片段，会与正文误匹配）。
+ * M3b 两条夹具断言按夹具内容现算行号（不写死数字，改夹具头注释不至于假红）。
+ */
+function codeLinesOf(text: string): Array<{ line: number; code: string }> {
+  return text
+    .split("\n")
+    .map((raw, i) => ({ line: i + 1, code: raw.trim() }))
+    .filter((l) => !l.code.startsWith("/*") && !l.code.startsWith("*"));
+}
+
 function chapter(id: string, folder: string, narrations: string[]): ChapterDef {
   return { id, folder, steps: narrations.length, narrations, Component: NOOP };
 }
@@ -122,6 +133,10 @@ describe("bad/ 负样本：逐文件至少一条 blocker", () => {
     { file: "bad/bad-color.css", rules: ["禁硬编码色", "禁硬编码字体", "禁裸动画时长"] },
     // #6 裸紫粉渐变（warning）+ #2 裸色（blocker——同文件必中 blocker 的构造）
     { file: "bad/bad-gradient.css", rules: ["禁硬编码色", "禁裸紫粉渐变"] },
+    // #2 裸色（M3b K-10：裸 rgba 在声明续行——行级预处理逃逸，声明级分词器抓到）
+    { file: "bad/bad-cross-line-value.css", rules: ["禁硬编码色"] },
+    // #2 裸色（M3b K-12：字符串内 `/*` 不置注释态——字符串之后的裸色必须仍被报）
+    { file: "bad/bad-string-comment-leak.css", rules: ["禁硬编码色"] },
   ];
 
   for (const { file, rules } of BAD_CSS) {
@@ -139,6 +154,34 @@ describe("bad/ 负样本：逐文件至少一条 blocker", () => {
       expect(r.every((x) => x.location.startsWith(`${f.path}:`))).toBe(true);
     });
   }
+
+  it("bad/bad-cross-line-value.css → K-10 跨行声明的裸色落在声明起始行（续行不逃逸）", () => {
+    const f = readFixture("bad/bad-cross-line-value.css");
+    const r = scanChapterCss([{ path: f.path, css: f.text }]);
+    // 两行行号按夹具正文现算（不写死数字）：裸色在 box-shadow 的续行，定位归声明起始行
+    const lines = codeLinesOf(f.text);
+    const declLine = lines.find((l) => l.code.startsWith("box-shadow:"))!.line;
+    const valueLine = lines.find((l) => l.code.includes("rgba("))!.line;
+    expect(valueLine).toBeGreaterThan(declLine); // 夹具前提：跨行值确实不在声明起始行
+    const hits = r.filter((x) => x.rule === "禁硬编码色");
+    expect(hits).toHaveLength(1);
+    expect(hits[0].location).toBe(`${f.path}:${declLine}`);
+    expect(hits[0].severity).toBe("blocker");
+  });
+
+  it("bad/bad-string-comment-leak.css → K-12 字符串内 `/*` 不置注释态（后续裸色仍被报）", () => {
+    const f = readFixture("bad/bad-string-comment-leak.css");
+    const r = scanChapterCss([{ path: f.path, css: f.text }]);
+    // 两行行号按夹具正文现算（不写死数字）：字符串行零 finding、字符串之后的裸色被报
+    const lines = codeLinesOf(f.text);
+    const stringLine = lines.find((l) => l.code.startsWith('content: "/*"'))!.line;
+    const colorLine = lines.find((l) => l.code.startsWith("color: #ff0000"))!.line;
+    expect(stringLine).toBeGreaterThan(0);
+    expect(colorLine).toBeGreaterThan(stringLine);
+    // 唯一 finding 落在 color 行——字符串行若被误判为注释开头，这条会整条消失（漏检）
+    expect(r.map((x) => x.location)).toEqual([`${f.path}:${colorLine}`]);
+    expect(r.some((x) => x.location === `${f.path}:${stringLine}`)).toBe(false);
+  });
 
   it("bad/bad-gradient.css → 禁裸紫粉渐变 severity 为 warning（规则档位钉死）", () => {
     const f = readFixture("bad/bad-gradient.css");
@@ -273,6 +316,16 @@ describe("good/ false-positive 集：零 finding 护栏", () => {
     expect(scanChapterCss([{ path: f.path, css: f.text }])).toEqual([]);
   });
 
+  it("good/good-selector-head.css → 规则头（pink/purple/orange/gold + :hover + @media 前导）零 finding", () => {
+    const f = readFixture("good/good-selector-head.css");
+    expect(scanChapterCss([{ path: f.path, css: f.text }])).toEqual([]);
+  });
+
+  it('good/good-string-literal.css → 字符串内的 `/*` 与 content: "gold" 零 finding（K-12 反面）', () => {
+    const f = readFixture("good/good-string-literal.css");
+    expect(scanChapterCss([{ path: f.path, css: f.text }])).toEqual([]);
+  });
+
   it("good/good-narrations.txt → 正常口播句 + ？！结尾（V3 豁免）零 finding", () => {
     const narrations = narrationsFrom("good/good-narrations.txt");
     expect(
@@ -310,7 +363,12 @@ describe("夹具清单同步护栏", () => {
   }
 
   it("bad/ 夹具文件与本测试预期清单一致（防新增夹具漏断言）", () => {
-    expect(listFiles("bad", ".css")).toEqual(["bad-color.css", "bad-gradient.css"]);
+    expect(listFiles("bad", ".css")).toEqual([
+      "bad-color.css",
+      "bad-cross-line-value.css",
+      "bad-gradient.css",
+      "bad-string-comment-leak.css",
+    ]);
     expect(listFiles("bad", ".txt")).toEqual([
       "bad-echart-option.txt",
       "bad-text.txt",
@@ -320,7 +378,11 @@ describe("夹具清单同步护栏", () => {
   });
 
   it("good/ 夹具文件与本测试预期清单一致（防新增夹具漏断言）", () => {
-    expect(listFiles("good", ".css")).toEqual(["good-chapter.css"]);
+    expect(listFiles("good", ".css")).toEqual([
+      "good-chapter.css",
+      "good-selector-head.css",
+      "good-string-literal.css",
+    ]);
     expect(listFiles("good", ".txt")).toEqual([
       "good-chapter.txt",
       "good-echart-option.txt",
