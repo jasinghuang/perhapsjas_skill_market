@@ -28,6 +28,7 @@ import type { Browser, Page } from "playwright";
 import {
   DEFAULT_VIEWPORT,
   READY_TIMEOUT_MS,
+  assertCursorStill,
   chromiumMissingError,
   isMissingBrowserError,
   shotPath,
@@ -231,7 +232,10 @@ export async function verifySequential(
     const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
     const page = await context.newPage();
     await openPage(page, url);
-    // 起始游标复位（全新 context 本应是 (0,0)；防御 localStorage 游标恢复带来的起点漂移）
+    // 起始游标复位（全新 context 本应是 (0,0)；防御 localStorage 游标恢复带来的起点漂移）。
+    // 注意（评审 F6）：起点帧 (0,0) 无"顺序来路"可走——它的"顺序路径"就是这次 jumpTo + 页面
+    // 初始 mount 的产出，故该帧两路径的比对强度**等同于参考图自身**（不给顺序推进额外证据）。
+    // 真正带键盘推进信息的比对从 step ≥ 1 起（多步章则从第 2 帧起）。
     await page.evaluate(() => window.__presentation!.jumpTo(0, 0));
     await readyWithTimeout(page, "起始游标");
 
@@ -272,6 +276,10 @@ export async function verifySequential(
       }
 
       const seqBytes = await page.screenshot();
+      // 截图后回读（评审 F1）：自驱推进若在截图窗口抢先，这张图是别的步 → 会与参考图不同，
+      // 但归因是"页面自驱推进"而非"顺序/独立 mount 有差"（假红源头）。故先回读再比对。
+      assertCursorStill(spec, await page.evaluate(() => window.__presentation!.getState()));
+
       const refPath = shotPath(opts.referenceDir, chapterId, spec.step);
       if (!fs.existsSync(refPath)) {
         throw new Error(

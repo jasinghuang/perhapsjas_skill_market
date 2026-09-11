@@ -133,6 +133,33 @@ describe("子进程集成：png import 章节源经 tsx 不崩", () => {
     expect(r.stdout).toContain("STUB_OK 0 true");
   });
 
+  it("集成：子进程只 import(\"playwright\") 不 launch 也不崩（评审 F5：钉住 CJS require JSON 路径）", () => {
+    // 本次修复的实撞面：依赖内部 require("../package.json")（经 tsx 转 ESM 后走 Node 的 JSON
+    // 模块路径）会被旧钩子的 JS 源码包装喂给 JSON 解析器 → "…is not valid JSON"。
+    // 只 import 不 launch：不需要浏览器二进制（CI 无缓存也跑得动），覆盖的正是那条加载路径。
+    const d = makeTmp("loader-hooks-pw-");
+    const childPath = path.join(d, "child-playwright.ts");
+    fs.writeFileSync(
+      childPath,
+      [
+        "const hooksPath = process.argv[2]!;",
+        "const playwrightEntry = process.argv[3]!;",
+        "void (async () => {",
+        "  await import(hooksPath); // 注册资产/样式钩子（副作用）",
+        "  const pw = (await import(playwrightEntry)) as { chromium?: unknown };",
+        "  console.log(`PW_OK ${typeof pw.chromium}`);",
+        "})();",
+      ].join("\n"),
+    );
+    // 夹具在 os.tmpdir()，裸 "playwright" 解析不到模板依赖 → 直接给 ESM 入口绝对路径
+    // （import 链与 import("playwright") 同源：playwright → playwright-core → 其 package.json）
+    const playwrightEntry = path.join(TEMPLATE_ROOT, "node_modules", "playwright", "index.mjs");
+    const r = runTsx(childPath, [HOOKS_MODULE, playwrightEntry]);
+    expect(r.stderr).not.toContain("is not valid JSON");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("PW_OK object");
+  });
+
   it("对照：无钩子子进程同源崩溃 ERR_UNKNOWN_FILE_EXTENSION（钉住测试力度）", () => {
     const d = makeTmp("loader-hooks-int-");
     fs.writeFileSync(path.join(d, "package.json"), '{"type":"module"}');

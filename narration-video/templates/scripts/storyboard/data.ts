@@ -184,6 +184,22 @@ export function normalizeDurations(raw: unknown): AudioDurations | null {
   );
 }
 
+/**
+ * 根形态守卫（评审 F4）：timing.json 顶层须为对象。
+ * 少了这道守卫，`timing?.dwell` 这类属性读取对数组/字符串/数字都静默返回 undefined（全默认），
+ * 坏文件被当成"没写"——与 dwell 值非法的 throw 口径不一致。
+ */
+function normalizeTiming(raw: unknown, chapterId: string): TimingFile | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error(
+      `分镜数据：${chapterId}/timing.json 顶层须为对象（dwell / animation / ambient），` +
+        `实为 ${JSON.stringify(raw)}——空配置写 {} 而不是 null/数组`,
+    );
+  }
+  return raw as TimingFile;
+}
+
 /** 章节 steps 与 narrations 失同步 = 帧集合定义本身坏了，宁炸不静默少帧。 */
 function assertChapterSync(c: StoryboardChapter, index: number): void {
   if (!Number.isInteger(c.steps) || c.steps < 0) {
@@ -341,7 +357,7 @@ export function buildStoryboardData(input: BuildStoryboardInput): StoryboardData
 
   input.chapters.forEach((c, ci) => {
     assertChapterSync(c, ci);
-    const timing = input.timings[c.id];
+    const timing = normalizeTiming(input.timings[c.id], c.id);
     warnOrphanKeys(timing, c, warnings);
     const audioMsOfChapter = audioByChapter[ci];
 
@@ -366,7 +382,19 @@ export function buildStoryboardData(input: BuildStoryboardInput): StoryboardData
     });
   });
 
-  return { frames, expectedFrames: frames.length, findings: [], warnings };
+  // 评审 F3：expectedFrames 取 **manifest 声明值**（Σ chapters.steps）而非 frames.length——
+  // 前者独立于构建路径，门禁拿两者交叉校验才有意义（|frames| 是构建结果，拿它自比是恒真死分支）。
+  const expectedFrames = input.chapters.reduce((n, c) => n + c.steps, 0);
+  return { frames, expectedFrames, findings: [], warnings };
+}
+
+/** 免比对集合（评审 F2）：只收 `gate === "ambient"` 的步——声明**且**计数 > 0。
+ *  "声明了但计数为 0"的过期声明步**照常参与**字节比对（门禁自己标了"声明可能过期"，不该白送豁免）。
+ *  键格式 `${chapter}:${step}` 与 verify-sequential 的 `ambientKey` 一致（单测两侧对钉）。 */
+export function ambientExemptKeys(data: StoryboardData): Set<string> {
+  return new Set(
+    data.frames.filter((f) => f.gate === "ambient").map((f) => `${f.chapter}:${f.step}`),
+  );
 }
 
 // ── 分镜门禁（Ruling M4-2） ──
@@ -412,11 +440,15 @@ export function gateStoryboard(
   const extra = captured
     .filter((c) => !known.has(cursorKey(c.chapter, c.step)))
     .map((c) => `章节 ${c.chapter} 第 ${c.step} 步`);
+  // 构建结果 vs manifest 声明值的交叉校验（评审 F3：expectedFrames 取 Σ steps，不是 frames.length
+  // ——否则这里是恒真的死分支）。触发的现实面：将来改动构建路径导致某步被静默跳过。
   if (data.frames.length !== data.expectedFrames) {
     findings.push({
       severity: "blocker",
       location: "分镜帧集合",
-      message: `帧集合 ${data.frames.length} ≠ 总 step 数 ${data.expectedFrames}——数据组装异常（不该发生）`,
+      message:
+        `帧集合 ${data.frames.length} ≠ 总 step 数 ${data.expectedFrames}（Σ chapters.steps）` +
+        `——构建出的帧与 manifest 声明不一致（组装异常，宁炸不静默少帧）`,
     });
   }
   if (missing.length > 0 || extra.length > 0 || captured.length !== data.expectedFrames) {

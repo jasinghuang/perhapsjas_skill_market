@@ -7,13 +7,19 @@
 
 import { describe, expect, it } from "vitest";
 import { shotPath } from "./shot/capture";
-import { compareShotBytes, summarizeVerification, type VerifyVerdict } from "./shot/verify-sequential";
+import {
+  ambientKey,
+  compareShotBytes,
+  summarizeVerification,
+  type VerifyVerdict,
+} from "./shot/verify-sequential";
 import {
   AUDIO_MISSING_TEXT,
   SILENT_STEP_TEXT,
   STEP_MS_MISSING_TEXT,
   THEME_SNAPSHOT_NOTE,
   VOCAB_MISSING_TEXT,
+  ambientExemptKeys,
   buildStoryboardData,
   gateStoryboard,
   type StoryboardChapter,
@@ -186,6 +192,23 @@ describe("buildStoryboardData：帧集合与字段计算", () => {
     expect(() => build({ timings: { example: stringDwell } })).toThrow(/dwell/);
     expect(() => build({ chapters: [{ ...CHAPTERS[0], steps: 9 }] })).toThrow(/steps/);
   });
+
+  it("timing.json 顶层非对象（数组 / 字符串 / 数字 / null）→ throw（评审 F4）", () => {
+    // 少这道守卫时 `timing?.dwell` 对它们全部静默 undefined（全默认），坏文件被当"没写"
+    for (const bad of [[], "nope", 3, null, ["dwell"]]) {
+      expect(() =>
+        build({ timings: { example: bad as unknown as TimingFile } }),
+      ).toThrow(/timing\.json/);
+    }
+    // 合法空配置仍是"没写"（不 throw）
+    expect(() => build({ timings: { example: {} } })).not.toThrow();
+  });
+
+  it("expectedFrames = Σ chapters.steps（manifest 声明值，独立于 frames 构建结果）", () => {
+    const data = build();
+    expect(data.expectedFrames).toBe(CHAPTERS.reduce((n, c) => n + c.steps, 0));
+    expect(data.expectedFrames).toBe(data.frames.length);
+  });
 });
 
 // ── 分镜门禁（Ruling M4-2 氛围豁免） ──
@@ -271,6 +294,23 @@ describe("gateStoryboard：零动画门禁 + 帧数校验 + 氛围豁免", () =>
     expect(blockers).toHaveLength(1);
     expect(blockers[0].message).toContain("章节 1 第 1 步");
     expect(blockers[0].message).toContain("章节 9 第 9 步");
+  });
+
+  it("免比对集合只收 gate=ambient 的步（评审 F2：过期声明不白送豁免），键格式与 verify 一致", () => {
+    // step 0 声明 ambient 且计数 1 → gate=ambient；step 1 声明了 ambient 但计数 0（过期）→ gate=pass
+    const data = build({
+      timings: {
+        example: { ambient: { "0": "KenBurns 背景缓推", "1": "呼吸微动（声明过期）" } },
+      },
+    });
+    const gated = gateStoryboard(
+      data,
+      counts([0, 0, 1], [0, 1, 0], [0, 2, 0], [1, 0, 0], [1, 1, 0]),
+    );
+    expect(gated.frames[1].ambient).not.toBeNull(); // 声明还在（note 仍上帧）
+    expect(gated.frames[1].gate).toBe("pass"); // 但没豁免资格
+    expect(ambientExemptKeys(gated)).toEqual(new Set([ambientKey(0, 0)]));
+    expect(ambientExemptKeys(gated).has(ambientKey(0, 1))).toBe(false);
   });
 
   it("reset：门禁不就地改入参（返回新帧对象）", () => {

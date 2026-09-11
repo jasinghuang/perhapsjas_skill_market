@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertCursorMatch,
+  assertCursorStill,
   captureSteps,
   chromiumMissingError,
   expandSpecs,
@@ -83,6 +84,25 @@ describe("assertCursorMatch：回读校验（F2）", () => {
     // 章内步越界同样当场暴露
     expect(() => assertCursorMatch({ chapter: 0, step: 9 }, { chapter: 0, step: 2 })).toThrow(
       /游标回读不符/,
+    );
+  });
+});
+
+describe("assertCursorStill：截图后回读（评审 F1——归因'页面自驱推进'而非分镜内容差异）", () => {
+  it("仍停在目标步 → 放行", () => {
+    expect(() => assertCursorStill({ chapter: 0, step: 2 }, { chapter: 0, step: 2 })).not.toThrow();
+  });
+
+  it("被自驱推进带走 → throw，且文案归因自动推进（不误报成 clamp / 顺序-独立 mount 有差）", () => {
+    expect(() => assertCursorStill({ chapter: 0, step: 1 }, { chapter: 0, step: 2 })).toThrow(
+      /截图后游标已被带走/,
+    );
+    expect(() => assertCursorStill({ chapter: 0, step: 1 }, { chapter: 0, step: 2 })).toThrow(
+      /页面自驱推进抢先/,
+    );
+    // 不误归因：F2 的 clamp 文案与 F1 的自动推进文案各说各的
+    expect(() => assertCursorStill({ chapter: 0, step: 1 }, { chapter: 0, step: 2 })).not.toThrow(
+      /静默 clamp/,
     );
   });
 });

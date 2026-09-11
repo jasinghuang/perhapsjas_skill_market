@@ -26,6 +26,9 @@
 //   7. **游标回读（评审 F2）+ chapterId 白名单（评审 F3）**：跳转越界被 stepper 静默
 //      clamp（要 (5,3) 得 (0,2)）→ 截图悄悄落错帧，故 ready() 后回读 getState 比对；
 //      chapterId 直接进输出路径，白名单挡空串 / 分隔符 / `.` `..`（防写出目录外）。
+//   8. **截图后回读（评审 F1）**：F2 的回读发生在 ready() 之后、截图之前——覆盖不了"截图窗口里
+//      页面自驱推进（音频兜底估时 → next()）把游标带走"：那样落盘的是别的步，而动画计数可能照样
+//      为 0（门禁不会报）。故 screenshot 之后再回读一次，归因单列（assertCursorStill）。
 //
 // 环境前置：dev server 已运行（连接失败给出 "先 npm run dev" 指引，不自动起服——M5 编排器
 // 再考虑自起）；`npx playwright install chromium` 首次执行（浏览器缺失抛可读指引错误）。
@@ -128,6 +131,23 @@ export function assertCursorMatch(
       `游标回读不符：期望 章节 ${expected.chapter} 第 ${expected.step} 步，` +
         `实际 章节 ${actual.chapter} 第 ${actual.step} 步——越界游标被 stepper 静默 clamp` +
         `（useStepper.clamp），此帧会截到错的画面；请核对 spec 是否在 manifest 范围内`,
+    );
+  }
+}
+
+/**
+ * 截图**后**回读（评审 F1）：判据同 assertCursorMatch，归因不同——截图窗口里游标被带走
+ * 几乎只有一个原因：页面自驱推进（音频兜底估时 → next()，useAudioPlayer）在 ready() 与截图
+ * 之间抢先。截到的是**别的步**，下游只看动画计数发现不了（计数可能照样是 0）。
+ * 与 assertCursorMatch 分开是为了不让排查者把它误读成"游标被 clamp / 分镜内容有差"。
+ */
+export function assertCursorStill(expected: ShotSpec, actual: { chapter: number; step: number }): void {
+  if (actual.chapter !== expected.chapter || actual.step !== expected.step) {
+    throw new Error(
+      `截图后游标已被带走：期望仍停在 章节 ${expected.chapter} 第 ${expected.step} 步，` +
+        `实际已到 章节 ${actual.chapter} 第 ${actual.step} 步——页面自驱推进抢先（预览态音频兜底估时的` +
+        `自动 next；本帧图可能已是别的步），不是顺序/独立 mount 有差。请让页面停在目标步再截` +
+        `（?render=1 下动画冻结但音频兜底推进仍在跑）`,
     );
   }
 }
@@ -253,6 +273,10 @@ async function captureOne(
   const file = shotPath(opts.outDir, chapterId, spec.step);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   await page.screenshot({ path: file });
+
+  // 截图后回读（评审 F1）：自驱推进若在这一窗口抢先，落盘的就是别的步（且计数可能照样为 0，
+  // 门禁不会报）。此处抛 = 宁炸不静默落错帧。
+  assertCursorStill(spec, await page.evaluate(() => window.__presentation!.getState()));
 
   return { chapter: spec.chapter, step: spec.step, file, animations };
 }

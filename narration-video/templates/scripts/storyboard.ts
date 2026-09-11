@@ -25,8 +25,9 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import "./check/loader-hooks"; // 模块副作用：非 vitest 环境注册 .css/.json/资产加载钩子（manifest React 链，终审 M-6）
 import { captureSteps, expandSpecs, withHeadless } from "./shot/capture";
-import { ambientKey, summarizeVerification, verifySequential } from "./shot/verify-sequential";
+import { summarizeVerification, verifySequential } from "./shot/verify-sequential";
 import {
+  ambientExemptKeys,
   buildStoryboardData,
   gateStoryboard,
   hasBlockers,
@@ -195,11 +196,8 @@ export async function runStoryboard(
   let exitCode = hasBlockers(gated) ? 1 : 0;
 
   if (args.verifySequential) {
-    const ambientKeys = new Set(
-      gated.frames
-        .filter((f) => f.ambient !== null)
-        .map((f) => ambientKey(f.chapter, f.step)),
-    );
+    // 免比对集合 = gate === "ambient" 的步（声明且计数 > 0，评审 F2）——过期声明不白送豁免
+    const ambientKeys = ambientExemptKeys(gated);
     const verdicts = await verifySequential({
       url: STORYBOARD_URL,
       specs,
