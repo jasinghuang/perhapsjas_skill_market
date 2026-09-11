@@ -1,5 +1,5 @@
 // 样式词典页（M2b 验收工具；dev-only，不入章节层）。
-// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 44 组件全变体目录
+// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 全部组件全变体目录
 // （组件数/组序/组计数一律由 components/manifest.ts 派生，不写死）。
 // 页面壳：深色 shell 底（var(--shell)）、1920 居中；每区段 mono 区段头（cream，编号 + 标题）
 // + 全幅 cream 内容面板（4px 墨框、水平内衬 96px——与安全框规格一致）。
@@ -669,7 +669,7 @@ function SemanticSection() {
   );
 }
 
-/* ── 06 · 组件全览 COMPONENTS（44 组件 × 全变体；组序 = GROUPS，组计数派生） ── */
+/* ── 06 · 组件全览 COMPONENTS（全组件 × 全变体；组序 = GROUPS，组件数与组计数派生） ── */
 
 /** 组件格尺寸提示（M2b 三轮定稿：按内容自适应——每组件按其内容需要设计尺寸）。
     每组件一行：内容区建议 minW / minH（内容自然尺寸的舒适下限，不设上限——格高 = 内容自然高

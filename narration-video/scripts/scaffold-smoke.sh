@@ -22,6 +22,20 @@ test -f "$TMP/demo/scripts/check/check-fast.ts"
 test -d "$TMP/demo/scripts/check/__fixtures__"
 (cd "$TMP/demo" && npm run check >/dev/null)
 
+# 1c. 时间机器接线（M4 收口）：截图模块 + storyboard 生成器随模板全量拷贝，
+#     package.json 有 storyboard 入口（只断言产物存在与接线——真跑要 dev server + Chromium）
+test -f "$TMP/demo/scripts/shot/capture.ts"
+test -f "$TMP/demo/scripts/shot/verify-sequential.ts"
+test -f "$TMP/demo/scripts/storyboard.ts"
+test -f "$TMP/demo/scripts/storyboard/data.ts"
+test -f "$TMP/demo/scripts/storyboard/html.ts"
+test -f "$TMP/demo/src/engine/cursorBridge.ts"
+test -f "$TMP/demo/src/chapters/01-example/timing.json"
+grep -q '"storyboard": "tsx scripts/storyboard.ts"' "$TMP/demo/package.json"
+grep -q 'npx playwright install chromium' "$TMP/demo/scripts/shot/capture.ts"
+# 模板工作区的分镜产出不得随拷贝进新项目（与 dist/ 同类的生成物；新项目分镜页应为空）
+test ! -e "$TMP/demo/storyboard"
+
 # 2. 3:4 场景
 bash "$SKILL_DIR/scripts/scaffold.sh" "$TMP/tall" --slug tall --stage 3:4 >/dev/null
 grep -q 'width: 1080' "$TMP/tall/src/engine/runtime-config.ts"

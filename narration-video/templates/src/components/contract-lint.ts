@@ -3,7 +3,7 @@
 // M3a 门禁与本章节测试共用同一实现。
 // Why here: 依赖 Vite ?raw 管线（src 内），不随内部件收纳（故留在 components/ 根，而非 _internal/）。
 // Ruling P2-8：不用 node:fs + __dirname（ESM 无 __dirname、无 @types/node，tsc 必挂），
-// 改用 Vite `?raw` 显式导入 44 个组件 CSS，lint 扫描这些字符串。
+// 改用 Vite `?raw` 显式导入组件 CSS（数量以 components/manifest.ts 为准，不写死），lint 扫描这些字符串。
 
 import { COMPONENTS, cssPathOf } from "./manifest";
 import heroTitleCss from "./text/HeroTitle.css?raw";
