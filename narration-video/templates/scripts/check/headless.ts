@@ -35,6 +35,21 @@
  * `examined === 0` 在**收集器级**（全 deck 累计）→ blocker（收集器什么都没检查到）；
  * **步级零元素合法**（该步没有这类元素）。收集器自身另有"找不到画布根 → blocker"
  * （那是"收集器没有检查面"，与"这一步没有元素"不同——见 collectors.ts）。
+ * Task 8 起**按收集器分列**（T7 评审 M5）：合计句会把"某个收集器整体失效"掩在别家的大数字里，
+ * 故溢出 / 安全边距 / 对比度各要一次自己的护栏，读数也分列输出。
+ *
+ * ## Task 8 追加的三条（§11.1 #20 / #18 / #14 的无头半边）
+ *
+ * 逐 step 的两条（与 #16 的溢出收集器同批采集，归位语义相同）：
+ *   · **#20 文字安全边距**（warning，`COLLECT_SAFE_MARGINS_SRC`）——参数 `SAFE_MARGIN_ARGS`
+ *     由 `safeMarginArgs(stageConfig.safeArea, stageConfig.dims)` 构造：安全带的每个数字都来自
+ *     单一源 `src/engine/safe-area.ts`（本文件与收集器都不出现 96/112/934 的副本）。
+ *   · **#18 对比度**（warning，`COLLECT_CONTRAST_SRC`）——`CONTRAST_ARGS`（自身底色优先 +
+ *     transparent 才祖先链采样；渐变/图片背景 → info）。
+ * 全套步跑完后做一次的：
+ *   · **#14 字体加载**（blocker 半边 + 无主题字体文本 → info，`COLLECT_FONTS_SRC`）——
+ *     字体加载**跨步累积**，逐 step 采会读出半张脸；中止（游标失配）时**不判**：
+ *     部分步的使用面会造出"加载了没人用"的假 blocker（读数额外标注）。
  *
  * ## 环境前置
  *
@@ -59,10 +74,19 @@ import {
   type ShotSpec,
 } from "../shot/session";
 import {
+  COLLECT_CONTRAST_SRC,
+  COLLECT_FONTS_SRC,
   COLLECT_OVERFLOW_SRC,
+  COLLECT_SAFE_MARGINS_SRC,
+  CONTRAST_ARGS,
+  CONTRAST_RULE,
+  FONT_RULE,
+  SAFE_MARGIN_RULE,
   STAGE_SELECTOR,
+  safeMarginArgs,
   type CollectorFinding,
   type CollectorResult,
+  type FontsCollectorResult,
 } from "./collectors";
 import { FindingBag, type Finding } from "./findings";
 import { startServe, type ServeHandle } from "./serve";
@@ -183,6 +207,10 @@ export interface StepSample {
   consoleEvents: readonly RawConsoleEvent[];
   overflow: CollectorResult;
   audit: AnimationAudit;
+  /** #20 文字安全边距（Task 8 追加；缺省 = 该步未采 → 跳过这一面，旧调用方/单测不必改） */
+  safeMargins?: CollectorResult;
+  /** #18 对比度（Task 8 追加；同上） */
+  contrast?: CollectorResult;
 }
 
 export interface JudgeContext {
@@ -226,8 +254,11 @@ export function consoleVerdict(
   return { findings, notes };
 }
 
-/** 溢出收集器结果 → findings / notes（#16 ②；定位到步 + 元素描述）。 */
-export function overflowVerdict(
+/**
+ * 收集器结果 → findings / notes（收集器级通用：溢出 / 安全边距 / 对比度共用同一归位语义——
+ * 定位到步 + 元素描述；info 档走 note 通道，计数但不进退出码）。
+ */
+export function collectorVerdict(
   spec: ShotSpec,
   chapterId: string,
   result: CollectorResult,
@@ -244,6 +275,37 @@ export function overflowVerdict(
       rule: cf.rule,
       severity: cf.severity,
       location: `${where} · ${cf.location}`,
+      message: cf.message,
+    });
+  }
+  return { findings, notes };
+}
+
+/** 溢出收集器结果 → findings / notes（#16 ②；`collectorVerdict` 的具名别名，T7 面不动）。 */
+export function overflowVerdict(
+  spec: ShotSpec,
+  chapterId: string,
+  result: CollectorResult,
+): StepVerdict {
+  return collectorVerdict(spec, chapterId, result);
+}
+
+/**
+ * #14 字体面 → findings / notes（Task 8；**无步定位**：字体加载跨步累积，全套步跑完后才做一次）。
+ * info（无主题字体文本）走 note 通道；blocker（加载了没人用）进袋。
+ */
+export function fontsVerdict(result: FontsCollectorResult): StepVerdict {
+  const findings: Finding[] = [];
+  const notes: string[] = [];
+  for (const cf of result.findings as readonly CollectorFinding[]) {
+    if (cf.severity === "info") {
+      notes.push(`#14 ${FONT_RULE} · [info] ${cf.message}`);
+      continue;
+    }
+    findings.push({
+      rule: cf.rule,
+      severity: cf.severity,
+      location: `#14 ${FONT_RULE}（全 deck 跑完后的单次读数）· ${cf.location}`,
       message: cf.message,
     });
   }
@@ -295,18 +357,31 @@ export function animationEscapeVerdict(
   return { findings, notes: [] };
 }
 
-/** 收集器级非空护栏（全 deck 累计 examined === 0 → blocker）；> 0 → null。 */
-export function examinedGuard(totalExamined: number): Finding | null {
-  if (totalExamined > 0) return null;
+/**
+ * 收集器级非空护栏（**通用**：某个收集器全 deck 累计 examined === 0 → blocker）；> 0 → null。
+ * Task 8 起**按收集器分列**（T7 评审 M5 的建议）：合计数字会把"某个收集器整体失效"掩在
+ * 别家的大数字里，故每个收集器各要一次自己的护栏。
+ */
+export function collectorExaminedGuard(
+  label: string,
+  examined: number,
+  hint: string,
+): Finding | null {
+  if (examined > 0) return null;
   return {
     rule: "收集器非空护栏",
     severity: "blocker",
     location: STAGE_SELECTOR,
     message:
-      `全 deck 累计 examined === 0——溢出收集器在整个 pass 里没检查到任何元素` +
+      `全 deck 累计 examined === 0——${label}在整个 pass 里没检查到任何${hint}` +
       `（画布根 ${STAGE_SELECTOR} 选择器失配 / 页面未挂载 / 收集器本身失效）；` +
       `拒绝把"什么都没查"当作"没有问题"`,
   };
+}
+
+/** 溢出收集器的非空护栏（#16 ②；`collectorExaminedGuard` 的具名别名，文案逐字保留）。 */
+export function examinedGuard(totalExamined: number): Finding | null {
+  return collectorExaminedGuard("溢出收集器", totalExamined, "元素");
 }
 
 /** 单步归因（纯函数：真机采集与单测走同一份判据）。 */
@@ -316,6 +391,13 @@ export function judgeStep(sample: StepSample, ctx: JudgeContext): StepVerdict {
     overflowVerdict(sample.spec, sample.chapterId, sample.overflow),
     animationEscapeVerdict(sample.audit, { renderMode: ctx.renderMode }),
   ];
+  // Task 8 追加的两面：缺省（旧调用方/单测未采）即跳过——不假装查过
+  if (sample.safeMargins !== undefined) {
+    parts.push(collectorVerdict(sample.spec, sample.chapterId, sample.safeMargins));
+  }
+  if (sample.contrast !== undefined) {
+    parts.push(collectorVerdict(sample.spec, sample.chapterId, sample.contrast));
+  }
   const findings: Finding[] = [];
   const notes: string[] = [];
   for (const p of parts) {
@@ -329,6 +411,12 @@ export function judgeStep(sample: StepSample, ctx: JudgeContext): StepVerdict {
 
 /** 收集器参数（画布 = Stage.tsx 的 stage-frame；容差 1px 防布局取整的亚像素假报）。 */
 const COLLECT_ARGS = { canvasSelector: STAGE_SELECTOR, tolerancePx: 1 };
+
+/**
+ * #20 参数：安全带的每个数字都来自单一源 `src/engine/safe-area.ts`（本文件与收集器都不出现
+ * 96/112/934 的副本），坐标换算用 `stageConfig.dims`（画布 px ≠ DOM px 时靠它折算）。
+ */
+const SAFE_MARGIN_ARGS = safeMarginArgs(stageConfig.safeArea, stageConfig.dims);
 
 /** URL 追加 `render=1`（幂等：已带则原样——与 `withHeadless` 同款归一语义）。 */
 export function withRenderMode(url: string): string {
@@ -350,11 +438,13 @@ function wireConsole(page: Page, window: ConsoleWindow): void {
 }
 
 /** 收集器 evaluate 调用（源码串载体——见 collectors.ts 文件头：真函数会被 tsx 的 __name 污染）。 */
-async function collectOverflow(page: Page): Promise<CollectorResult> {
-  const raw = await page.evaluate(
-    `(${COLLECT_OVERFLOW_SRC})(${JSON.stringify(COLLECT_ARGS)})`,
-  );
+async function collectFrom(page: Page, src: string, args: unknown): Promise<CollectorResult> {
+  const raw = await page.evaluate(`(${src})(${JSON.stringify(args)})`);
   return raw as CollectorResult;
+}
+
+async function collectOverflow(page: Page): Promise<CollectorResult> {
+  return collectFrom(page, COLLECT_OVERFLOW_SRC, COLLECT_ARGS);
 }
 
 /**
@@ -377,7 +467,8 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
   let serve: ServeHandle | null = null;
   let session: Session | null = null;
   let stepsRun = 0;
-  let totalExamined = 0;
+  // 各收集器的检查面**分列**（Task 8：合计会把"某个收集器整体失效"掩在别家的大数字里）
+  const examinedBy = { overflow: 0, safeMargins: 0, contrast: 0 };
   let blockerMsgs = 0;
   let infoMsgs = 0;
 
@@ -429,9 +520,11 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
         break;
       }
 
-      // 采集顺序固定：DOM 收集器 → 动画审计 → 取走窗口内消息（窗口 = 上一步取走之后至此刻，
-      // 含该步自己的 jumpTo→ready 渲染期——见文件头 ① 的两处如实标注）。
+      // 采集顺序固定：DOM 收集器（溢出 → 安全边距 → 对比度）→ 动画审计 → 取走窗口内消息
+      // （窗口 = 上一步取走之后至此刻，含该步自己的 jumpTo→ready 渲染期——见文件头 ① 的两处标注）。
       const overflow = await collectOverflow(page);
+      const safeMargins = await collectFrom(page, COLLECT_SAFE_MARGINS_SRC, SAFE_MARGIN_ARGS);
+      const contrast = await collectFrom(page, COLLECT_CONTRAST_SRC, CONTRAST_ARGS);
       const audit = await auditAnimations(page);
       const events = window.drain();
 
@@ -440,15 +533,33 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
       infoMsgs += triage.infos.length;
 
       const verdict = judgeStep(
-        { spec, chapterId, consoleEvents: events, overflow, audit },
+        { spec, chapterId, consoleEvents: events, overflow, safeMargins, contrast, audit },
         { pageUrl, renderMode: true },
       );
       bag.addAll(verdict.findings);
       // judge 的 notes = **info 级 finding**（浏览器 Log 类消息 / 收集器 info 档）
       for (const n of verdict.notes) bag.addNote(n, "info");
 
-      totalExamined += overflow.examined;
+      examinedBy.overflow += overflow.examined;
+      examinedBy.safeMargins += safeMargins.examined;
+      examinedBy.contrast += contrast.examined;
       stepsRun += 1;
+    }
+
+    // #14 字体面：**全部步跑完后做一次**（字体加载跨步累积——`only` 模式读数不同，故只在
+    // 整轮跑完时判）。中止时不判：部分步的使用面会造出"加载了没人用"的假 blocker。
+    let fonts: FontsCollectorResult | null = null;
+    if (aborted === null) {
+      fonts = (await collectFrom(page, COLLECT_FONTS_SRC, {})) as FontsCollectorResult;
+      const fontVerdict = fontsVerdict(fonts);
+      bag.addAll(fontVerdict.findings);
+      for (const n of fontVerdict.notes) bag.addNote(n, "info");
+    } else {
+      bag.addNote(
+        `#14 ${FONT_RULE}：未执行（pass 在 ${aborted} 中止——字体加载跨步累积，部分步的使用面会` +
+          `造出"加载了没人用"的假 blocker）`,
+        "readout",
+      );
     }
 
     if (aborted !== null) {
@@ -457,8 +568,16 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
         "readout",
       );
     }
-    const guard = examinedGuard(totalExamined);
-    if (guard !== null) bag.add(guard);
+    // 非空护栏按**收集器级别**判定（Task 8）：三个逐 step 收集器各要一次自己的护栏。
+    // #14 不在此列：它的 examined === 0（全 deck 无主题字体文本）由收集器自己判成 info
+    // ——示例章节正文走 UA 默认字体，那不是缺陷态，是读数为零（见 collectors.ts）。
+    for (const guard of [
+      examinedGuard(examinedBy.overflow),
+      collectorExaminedGuard(SAFE_MARGIN_RULE, examinedBy.safeMargins, "文本元素"),
+      collectorExaminedGuard(CONTRAST_RULE, examinedBy.contrast, "文本元素"),
+    ]) {
+      if (guard !== null) bag.add(guard);
+    }
     if (blockerMsgs > 0) {
       // 去歧义（修复轮 1 / M5）：StrictMode 双渲染让同一处渲染期报错记两条，属预期而非重复上报
       bag.addNote(
@@ -466,9 +585,19 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
         "readout",
       );
     }
+    const fontReadout =
+      fonts === null
+        ? "未执行（中止）"
+        : `FontFace ${fonts.fontFaceCount} 条 / 去重家族 ${fonts.familyCount} / status==="loaded" ` +
+          `${fonts.loadedFamilies.length}（${fonts.loadedFamilies.length === 0 ? "无" : fonts.loadedFamilies.join("、")}）` +
+          ` / used ${fonts.usedFamilies.length}（${fonts.usedFamilies.length === 0 ? "无" : fonts.usedFamilies.join("、")}）` +
+          ` / 主题字体文本元素 ${fonts.examined}`;
     bag.addNote(
-      `#16 采集读数：已跑 ${stepsRun} 步；元素检查面累计 examined ${totalExamined}；` +
-        `本页脚本报错 ${blockerMsgs} 条 / info ${infoMsgs} 条（窗口自页面装载起——修复轮 1 / I1）`,
+      `#16 采集读数：已跑 ${stepsRun} 步；检查面 examined（**分列**——合计会把某个收集器整体失效` +
+        `掩在别家的大数字里）：溢出 ${examinedBy.overflow} / 安全边距 ${examinedBy.safeMargins} / ` +
+        `对比度 ${examinedBy.contrast}；#14 字体面：${fontReadout}；` +
+        `本页脚本报错 ${blockerMsgs} 条 / 控制台 info ${infoMsgs} 条（窗口自页面装载起——` +
+        `修复轮 1 / I1；不含 #18/#14 的收集器 info——那些在报告上方的 info 段里）`,
       "readout",
     );
     return bag;
