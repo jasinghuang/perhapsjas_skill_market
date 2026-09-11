@@ -20,11 +20,13 @@
  *                                （P4-7：组件同为库代码不豁免，同样要确定性）
  *   无限循环动画 blocker  #8      iterations: Infinity / -1 / -Infinity 字面量（WAAPI 负 iterations = 无限）
  *   禁裸缓动     blocker  终审    字符串/模板串内 cubic-bezier( 裸值（须走 var(--ease-*) token）——
- *                                engine/ 与 components/ 目录豁免（P4-7）
+ *                                engine/ 与 components/ 目录豁免（P4-7；豁免面独立于下表 EChart
+ *                                规则，K-11）
  *   ECharts option 裸色/裸字体 blocker P4.5-T3 <EChart option={{...}}> 对象字面量内 color:/textStyle.fontFamily
  *                                裸值（hex/rgb/命名色、非 var(--font-*) 字体串——white/black 豁免口径同 #2，
- *                                数组色板与嵌套 itemStyle/textStyle 一并遍历）；components/ 目录豁免
- *                                （组件库代码，showcase 消费 EChart）
+ *                                数组色板与嵌套 itemStyle/textStyle 一并遍历）；仅 components/ 目录豁免
+ *                                （组件库代码，showcase 消费 EChart）；engine/ 与章节层/展示页照查
+ *                                （K-11：豁免面独立，不沾禁裸缓动的 engine 豁免）
  *
  * 实现取舍（任务要求报告）：typescript compiler API AST 遍历，非正则。理由：
  *   1. 属性名精确匹配——fillOpacity/strokeWidth 等前缀属性零误报，正则做不到（startsWith 必炸）；
@@ -176,8 +178,11 @@ interface ScanCtx {
   path: string;
   findings: Finding[];
   seen: Set<string>; // `${rule}|${line}` 去重——单行同规则最多一条（与 scanner-css 粒度一致）
-  exemptDeterminism: boolean; // P4-7：仅 src/engine/（组件同为库代码不豁免）
-  exemptEasing: boolean; // P4-7：src/engine/ 或 src/components/（P4.5-T3 EChart option 规则同用——组件库代码豁免）
+  // 豁免面逐个独立（K-11：曾被两条规则共享的旗标会静默放宽 spec 未要求的豁免面）——
+  // 每个字段即一条规则的完整豁免集合，读者在类型上一眼可见：
+  exemptDeterminism: boolean; // 确定性黑名单  P4-7：仅 src/engine/（组件同为库代码不豁免）
+  exemptEasing: boolean; // 禁裸缓动       P4-7：src/engine/ ∪ src/components/（面逐字不动）
+  exemptChartOption: boolean; // EChart option    P4.5-T3/K-11：仅 src/components/（不沾 engine）
 }
 
 function pushFinding(
@@ -382,7 +387,11 @@ function checkEChartOptionObject(ctx: ScanCtx, obj: ts.ObjectLiteralExpression):
   }
 }
 
-/** <EChart option={{...}}>：对象字面量 → 裸色/裸字体检查（components/ 目录豁免——与 easing 同旗标）。 */
+/**
+ * <EChart option={{...}}>：对象字面量 → 裸色/裸字体检查。
+ * 豁免面 = 仅 components/（独立旗标 exemptChartOption，K-11）：engine/ 与章节层、展示页
+ * 一律照查——不再复用 exemptEasing 的 engine ∪ components 面（那是缓动规则的豁免集合）。
+ */
 function checkEChartOpening(ctx: ScanCtx, node: ts.JsxOpeningElement | ts.JsxSelfClosingElement): void {
   if (!ts.isIdentifier(node.tagName) || node.tagName.text !== "EChart") return;
   for (const a of node.attributes.properties) {
@@ -404,7 +413,7 @@ function walk(ctx: ScanCtx, node: ts.Node): void {
     else if (name === "fontSize" || name === "font-size") checkSvgFontSizeAttribute(ctx, node);
   } else if (
     (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-    !ctx.exemptEasing
+    !ctx.exemptChartOption
   ) {
     checkEChartOpening(ctx, node);
   } else if ((ts.isCallExpression(node) || ts.isNewExpression(node)) && !ctx.exemptDeterminism) {
@@ -484,6 +493,7 @@ export function scanChapterTsx(files: Array<{ path: string; source: string }>): 
       seen: new Set<string>(),
       exemptDeterminism: isSrcSubdir(path, "engine"),
       exemptEasing: isSrcSubdir(path, "engine") || isSrcSubdir(path, "components"),
+      exemptChartOption: isSrcSubdir(path, "components"),
     };
     walk(ctx, sf);
   }

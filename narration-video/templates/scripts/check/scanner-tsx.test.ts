@@ -430,4 +430,17 @@ export const D = <EChart {...props} />;
     ]);
     expect(components).toEqual([]);
   });
+
+  // M3b K-11：豁免旗标拆分——EChart 规则的豁免面 = 仅 src/components/（独立于「禁裸缓动」
+  // 的 engine ∪ components 面）；engine 不再沾这份豁免，spec §12c 动效策略不被静默放宽。
+  it("engine 目录不再获得 EChart option 豁免（K-11）", () => {
+    const src = `export const A = () => <EChart option={{ series: [{ itemStyle: { color: "#ff0000" } }] }} />;`;
+    const f = scanChapterTsx([{ path: "src/engine/x.tsx", source: src }]);
+    expect(f.some((x) => x.rule === "ECharts option 裸色/裸字体")).toBe(true);
+  });
+
+  it("components 目录仍豁免（组件库本体不受该规则约束）", () => {
+    const src = `export const A = () => <EChart option={{ series: [{ itemStyle: { color: "#ff0000" } }] }} />;`;
+    expect(scanChapterTsx([{ path: "src/components/charts/x.tsx", source: src }])).toEqual([]);
+  });
 });

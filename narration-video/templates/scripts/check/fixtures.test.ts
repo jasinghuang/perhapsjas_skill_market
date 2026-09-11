@@ -11,6 +11,10 @@
  * 夹具注入方式（决策记录）：
  *   - CSS/TSX/MD 夹具经 fs 读取字符串注入扫描器（path 传夹具相对模板根的路径——
  *     与真实章节文件同型定位，且不在 src/ 下故 TSX 目录豁免全部不生效）。
+ *   - 目录豁免类夹具（bad/bad-echart-option-engine.txt、good/good-echart-option-components
+ *     .txt）判别力全在**注入路径**：同一段 TSX 源码分别注入 src/engine/ 与 src/components/
+ *     等价路径，断言 engine 报、components 豁免（K-11 旗标拆分回归——路径是夹具的一部分，
+ *     库内其余夹具的"无 src 段故豁免不生效"约定对这两个不适用）。
  *   - 夹具一律 .txt/.css/.md 自然文本扩展名（含 TSX 源码的 bad-tsx.txt /
  *     good-chapter.txt 用 .txt 规避 tsc 编译）：tsconfig include scripts/**
  *     完全不触碰 __fixtures__ 内容——夹具内门禁违规与类型检查解耦
@@ -217,6 +221,26 @@ describe("bad/ 负样本：逐文件至少一条 blocker", () => {
     expect(hits.some((x) => x.message.includes("fontFamily"))).toBe(true);
   });
 
+  it("bad/bad-echart-option-engine.txt → 注入 src/engine/ 路径仍报（K-11：EChart 不沾 engine 豁免）", () => {
+    const f = readFixture("bad/bad-echart-option-engine.txt");
+    // 判别力全在注入路径（src 段锚定）——与夹具头注释同一约定：同一段源码注入
+    // src/components/ 路径零 finding（对照 good-echart-option-components.txt）
+    const path = "src/engine/charts/option.tsx";
+    const r = scanChapterTsx([{ path, source: f.text }]);
+    // 行号按夹具正文现算（不写死数字）：裸色所在行 / 裸缓动所在行
+    const lines = codeLinesOf(f.text);
+    const colorLine = lines.find((l) => l.code.includes("#ff0000"))!.line;
+    const easeLine = lines.find((l) => l.code.startsWith("export const EASE"))!.line;
+    expect(colorLine).not.toBe(easeLine); // 夹具前提：两处不同行，定位断言才有判别力
+    expect(r.map((x) => x.location)).toEqual([`${path}:${colorLine}`]);
+    expect(r[0].rule).toBe("ECharts option 裸色/裸字体");
+    expect(r[0].severity).toBe("blocker");
+    // 反证钉死：同文件裸缓动仍走「禁裸缓动」的 engine 豁免（豁免面逐字不动）——两条规则
+    // 各自的豁免集合互不串门（旗标拆分后若缓动规则的 engine 面被误改，这条会红）
+    expect(r.some((x) => x.location === `${path}:${easeLine}`)).toBe(false);
+    expect(r.some((x) => x.rule === "禁裸缓动")).toBe(false);
+  });
+
   it("bad/bad-text.txt → manifest 一致性 blocker（steps 错配）+ 反 AI 味 + 结尾标点 warning", () => {
     // #1 导入坏数据状态：steps 故意 ≠ narrations.length
     const narrations = narrationsFrom("bad/bad-text.txt");
@@ -312,6 +336,21 @@ describe("good/ false-positive 集：零 finding 护栏", () => {
     expect(scanChapterTsx([{ path: f.path, source: f.text }])).toEqual([]);
   });
 
+  it("good/good-echart-option-components.txt → 注入 src/components/ 路径零 finding（K-11 豁免面不扩大）", () => {
+    const f = readFixture("good/good-echart-option-components.txt");
+    // 判别力全在注入路径：组件库本体（components/）= EChart 规则与缓动规则共同豁免面
+    expect(
+      scanChapterTsx([{ path: "src/components/charts/option.tsx", source: f.text }]),
+    ).toEqual([]);
+    // 夹具判别力自证：同内容注入章节层路径必须报——否则零 finding 是内容本就干净，
+    // 而不是豁免生效（夹具被改坏时这条会红）
+    const chapter = scanChapterTsx([
+      { path: "src/chapters/01-x/index.tsx", source: f.text },
+    ]);
+    expect(chapter.some((x) => x.rule === "ECharts option 裸色/裸字体")).toBe(true);
+    expect(chapter.some((x) => x.rule === "禁裸缓动")).toBe(true);
+  });
+
   it("good/good-chapter.css → token 化色/渐变/字体/时长 + 合法字阶间距 + /* pink */ 注释零 finding", () => {
     const f = readFixture("good/good-chapter.css");
     expect(scanChapterCss([{ path: f.path, css: f.text }])).toEqual([]);
@@ -371,6 +410,7 @@ describe("夹具清单同步护栏", () => {
       "bad-string-comment-leak.css",
     ]);
     expect(listFiles("bad", ".txt")).toEqual([
+      "bad-echart-option-engine.txt",
       "bad-echart-option.txt",
       "bad-text.txt",
       "bad-tsx.txt",
@@ -386,6 +426,7 @@ describe("夹具清单同步护栏", () => {
     ]);
     expect(listFiles("good", ".txt")).toEqual([
       "good-chapter.txt",
+      "good-echart-option-components.txt",
       "good-echart-option.txt",
       "good-narrations.txt",
     ]);
