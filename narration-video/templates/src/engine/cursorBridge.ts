@@ -2,15 +2,24 @@
 // 无头门禁（M3b）与渲染管线（M5）共用的"时间机器"入口。接口约定跨计划冻结，逐字落实：
 // jumpTo / getState / ready / animations。仅显式安装（App 在 ?headless=1 或 dev 模式调用
 // installBridge）；生产构建不暴露——模块导入本身无任何副作用。
+//
+// ready() 无内建超时（契约不含）——消费方（截图模块 / M5 / M3b）需自行包 timeout：
+// 停滞的 load（没等到 load 也没等到 error）会一直挂起，这是"等页面定下来"的本意。
+
+import { registrySize } from "./animationRuntime";
 
 /** 就绪语义：双 rAF（等 React commit 落定）→ document.fonts.ready + 所有 img 就绪 */
 export interface PresentationBridge {
   /** 同步定位（React 状态更新后由 ready() 等待落定） */
   jumpTo(chapter: number, step: number): void;
+  /** 读游标。**commit-lagging**：jumpTo 是 React 状态更新，本函数读到的是已 commit 的值——
+   *  跳转后须先 `await ready()` 再读，否则拿到跳转前的位置。 */
   getState(): { chapter: number; step: number };
-  /** 双 rAF + fonts.ready + 所有 img.complete */
+  /** 双 rAF + fonts.ready + 所有 img.complete（无内建超时，见文件头） */
   ready(): Promise<void>;
-  /** document.getAnimations() 计数（分镜门禁/覆盖率断言共用；jsdom 无此 API → 0） */
+  /** document.getAnimations() 计数 + 引擎动画注册表计数（Ruling M4-1：WAAPI 之外的帧函数
+   *  逃生舱 canvasAnim 也必须计入，否则"零动画"门禁漏检）。jsdom 无 WAAPI 查询面 → guard
+   *  归 0，此时计数全部由注册表部分贡献。（分镜门禁/覆盖率断言共用） */
   animations(): number;
 }
 
@@ -20,7 +29,7 @@ declare global {
   }
 }
 
-/** 已安装的桥（uninstall 时比对身份，避免误删后装者） */
+/** 最近一次 install 的桥（uninstall 以它为"是否由本模块装上"的判据） */
 let installed: PresentationBridge | null = null;
 
 /**
@@ -37,6 +46,8 @@ export function installBridge(bridge: PresentationBridge): void {
   window.__presentation = bridge;
 }
 
+/** 卸载：**last-install-wins**——清的就是最后装上的那座桥，不论是谁的 cleanup 调的。
+ *  当前只有 App 一处安装，够用；多 owner 场景需引入 owner token 才能各清各的。 */
 export function uninstallBridge(): void {
   if (installed !== null && window.__presentation === installed) {
     delete window.__presentation;
@@ -114,8 +125,12 @@ export function ready(): Promise<void> {
   return twoFrames().then(() => Promise.all([fontsReady(), imagesReady()])).then(() => undefined);
 }
 
-/** document.getAnimations() 计数（jsdom 无 WAAPI 查询面 → 0） */
+/**
+ * 动画计数 = document.getAnimations()（CSS/WAAPI 泄漏面）+ 引擎注册表（Ruling M4-1）。
+ * 注册表部分不可省：canvasAnim（rAF 帧函数逃生舱）不进 WAAPI 查询面，只靠 getAnimations()
+ * 会让"分镜阶段零动画"门禁对帧函数动画失明。jsdom 无 getAnimations → guard 归 0。
+ */
 export function animations(): number {
-  if (typeof document.getAnimations !== "function") return 0;
-  return document.getAnimations().length;
+  const waapi = typeof document.getAnimations === "function" ? document.getAnimations().length : 0;
+  return waapi + registrySize();
 }

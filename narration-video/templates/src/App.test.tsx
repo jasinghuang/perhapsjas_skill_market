@@ -155,4 +155,28 @@ describe("App 装配 · 游标桥（M4）", () => {
     unmount();
     expect(window.__presentation).toBeUndefined();
   });
+
+  it("守卫为假时不安装（生产构建不暴露）：installBridge 不被调用", async () => {
+    // vitest 里 import.meta.env.DEV 恒为 true（vite 静态替换），App 层无法真跑"非 dev 分支"，
+    // 故用 mock 把 shouldInstallBridge 压成 false 来验证接线面确实受守卫控制。
+    vi.resetModules();
+    const installBridge = vi.fn();
+    vi.doMock("./engine/cursorBridge", () => ({
+      shouldInstallBridge: () => false,
+      installBridge,
+      uninstallBridge: vi.fn(),
+      ready: () => Promise.resolve(),
+      animations: () => 0,
+    }));
+
+    const { default: GuardedApp } = await import("./App");
+    render(<GuardedApp />);
+
+    expect(installBridge).not.toHaveBeenCalled();
+    expect(window.__presentation).toBeUndefined();
+
+    // 还原：mock 与模块缓存不留到后续用例（afterEach 的 cleanup 已卸载本用例的 App）
+    vi.doUnmock("./engine/cursorBridge");
+    vi.resetModules();
+  });
 });
