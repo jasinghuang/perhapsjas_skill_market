@@ -12,8 +12,9 @@
  *   5. 组件层 lintComponentCss（动态 import contract-lint——纯 TS 可 import）
  *   6. 防失同步断言（Ruling P4-2）：tokens.css --dur-fast/mid/slow 解析值（ms）===
  *      motion.ts durationMs fallback 字面量 300/700/1400，不等 → blocker
- *   7. 清单对比断言：contract-lint COMPONENT_CSS file 集合 === index.ts CSS import
- *      集合（fs 读 index.ts 提取 import "./xxx.css"），不等 → blocker
+ *   7. 三方同步断言（manifest.ts 单一真相源）：manifest ↔ index.ts（CSS 装配路径 + 导出名，
+ *      双向）→ blocker；manifest ↔ StyleGuide.tsx（组件 JSX 覆盖，缺 <Name 用法）→ blocker。
+ *      下级防线：contract-lint 的 RAW↔manifest 完整性断言在模块作用域 throw（见其文件头）
  *   8. Ruling P4-9：public/audio-durations.json 存在时条目数 === 总非空 narrations 数，
  *      不等 → blocker（在入口层做——跨章聚合是编排层关注点，scanner-assets 不动）
  *
@@ -35,6 +36,7 @@ import * as path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import type { ChapterDef } from "../../src/chapters/manifest";
+import { COMPONENTS, cssPathOf, type ComponentEntry } from "../../src/components/manifest";
 import { validateTheme } from "../../src/theme/theme-validate";
 import { FindingBag, type Finding } from "./findings";
 import "./loader-hooks"; // 模块副作用：非 vitest 环境注册资产/样式加载钩子（终审 M-6）
@@ -176,47 +178,138 @@ function assertDurationDesync(tokensCss: string): Finding[] {
   return findings;
 }
 
-// ── 清单对比断言（COMPONENT_CSS === index.ts CSS import 集合） ──
+// ── 三方同步断言（manifest.ts = 单一真相源；组件库结构规范化 2/3） ──
+//
+// 三级防线（让「漏挂」类错误从结构上不可能；报告断言清单同此口径）：
+//   ① contract-lint.ts 模块作用域 throw：RAW（44 份 `?raw`）键集 ≡ manifest cssPath 集——
+//      缺一即炸（最贴近 CSS 文本的一层；负样本见 contract-lint.test.ts）
+//   ② 本文件三方同步断言：manifest ↔ index.ts（CSS 装配路径 + 导出名，双向）
+//      × manifest ↔ StyleGuide.tsx（组件 JSX 覆盖；防「导出但目录页漏挂」重演）
+//   ③ 双护栏负样本：①的键名改写、②的漏装配/漏导出/删用法各自钉红
+//
+// 断言只吃「源文本」参数（不碰 fs）——负样本直接喂坏文本；解析不到（空集）→ throw 而非静默通过。
 
-function assertComponentCssParity(repoRoot: string, contractFiles: string[]): Finding[] {
-  const findings: Finding[] = [];
-  const indexPath = path.join(repoRoot, "src", "components", "index.ts");
-  if (!fs.existsSync(indexPath)) {
-    findings.push({
-      rule: "清单对比",
-      severity: "blocker",
-      location: "src/components/index.ts",
-      message: "组件出口文件缺失，无法对比 COMPONENT_CSS 装配清单",
-    });
-    return findings;
+const CSS_IMPORT_RE = /import\s+["']\.\/([^"']+\.css)["']/g;
+const EXPORT_FROM_RE = /export\s*\{([^}]*)\}\s*from\s*["']\.[^"']*["']/g;
+// `<Name` 后接空白 / `/` / `>`——比裸子串紧一档（`<CardX` 不误判为 Card 的用法）
+const JSX_USAGE_RE = /<([A-Z][A-Za-z0-9]*)(?=[\s/>])/g;
+
+/** index.ts 源码 → CSS 装配路径集合（`import "./<组>/<导出名>.css"`；`../theme/*` 导入不属组件 CSS）。 */
+export function extractCssImports(indexSrc: string): Set<string> {
+  const found = [...indexSrc.matchAll(CSS_IMPORT_RE)].map((m) => m[1]);
+  if (found.length === 0) {
+    throw new Error(
+      '三方同步：src/components/index.ts 解析不到任何 `import "./*.css"` 装配（非空护栏——拒绝静默通过）',
+    );
   }
-  const indexSrc = fs.readFileSync(indexPath, "utf8");
-  // 只提取 `./xxx.css` 形态（tokens.css 的 ../ 导入不属组件 CSS）
-  const indexImports = new Set(
-    [...indexSrc.matchAll(/import\s+["']\.\/([^"']+\.css)["']/g)].map((m) => m[1]),
+  return new Set(found);
+}
+
+/** index.ts 源码 → 组件导出名集合（`export { A, B } from "./<组>"`）。 */
+export function extractExportNames(indexSrc: string): Set<string> {
+  const found = [...indexSrc.matchAll(EXPORT_FROM_RE)].flatMap((m) =>
+    m[1]
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
   );
-  const contract = new Set(contractFiles);
-  for (const f of contract) {
-    if (!indexImports.has(f)) {
+  if (found.length === 0) {
+    throw new Error(
+      '三方同步：src/components/index.ts 解析不到任何 `export { … } from "./<组>"`（非空护栏——拒绝静默通过）',
+    );
+  }
+  return new Set(found);
+}
+
+/** StyleGuide.tsx 源码 → JSX 用法名集合（大小写敏感）。 */
+export function extractJsxUsages(styleGuideSrc: string): Set<string> {
+  const found = [...styleGuideSrc.matchAll(JSX_USAGE_RE)].map((m) => m[1]);
+  if (found.length === 0) {
+    throw new Error(
+      "组件覆盖：src/StyleGuide.tsx 解析不到任何 JSX 组件用法（非空护栏——拒绝静默通过）",
+    );
+  }
+  return new Set(found);
+}
+
+/** manifest ↔ index.ts：CSS 装配路径 + 导出名，双向差集 → blocker。 */
+export function assertManifestIndexSync(
+  entries: readonly ComponentEntry[],
+  indexSrc: string,
+): Finding[] {
+  const findings: Finding[] = [];
+  const loc = "src/components/index.ts";
+  const manifestPaths = entries.map(cssPathOf);
+  const indexPaths = extractCssImports(indexSrc);
+  for (const p of manifestPaths) {
+    if (!indexPaths.has(p)) {
       findings.push({
-        rule: "清单对比",
+        rule: "三方同步",
         severity: "blocker",
-        location: "src/components/index.ts",
-        message: `契约组件 CSS ${f} 未在 index.ts 装配（COMPONENT_CSS 与 index.ts 失同步）`,
+        location: loc,
+        message: `manifest 组件 CSS ${p} 未在 index.ts 装配（漏挂——§6.2 章节层唯一零件来源缺样式）`,
       });
     }
   }
-  for (const f of indexImports) {
-    if (!contract.has(f)) {
+  for (const p of indexPaths) {
+    if (!manifestPaths.includes(p)) {
       findings.push({
-        rule: "清单对比",
+        rule: "三方同步",
         severity: "blocker",
-        location: "src/components/index.ts",
-        message: `index.ts 装配 ${f} 未入契约 COMPONENT_CSS（失同步）`,
+        location: loc,
+        message: `index.ts 装配 ${p} 未入 manifest（幽灵装配——manifest.ts 才是装配清单真相源）`,
+      });
+    }
+  }
+  const manifestExports = entries.map((c) => c.export);
+  const indexExports = extractExportNames(indexSrc);
+  for (const e of manifestExports) {
+    if (!indexExports.has(e)) {
+      findings.push({
+        rule: "三方同步",
+        severity: "blocker",
+        location: loc,
+        message: `manifest 组件 ${e} 未在 index.ts 导出（章节层不可消费）`,
+      });
+    }
+  }
+  for (const e of indexExports) {
+    if (!manifestExports.includes(e)) {
+      findings.push({
+        rule: "三方同步",
+        severity: "blocker",
+        location: loc,
+        message: `index.ts 导出 ${e} 未入 manifest（失同步——新增组件先改 manifest.ts）`,
       });
     }
   }
   return findings;
+}
+
+/** manifest ↔ StyleGuide.tsx：每个组件的导出名必须有 JSX 用法（防「导出但目录页漏挂」重演）。 */
+export function assertStyleGuideCoverage(
+  entries: readonly ComponentEntry[],
+  styleGuideSrc: string,
+): Finding[] {
+  const usages = extractJsxUsages(styleGuideSrc);
+  return entries
+    .filter((c) => !usages.has(c.export))
+    .map((c) => ({
+      rule: "组件覆盖",
+      severity: "blocker" as const,
+      location: "src/StyleGuide.tsx",
+      message: `组件 ${c.export} 未在 styleguide 展示（缺 <${c.export} 用法——防「导出但漏挂」重演）`,
+    }));
+}
+
+/** 断言输入文件读取：缺失 → blocker（可报告的门禁失败），不 throw。 */
+function readSyncTarget(repoRoot: string, rel: string, rule: string, hint: string, bag: FindingBag): string | null {
+  const p = path.join(repoRoot, rel);
+  if (!fs.existsSync(p)) {
+    bag.add({ rule, severity: "blocker", location: rel, message: hint });
+    return null;
+  }
+  return fs.readFileSync(p, "utf8");
 }
 
 // ── Ruling P4-9：audio-durations.json 条目数 === 总非空 narrations 数 ──
@@ -333,8 +426,23 @@ export async function runCheckFast(opts: CheckFastOptions = {}): Promise<Finding
   // 6) 防失同步断言（Ruling P4-2）
   if (tokensCss !== null) addAll(assertDurationDesync(tokensCss));
 
-  // 7) 清单对比断言
-  addAll(assertComponentCssParity(repoRoot, contractLint.COMPONENT_CSS.map((c) => c.file)));
+  // 7) 三方同步断言（manifest 单一真相源：manifest ↔ index.ts ↔ StyleGuide.tsx）
+  const indexSrc = readSyncTarget(
+    repoRoot,
+    "src/components/index.ts",
+    "三方同步",
+    "组件出口文件缺失，无法对比 manifest 装配清单",
+    bag,
+  );
+  if (indexSrc !== null) addAll(assertManifestIndexSync(COMPONENTS, indexSrc));
+  const styleGuideSrc = readSyncTarget(
+    repoRoot,
+    "src/StyleGuide.tsx",
+    "组件覆盖",
+    "样式词典页缺失，无法校验组件展示覆盖（StyleGuide.tsx）",
+    bag,
+  );
+  if (styleGuideSrc !== null) addAll(assertStyleGuideCoverage(COMPONENTS, styleGuideSrc));
 
   // 8) Ruling P4-9 音频时长清单条目数
   addAll(checkAudioDurations(repoRoot, chapters));

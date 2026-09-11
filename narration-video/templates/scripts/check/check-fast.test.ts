@@ -17,7 +17,16 @@ import * as path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import type { ChapterDef } from "../../src/chapters/manifest";
-import { formatCrashMessage, runCheckFast } from "./check-fast";
+import { COMPONENTS } from "../../src/components/manifest";
+import {
+  assertManifestIndexSync,
+  assertStyleGuideCoverage,
+  extractCssImports,
+  extractExportNames,
+  extractJsxUsages,
+  formatCrashMessage,
+  runCheckFast,
+} from "./check-fast";
 
 // ── 夹具 ──
 
@@ -31,8 +40,10 @@ interface FixtureOptions {
   chapterCss?: string;
   /** tokens.css 补丁（防失同步 / 主题契约负样本）。 */
   tokensPatch?: (real: string) => string;
-  /** components/index.ts 补丁（清单对比负样本）。 */
+  /** components/index.ts 补丁（三方同步负样本）。 */
   indexTsPatch?: (real: string) => string;
+  /** src/StyleGuide.tsx 补丁（组件覆盖负样本）。 */
+  styleGuideTsxPatch?: (real: string) => string;
   /** SKILL.md 内容（死链负样本）。 */
   skillMd?: string;
   /** public/audio-durations.json 原始内容（P4-9 负样本）。 */
@@ -62,6 +73,9 @@ function makeFixture(o: FixtureOptions = {}): string {
   fs.mkdirSync(path.join(root, "src", "components"), { recursive: true });
   const indexTs = real("src/components/index.ts");
   fs.writeFileSync(path.join(root, "src", "components", "index.ts"), o.indexTsPatch ? o.indexTsPatch(indexTs) : indexTs);
+  // src/StyleGuide.tsx：真实拷贝（组件覆盖断言的对象，只读源文本、不执行）
+  const sgTsx = real("src/StyleGuide.tsx");
+  fs.writeFileSync(path.join(root, "src", "StyleGuide.tsx"), o.styleGuideTsxPatch ? o.styleGuideTsxPatch(sgTsx) : sgTsx);
   // 文档 / 音频（可选）
   if (o.skillMd !== undefined) fs.writeFileSync(path.join(root, "SKILL.md"), o.skillMd);
   if (o.durations !== undefined) {
@@ -116,10 +130,11 @@ describe("check-fast 入口编排", () => {
     expect(bag.exitCode()).toBe(0);
     const out = bag.render();
     expect(out).toContain("blocker 0");
-    // 主题契约 / 防失同步 / 清单对比 / 组件 lint 全部静默通过（零相应 finding）
+    // 主题契约 / 防失同步 / 三方同步 / 组件覆盖 / 组件 lint 全部静默通过（零相应 finding）
     expect(out).not.toContain("主题契约");
     expect(out).not.toContain("防失同步");
-    expect(out).not.toContain("清单对比");
+    expect(out).not.toContain("三方同步");
+    expect(out).not.toContain("组件覆盖");
     expect(out).not.toContain("禁硬编码色");
     expect(out).not.toContain("禁硬编码字体");
     expect(out).not.toContain("禁裸动画时长");
@@ -145,22 +160,140 @@ describe("防失同步断言（tokens.css --dur-* === fallback 字面量 300/700
   });
 });
 
-// ── 清单对比断言（COMPONENT_CSS === index.ts CSS import 集合） ──
+// ── 三方同步断言（manifest ↔ index.ts ↔ StyleGuide.tsx；组件库结构规范化 2/3） ──
 
-describe("清单对比断言（contract-lint COMPONENT_CSS === index.ts CSS import 集合）", () => {
-  it("真实 index.ts 与 COMPONENT_CSS 一致通过——干净夹具零 清单对比 finding", async () => {
+describe("三方同步断言 A：manifest ↔ index.ts（CSS 路径 + 导出名，双向）", () => {
+  it("真实 index.ts 与 manifest 一致通过——干净夹具零 三方同步 finding", async () => {
     const bag = await runCheckFast({ repoRoot: makeFixture(), chapters: GOOD_CHAPTERS });
-    expect(bag.render()).not.toContain("清单对比");
+    expect(bag.render()).not.toContain("三方同步");
   });
 
-  it("index.ts 漏装配一份组件 CSS → blocker 清单对比 + exitCode 1", async () => {
+  it("负样本 B1a：index.ts 漏装配一份组件 CSS → blocker 三方同步（manifest 有 index 无）", async () => {
     const root = makeFixture({
       indexTsPatch: (real) => real.replace('import "./text/HeroTitle.css";\n', ""),
     });
     const bag = await runCheckFast({ repoRoot: root, chapters: GOOD_CHAPTERS });
     expect(bag.hasBlockers()).toBe(true);
     expect(bag.exitCode()).toBe(1);
-    expect(bag.render()).toContain("[blocker] 清单对比");
+    const out = bag.render();
+    expect(out).toContain("[blocker] 三方同步");
+    expect(out).toContain("text/HeroTitle.css 未在 index.ts 装配");
+  });
+
+  it("负样本 B1a′：index.ts 装配幽灵 CSS（路径写错）→ 双向两条 blocker", async () => {
+    const root = makeFixture({
+      indexTsPatch: (real) => real.replace('import "./text/HeroTitle.css";', 'import "./text/HeroTitleX.css";'),
+    });
+    const bag = await runCheckFast({ repoRoot: root, chapters: GOOD_CHAPTERS });
+    expect(bag.hasBlockers()).toBe(true);
+    const out = bag.render();
+    expect(out).toContain("text/HeroTitle.css 未在 index.ts 装配");
+    expect(out).toContain("text/HeroTitleX.css 未入 manifest");
+  });
+
+  it("负样本 B1b：index.ts 漏一个组件导出名 → blocker 三方同步（manifest 有 index 无）", async () => {
+    const root = makeFixture({
+      indexTsPatch: (real) =>
+        real.replace("export { HeroTitle, Kicker,", "export { Kicker,"),
+    });
+    const bag = await runCheckFast({ repoRoot: root, chapters: GOOD_CHAPTERS });
+    expect(bag.hasBlockers()).toBe(true);
+    const out = bag.render();
+    expect(out).toContain("[blocker] 三方同步");
+    expect(out).toContain("组件 HeroTitle 未在 index.ts 导出");
+  });
+
+  it("负样本 B1b′：index.ts 多一个幽灵导出名 → blocker 三方同步（index 有 manifest 无）", async () => {
+    const root = makeFixture({
+      indexTsPatch: (real) =>
+        real.replace("export { HeroTitle, Kicker,", "export { HeroTitle, GhostWidget, Kicker,"),
+    });
+    const bag = await runCheckFast({ repoRoot: root, chapters: GOOD_CHAPTERS });
+    expect(bag.hasBlockers()).toBe(true);
+    expect(bag.render()).toContain("导出 GhostWidget 未入 manifest");
+  });
+
+  it("index.ts 整文件缺失 → blocker 三方同步（可报告失败，不 throw）", async () => {
+    const root = makeFixture();
+    fs.rmSync(path.join(root, "src", "components", "index.ts"));
+    const bag = await runCheckFast({ repoRoot: root, chapters: GOOD_CHAPTERS });
+    expect(bag.hasBlockers()).toBe(true);
+    expect(bag.render()).toContain("[blocker] 三方同步");
+  });
+});
+
+describe("三方同步断言 B：manifest ↔ StyleGuide.tsx（组件 JSX 覆盖）", () => {
+  it("真实 StyleGuide.tsx 覆盖全部 44 组件——干净夹具零 组件覆盖 finding", async () => {
+    const bag = await runCheckFast({ repoRoot: makeFixture(), chapters: GOOD_CHAPTERS });
+    expect(bag.render()).not.toContain("组件覆盖");
+  });
+
+  it("负样本 B2：删掉 MarkerBlock 的 JSX 用法 → blocker 组件覆盖（防漏挂重演）", async () => {
+    const root = makeFixture({
+      styleGuideTsxPatch: (real) => real.replace(/<MarkerBlock/g, "<MarkerBlockX"),
+    });
+    const bag = await runCheckFast({ repoRoot: root, chapters: GOOD_CHAPTERS });
+    expect(bag.hasBlockers()).toBe(true);
+    expect(bag.exitCode()).toBe(1);
+    const out = bag.render();
+    expect(out).toContain("[blocker] 组件覆盖");
+    expect(out).toContain("组件 MarkerBlock 未在 styleguide 展示");
+  });
+
+  it("StyleGuide.tsx 整文件缺失 → blocker 组件覆盖（可报告失败，不 throw）", async () => {
+    const root = makeFixture();
+    fs.rmSync(path.join(root, "src", "StyleGuide.tsx"));
+    const bag = await runCheckFast({ repoRoot: root, chapters: GOOD_CHAPTERS });
+    expect(bag.hasBlockers()).toBe(true);
+    expect(bag.render()).toContain("[blocker] 组件覆盖");
+  });
+});
+
+// ── 解析器纯函数 + 非空护栏（空/解析不到 → throw，拒绝静默通过） ──
+
+describe("三方同步解析器（纯函数 + 非空护栏）", () => {
+  it("extractCssImports：提取 `./x.css` 装配，忽略 ../theme 导入", () => {
+    const src = 'import "../theme/tokens.css";\nimport "./text/HeroTitle.css";\n';
+    expect([...extractCssImports(src)]).toEqual(["text/HeroTitle.css"]);
+  });
+
+  it("extractExportNames：提取 `export { A, B } from \"./<组>\"` 具名导出", () => {
+    expect([...extractExportNames('export { A, B } from "./text";\n')]).toEqual(["A", "B"]);
+  });
+
+  it("extractJsxUsages：`<Card` 命中、`<CardX` 不误判、`Record<GroupId, …>` 类型实参不算用法", () => {
+    const src = "const x: Record<GroupId, string> = {};\n<Card>\n<CardX />\n<EChart\n  option={1}\n/>\n";
+    const usages = extractJsxUsages(src);
+    expect(usages.has("Card")).toBe(true);
+    expect(usages.has("CardX")).toBe(true); // 自身是独立用法名，但不等于 Card
+    expect(usages.has("EChart")).toBe(true);
+    expect(usages.has("GroupId")).toBe(false);
+  });
+
+  it("非空护栏：空/解析不到 → throw 而非静默通过", () => {
+    expect(() => extractCssImports("// 没有装配")).toThrow(/非空护栏/);
+    expect(() => extractExportNames("// 没有导出")).toThrow(/非空护栏/);
+    expect(() => extractJsxUsages("// 没有 JSX")).toThrow(/非空护栏/);
+    expect(() => assertManifestIndexSync(COMPONENTS, "")).toThrow(/非空护栏/);
+    expect(() => assertStyleGuideCoverage(COMPONENTS, "const x = 1;\n")).toThrow(/非空护栏/);
+  });
+
+  it("负样本：空 manifest + 非空源 → 全部条目报「幽灵装配/幽灵导出」", () => {
+    const indexSrc = 'import "./text/HeroTitle.css";\nexport { HeroTitle } from "./text";\n';
+    const findings = assertManifestIndexSync([], indexSrc);
+    expect(findings.map((f) => f.message).join("\n")).toContain("未入 manifest");
+    expect(findings.every((f) => f.rule === "三方同步" && f.severity === "blocker")).toBe(true);
+  });
+
+  it("组件覆盖：manifest 条目在 StyleGuide 无用法 → 每条一个 blocker（rule=组件覆盖）", () => {
+    const entries = [
+      { export: "Card", group: "structure" as const, class: "card" },
+      { export: "Ghost", group: "structure" as const, class: "ghost" },
+    ];
+    const findings = assertStyleGuideCoverage(entries, "<Card>\n");
+    expect(findings).toHaveLength(1);
+    expect(findings[0].rule).toBe("组件覆盖");
+    expect(findings[0].message).toContain("组件 Ghost 未在 styleguide 展示");
   });
 });
 

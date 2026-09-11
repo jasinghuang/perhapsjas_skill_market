@@ -1,4 +1,5 @@
-// 组件契约 lint（§11.1 #9 内核）：组件 CSS 只消费 token——禁裸色值、禁裸 font-family、禁裸动画时长。
+// 组件契约 lint（§11.1 #9 内核）：组件 CSS 只消费 token——禁裸色值、禁裸 font-family、禁裸动画时长；
+// 另加 class 前缀门禁（§6.4 缺点 4 类名侧）：每个选择器片段必须 .cdp- 开头（防裸类名污染全局）。
 // M3a 门禁与本章节测试共用同一实现。
 // Why here: 依赖 Vite ?raw 管线（src 内），不随内部件收纳（故留在 components/ 根，而非 _internal/）。
 // Ruling P2-8：不用 node:fs + __dirname（ESM 无 __dirname、无 @types/node，tsc 必挂），
@@ -152,7 +153,88 @@ export function lintCssText(css: string, label: string): string[] {
 }
 
 export function lintComponentCss(): string[] {
-  return COMPONENT_CSS.flatMap(({ file, css }) => lintCssText(css, file));
+  return COMPONENT_CSS.flatMap(({ file, css }) => [
+    ...lintCssText(css, file),
+    ...lintCdpPrefix(css, file),
+  ]);
+}
+
+// ── class 前缀门禁（§6.4 缺点 4 物理隔离的类名侧）：组件 CSS 的每个选择器片段必须 .cdp- 开头 ──
+
+/** 注释剥离——保留换行（行号必须与原文一致，违规定位到原文行）。 */
+function stripCssComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+}
+
+/**
+ * 纯函数核心：扫 CSS 文本的「块前导（prelude）」——即每个 `{` 之前的文本，按 `,` 切片段，
+ * 每段必须以 `.cdp-` 开头，否则记违规（文件:行 + 违规片段）。
+ *
+ * 跳过：块注释（含行尾注释）、`@` 开头的 at-rule 前导（@media/@keyframes/…——其 **内部** 选择器
+ * 仍检查，@keyframes 内部整体跳过：from/to/百分比不是 class 选择器）、声明体（`{` 与 `}` 之间的
+ * 文本只累积不判定，遇 `}` 重置）。
+ *
+ * 现库 44 份 CSS 0 违规（回归护栏：lintComponentCss 一并纳入，见 contract-lint.test.ts）。
+ */
+export function lintCdpPrefix(css: string, label: string): string[] {
+  const violations: string[] = [];
+  const text = stripCssComments(css);
+  const frames: string[] = []; // 块栈："rule" | "at" | "keyframes"
+  let prelude = "";
+  let preludeLine = 1;
+  let line = 1;
+
+  // p = trim 后的块前导（起点即 preludeLine 那一行的首个非空白字符——多行逗号选择器时
+  // 逐片段按其所在行报点：行号 = preludeLine + 片段起点前的换行数）。
+  const checkPrelude = (p: string, preludeLine: number): void => {
+    if (p.startsWith("@")) return; // at-rule 前导不是选择器
+    let from = 0;
+    for (let i = 0; i <= p.length; i++) {
+      if (i !== p.length && p[i] !== ",") continue;
+      const raw = p.slice(from, i);
+      const frag = raw.trim();
+      if (frag !== "" && !frag.startsWith(".cdp-")) {
+        // 片段自身的行 = 片段首个非空白字符所在行（逗号后的换行归片段头部空白）
+        const lead = raw.length - raw.trimStart().length;
+        const fragLine = preludeLine + (p.slice(0, from + lead).match(/\n/g)?.length ?? 0);
+        violations.push(
+          `${label}:${fragLine} 组件 CSS 选择器「${frag}」未以 .cdp- 开头` +
+            "（class 前缀门禁：组件 CSS 只允许 .cdp-* 选择器，防裸类名污染全局，§6.4 缺点 4）",
+        );
+      }
+      from = i + 1;
+    }
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "\n") {
+      // 前导内保留换行（多行逗号选择器的片段行号依据）；空白前导不累积（preludeLine 在首个非空白字符处重置）
+      if (prelude.trim() !== "") prelude += "\n";
+      line++;
+      continue;
+    }
+    if (ch === "{") {
+      const p = prelude.trim();
+      const insideKeyframes = frames.includes("keyframes");
+      if (p.startsWith("@")) {
+        frames.push(/^@(-\w+-)?keyframes\b/.test(p) ? "keyframes" : "at");
+      } else {
+        if (!insideKeyframes) checkPrelude(p, preludeLine);
+        frames.push("rule");
+      }
+      prelude = "";
+      continue;
+    }
+    if (ch === "}") {
+      frames.pop();
+      prelude = "";
+      continue;
+    }
+    if (prelude.trim() === "" && !/\s/.test(ch)) preludeLine = line;
+    prelude += ch;
+  }
+  return violations;
 }
 
 // 终审 I2：提取一段 CSS 里全部 var(--…) 引用（去重），供闭合测试
