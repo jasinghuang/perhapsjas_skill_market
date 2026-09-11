@@ -30,6 +30,9 @@
 // 再考虑自起）；`npx playwright install chromium` 首次执行（浏览器缺失抛可读指引错误）。
 
 import type { Browser, Page } from "playwright";
+// 类型面（M3b Task 7 追加）：`audit()` 的返回类型。**type-only import**——cursorBridge 的
+// `declare global { Window.__presentation }` 本就对全程序可见，此处只需把类型名带进来。
+import type { AnimationAudit } from "../../src/engine/cursorBridge";
 
 // ── 冻结契约（计划 §2 接口约定，逐字） ──
 
@@ -237,6 +240,16 @@ export async function readCursor(page: Page): Promise<{ chapter: number; step: n
 /** 读动画计数（WAAPI + 引擎注册表；Ruling M4-1）。0 是合法值，不折叠成 falsy。 */
 export async function readAnimations(page: Page): Promise<number> {
   return page.evaluate(() => window.__presentation!.animations());
+}
+
+/**
+ * 读动画审计面（M3b Task 7 追加，消费 M3b Task 5 的 `audit()`）：WAAPI 面按"引擎是否打标"
+ * 拆 owned / unowned（附可读定位与 running 统计）+ 注册表容量与窗口时长。无头门禁据此区分
+ * "引擎动画"与"章节层泄漏的动画"（§11.1 #4 的注册表覆盖断言）。
+ * 与 readAnimations 同款薄封装——**追加成员，不改既有四方法契约**。
+ */
+export async function auditAnimations(page: Page): Promise<AnimationAudit> {
+  return page.evaluate(() => window.__presentation!.audit());
 }
 
 // ── 会话（接口约定 1：M5 与无头门禁共用的启停面） ──
