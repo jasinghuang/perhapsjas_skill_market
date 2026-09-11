@@ -2,6 +2,11 @@
 //
 // 单测面刻意**不启浏览器**（与 capture.test.ts 同策略：jsdom 里跑纯函数与薄封装）：
 //   · 页面侧驱动（openSession）靠真机冒烟与 storyboard/verify 两条实跑路径反证；
+//   · **例外（M3b Task 7 修复轮 1 / I1）**：`beforeGoto` 导航前钩子的**调用顺序**用 playwright
+//     替身钉死在本文件（"监听必须早于 goto"是这条修复的全部要点）；其**真机两臂**在
+//     `session.browser.test.ts`——jsdom 环境里 `vi.importActual("playwright")` 会炸
+//     （playwright-core 的 mcpBundle 需要 jsdom 里没有的 TransformStream），真浏览器用例
+//     必须跑在 node 环境（同 Task 8 的 collectors.browser.test.ts 约定）；
 //   · jumpToStep / readCursor / readAnimations 用最小 Page 替身钉住"页面侧回调调了哪座桥的
 //     哪个方法、参数怎么传"——这三条正是 capture.ts 原先内联的 evaluate，外提后必须逐字等价。
 
@@ -9,9 +14,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page } from "playwright";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as session from "./session";
-import { jumpToStep, readAnimations, readCursor, withHeadless } from "./session";
+import { jumpToStep, openSession, readAnimations, readCursor, withHeadless } from "./session";
 
 describe("withHeadless：URL 归一（幂等 + 保留既有 query）", () => {
   it("无 query → 追加 ?headless=1", () => {
@@ -154,5 +159,64 @@ describe("jumpToStep / readCursor / readAnimations：内联 evaluate 外提（�
     const { page, calls } = stubPage(0);
     await expect(readAnimations(page)).resolves.toBe(0);
     expect((calls[0].fn as () => unknown)()).toBe(7);
+  });
+});
+
+// ── 修复轮 1（I1）：openSession 的导航前钩子 beforeGoto ──
+//
+// 由来：页面**装载期**（Vite client / React 首帧挂载 / 首步 effect）的事件在 openSession
+// 返回前就发完了（waitForBridge 等的是挂载后才装的桥）——晚挂监听即永久丢失。无头门禁的
+// #16 ① 断言的正是这段窗口里的报错（评审实测：useEffect(…, []) 里的 console.error 整条漏报）。
+//
+// 本 describe 两条：① 调用顺序（playwright 替身，jsdom 内跑）；② 真机两臂（真浏览器 +
+// 本地 http 夹具页）。替身与真机**分处两个 describe**——vi.mock 是文件级，替身会截胡真机臂。
+
+const { pwCalls } = vi.hoisted(() => ({ pwCalls: [] as string[] }));
+
+vi.mock("playwright", () => ({
+  chromium: {
+    launch: async () => ({
+      newPage: async () => {
+        pwCalls.push("newPage");
+        return {
+          goto: async (url: string) => {
+            pwCalls.push("goto:" + url);
+          },
+          waitForFunction: async () => {
+            pwCalls.push("waitForFunction");
+          },
+          on: () => undefined,
+          evaluate: async () => undefined,
+        };
+      },
+      close: async () => undefined,
+    }),
+  },
+}));
+
+describe("beforeGoto：调用顺序（替身）", () => {
+  it("钩子在 page.goto 之前调用——晚一步就漏掉整个装载期", async () => {
+    pwCalls.length = 0;
+    const session = await openSession({
+      url: "http://fixture.test/",
+      beforeGoto: (page) => {
+        pwCalls.push("beforeGoto");
+        expect(typeof page.on).toBe("function");
+      },
+    });
+    expect(pwCalls).toEqual([
+      "newPage",
+      "beforeGoto",
+      "goto:http://fixture.test/?headless=1",
+      "waitForFunction",
+    ]);
+    await session.close();
+  });
+
+  it("不传钩子 → 顺序不变（既有调用方 capture/verify 行为零变化）", async () => {
+    pwCalls.length = 0;
+    const session = await openSession({ url: "http://fixture.test/" });
+    expect(pwCalls).toEqual(["newPage", "goto:http://fixture.test/?headless=1", "waitForFunction"]);
+    await session.close();
   });
 });

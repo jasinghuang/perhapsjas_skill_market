@@ -5,6 +5,10 @@
  * ——本文件用注入式 deps 钉住编排语义（标题 / 合并 / 退出码 / 标志位），用纯函数钉住
  * #16 三断言的判据（console 归因 / 溢出归 Finding / 动画逃逸分级）。真机正反样本见
  * 实现报告（Task 7 Step 5）。
+ *
+ * 修复轮 1（I1）：`openSession` 的导航前钩子 `beforeGoto` 的两条测试（调用顺序替身 + 真机两臂）
+ * 放在 `scripts/shot/session.test.ts`——它们测的是 session 的契约，且真机臂不能被本文件的
+ * playwright 替身（vi.mock 是文件级）截胡。
  */
 
 import { describe, expect, it } from "vitest";
@@ -321,7 +325,7 @@ describe("runCheck：fast + 无头合并、标题与退出码", () => {
   const headlessBag = () => {
     const b = new FindingBag();
     b.add({ rule: "被画布截断", severity: "blocker", location: "章节 0 第 1 步（example）", message: "m" });
-    b.addNote("#16 采集：2 步；元素检查面累计 6");
+    b.addNote("#16 采集读数：已跑 2 步；元素检查面累计 examined 6", "readout");
     return b;
   };
 
@@ -336,7 +340,7 @@ describe("runCheck：fast + 无头合并、标题与退出码", () => {
     const out = bag.render(CHECK_REPORT_TITLE);
     expect(out).toContain(CHECK_REPORT_TITLE);
     expect(out).toContain("共 2 项（blocker 1，warning 1）");
-    expect(out).toContain("元素检查面累计 6");
+    expect(out).toContain("元素检查面累计 examined 6");
     expect(bag.exitCode()).toBe(1);
   });
 

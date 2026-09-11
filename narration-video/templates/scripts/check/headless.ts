@@ -12,14 +12,19 @@
  * ① **console**：blocker **只认 `pageerror` 与 `console.error`**（本页脚本来源）；
  *    `m.location().url` 非本页脚本的浏览器 Log 类消息（弃用告警 / CSP / 非 passive 监听器）
  *    → **info 并计数**，不报 warning。
- *    归因窗口 = **该步期间**：开场（页面装载 + 开场挂载）的消息在开场 `ready()` 后丢弃；
- *    此后每步在"该步采集完成"时**取走并清空**缓冲——即每步只对"自上次取走以来"的消息负责，
- *    上一步的消息不会被重算到下一步头上（跨步不累积、不迁移）。
- *    ⚠ 刻意收窄/放宽的两处（如实标注）：
- *      · **包含该步自己的 jumpTo→ready 窗口**（不只是 ready 之后）：章节层的 console.error
- *        绝大多数发生在**该步挂载渲染/effect** 时——正是 jumpTo 触发的。若把它算作"框架期"
- *        丢弃，这条断言就只剩"等页面静止后再报错才算"，等于漏掉它要抓的东西。
- *      · **不含首帧装载期**：页面装载（Vite client / React 挂载）的消息一律丢弃（框架期噪音）。
+ *    **监听自导航前挂起**（`openSession({ beforeGoto })`，修复轮 1 / I1）：页面装载期
+ *    （Vite client / React 首帧挂载 / 首步 effect）的事件在 `openSession` 返回前就已发完
+ *    ——晚挂即永久丢失（实测：`useEffect(…, [])` 里的 `console.error` 曾整条漏报）。
+ *    归因窗口 = **每步在"该步采集完成"时取走并清空缓冲**：
+ *      · **首步窗口 = 页面装载 → 首步采集完成**（含装载期与开场 `jumpTo(0,0)`）；
+ *      · 其余步窗口 = 上一步采集完成 → 本步采集完成（含本步 `jumpTo→ready`）。
+ *    即每步只对"自上次取走以来"的消息负责——上一步的消息不会被重算到下一步头上
+ *    （跨步不累积、不迁移）；**没有任何消息被无条件丢弃**，噪音靠分级（log/info 级忽略、
+ *    warning 级计 info、error 级才判 blocker）而不是靠丢窗口。
+ *    ⚠ 如实标注两处口径（修复轮 1 / M2 更正）：
+ *      · 报错文本说的"该步窗口"包含 `jumpTo→ready` 渲染期——章节层的 console.error 绝大多数
+ *        正发生在**该步挂载渲染/effect** 时；只认 `ready()` 之后的字面读法抓不到它们。
+ *      · 两步之间滞后的消息会算进**下一步**（窗口边界是"采集完成"而非"导航开始"）。
  * ② **被画布截断** → blocker（`collectors.ts` 的 `COLLECT_OVERFLOW_SRC`）。
  * ③ **动画逃逸**：`audit.unownedRunning > 0` 或 render 下 `audit.running > 0` → **blocker**；
  *    `unowned > 0` 但**未在跑**（CSS transition 残影）→ **warning** 并列 hints
@@ -211,7 +216,11 @@ export function consoleVerdict(
     rule: e.kind === "pageerror" ? "运行期报错" : "控制台报错",
     severity: "blocker" as const,
     location: `${where} · ${e.kind === "pageerror" ? "pageerror" : "console.error"}`,
-    message: `${describeEvent(e)}——该步就绪后本步期间抛出的报错（#16 ①：无头 pass 逐 step 断言）`,
+    // 文案与实际窗口一致（修复轮 1 / M2：此前写"该步就绪后本步期间"，而报出的消息几乎都发生在
+    // ready() **之前**——该步窗口含 jumpTo→ready，首步还含页面装载期）。
+    message:
+      `${describeEvent(e)}——该步窗口（首步自页面装载起、其后自上一步采集完成起；` +
+      `含本步 jumpTo→ready 渲染期）内抛出的本页脚本报错（#16 ①：无头 pass 逐 step 断言）`,
   }));
   const notes = infos.map((e) => `${where} · [info] ${describeEvent(e)}`);
   return { findings, notes };
@@ -358,7 +367,10 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
   const all = expandSpecs(opts.chapters);
   const specs = opts.only === undefined ? all : all.filter((s) => opts.only!.includes(s.chapter));
   if (specs.length === 0) {
-    bag.addNote("#16 无头 pass：无 step 可跑（chapters 为空或 only 过滤后为空）——未开浏览器");
+    bag.addNote(
+      "#16 无头 pass：无 step 可跑（chapters 为空或 only 过滤后为空）——未开浏览器",
+      "readout",
+    );
     return bag;
   }
 
@@ -372,19 +384,27 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
   try {
     const baseUrl = opts.url ?? (serve = await startServe({ repoRoot: opts.repoRoot })).url;
     const pageUrl = withHeadless(withRenderMode(baseUrl));
-    // 自起的 server 把端口写进 note（端口被占时 Vite 自动 +1——报告要能看出查的是哪个端口）
-    bag.addNote(`#16 无头 pass 基址：${pageUrl}（${opts.url === undefined ? "进程内自起" : "显式 --url 复用"}）`);
+    // 自起的 server 把端口写进读数（端口被占时 Vite 自动 +1——报告要能看出查的是哪个端口）
+    bag.addNote(
+      `#16 无头 pass 基址：${pageUrl}（${opts.url === undefined ? "进程内自起" : "显式 --url 复用"}）`,
+      "readout",
+    );
 
-    session = await openSession({ url: pageUrl, viewport: stageConfig.dims });
-    const page = session.page;
+    // 监听必须**早于导航**（修复轮 1 / I1）：装载期（Vite client / React 首帧挂载 / 首步 effect）
+    // 的事件在 openSession 返回前就发完了——晚挂即永久丢失。
     const window = new ConsoleWindow();
-    wireConsole(page, window);
+    session = await openSession({
+      url: pageUrl,
+      viewport: stageConfig.dims,
+      beforeGoto: (page) => wireConsole(page, window),
+    });
+    const page = session.page;
 
     // 开场复位（计划 Global Constraints / I12）：防 localStorage 游标恢复的起点漂移
-    // （同一 context 的第二个页面实测开局在 step 2）。
+    // （同一 context 的第二个页面实测开局在 step 2）。**不丢窗口**：装载期到首步采集完成之间
+    // 的消息全部归首步（(0,0)）——那正是"仅挂载期跑一次"的报错所在处（修复轮 1 / I1）。
     await jumpToStep(page, { chapter: 0, step: 0 });
     await readyWithTimeout(page, frameLocation({ chapter: 0, step: 0 }, chapterIds[0] ?? "#0"));
-    window.clear(); // 框架期（页面装载 + 开场挂载）的消息丢弃
 
     let aborted: string | null = null;
     for (const spec of specs) {
@@ -424,20 +444,32 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
         { pageUrl, renderMode: true },
       );
       bag.addAll(verdict.findings);
-      for (const n of verdict.notes) bag.addNote(n);
+      // judge 的 notes = **info 级 finding**（浏览器 Log 类消息 / 收集器 info 档）
+      for (const n of verdict.notes) bag.addNote(n, "info");
 
       totalExamined += overflow.examined;
       stepsRun += 1;
     }
 
     if (aborted !== null) {
-      bag.addNote(`#16 无头 pass：在 ${aborted} 中止（游标失配后，其余步的逐 step 归因不再可信）——已跑 ${stepsRun} 步`);
+      bag.addNote(
+        `#16 无头 pass：在 ${aborted} 中止（游标失配后，其余步的逐 step 归因不再可信）——已跑 ${stepsRun} 步`,
+        "readout",
+      );
     }
     const guard = examinedGuard(totalExamined);
     if (guard !== null) bag.add(guard);
+    if (blockerMsgs > 0) {
+      // 去歧义（修复轮 1 / M5）：StrictMode 双渲染让同一处渲染期报错记两条，属预期而非重复上报
+      bag.addNote(
+        "注：React StrictMode 双渲染会让同一处渲染期/挂载期报错记两条，属预期（不是重复上报）",
+        "readout",
+      );
+    }
     bag.addNote(
       `#16 采集读数：已跑 ${stepsRun} 步；元素检查面累计 examined ${totalExamined}；` +
-        `本页脚本报错 ${blockerMsgs} 条 / info ${infoMsgs} 条（不含开场装载期）`,
+        `本页脚本报错 ${blockerMsgs} 条 / info ${infoMsgs} 条（窗口自页面装载起——修复轮 1 / I1）`,
+      "readout",
     );
     return bag;
   } finally {

@@ -261,6 +261,18 @@ export interface SessionOptions {
   viewport?: { width: number; height: number };
   /** 默认 1（"精确 1080p"契约） */
   deviceScaleFactor?: number;
+  /**
+   * **导航前钩子**（M3b Task 7 修复轮 1 追加；M4-3 同款"追加字段不破坏既有调用方"）：
+   * 在 `page.goto` **之前**调用，供消费方挂 `page.on("console" | "pageerror")` 之类的事件监听。
+   *
+   * 为什么必须是"之前"：页面**装载期**（Vite client / React 首帧挂载 / 首步 effect）产生的事件
+   * 在 `goto` 解析 load、`waitForBridge` 等到桥（桥是挂载后才装的）时就已发完——`openSession`
+   * 返回之后再挂监听，那段窗口早已过去，事件永久丢失（`jumpTo(0,0)` 只触发重渲染，不会重跑
+   * `[]` 依赖的 effect）。无头门禁的 #16 ① 断言的正是这段窗口里的报错。
+   *
+   * 不传 = 行为逐字不变（capture.ts / verify-sequential.ts 均不传）。
+   */
+  beforeGoto?: (page: Page) => void;
 }
 
 export interface Session {
@@ -283,6 +295,8 @@ export async function openSession(opts: SessionOptions): Promise<Session> {
   const browser = await launchChromium();
   try {
     const page = await browser.newPage({ viewport, deviceScaleFactor });
+    // 导航前钩子（见 SessionOptions.beforeGoto）：必须早于 goto——装载期事件晚挂即丢。
+    opts.beforeGoto?.(page);
     await gotoOrExplain(page, url);
     await waitForBridge(page, url);
     return { page, close: () => browser.close() };

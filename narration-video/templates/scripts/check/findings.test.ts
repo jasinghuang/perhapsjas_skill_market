@@ -88,23 +88,53 @@ describe("findings info 通道（M3b Task 7：#16/Task 8 的「计数但不判�
   it("addNote：报告末尾成段列出；无 note 时报告逐字不变（既有消费方不受影响）", () => {
     const a = new FindingBag();
     expect(a.render()).toBe("静态门禁报告：0 项（blocker 0，warning 0）");
-    a.addNote("#16 采集：2 步；元素检查面累计 6");
-    expect(a.notes()).toEqual(["#16 采集：2 步；元素检查面累计 6"]);
+    a.addNote("浏览器 Log：Third-party cookie", "info");
+    expect(a.notes()).toEqual(["浏览器 Log：Third-party cookie"]);
     const out = a.render();
     expect(out).toContain("info 1 条（不进退出码）");
-    expect(out).toContain("元素检查面累计 6");
+    expect(out).toContain("Third-party cookie");
     // info 不进退出码（哪怕只有 note 没有 finding）
     expect(a.exitCode()).toBe(0);
     expect(a.hasBlockers()).toBe(false);
   });
 
-  it("merge 连 notes 一并并入（fast 层与无头层的 notes 不得在合并时丢失）", () => {
+  it("修复轮 M1：`info N 条` 只计 info finding；诊断读数单列、不混装（T8 的 #14/#18 要往同一通道塞 info）", () => {
+    const a = new FindingBag();
+    a.addNote("#16 无头 pass 基址：http://localhost:5175/?render=1&headless=1（进程内自起）", "readout");
+    a.addNote("#16 采集读数：已跑 3 步；元素检查面累计 examined 10", "readout");
+    a.addNote("章节 0 第 1 步 · [info] 浏览器 Log：deprecation warning", "info");
+
+    expect(a.notes("info")).toEqual(["章节 0 第 1 步 · [info] 浏览器 Log：deprecation warning"]);
+    expect(a.notes("readout")).toHaveLength(2);
+
+    const out = a.render();
+    // info 段只数真 info finding（诊断读数不得把它撑成 3 条）
+    expect(out).toContain("info 1 条（不进退出码）");
+    expect(out).not.toContain("info 3 条");
+    expect(out).toContain("诊断读数");
+    expect(out).toContain("元素检查面累计 examined 10");
+  });
+
+  it("修复轮 M3：notes() 返回副本——外部拿到的是快照，改不动内部状态", () => {
+    const a = new FindingBag();
+    a.addNote("x", "readout");
+    const snapshot = a.notes("readout") as string[];
+    snapshot.push("被外部塞进来的");
+    expect(a.notes("readout")).toEqual(["x"]);
+    expect(a.render()).toContain("诊断读数");
+  });
+
+  it("merge 连两类 notes 一并并入（fast 层与无头层的 notes 不得在合并时丢失/串档）", () => {
     const a = new FindingBag();
     const b = new FindingBag();
-    a.addNote("fast note");
-    b.addNote("headless note");
+    a.addNote("fast readout", "readout");
+    b.addNote("headless info", "info");
+    b.addNote("headless readout", "readout");
     a.merge(b);
-    expect(a.notes()).toEqual(["fast note", "headless note"]);
-    expect(a.render()).toContain("info 2 条");
+    expect(a.notes("info")).toEqual(["headless info"]);
+    expect(a.notes("readout")).toEqual(["fast readout", "headless readout"]);
+    const out = a.render();
+    expect(out).toContain("info 1 条");
+    expect(out).toContain("fast readout");
   });
 });
