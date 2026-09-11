@@ -1899,14 +1899,16 @@ function HighlightsSlide() {
           </aside>
         </div>
         {/* 底部展望强调块（二十六轮 F5 墨底；二十七轮 F5：surface-3 墨底 → accent-1 绿底 + cream 字，
-            主文案 --t-body 28px → --t-h3 40px 字阶升级；4px 墨框保持（Card 风格）；Kicker 保持 24px） */}
+            主文案 --t-body 28px → --t-h3 40px 字阶升级；4px 墨框保持（Card 风格）；Kicker 保持 24px；
+            三十五轮 F2：marginTop --space-3→--space-2 + 纵向内衬 --space-3→--space-2（DataItemRow
+            字号 token 化后内容下推致块底 952 > 安全框限 934，回收 24px → 928 复归带内） */}
         <div
           data-testid="hl-outlook"
           style={{
-            marginTop: "var(--space-3)",
+            marginTop: "var(--space-2)",
             background: "var(--accent-1)",
             border: "var(--border-w) solid var(--text)",
-            padding: "var(--space-3) var(--space-4)",
+            padding: "var(--space-2) var(--space-4)",
             display: "flex",
             alignItems: "center",
             gap: "var(--space-4)",
