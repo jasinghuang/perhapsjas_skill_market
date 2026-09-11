@@ -137,7 +137,7 @@ export interface RawConsoleEvent {
   locationUrl: string;
 }
 
-/** 消息缓冲（归因窗口的载体）：`drain()` 取走并清空；`clear()` 丢弃（框架期/中止时）。 */
+/** 消息缓冲（归因窗口的载体）：`drain()` 取走并清空；`clear()` 丢弃（中止时）。 */
 export class ConsoleWindow {
   private events: RawConsoleEvent[] = [];
 

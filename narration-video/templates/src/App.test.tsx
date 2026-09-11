@@ -219,6 +219,17 @@ describe("App 装配 · 无头/渲染不自驱（M3b Task 6）", () => {
     expect(playStep).not.toHaveBeenCalled();
   });
 
+  it("?render=1（无 headless）不武装自驱推进链：playStep 不被调用（守卫 render 支路的防御锁）", async () => {
+    // 当前不可达（capture.ts / verify-sequential.ts 都走 openSession，而它恒追加 headless=1），
+    // 但守卫是 OR：若将来有人把它改成只判 headless，本用例是 ?render=1 静默恢复自驱的唯一警报。
+    window.history.replaceState({}, "", "/?render=1");
+    vi.resetModules();
+    const playStep = mockPlayer();
+    const { default: RenderApp } = await import("./App");
+    render(<RenderApp />);
+    expect(playStep).not.toHaveBeenCalled();
+  });
+
   it("无 query 时行为不变：进入即 playStep 一次", async () => {
     window.history.replaceState({}, "", "/");
     vi.resetModules();
