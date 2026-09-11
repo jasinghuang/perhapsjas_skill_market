@@ -5,7 +5,9 @@ import { register, setRenderMode } from "./animationRuntime";
 
 class FakeAudio {
   static instances: FakeAudio[] = [];
-  src: string | null = null;
+  private _src: string | null = null;
+  /** 资源选择失败后置位（真实 HTMLMediaElement.error 同义）；赋新 src 时复归 */
+  error: { code: number } | null = null;
   ended = false;
   onended: (() => void) | null = null;
   onerror: (() => void) | null = null;
@@ -13,6 +15,13 @@ class FakeAudio {
   pauseCalls = 0;
   constructor() {
     FakeAudio.instances.push(this);
+  }
+  get src() {
+    return this._src;
+  }
+  set src(v: string | null) {
+    this._src = v;
+    this.error = null; // 赋 src 重跑资源选择 → error 复归（浏览器语义）
   }
   play() {
     this.playCalls++;
@@ -27,6 +36,7 @@ class FakeAudio {
     this.onended?.();
   }
   fail() {
+    this.error = { code: 4 }; // MEDIA_ERR_SRC_NOT_SUPPORTED（404 同类）
     this.onerror?.();
   }
 }
@@ -150,6 +160,25 @@ describe("useAudioPlayer", () => {
     act(() => { result.current.resume(); }); // 双击播放第 2 次：T4 @2700
     vi.advanceTimersByTime(5000);
     expect(onDone).toHaveBeenCalledTimes(1); // 无 fix：T1@1500 推进一次 + T3@2600 再推进 → 2 次
+  });
+
+  it("resume-after-404：加载失败后暂停再播放走估时兜底，不卡死", () => {
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useAudioPlayer());
+    act(() => {
+      result.current.playStep("你好", "1.mp3", 400, onDone);
+    });
+    const audio = FakeAudio.instances[0];
+
+    act(() => { audio.fail(); }); // 404 → onerror 武装估时计时器
+    vi.advanceTimersByTime(200);
+    act(() => { result.current.pause(); }); // 用户在估时等待中暂停（计时器被清）
+    vi.advanceTimersByTime(5000);
+    expect(onDone).not.toHaveBeenCalled();
+
+    act(() => { result.current.resume(); }); // 失败资源上 play() 不再触发 error：无守卫则永久卡死
+    vi.advanceTimersByTime(1500 + 50 + 400);
+    expect(onDone).toHaveBeenCalledTimes(1); // 无守卫：0 次（死锁）
   });
 
   it("stop 清空定时与音频", () => {

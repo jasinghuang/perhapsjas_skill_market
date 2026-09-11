@@ -114,7 +114,7 @@ export function useAudioPlayer(): AudioPlayer {
     const last = lastRef.current;
     if (!last) return;
     const audio = audioRef.current;
-    if (audio?.src) {
+    if (audio?.src && !audio.error) {
       if (audio.ended) {
         // 音频已念完、曾在等待动画中被暂停：重新武装等待链
         afterAnimations(scheduleHold);
@@ -125,6 +125,8 @@ export function useAudioPlayer(): AudioPlayer {
       }
     } else {
       // 兜底估时路径：重新计时（M1 简化，不恢复已流逝部分）
+      // 含 audio.error 情形（M1 终审 parked ①）：失败资源上再 play() 不触发新 error 事件，
+      // 无计时器重武装 → 暂停后播放即死锁；判 error 走估时兜底
       timerRef.current = window.setTimeout(
         () => afterAnimations(scheduleHold),
         estimateMs(last.narration),
