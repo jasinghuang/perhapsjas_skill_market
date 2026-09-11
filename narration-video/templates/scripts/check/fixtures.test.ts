@@ -176,8 +176,9 @@ describe("bad/ 负样本：逐文件至少一条 blocker", () => {
     const lines = codeLinesOf(f.text);
     const stringLine = lines.find((l) => l.code.startsWith('content: "/*"'))!.line;
     const colorLine = lines.find((l) => l.code.startsWith("color: #ff0000"))!.line;
-    expect(stringLine).toBeGreaterThan(0);
-    expect(colorLine).toBeGreaterThan(stringLine);
+    // 夹具前提（与 K-10 那条同型）：裸色紧邻字符串声明的下一行——判别力全在"字符串行
+    // 不置注释态"，若两者不相邻则该前提不成立（夹具被改坏）
+    expect(colorLine).toBe(stringLine + 1);
     // 唯一 finding 落在 color 行——字符串行若被误判为注释开头，这条会整条消失（漏检）
     expect(r.map((x) => x.location)).toEqual([`${f.path}:${colorLine}`]);
     expect(r.some((x) => x.location === `${f.path}:${stringLine}`)).toBe(false);

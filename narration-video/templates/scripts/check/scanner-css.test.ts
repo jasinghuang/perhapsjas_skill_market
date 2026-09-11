@@ -181,10 +181,34 @@ describe("章节层 CSS 扫描器 · 声明级状态机（M3b）", () => {
     expect(f.filter((x) => x.rule === "禁硬编码色").map((x) => x.location)).toEqual(["a.css:4"]);
   });
 
-  // ② 未闭合引号（CSS bad-string）不得吞掉后续声明——抑制泄漏不越过一行（行级旧管线同款）。
-  it("未闭合字符串只吞到行末：后续规则/声明照常检查", () => {
+  // ② 未闭合引号（CSS bad-string）不再吞掉文件余下全部内容：抑制面收窄到「下一个 token
+  // 边界之前」——坏字符串里的 `;` 不构成边界，故该边界**可跨行**（不是"只吞到行末"）。
+  it("未闭合字符串不再吞掉文件余下全部：下一个 token 边界之后照常检查（可跨行）", () => {
     const css = `.cdp-x {\n  content: "oops\n}\n.cdp-y { color: #ff0000; }`;
     const f = scanChapterCss([{ path: "a.css", css }]);
     expect(f.filter((x) => x.rule === "禁硬编码色").map((x) => x.location)).toEqual(["a.css:4"]);
+  });
+});
+
+// 修复轮 1（评审 I-1）：`(` 无界 + 字符串外转义未跳过 → 「括号深度永不为 0」的静默漏检面
+// （与 K-12 同型：一处状态泄漏 ⇒ 后续全部边界失效 ⇒ 零 finding）。
+describe("章节层 CSS 扫描器 · 修复轮 1（括号深度泄漏面）", () => {
+  it("未闭合括号（@media 前导少一个 `)`）不吞掉后续声明：该报的裸色必须被报", () => {
+    const css = `@media (min-width: 900px {\n.a { color: #f00; }\n}\n.b { color: #0f0; }`;
+    const f = scanChapterCss([{ path: "a.css", css }]);
+    // 行级旧实现同输入报 a.css:2 + a.css:4——修复后不得回归为漏检
+    expect(f.filter((x) => x.rule === "禁硬编码色").map((x) => x.location)).toEqual([
+      "a.css:2",
+      "a.css:4",
+    ]);
+  });
+
+  it("选择器内的转义括号（`.foo\\(`，合法 CSS）不改变括号深度：整文件照常检查", () => {
+    const css = `.foo\\( { color: #f00; }\n.bar { color: #0f0; }`;
+    const f = scanChapterCss([{ path: "a.css", css }]);
+    expect(f.filter((x) => x.rule === "禁硬编码色").map((x) => x.location)).toEqual([
+      "a.css:1",
+      "a.css:2",
+    ]);
   });
 });
