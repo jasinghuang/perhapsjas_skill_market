@@ -677,7 +677,7 @@ const SIZE_HINTS: Record<string, { minW?: number; minH?: number; span?: number; 
   "bar-grow": { minH: 80 },      // 条形 → 矮格（~120 内容）
   "donut-meter": { minH: 168 },  // 圆环 144 + 标注 → 小格（~260）
   "stat-card": { minH: 128 },    // 三变体并排
-  "stat-cell": { span: 2, minW: 1080, minH: 160 }, // 四档 descStyle 4 列全览（跨列给足宽）
+  "stat-cell": { span: 2, minW: 1080, minH: 560 }, // 定版四卡 block 2×2（S20 同构，自然字号）→ 大格 ~690
   "stat-inline": { minH: 300 },  // 两变体竖排全宽 → 大格（300-420）
   // STRUCTURE · 结构
   "card": { minH: 96 },
@@ -871,23 +871,17 @@ function ComponentsSection() {
           </div>
         </CompCell>
         {/* 置组尾：跨列格不占行导致前一行留洞（auto-placement 不回填），组尾跨列只留尾行洞 */}
-        <CompCell name="stat-cell" extraScope={{ "--t-body": "18px", "--space-4": "16px" }}>
-          {/* 四档 descStyle 单行 4 列全览（跨列 1088 内容宽 → 每列 260）；数字保持 display-2 40 不缩，
-              仅 body 20→18 + 卡衬 24→16 让药丸 desc 在列宽内单行贴文——四档同屏自然可读 */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "var(--space-2)", width: "100%" }}>
-            <Variant label="block · 绿底 cream 字">
-              <StatCell index="/01" value="42%" label="参与度提升" desc="一句描述，突出样式。" descStyle="block" data-testid="variant-stat-cell-block" />
-            </Variant>
-            <Variant label="pill · 墨框药丸 + 涨橙 delta">
-              <StatCell index="/02" value="27,930" label="营业收入 · 百万元" desc="收入规模稳步抬升。" descStyle="pill" delta="▲ +9.52%" deltaTone="up" data-testid="variant-stat-cell-pill" />
-            </Variant>
-            <Variant label="pillFilled · 绿填充药丸">
-              <StatCell index="/03" value="975,484" label="总资产 · 百万元" desc="资产盘子继续扩张。" descStyle="pillFilled" data-testid="variant-stat-cell-pill-filled" />
-            </Variant>
-            <Variant label="plain · 无底无框 + 跌绿 delta">
-              <StatCell index="/04" value="9,637" label="归母净利 · 百万元" desc="回调一档，落袋为安。" descStyle="plain" delta="▼ -3.20%" deltaTone="down" data-testid="variant-stat-cell-plain" />
-            </Variant>
+        <CompCell name="stat-cell" extraScope={{ "--t-display-2": "96px", "--t-body": "28px", "--t-label": "24px", "--space-4": "32px" }}>
+          {/* 定版样式（与 S20 KEY METRICS 完全同构）：四卡统一 descStyle block（默认档，绿底 cream 字）
+              + 每卡 delta 涨橙；自然字号覆盖 CELL_SCOPE（value 96 / desc 28 / label 24——全部 ≥24 全局
+              最小字号）；2×2 布局（自然字号下一行放不下四卡） */}
+          <div style={{ width: "100%", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "var(--space-2)" }}>
+            <StatCell index="/01" label="营业收入 · 百万元" value="27,930" delta="▲ +9.52%" deltaTone="up" desc="收入规模稳步抬升，再上台阶。" descStyle="block" data-testid="variant-stat-cell-block" />
+            <StatCell index="/02" label="归母净利 · 百万元" value="13,702" delta="▲ +42.18%" deltaTone="up" desc="利润增速领跑，成色十足。" descStyle="block" data-testid="variant-stat-cell-block-2" />
+            <StatCell index="/03" label="总资产 · 百万元" value="975,484" delta="▲ +28.57%" deltaTone="up" desc="资产盘子继续扩张，逼近万亿。" descStyle="block" data-testid="variant-stat-cell-block-3" />
+            <StatCell index="/04" label="归母权益 · 百万元" value="156,111" delta="▲ +27.93%" deltaTone="up" desc="股东权益同步增厚，家底更实。" descStyle="block" data-testid="variant-stat-cell-block-4" />
           </div>
+          <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>默认档 · block 绿底 cream 字（与 KEY METRICS 定版一致）；pill / pillFilled / plain 为组件能力（展示页未使用）</MonoLabel>
         </CompCell>
       </CompGroup>
       <CompGroup label="STRUCTURE · 结构（6）">
