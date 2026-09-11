@@ -33,85 +33,95 @@ describe("装饰组", () => {
     expect(getByTestId("c").className).toContain("cdp-decor-ring-filled");
   });
 
-  it("reveal 走引擎、卸载 dispose", () => {
-    const { unmount } = render(<DecorDot reveal="fade" />);
-    expect(registrySize()).toBeGreaterThan(0);
-    unmount();
-    expect(registrySize()).toBe(0);
+  describe("DecorDot", () => {
+    it("reveal 走引擎、卸载 dispose", () => {
+      const { unmount } = render(<DecorDot reveal="fade" />);
+      expect(registrySize()).toBeGreaterThan(0);
+      unmount();
+      expect(registrySize()).toBe(0);
+    });
   });
 
-  it("StackedBlocks 渲染 4 方块 + 类名约定", () => {
-    const { getByTestId } = render(<StackedBlocks data-testid="stack" />);
-    expect(getByTestId("stack").className).toContain("cdp-stacked-blocks");
-    expect(getByTestId("stack").querySelectorAll(".cdp-stacked-block")).toHaveLength(4);
+  describe("StackedBlocks", () => {
+    it("StackedBlocks 渲染 4 方块 + 类名约定", () => {
+      const { getByTestId } = render(<StackedBlocks data-testid="stack" />);
+      expect(getByTestId("stack").className).toContain("cdp-stacked-blocks");
+      expect(getByTestId("stack").querySelectorAll(".cdp-stacked-block")).toHaveLength(4);
+    });
   });
 
-  it("MarkerBlock 三变体类名 + 子内容渲染（十六轮 F3；二十二轮 F1 补 invert）", () => {
-    const { getByTestId } = render(
-      <div>
-        <MarkerBlock data-testid="m1">CREATIVE</MarkerBlock>
-        <MarkerBlock variant="accent" data-testid="m2">创意模式</MarkerBlock>
-        <MarkerBlock variant="invert" data-testid="m3">墨底</MarkerBlock>
-      </div>,
-    );
-    expect(getByTestId("m1").className).toContain("cdp-marker-block");
-    expect(getByTestId("m1").className).toContain("cdp-marker-block-plain");
-    expect(getByTestId("m1").textContent).toBe("CREATIVE");
-    expect(getByTestId("m2").className).toContain("cdp-marker-block-accent");
-    expect(getByTestId("m2").textContent).toBe("创意模式");
-    expect(getByTestId("m3").className).toContain("cdp-marker-block-invert");
-    expect(getByTestId("m3").textContent).toBe("墨底");
+  describe("MarkerBlock", () => {
+    it("MarkerBlock 三变体类名 + 子内容渲染（十六轮 F3；二十二轮 F1 补 invert）", () => {
+      const { getByTestId } = render(
+        <div>
+          <MarkerBlock data-testid="m1">CREATIVE</MarkerBlock>
+          <MarkerBlock variant="accent" data-testid="m2">创意模式</MarkerBlock>
+          <MarkerBlock variant="invert" data-testid="m3">墨底</MarkerBlock>
+        </div>,
+      );
+      expect(getByTestId("m1").className).toContain("cdp-marker-block");
+      expect(getByTestId("m1").className).toContain("cdp-marker-block-plain");
+      expect(getByTestId("m1").textContent).toBe("CREATIVE");
+      expect(getByTestId("m2").className).toContain("cdp-marker-block-accent");
+      expect(getByTestId("m2").textContent).toBe("创意模式");
+      expect(getByTestId("m3").className).toContain("cdp-marker-block-invert");
+      expect(getByTestId("m3").textContent).toBe("墨底");
+    });
   });
 
-  it("StepStairs 渲染 N 卡 + 无序号 + 卡高递增 200/240/280 + 位置平齐无 translateY + 无上升箭头（三十轮 F1）", () => {
-    const { getByTestId } = render(
-      <StepStairs
-        data-testid="stairs"
-        items={[
-          { value: "42%", note: "参与度提升" },
-          { value: "2.7×" },
-          { value: "25", note: "屏数" },
-        ]}
-      />,
-    );
-    const root = getByTestId("stairs");
-    expect(root.className).toContain("cdp-step-stairs");
-    const cards = root.querySelectorAll(".cdp-step-stairs-card");
-    expect(cards).toHaveLength(3);
-    // 卡高逐级递增 200/240/280（三十轮 F1 重算：卡内安全边距四周 24px + 最短卡内容底距 ≥24px——
-    //   底缘共线 + 顶部阶梯轮廓——高度步进 40px 保持）
-    expect((cards[0] as HTMLElement).style.height).toBe("200px");
-    expect((cards[1] as HTMLElement).style.height).toBe("240px");
-    expect((cards[2] as HTMLElement).style.height).toBe("280px");
-    // 位置高度一致：不再 translateY 错落（同一水平线——二十九轮 F4 v4）
-    expect((cards[0] as HTMLElement).style.transform).toBe("");
-    expect((cards[1] as HTMLElement).style.transform).toBe("");
-    expect((cards[2] as HTMLElement).style.transform).toBe("");
-    // 无 NumberPill 序号（二十七轮 F3 删除——组件不再渲染序号）
-    expect(root.querySelector(".cdp-number-pill")).toBeNull();
-    // 无上升箭头（二十八轮 F4 v3 删除，v4 保留）
-    expect(root.querySelectorAll(".cdp-step-stairs-rise")).toHaveLength(0);
-    // 卡内两件套：HeroNumber 值 + mono 注（note 可选）
-    expect(cards[0].querySelector(".cdp-hero-number-value")).toHaveTextContent("42%");
-    expect(cards[0].querySelector(".cdp-step-stairs-note")).toHaveTextContent("参与度提升");
-    expect(cards[1].querySelector(".cdp-step-stairs-note")).toBeNull();
+  describe("StepStairs", () => {
+    it("StepStairs 渲染 N 卡 + 无序号 + 卡高递增 200/240/280 + 位置平齐无 translateY + 无上升箭头（三十轮 F1）", () => {
+      const { getByTestId } = render(
+        <StepStairs
+          data-testid="stairs"
+          items={[
+            { value: "42%", note: "参与度提升" },
+            { value: "2.7×" },
+            { value: "25", note: "屏数" },
+          ]}
+        />,
+      );
+      const root = getByTestId("stairs");
+      expect(root.className).toContain("cdp-step-stairs");
+      const cards = root.querySelectorAll(".cdp-step-stairs-card");
+      expect(cards).toHaveLength(3);
+      // 卡高逐级递增 200/240/280（三十轮 F1 重算：卡内安全边距四周 24px + 最短卡内容底距 ≥24px——
+      //   底缘共线 + 顶部阶梯轮廓——高度步进 40px 保持）
+      expect((cards[0] as HTMLElement).style.height).toBe("200px");
+      expect((cards[1] as HTMLElement).style.height).toBe("240px");
+      expect((cards[2] as HTMLElement).style.height).toBe("280px");
+      // 位置高度一致：不再 translateY 错落（同一水平线——二十九轮 F4 v4）
+      expect((cards[0] as HTMLElement).style.transform).toBe("");
+      expect((cards[1] as HTMLElement).style.transform).toBe("");
+      expect((cards[2] as HTMLElement).style.transform).toBe("");
+      // 无 NumberPill 序号（二十七轮 F3 删除——组件不再渲染序号）
+      expect(root.querySelector(".cdp-number-pill")).toBeNull();
+      // 无上升箭头（二十八轮 F4 v3 删除，v4 保留）
+      expect(root.querySelectorAll(".cdp-step-stairs-rise")).toHaveLength(0);
+      // 卡内两件套：HeroNumber 值 + mono 注（note 可选）
+      expect(cards[0].querySelector(".cdp-hero-number-value")).toHaveTextContent("42%");
+      expect(cards[0].querySelector(".cdp-step-stairs-note")).toHaveTextContent("参与度提升");
+      expect(cards[1].querySelector(".cdp-step-stairs-note")).toBeNull();
+    });
   });
 
-  it("PostIt：tone 类名 + 图钉 + label/text（亮底 plain / 深底 accent 变体）", () => {
-    const { getByTestId } = render(
-      <div>
-        <PostIt label="NOTE 01" text="先把想法贴墙" tone="pink" rotate={-2} data-testid="pi-pink" />
-        <PostIt label="BIG IDEA" text="别让想法溜走" tone="yellow" emphasis data-testid="pi-yellow" />
-      </div>,
-    );
-    // 深色三色（pink）走 accent 变体；亮底（yellow）走 plain 墨字
-    expect(getByTestId("pi-pink").className).toContain("cdp-card-accent");
-    expect(getByTestId("pi-pink").className).toContain("cdp-post-it-tone-accent-2");
-    expect(getByTestId("pi-pink").style.transform).toBe("rotate(-2deg)");
-    expect(getByTestId("pi-pink").querySelector(".cdp-post-it-pin")).not.toBeNull();
-    expect(getByTestId("pi-yellow").className).toContain("cdp-card-plain");
-    expect(getByTestId("pi-yellow").className).toContain("cdp-post-it-tone-accent-4");
-    expect(getByTestId("pi-yellow").className).toContain("cdp-post-it-emphasis");
-    expect(getByTestId("pi-yellow").querySelector(".cdp-post-it-text")).toHaveTextContent("别让想法溜走");
+  describe("PostIt", () => {
+    it("PostIt：tone 类名 + 图钉 + label/text（亮底 plain / 深底 accent 变体）", () => {
+      const { getByTestId } = render(
+        <div>
+          <PostIt label="NOTE 01" text="先把想法贴墙" tone="pink" rotate={-2} data-testid="pi-pink" />
+          <PostIt label="BIG IDEA" text="别让想法溜走" tone="yellow" emphasis data-testid="pi-yellow" />
+        </div>,
+      );
+      // 深色三色（pink）走 accent 变体；亮底（yellow）走 plain 墨字
+      expect(getByTestId("pi-pink").className).toContain("cdp-card-accent");
+      expect(getByTestId("pi-pink").className).toContain("cdp-post-it-tone-accent-2");
+      expect(getByTestId("pi-pink").style.transform).toBe("rotate(-2deg)");
+      expect(getByTestId("pi-pink").querySelector(".cdp-post-it-pin")).not.toBeNull();
+      expect(getByTestId("pi-yellow").className).toContain("cdp-card-plain");
+      expect(getByTestId("pi-yellow").className).toContain("cdp-post-it-tone-accent-4");
+      expect(getByTestId("pi-yellow").className).toContain("cdp-post-it-emphasis");
+      expect(getByTestId("pi-yellow").querySelector(".cdp-post-it-text")).toHaveTextContent("别让想法溜走");
+    });
   });
 });
