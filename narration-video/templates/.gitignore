@@ -1,2 +1,6 @@
 node_modules/
 dist/
+# 分镜产出（M4 `npm run storyboard` 的生成物：index.html + storyboard.json + shots/*.png）
+# 与 dist/ 同类：整目录可重生成，不入库（Checkpoint 2 人审在浏览器里看，不靠 git diff）
+# 前导斜杠锚定模板根——裸 `storyboard/` 会连 scripts/storyboard/（生成器源码）一起忽略
+/storyboard/

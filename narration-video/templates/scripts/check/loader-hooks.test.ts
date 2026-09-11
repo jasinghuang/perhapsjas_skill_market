@@ -1,8 +1,9 @@
 /**
  * loader-hooks 测试：tsx（node）资产/样式加载钩子（终审 M-6 最大崩溃面修复）。
  *
- * 单元：assetModuleSource 纯函数（图片占位空字符串 / JSON 解析真实内容 / CSS 文本
- * 默认导出 / 非 file: 或未知扩展 undefined 交还默认加载器）。
+ * 单元：assetModuleSource（图片占位空字符串 / CSS 文本默认导出 / 非 file: 或未知扩展
+ * undefined 交还默认加载器）+ jsonModuleSource（原始 JSON 文本 → format "json" 路径，
+ * 见文件头 2026-09-11：JS 源码包装会被 Node 的 JSON 解析器 parse 成语法错）。
  * 集成：spawn 子进程跑真实 tsx（env 剥离 VITEST——钩子只在非 vitest 环境注册，
  * 子进程模拟真实 CLI 环境）：含 `import x from "./x.png"` 的章节源经钩子不崩、
  * 输出可读；对照子进程不注册钩子 → 同源崩溃 ERR_UNKNOWN_FILE_EXTENSION
@@ -15,7 +16,7 @@ import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { assetModuleSource } from "./loader-hooks";
+import { assetModuleSource, jsonModuleSource } from "./loader-hooks";
 
 const CHECK_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_ROOT = path.resolve(CHECK_DIR, "../..");
@@ -44,12 +45,15 @@ describe("assetModuleSource 单元", () => {
     expect(assetModuleSource("file:///tmp/hero.png?width=100")).toBe(`export default ""`);
   });
 
-  it("json → 解析真实内容导出（章节模块作用域读字段不因占位假值崩）", () => {
+  it("json → 原始文本（format \"json\" 路径；不再是 JS 源码包装）", () => {
     const d = makeTmp("loader-hooks-json-");
     const p = path.join(d, "config.json");
     fs.writeFileSync(p, '{"ok":true}');
-    const src = assetModuleSource(pathToFileURL(p).href);
-    expect(src).toBe(`export default JSON.parse(${JSON.stringify('{"ok":true}')})`);
+    expect(jsonModuleSource(pathToFileURL(p).href)).toBe('{"ok":true}');
+    // assetModuleSource 不再管 .json（两条路径分离，见文件头 2026-09-11）
+    expect(assetModuleSource(pathToFileURL(p).href)).toBeUndefined();
+    expect(jsonModuleSource("file:///tmp/x.webp")).toBeUndefined();
+    expect(jsonModuleSource("data:application/json,%7B%7D")).toBeUndefined();
   });
 
   it("css → 文本默认导出（?raw 与副作用 import 皆通）", () => {
