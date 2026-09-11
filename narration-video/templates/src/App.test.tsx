@@ -185,3 +185,46 @@ describe("App 装配 · 游标桥（M4）", () => {
     vi.resetModules();
   });
 });
+
+describe("App 装配 · 无头/渲染不自驱（M3b Task 6）", () => {
+  // params/renderMode 是 App.tsx 模块作用域读一次的量 → 必须先改 URL 再造模块
+  const mockPlayer = () => {
+    const playStep = vi.fn();
+    vi.doMock("./engine/useAudioPlayer", () => ({
+      // 五个成员缺一不可（App 解构了 playStep/resume/pause/stop 并读 playing）
+      useAudioPlayer: () => ({
+        playing: false,
+        playStep,
+        pause: vi.fn(),
+        resume: vi.fn(),
+        stop: vi.fn(),
+      }),
+    }));
+    return playStep;
+  };
+
+  afterEach(() => {
+    // 复位：mock 与 URL 都不留到后续用例（?headless=1 残留会让下一个用例假红）
+    vi.doUnmock("./engine/useAudioPlayer");
+    vi.resetModules();
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("?headless=1 不武装自驱推进链：playStep 不被调用", async () => {
+    window.history.replaceState({}, "", "/?headless=1");
+    vi.resetModules();
+    const playStep = mockPlayer();
+    const { default: HeadlessApp } = await import("./App");
+    render(<HeadlessApp />);
+    expect(playStep).not.toHaveBeenCalled();
+  });
+
+  it("无 query 时行为不变：进入即 playStep 一次", async () => {
+    window.history.replaceState({}, "", "/");
+    vi.resetModules();
+    const playStep = mockPlayer();
+    const { default: PlainApp } = await import("./App");
+    render(<PlainApp />);
+    expect(playStep).toHaveBeenCalledTimes(1);
+  });
+});

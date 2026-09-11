@@ -58,6 +58,15 @@ export default function App() {
 
   // 每步推进：音频驱动（audio.ended 且 动画窗口结束 → 停留垫 → next）
   useEffect(() => {
+    // 无头/渲染模式不武装自驱推进链（M3b Task 6）：模板无 public/ → 每步 mp3 拿不到真音频
+    //（dev server 命中 SPA fallback 回 index.html：200 text/html → 解码失败；静态服多为 404）
+    // → onerror 走估时兜底 → 约 2.5s 就把游标带走，逐 step 检查根本来不及。
+    // 依赖方：scripts/shot/capture.ts（截图）、scripts/storyboard.ts（分镜）、
+    // verify-sequential（顺序校验）、M3b 无头门禁（Task 7）——它们都靠键盘/jumpTo
+    // 显式驱动游标，推进必须只由它们说了算。
+    // 注：非 render 的 headless 下 transport 仍可见，但播放键点了不会有反应
+    //（playStep 从未被调用 → lastRef 为 null → resume() 直接返回）。
+    if (renderMode || params.has("headless")) return;
     if (stoppedRef.current) {
       // 停止后的回零触发了本 effect：停在起点静止，消费标记后放行
       stoppedRef.current = false;
