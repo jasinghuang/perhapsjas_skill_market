@@ -240,3 +240,21 @@ describe("章节层 CSS 扫描器 · 修复轮 1b（url() 内的字面括号不�
     ]);
   });
 });
+
+// 修复轮 2（复审 F）：URL 态无重锚点 → 未闭合 `url(` 的 urlDepth 永不为 0 → 之后所有边界
+// 失效 → 整文件零声明零 finding（与 I-1 同型的"畸形状态越界存活"）。终止条件：`)` / 空白 /
+// 空内容里的结构 token（细则与取舍见 task-1-report「修复轮 2」）。
+describe("章节层 CSS 扫描器 · 修复轮 2（URL 态终止条件）", () => {
+  it("未闭合 url( 不吞掉后续声明（复审 F 向量）：该报的裸色必须被报且定位第 2 行", () => {
+    const css = `@import url(a.css\n.b { color: #f00; }`;
+    const f = scanChapterCss([{ path: "a.css", css }]);
+    // 父提交 2860a69 同输入报 a.css:2——修复后不得回归为漏检
+    expect(f.filter((x) => x.rule === "禁硬编码色").map((x) => x.location)).toEqual(["a.css:2"]);
+  });
+
+  it("URL 态不跨行：`url(` 后紧跟换行同样退出（空白 = CSS bad-url 重锚点）", () => {
+    const css = `@import url(\n.b { color: #f00; }`;
+    const f = scanChapterCss([{ path: "a.css", css }]);
+    expect(f.filter((x) => x.rule === "禁硬编码色").map((x) => x.location)).toEqual(["a.css:2"]);
+  });
+});

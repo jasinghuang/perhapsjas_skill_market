@@ -30,10 +30,15 @@
  *      行号在扫描时逐字符跟随（首个非空白字符入段时的当前行——注释内换行同样计数），
  *      不做"文本内换行重数"：注释字符整体丢弃，重数会把注释里的换行漏掉、把声明误标到
  *      注释行上。跨行声明值（K-10）整体参与判定，违规落声明起始行而非续行（stylelint 同款）。
- *   2b) URL 态（评审修复轮 1b）：`url(`（词界起、大小写不敏感）后到 URL 内配对深度归零的
- *      `)` 之前，`{` `}` `;` `(` `)` 一律不作 token 边界——裸内容里的字面括号（内联 SVG
+ *   2b) URL 态（修复轮 1b/2）：`url(`（词界起、大小写不敏感）后到 URL 内配对深度归零的 `)`
+ *      之前，`{` `}` `;` `(` `)` 一律不作 token 边界——裸内容里的字面括号（内联 SVG
  *      data URI `<style>.x{fill:red}</style>`）不得把段切断：切断后碎片既不在 url() 内
  *      （URL_RE 剥不掉）又含裸色名 ⇒ blocker 级假阳性，而门禁的假 blocker 会教作者绕门禁。
+ *      终止条件（修复轮 2：畸形状态不得越界存活——无界 urlDepth 会让之后所有边界失效、
+ *      整文件零 finding，与 I-1 同型）：① 配对 `)` 归零；② **任何空白**（未加引号 url token
+ *      遇空白即 bad-url，Syntax §4.3.6）⇒ URL 态不跨行存活；③ 内容为空时的 `{` `}` `;`
+ *      （结构优先）；④ `url(` 后紧跟引号 = 函数形态，交由字符串态（裸内容模式立即退出）。
+ *      非空裸内容里的 `{` `}` `;` 仍不退出——它们是合法 url 内容，退出会让 1b 负样本回归。
  *   3) 前导剥离（等价现网 lastBrace 切片）：段终止于 `{` 即规则头/At 规则前导——
  *      "丢弃最后一个顶层 `{` 之前的文本"整段丢弃（不产出声明），判定式即
  *      `顶层 : 的下标 > 该段最后一个顶层 { 的下标`。单行规则 `.x { color: #f00; }`
@@ -49,10 +54,14 @@
  * 残余面（已核可构造、未归零——均为非法 CSS 或极端形态，取舍见 task-1-report「修复轮 1/1b」）：
  *   a) 坏字符串（未闭合引号）跨行吞并：坏字符串里的 `;` 不是边界 ⇒ 与紧随声明并入同一段，
  *      声明级字符串剥离（按对到段尾容错）把该段 `"` 之后整段剥掉 ⇒ 紧随声明的裸色不报。
- *   b) **未闭合的 `url(`**（无配对 `)`）：URL 态不退出 ⇒ 其后内容并入同一段，URL_RE 因缺
- *      `)` 剥不掉 ⇒ 段内一切裸色名/hex 照报（`url(…<style>.x{fill:red}` 会误报）——方向是
- *      **响**不是漏。合法闭合的 url（含字面 `{` `}` `;` 的内联 SVG data URI）已由 URL 态保护，
- *      实测零 finding；base64 形态 `url(data:image/png;base64,AAA=)` 同样零 finding。
+ *   b) URL 态残余（修复轮 2 实测口径，按形态分别给方向——探针见报告「修复轮 2」）：
+ *      · 闭合形态（有配对 `)`，含字面 `{` `}` 的内联 SVG data URI）：零 finding（1b 成果保留）；
+ *      · 未闭合 + 其后有空白/换行：URL 态在空白处退出 ⇒ 不跨行存活，后续行照常判（**响**）；
+ *      · 未闭合 + 裸内容不含任何空白（minified 单行，如 `@import url(x.svg;color:#f00}`）：
+ *        URL 态存活到段尾，段内首个顶层 `:` 落在未闭合 `(` 之后 ⇒ 整段跳过 ⇒ **漏**
+ *        （实测 `[]`）。关闭它需加 `{` `}` `;` 退出，代价 = 1b 负样本回归（取舍见报告）；
+ *      · 跨行未加引号的 url（`url(` 后换行）：在换行处退出 ⇒ 会被拆；碎片可能误报（**响**）；
+ *        引号形态（`url(\n "data:…")`）由字符串态保护，不拆、零 finding。
  *
  * 字阶/间距集合从 src/theme/tokens.css 解析（Ruling P4-1——与主题同源，主题改档门禁
  * 自动跟随）。Ruling P4-6（T6 落地）：弃 `?raw` 改 node:fs 读取——tsx（node 环境）
@@ -213,6 +222,7 @@ export function tokenizeCss(css: string): CssDeclaration[] {
   let quote = ""; // 非空 = 字符串态（值为当前引号）
   let parenDepth = 0;
   let urlDepth = 0; // > 0 = URL 态（`url(` 裸内容内；`{` `}` `;` `(` `)` 均不作边界）
+  let urlHasContent = false; // URL 态内是否已见非空白内容（空内容里的结构 token 归结构）
 
   /** 入段：记录首个非空白字符的行（声明归属行的唯一真相源），再追加字符。 */
   const put = (ch: string): void => {
@@ -261,25 +271,44 @@ export function tokenizeCss(css: string): CssDeclaration[] {
       continue;
     }
     if (urlDepth > 0) {
-      // URL 态：`url(` 的裸内容——`{` `}` `;` `(` `)` 一律不作 token 边界，`)` 仅在 URL 内
-      // 配对深度归零时退出。理由：裸内容里的字面括号（内联 SVG data URI，如
-      // `url(data:…,<style>.x{fill:red}</style>)`）被 `{` 切断后，碎片既不在 url() 内
-      // （URL_RE 剥不掉）又含裸色名 ⇒ blocker 级假阳性（门禁假 blocker 会教作者绕门禁）。
-      put(ch);
+      // URL 态（修复轮 1b/2）：`url(` 裸内容里 `{` `}` `;` 不作 token 边界——内联 SVG data URI
+      // （合法形态 `url(data:…,<style>.x{fill:red}</style>)`）不得被切断：切断后碎片既不在
+      // url() 内（URL_RE 剥不掉）又含裸色名 ⇒ blocker 级假阳性。
+      // 终止条件（复审 F：畸形状态不得越界存活——urlDepth 永不为 0 会让后续所有边界一并
+      // 失效、整文件零 finding，与 I-1 同型）：
+      //   ① 配对的 `)`（URL 内配对深度归零）——正常退出；
+      //   ② 任何空白（空格/制表/换行）——未加引号的 url token 遇空白即 bad-url
+      //      （CSS Syntax §4.3.6）⇒ 退出即"行级重锚"：URL 态不可能跨行存活；
+      //   ③ 内容为空时的 `{` `}` `;`——空 url 内容里的结构 token 不可能是内容，结构优先。
+      // 非空内容里的 `{` `}` `;` **不**退出：它们是合法 url 内容（同条规范），退出会让
+      // 1b 的 SVG 负样本回归（取舍与替代方案见 task-1-report「修复轮 2」）。
       if (ch === "\\" && css[i + 1] !== undefined) {
+        put(ch); // URL 内转义整体入文本（`\` + 换行 = 续行，不触发 ②）
         if (css[i + 1] === "\n") line++;
-        put(css[i + 1]); // URL 内转义同样整体入文本
+        put(css[i + 1]);
         i++;
-      } else if (ch === '"' || ch === "'") {
-        quote = ch; // URL 内的引号串走公共字符串态（串内 `/*` 不置注释、`)` 不算配对）
-      } else if (ch === "(") {
-        urlDepth++;
-      } else if (ch === ")") {
-        urlDepth--;
-      } else if (ch === "\n") {
-        line++;
+        urlHasContent = true;
+        continue;
       }
-      continue;
+      if (ch === " " || ch === "\t" || ch === "\n" || ch === "\f" || ch === "\r") {
+        urlDepth = 0; // ② 空白 = bad-url：退出，该字符交由下方正常分支处理（换行照常计行）
+      } else if (!urlHasContent && (ch === "{" || ch === "}" || ch === ";")) {
+        urlDepth = 0; // ③ 空内容 + 结构 token：结构优先，退出后交由下方边界分支
+      } else {
+        put(ch);
+        if (ch === '"' || ch === "'") {
+          // `url(` 后紧跟引号 = 函数形态的字符串参数：走公共字符串态（串内 `/*` 不置注释、
+          // 串内 `)` 不算配对）；字符串内容里的一切都不是边界，故 URL 态无需延续。
+          quote = ch;
+          urlDepth = 0; // 引号形态不需要裸内容模式（内容由字符串态保护）——立即退出
+        } else if (ch === "(") {
+          urlDepth++; // 裸内容里的嵌套括号（url(foo(bar).svg)）
+        } else if (ch === ")") {
+          urlDepth--; // ① 配对归零 = 正常退出
+        }
+        urlHasContent = true;
+        continue;
+      }
     }
     if (
       (ch === "u" || ch === "U") &&
@@ -288,6 +317,7 @@ export function tokenizeCss(css: string): CssDeclaration[] {
     ) {
       put(css.slice(i, i + 4)); // `url(` 原样入段（内容随段保留，判定前由 URL_RE 剥离）
       urlDepth = 1;
+      urlHasContent = false; // 空内容判定（③ 结构优先）每次进入 URL 态重新起算
       i += 3;
       continue;
     }
