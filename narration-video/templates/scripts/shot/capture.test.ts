@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertCursorMatch,
   captureSteps,
   chromiumMissingError,
   expandSpecs,
@@ -54,6 +55,35 @@ describe("shotPath：输出路径约定 <outDir>/shots/<chapterId>/<step>.png", 
   it("非法 step（负数 / 非整数）→ throw", () => {
     expect(() => shotPath("/tmp/sb", "example", -1)).toThrow(/step/);
     expect(() => shotPath("/tmp/sb", "example", 0.5)).toThrow(/step/);
+  });
+
+  it("非法 chapterId → throw（F3：空串 / 分隔符 / 上跳）", () => {
+    expect(() => shotPath("/tmp/sb", "", 0)).toThrow(/chapterId/);
+    expect(() => shotPath("/tmp/sb", "a/b", 0)).toThrow(/chapterId/);
+    expect(() => shotPath("/tmp/sb", "a\\b", 0)).toThrow(/chapterId/);
+    expect(() => shotPath("/tmp/sb", "../../etc/x", 0)).toThrow(/chapterId/);
+    expect(() => shotPath("/tmp/sb", "..", 0)).toThrow(/chapterId/);
+    expect(() => shotPath("/tmp/sb", ".", 0)).toThrow(/chapterId/);
+  });
+});
+
+describe("assertCursorMatch：回读校验（F2）", () => {
+  it("期望 === 实际 → 放行", () => {
+    expect(() => assertCursorMatch({ chapter: 0, step: 2 }, { chapter: 0, step: 2 })).not.toThrow();
+  });
+
+  it("被 clamp 的越界游标 → throw（带期望/实际双方坐标）", () => {
+    // useStepper.clamp 的实况：要 (5,3) 给 (0,2)
+    expect(() => assertCursorMatch({ chapter: 5, step: 3 }, { chapter: 0, step: 2 })).toThrow(
+      /游标回读不符/,
+    );
+    expect(() => assertCursorMatch({ chapter: 5, step: 3 }, { chapter: 0, step: 2 })).toThrow(
+      /期望 章节 5 第 3 步，实际 章节 0 第 2 步/,
+    );
+    // 章内步越界同样当场暴露
+    expect(() => assertCursorMatch({ chapter: 0, step: 9 }, { chapter: 0, step: 2 })).toThrow(
+      /游标回读不符/,
+    );
   });
 });
 
@@ -116,10 +146,47 @@ describe("captureSteps：非法输入与空列表（不启浏览器即可判定�
   it("负 step / 负 chapter → throw（在启动浏览器之前）", async () => {
     const bad = [{ chapter: 0, step: -1 }] as ShotSpec[];
     await expect(
-      captureSteps(bad, { url: "http://localhost:5174", outDir: "/tmp/never" }),
+      captureSteps(bad, {
+        url: "http://localhost:5174",
+        outDir: "/tmp/never",
+        chapterIds: ["example"],
+      }),
     ).rejects.toThrow(/坐标/);
     await expect(
-      captureSteps([{ chapter: -1, step: 0 }], { url: "http://localhost:5174", outDir: "/tmp/never" }),
+      captureSteps([{ chapter: -1, step: 0 }], {
+        url: "http://localhost:5174",
+        outDir: "/tmp/never",
+        chapterIds: ["example"],
+      }),
     ).rejects.toThrow(/坐标/);
+  });
+
+  it("specs 非空但缺 chapterIds → throw（不静默退化为数字下标，F1）", async () => {
+    await expect(
+      captureSteps([{ chapter: 0, step: 0 }], { url: "http://localhost:5174", outDir: "/tmp/never" }),
+    ).rejects.toThrow(/缺 chapterIds/);
+    await expect(
+      captureSteps([{ chapter: 0, step: 0 }], { url: "http://localhost:5174", outDir: "/tmp/never" }),
+    ).rejects.toThrow(/chapters\.map\(c => c\.id\)/);
+  });
+
+  it("chapterIds 与章节下标失位（太短）→ throw 且带 chapter/step 定位", async () => {
+    await expect(
+      captureSteps([{ chapter: 1, step: 0 }], {
+        url: "http://localhost:5174",
+        outDir: "/tmp/never",
+        chapterIds: ["example"],
+      }),
+    ).rejects.toThrow(/无第 1 项（章节 1 第 0 步）/);
+  });
+
+  it("chapterIds 内含非法 id → throw（F3，开浏览器之前就拦住）", async () => {
+    await expect(
+      captureSteps([{ chapter: 0, step: 0 }], {
+        url: "http://localhost:5174",
+        outDir: "/tmp/never",
+        chapterIds: ["../evil"],
+      }),
+    ).rejects.toThrow(/chapterIds\[0\]/);
   });
 });

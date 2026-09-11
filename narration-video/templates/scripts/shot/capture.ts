@@ -18,11 +18,14 @@
 //      的图，"精确 1080p"的约定即由此失守。
 //   5. **shotPath 用 "/" 手拼**（非 path.join）：该字符串同时是 storyboard.json / index.html
 //      的相对引用（分镜页离线可开），反斜杠不进约定；FS 侧 Windows 也认 "/"。
-//   6. **chapterIds 为可选增补**：冻结契约（计划 §2）的 CaptureOptions 只有 4 个字段，
-//      但输出约定要求 `shots/<chapterId>/<step>.png`（chapterId = 章节 id 如 "example"，
-//      非数字下标），而 ShotSpec 只有数字游标。故此处加一个可选字段：不给则退化为数字
-//      下标（调用方仍可用返回的 `file` 单一真相）；M4 Task 3 应传 manifest 的 id 列表。
-//      这是**追加**（不动冻结字段/签名），消费方不传也照跑。
+//   6. **chapterIds 为追加字段且 specs 非空时必传**（评审 F1 裁决）：冻结契约（计划 §2）的
+//      CaptureOptions 只有 4 个字段，但输出约定要求 `shots/<chapterId>/<step>.png`
+//      （chapterId = 章节 id 如 "example"，非数字下标），而 ShotSpec 只有数字游标。
+//      此处追加可选字段，**缺省不再是静默数字下标而是 throw**——静默退化会产出与约定
+//      不符、事后无人察觉的路径（宁炸不静默）。传 `chapters.map(c => c.id)`。
+//   7. **游标回读（评审 F2）+ chapterId 白名单（评审 F3）**：跳转越界被 stepper 静默
+//      clamp（要 (5,3) 得 (0,2)）→ 截图悄悄落错帧，故 ready() 后回读 getState 比对；
+//      chapterId 直接进输出路径，白名单挡空串 / 分隔符 / `.` `..`（防写出目录外）。
 //
 // 环境前置：dev server 已运行（连接失败给出 "先 npm run dev" 指引，不自动起服——M5 编排器
 // 再考虑自起）；`npx playwright install chromium` 首次执行（浏览器缺失抛可读指引错误）。
@@ -45,7 +48,9 @@ export interface CaptureOptions {
   viewport?: { width: number; height: number };
   /** 分镜模式 true（零动画门禁）；默认 false（M5 渲染逐帧 seek 时光标停在中途不为 0） */
   assertNoAnimations?: boolean;
-  /** 增补（见文件头取舍 6）：章节目录名——`shots/<chapterId>/<step>.png`；缺省用数字下标 */
+  /** 增补（见文件头取舍 6）：章节目录名——`shots/<chapterId>/<step>.png`。
+   *  **specs 非空时必传**（评审 F1）：缺省不再是静默数字下标，而是 throw——目录名是分镜页
+   *  相对引用的组成部分，静默退化会产出与约定不符、事后无人察觉的路径。传 `chapters.map(c => c.id)`。 */
   chapterIds?: readonly string[];
 }
 
@@ -88,10 +93,43 @@ export function expandSpecs(chapters: readonly { steps: number }[]): ShotSpec[] 
   return out;
 }
 
-/** 输出路径约定（计划 §4）：`<outDir>/shots/<chapterId>/<step>.png`（"/" 手拼，见取舍 5） */
+/** 章节 id 白名单（评审 F3）：同时挡掉空串、路径分隔符与 `.`/`..`——id 直接进输出路径，
+ *  不做守卫就能用 `../../etc/x` 把图写到输出目录之外。 */
+const CHAPTER_ID_RE = /^[A-Za-z0-9._-]+$/;
+
+function assertChapterId(chapterId: string, label: string): void {
+  if (!CHAPTER_ID_RE.test(chapterId) || chapterId === "." || chapterId === "..") {
+    throw new Error(
+      `${label} ${JSON.stringify(chapterId)} 非法（只允许 [A-Za-z0-9._-]，且不得为 "." / ".."——` +
+        `它直接进输出路径 shots/<chapterId>/）`,
+    );
+  }
+}
+
+/** 输出路径约定（计划 §4）：`<outDir>/shots/<chapterId>/<step>.png`（"/" 手拼，见取舍 5；id 守卫见 F3） */
 export function shotPath(outDir: string, chapterId: string, step: number): string {
+  assertChapterId(chapterId, "shotPath：chapterId");
   assertCursor(step, "shotPath：step");
   return `${outDir.replace(/[/\\]+$/, "")}/shots/${chapterId}/${step}.png`;
+}
+
+/**
+ * 回读校验（评审 F2）：`jumpTo` 越界会被 stepper **静默 clamp**（useStepper.clamp——要
+ * (5,3) 给你 (0,2)），于是截图悄悄落到别的帧上。期望 ≠ 实际即 throw，带双方坐标。
+ * 抽成纯函数是为了单测（浏览器路径在 captureOne 里调它，冒烟另有真机反证）。
+ * 注意：必须 `await ready()` **之后**才回读——getState 是 commit-lagging（见 cursorBridge 契约）。
+ */
+export function assertCursorMatch(
+  expected: ShotSpec,
+  actual: { chapter: number; step: number },
+): void {
+  if (actual.chapter !== expected.chapter || actual.step !== expected.step) {
+    throw new Error(
+      `游标回读不符：期望 章节 ${expected.chapter} 第 ${expected.step} 步，` +
+        `实际 章节 ${actual.chapter} 第 ${actual.step} 步——越界游标被 stepper 静默 clamp` +
+        `（useStepper.clamp），此帧会截到错的画面；请核对 spec 是否在 manifest 范围内`,
+    );
+  }
 }
 
 /**
@@ -185,16 +223,23 @@ async function gotoOrExplain(page: Page, url: string): Promise<void> {
   }
 }
 
-/** 单步：跳游标 → 等就绪 → 零动画断言 → 截图。 */
-async function captureOne(page: Page, spec: ShotSpec, opts: CaptureOptions): Promise<CaptureResult> {
+/** 单步：跳游标 → 等就绪 → 回读校验 → 零动画断言 → 截图。 */
+async function captureOne(
+  page: Page,
+  spec: ShotSpec,
+  opts: CaptureOptions,
+  chapterId: string,
+): Promise<CaptureResult> {
   const where = `章节 ${spec.chapter} 第 ${spec.step} 步`;
-  const chapterId = opts.chapterIds?.[spec.chapter] ?? String(spec.chapter);
 
   await page.evaluate(
     ({ chapter, step }) => window.__presentation!.jumpTo(chapter, step),
     { chapter: spec.chapter, step: spec.step },
   );
   await readyWithTimeout(page, where);
+
+  // 回读必须在 ready() 之后（getState 是 commit-lagging，跳转刚落定时读到的是跳转前的位置）。
+  assertCursorMatch(spec, await page.evaluate(() => window.__presentation!.getState()));
 
   const animations = await page.evaluate(() => window.__presentation!.animations());
   if (opts.assertNoAnimations === true && animations > 0) {
@@ -214,16 +259,34 @@ async function captureOne(page: Page, spec: ShotSpec, opts: CaptureOptions): Pro
 
 /**
  * 逐帧捕捉：单浏览器单页面，specs 顺序即产出顺序。
- * 空 specs → 空结果（不开浏览器）；非法游标 → throw（**开浏览器之前**，fail fast）。
+ * 空 specs → 空结果（不开浏览器）；缺 chapterIds / 非法游标 / 非法 id → throw
+ * （全部在**开浏览器之前**，fail fast：参数错误不该先花一次浏览器启停）。
  */
 export async function captureSteps(
   specs: readonly ShotSpec[],
   opts: CaptureOptions,
 ): Promise<CaptureResult[]> {
   if (specs.length === 0) return [];
-  for (const s of specs) {
-    assertCursor(s.chapter, "captureSteps：坐标 chapter");
-    assertCursor(s.step, "captureSteps：坐标 step");
+
+  const chapterIds = opts.chapterIds;
+  if (chapterIds === undefined) {
+    throw new Error(
+      "captureSteps：缺 chapterIds（specs 非空时必传，评审 F1）——输出约定是 " +
+        "shots/<chapterId>/<step>.png（chapterId = 章节 id 如 \"example\"，不是数字下标），" +
+        "请传 chapters.map(c => c.id)（与 specs 的 chapter 下标对位）",
+    );
+  }
+  for (const spec of specs) {
+    assertCursor(spec.chapter, `captureSteps：坐标 chapter（章节 ${spec.chapter} 第 ${spec.step} 步）`);
+    assertCursor(spec.step, `captureSteps：坐标 step（章节 ${spec.chapter} 第 ${spec.step} 步）`);
+    const id = chapterIds[spec.chapter];
+    if (id === undefined) {
+      throw new Error(
+        `captureSteps：chapterIds 无第 ${spec.chapter} 项（章节 ${spec.chapter} 第 ${spec.step} 步）` +
+          `——chapterIds 须与章节 manifest 等长对位（chapters.map(c => c.id)）`,
+      );
+    }
+    assertChapterId(id, `captureSteps：chapterIds[${spec.chapter}]`);
   }
 
   const viewport = opts.viewport ?? DEFAULT_VIEWPORT;
@@ -235,7 +298,9 @@ export async function captureSteps(
     await waitForBridge(page, url);
 
     const results: CaptureResult[] = [];
-    for (const spec of specs) results.push(await captureOne(page, spec, opts));
+    for (const spec of specs) {
+      results.push(await captureOne(page, spec, opts, chapterIds[spec.chapter]));
+    }
     return results;
   } finally {
     await browser.close();
