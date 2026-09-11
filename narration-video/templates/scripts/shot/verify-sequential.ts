@@ -19,22 +19,22 @@
 //      假绿）——这比假设"时间窗口足够短"更诚实。
 //   5. **纯函数面外置**：compareShotBytes / summarizeVerification 不碰浏览器，单测直接覆盖
 //      （浏览器驱动部分靠冒烟与 M5 复用验证）。
-//   6. **不在本模块引入 capture.ts 的私有 helper**：capture.ts 是对外冻结的消费契约（Task 2），
-//      其 goto/ready 细节不外借；此处按同一语义最小复刻三段（错误文案保持可读），避免为复用
-//      而扩冻结面。
+//   6. **浏览器三段收进 session.ts（M3b Task 3 / K-21）**：本模块原先按同一语义最小复刻了
+//      launch / goto+等桥 / ready 包超时三段（怕为复用而扩 capture.ts 的冻结面）；K-21 把这三段
+//      与页面驱动一并提到 ./session（既非 capture.ts 的私有面，也不再是两份会漂移的副本），
+//      此处改为直接消费——键盘推进流程逐字未动。
 
 import * as fs from "node:fs";
-import type { Browser, Page } from "playwright";
+import type { Page } from "playwright";
 import {
-  DEFAULT_VIEWPORT,
-  READY_TIMEOUT_MS,
   assertCursorStill,
-  chromiumMissingError,
-  isMissingBrowserError,
+  jumpToStep,
+  openSession,
+  readCursor,
+  readyWithTimeout,
   shotPath,
-  withHeadless,
   type ShotSpec,
-} from "./capture";
+} from "./session";
 
 export type VerifyStatus = "match" | "mismatch" | "exempt" | "exempt-info";
 
@@ -146,62 +146,6 @@ export function ambientKey(chapter: number, step: number): string {
   return `${chapter}:${step}`;
 }
 
-async function launchChromium(): Promise<Browser> {
-  const { chromium } = await import("playwright");
-  try {
-    return await chromium.launch();
-  } catch (e) {
-    if (isMissingBrowserError(e)) throw chromiumMissingError(e);
-    throw e;
-  }
-}
-
-/** goto + 等桥安装（语义同 capture.ts；连不上给 "先 npm run dev" 指引）。 */
-async function openPage(page: Page, url: string): Promise<void> {
-  try {
-    await page.goto(url);
-  } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
-    if (/ERR_CONNECTION_REFUSED|ERR_NAME_NOT_RESOLVED|ERR_ADDRESS_UNREACHABLE/.test(detail)) {
-      throw new Error(
-        `无法连接 ${url}——请先 \`npm run dev\`（模板 dev server 默认 5174）。原始错误：${detail}`,
-      );
-    }
-    throw e;
-  }
-  try {
-    await page.waitForFunction(() => window.__presentation !== undefined, undefined, {
-      timeout: READY_TIMEOUT_MS,
-    });
-  } catch {
-    throw new Error(
-      `页面未安装 window.__presentation 桥（${url}）——确认 URL 带 ?headless=1、dev server 在运行、` +
-        `且页面渲染无异常（桥在 App 挂载后安装）`,
-    );
-  }
-}
-
-/** ready() + 超时（桥无内建超时——语义同 capture.ts） */
-async function readyWithTimeout(page: Page, where: string): Promise<void> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () =>
-        reject(
-          new Error(
-            `ready() 超时（${READY_TIMEOUT_MS}ms）：${where} 未就绪——页面仍在等 fonts.ready / 图像 load`,
-          ),
-        ),
-      READY_TIMEOUT_MS,
-    );
-  });
-  try {
-    await Promise.race([page.evaluate(() => window.__presentation!.ready()), timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /**
  * 一致性校验主流程：单浏览器单页，键盘顺序推进逐帧截图 → 与磁盘参考图逐字节比对。
  * 空 specs → 空结论（不开浏览器）。
@@ -210,13 +154,11 @@ export async function verifySequential(
   opts: VerifySequentialOptions,
 ): Promise<VerifyVerdict[]> {
   if (opts.specs.length === 0) return [];
-  const viewport = opts.viewport ?? DEFAULT_VIEWPORT;
-  const url = withHeadless(opts.url);
   const index = new Map<string, number>();
   opts.specs.forEach((s, i) => index.set(ambientKey(s.chapter, s.step), i));
 
   const readIndex = async (page: Page, where: string): Promise<number> => {
-    const st = await page.evaluate(() => window.__presentation!.getState());
+    const st = await readCursor(page);
     const i = index.get(ambientKey(st.chapter, st.step));
     if (i === undefined) {
       throw new Error(
@@ -227,16 +169,16 @@ export async function verifySequential(
     return i;
   };
 
-  const browser = await launchChromium();
+  // 会话（viewport 缺省 / headless 归一 / goto 指引 / 等桥）全在 openSession 里——见 session.ts。
+  const session = await openSession({ url: opts.url, viewport: opts.viewport });
   try {
-    const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
-    const page = await context.newPage();
-    await openPage(page, url);
-    // 起始游标复位（全新 context 本应是 (0,0)；防御 localStorage 游标恢复带来的起点漂移）。
+    const page = session.page;
+    // 起始游标复位（全新会话的页 = 全新隐式 context，本应是 (0,0)；防御 localStorage 游标
+    // 恢复带来的起点漂移）。
     // 注意（评审 F6）：起点帧 (0,0) 无"顺序来路"可走——它的"顺序路径"就是这次 jumpTo + 页面
     // 初始 mount 的产出，故该帧两路径的比对强度**等同于参考图自身**（不给顺序推进额外证据）。
     // 真正带键盘推进信息的比对从 step ≥ 1 起（多步章则从第 2 帧起）。
-    await page.evaluate(() => window.__presentation!.jumpTo(0, 0));
+    await jumpToStep(page, { chapter: 0, step: 0 });
     await readyWithTimeout(page, "起始游标");
 
     const verdicts: VerifyVerdict[] = [];
@@ -278,7 +220,7 @@ export async function verifySequential(
       const seqBytes = await page.screenshot();
       // 截图后回读（评审 F1）：自驱推进若在截图窗口抢先，这张图是别的步 → 会与参考图不同，
       // 但归因是"页面自驱推进"而非"顺序/独立 mount 有差"（假红源头）。故先回读再比对。
-      assertCursorStill(spec, await page.evaluate(() => window.__presentation!.getState()));
+      assertCursorStill(spec, await readCursor(page));
 
       const refPath = shotPath(opts.referenceDir, chapterId, spec.step);
       if (!fs.existsSync(refPath)) {
@@ -322,6 +264,6 @@ export async function verifySequential(
     }
     return verdicts;
   } finally {
-    await browser.close();
+    await session.close();
   }
 }

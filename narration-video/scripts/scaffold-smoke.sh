@@ -32,7 +32,7 @@ test -f "$TMP/demo/scripts/storyboard/html.ts"
 test -f "$TMP/demo/src/engine/cursorBridge.ts"
 test -f "$TMP/demo/src/chapters/01-example/timing.json"
 grep -q '"storyboard": "tsx scripts/storyboard.ts"' "$TMP/demo/package.json"
-grep -q 'npx playwright install chromium' "$TMP/demo/scripts/shot/capture.ts"
+grep -q 'npx playwright install chromium' "$TMP/demo/scripts/shot/session.ts"
 # 模板工作区的分镜产出不得随拷贝进新项目（与 dist/ 同类的生成物；新项目分镜页应为空）
 test ! -e "$TMP/demo/storyboard"
 

@@ -1,0 +1,158 @@
+// M3b Task 3 会话模块单测（K-21）：冻结面 + 内联 evaluate 外提的两个消费改造护栏。
+//
+// 单测面刻意**不启浏览器**（与 capture.test.ts 同策略：jsdom 里跑纯函数与薄封装）：
+//   · 页面侧驱动（openSession）靠真机冒烟与 storyboard/verify 两条实跑路径反证；
+//   · jumpToStep / readCursor / readAnimations 用最小 Page 替身钉住"页面侧回调调了哪座桥的
+//     哪个方法、参数怎么传"——这三条正是 capture.ts 原先内联的 evaluate，外提后必须逐字等价。
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Page } from "playwright";
+import { describe, expect, it } from "vitest";
+import * as session from "./session";
+import { jumpToStep, readAnimations, readCursor, withHeadless } from "./session";
+
+describe("withHeadless：URL 归一（幂等 + 保留既有 query）", () => {
+  it("无 query → 追加 ?headless=1", () => {
+    expect(withHeadless("http://localhost:5174")).toBe("http://localhost:5174/?headless=1");
+  });
+
+  it("既有 query 保留（?render=1 不被吞——分镜的干净帧模式）", () => {
+    expect(withHeadless("http://a:1/?render=1")).toBe("http://a:1/?render=1&headless=1");
+  });
+
+  it("已含 headless → 原样（幂等：openSession 内部再归一也不翻倍）", () => {
+    expect(withHeadless("http://a:1/?headless=1")).toBe("http://a:1/?headless=1");
+    expect(withHeadless(withHeadless("http://a:1/?render=1"))).toBe("http://a:1/?render=1&headless=1");
+  });
+});
+
+describe("session 冻结面（接口约定 1：M5 与无头门禁的消费契约）", () => {
+  it("导出面齐备（缺一个即破跨计划契约）", () => {
+    for (const k of [
+      "openSession",
+      "readyWithTimeout",
+      "jumpToStep",
+      "readCursor",
+      "readAnimations",
+      "expandSpecs",
+      "shotPath",
+      "assertCursorMatch",
+      "assertCursorStill",
+      "withHeadless",
+      "isMissingBrowserError",
+      "chromiumMissingError",
+      "CHROMIUM_INSTALL_HINT",
+      "READY_TIMEOUT_MS",
+      "DEFAULT_VIEWPORT",
+    ]) {
+      expect(k in session, `session 缺导出：${k}`).toBe(true);
+    }
+  });
+
+  it("常量语义不变（迁移不得改形：安装命令字面量 / 超时 / 1080p 视口）", () => {
+    expect(session.CHROMIUM_INSTALL_HINT).toBe("npx playwright install chromium");
+    expect(session.READY_TIMEOUT_MS).toBe(10_000);
+    expect(session.DEFAULT_VIEWPORT).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it("依赖单向：session.ts 源码不 import ./capture（否则运行期成环炸链接）", () => {
+    // 用 fileURLToPath 而非 new URL(rel, import.meta.url)：jsdom 环境的 URL 全局把相对路径
+    // 解析成 http://localhost:3000/...（实测），只有 fileURLToPath 拿到真实文件路径。
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const src = fs.readFileSync(path.join(here, "session.ts"), "utf8");
+    expect(src).not.toMatch(/from\s+["']\.\/capture["']/);
+  });
+});
+
+describe("capture.ts 再导出面（K-21 迁移不得破向后兼容）", () => {
+  it("冻结契约仍可 import（含 captureSteps 自身）", async () => {
+    const cap = await import("./capture");
+    for (const k of [
+      "expandSpecs",
+      "shotPath",
+      "assertCursorMatch",
+      "assertCursorStill",
+      "withHeadless",
+      "chromiumMissingError",
+      "CHROMIUM_INSTALL_HINT",
+      "READY_TIMEOUT_MS",
+      "DEFAULT_VIEWPORT",
+      "captureSteps",
+    ]) {
+      expect(k in cap, `capture 缺导出：${k}`).toBe(true);
+    }
+  });
+
+  it("再导出 = 同一绑定（非第二份真相：常量改了单侧不漂移）", async () => {
+    const cap = await import("./capture");
+    expect(cap.withHeadless).toBe(session.withHeadless);
+    expect(cap.shotPath).toBe(session.shotPath);
+    expect(cap.expandSpecs).toBe(session.expandSpecs);
+    expect(cap.assertCursorMatch).toBe(session.assertCursorMatch);
+    expect(cap.assertCursorStill).toBe(session.assertCursorStill);
+    expect(cap.isMissingBrowserError).toBe(session.isMissingBrowserError);
+    expect(cap.chromiumMissingError).toBe(session.chromiumMissingError);
+    expect(cap.READY_TIMEOUT_MS).toBe(session.READY_TIMEOUT_MS);
+    expect(cap.CHROMIUM_INSTALL_HINT).toBe(session.CHROMIUM_INSTALL_HINT);
+    expect(cap.DEFAULT_VIEWPORT).toBe(session.DEFAULT_VIEWPORT);
+  });
+});
+
+// ── 页面侧薄封装（最小 Page 替身；不启浏览器） ──
+
+interface StubCall {
+  fn: (arg?: unknown) => unknown;
+  arg: unknown;
+}
+
+function stubPage(result?: unknown): { page: Page; calls: StubCall[] } {
+  const calls: StubCall[] = [];
+  const page = {
+    evaluate: async (fn: (arg?: unknown) => unknown, arg?: unknown) => {
+      calls.push({ fn, arg });
+      return result;
+    },
+  };
+  return { page: page as unknown as Page, calls };
+}
+
+/** 装一座最小桥（只实现本次断言用到的方法），返回后由调用方按需读回。 */
+function installStubBridge(bridge: Record<string, unknown>): void {
+  (window as unknown as { __presentation?: unknown }).__presentation = bridge;
+}
+
+describe("jumpToStep / readCursor / readAnimations：内联 evaluate 外提（语义逐字等价）", () => {
+  it("jumpToStep：页面侧回调调 window.__presentation.jumpTo(chapter, step)", async () => {
+    const seen: Array<[number, number]> = [];
+    installStubBridge({ jumpTo: (c: number, s: number) => seen.push([c, s]) });
+    const { page, calls } = stubPage();
+    await jumpToStep(page, { chapter: 2, step: 5 });
+    expect(calls).toHaveLength(1);
+    (calls[0].fn as (arg: unknown) => void)(calls[0].arg);
+    expect(seen).toEqual([[2, 5]]);
+  });
+
+  it("jumpToStep：spec 以对象传入（页面侧不依赖位置参数顺序）", async () => {
+    installStubBridge({ jumpTo: () => undefined });
+    const { page, calls } = stubPage();
+    await jumpToStep(page, { chapter: 0, step: 7 });
+    expect(calls[0].arg).toEqual({ chapter: 0, step: 7 });
+  });
+
+  it("readCursor：页面侧回调读 window.__presentation.getState()，结果原样返回", async () => {
+    const st = { chapter: 4, step: 2 };
+    installStubBridge({ getState: () => st });
+    const { page, calls } = stubPage(st);
+    await expect(readCursor(page)).resolves.toEqual(st);
+    expect((calls[0].fn as () => unknown)()).toEqual(st);
+  });
+
+  it("readAnimations：页面侧回调读 window.__presentation.animations()，0 也如实透传", async () => {
+    installStubBridge({ animations: () => 7 });
+    const { page, calls } = stubPage(0);
+    await expect(readAnimations(page)).resolves.toBe(0);
+    expect((calls[0].fn as () => unknown)()).toBe(7);
+  });
+});
