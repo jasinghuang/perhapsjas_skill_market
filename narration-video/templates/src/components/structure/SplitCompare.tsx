@@ -1,8 +1,9 @@
 // Before / After 分屏对比（§6.2 结构组；十九轮 F4 收编——原 showcase S13 双 Card + 中缝圆章拼装组件化）。
 // 单一整体面板：4px 墨框 + 24px 双层硬阴影；内部两半 grid 1fr 1fr 直接相接（无中缝线）；
 // 左半 cream-2 底（before 条目颜色消费 --split-before-text，默认墨色——showcase 以 scope 覆写为灰语义）；
-// 右半 accent-1 绿底 + cream 条目右对齐；中央 absolute VS 圆章（pink 圆 120px——二十七轮 F2 缩自 140px
-// + 4px 墨框 + cream 大字 + 24px 墨硬阴影）压交界；两半中缝侧净空 ≥90px 保证圆章覆盖区零文字（二十七轮 F2）。
+// 右半 accent-1 绿底 + cream 条目右对齐；中央 absolute VS 圆章（--seal-size 驱动，默认 88px——
+// 三十五轮 F1 由 120 收 27%，字号/阴影按 0.45×/0.15× 比例派生）压交界；
+// 两半中缝侧净空 ≥90px 保证圆章覆盖区零文字（二十七轮 F2）。
 import type { CSSProperties } from "react";
 
 export interface SplitCompareProps {

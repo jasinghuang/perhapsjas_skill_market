@@ -973,9 +973,9 @@ function ComponentsSection() {
         <CompCell name="split-compare" extraScope={{ "--split-min-w": "0px", "--split-seam-pad": "88px" }}>
           {/* 面板阴影 --shadow-card（二十一轮 F1 双层签名）——格内密度 scope 自动压 none，自然态见 showcase S17；
               组件级 min-width 1200 以 scope 压回 0（跨列 1088 宽内按内容自适应——两变体并排单行），
-              中缝净空 96→88（仍 ≥ 圆章 60 半跨 + 18 阴影 = 78，零文字压章纪律保持），
-              VS 圆章不压缩：--seal-size 保持默认 120（字号 54 / 阴影 18 由组件比例公式驱动——
-              三十四轮 M2b 比例化）；其余（BEFORE/AFTER 标题）自然态，组件默认档不变 */}
+              中缝净空 96→88（仍 ≥ 圆章 44 半跨 + 13 阴影 = 57，零文字压章纪律保持），
+              VS 圆章不压缩：--seal-size 保持默认 88（字号 40 / 阴影 13 由组件比例公式驱动——
+              三十五轮 F1 由 120 收 27%）；其余（BEFORE/AFTER 标题）自然态，组件默认档不变 */}
           <Variant label="default · split 左右分对齐">
             <SplitCompare
               before={["散落的文档", "模糊的归属"]}
