@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
-import { RevealText, RevealList, StepSequence } from "./";
+import { RevealText, RevealList, StepSequence, StaggerRow } from "./";
 
 beforeEach(() => setRenderMode(false));
 afterEach(() => setRenderMode(false));
@@ -63,5 +63,13 @@ describe("揭示组", () => {
       />,
     );
     expect(getByTestId("seq")).toHaveTextContent("描述");
+  });
+
+  it("StaggerRow：默认变体类名 + 子元素原样渲染（stagger 走引擎）", () => {
+    const { getByTestId } = render(
+      <StaggerRow stagger reveal="rise" data-testid="sr"><span>一</span><span>二</span></StaggerRow>,
+    );
+    expect(getByTestId("sr").className).toContain("cdp-stagger-row");
+    expect(getByTestId("sr").children).toHaveLength(2);
   });
 });

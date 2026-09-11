@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
-import { DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock, StepStairs } from "./";
+import { DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock, StepStairs, PostIt } from "./";
 
 beforeEach(() => setRenderMode(false));
 afterEach(() => setRenderMode(false));
@@ -95,5 +95,23 @@ describe("装饰组", () => {
     expect(cards[0].querySelector(".cdp-hero-number-value")).toHaveTextContent("42%");
     expect(cards[0].querySelector(".cdp-step-stairs-note")).toHaveTextContent("参与度提升");
     expect(cards[1].querySelector(".cdp-step-stairs-note")).toBeNull();
+  });
+
+  it("PostIt：tone 类名 + 图钉 + label/text（亮底 plain / 深底 accent 变体）", () => {
+    const { getByTestId } = render(
+      <div>
+        <PostIt label="NOTE 01" text="先把想法贴墙" tone="pink" rotate={-2} data-testid="pi-pink" />
+        <PostIt label="BIG IDEA" text="别让想法溜走" tone="yellow" emphasis data-testid="pi-yellow" />
+      </div>,
+    );
+    // 深色三色（pink）走 accent 变体；亮底（yellow）走 plain 墨字
+    expect(getByTestId("pi-pink").className).toContain("cdp-card-accent");
+    expect(getByTestId("pi-pink").className).toContain("cdp-post-it-tone-accent-2");
+    expect(getByTestId("pi-pink").style.transform).toBe("rotate(-2deg)");
+    expect(getByTestId("pi-pink").querySelector(".cdp-post-it-pin")).not.toBeNull();
+    expect(getByTestId("pi-yellow").className).toContain("cdp-card-plain");
+    expect(getByTestId("pi-yellow").className).toContain("cdp-post-it-tone-accent-4");
+    expect(getByTestId("pi-yellow").className).toContain("cdp-post-it-emphasis");
+    expect(getByTestId("pi-yellow").querySelector(".cdp-post-it-text")).toHaveTextContent("别让想法溜走");
   });
 });

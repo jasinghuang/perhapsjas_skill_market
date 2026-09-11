@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
-import { HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill } from "./";
+import { HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill, DeltaText } from "./";
 
 beforeEach(() => setRenderMode(false));
 afterEach(() => {
@@ -90,5 +90,20 @@ describe("文字组组件", () => {
     expect(getByTestId("p1").textContent).toBe("01");
     expect(getByTestId("p2").className).toContain("cdp-number-pill-accent");
     expect(getByTestId("p3").className).toContain("cdp-number-pill-invert");
+  });
+
+  it("DeltaText：涨跌片段着色类名（涨橙跌绿）+ 无片段原样", () => {
+    const { container, getByTestId } = render(
+      <div>
+        <BodyCopy data-testid="dt-up"><DeltaText text="营收 +9.52% 收官" /></BodyCopy>
+        <BodyCopy data-testid="dt-down"><DeltaText text="净利 -3.20%" /></BodyCopy>
+        <BodyCopy data-testid="dt-none"><DeltaText text="无涨跌片段" /></BodyCopy>
+      </div>,
+    );
+    expect(getByTestId("dt-up").querySelector(".cdp-delta-text-up")).toHaveTextContent("+9.52%");
+    expect(getByTestId("dt-down").querySelector(".cdp-delta-text-down")).toHaveTextContent("-3.20%");
+    // 无匹配原样输出：零包装 span
+    expect(container.querySelectorAll(".cdp-delta-text")).toHaveLength(2);
+    expect(getByTestId("dt-none")).toHaveTextContent("无涨跌片段");
   });
 });

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
-import { HeroNumber, Counter, BarGrow, DonutMeter, StatCard, StatCell, StatInline } from "./";
+import { HeroNumber, Counter, BarGrow, DonutMeter, StatCard, StatCell, StatInline, YearBarGroup, DataItemRow } from "./";
 
 beforeEach(() => setRenderMode(false));
 afterEach(() => setRenderMode(false));
@@ -148,5 +148,27 @@ describe("数据组组件", () => {
     expect(desc("s-pill-filled")!.className).toBe("cdp-stat-cell-desc cdp-stat-cell-desc-pill-filled");
     // plain 显式指定仍可用（组件能力保留）
     expect(desc("s-plain")!.className).toBe("cdp-stat-cell-desc cdp-stat-cell-desc-plain");
+  });
+
+  it("YearBarGroup：柱高 = value / max（% 内联）+ tone 类名", () => {
+    const { getByTestId } = render(
+      <YearBarGroup max={100} bars={[{ value: 62, tone: "muted" }, { value: 88, tone: "accent" }]} data-testid="ybg" />,
+    );
+    const bars = getByTestId("ybg").querySelectorAll(".cdp-year-bar");
+    expect(bars).toHaveLength(2);
+    expect((bars[0] as HTMLElement).style.height).toBe("62%");
+    expect((bars[1] as HTMLElement).style.height).toBe("88%");
+    expect(bars[0].className).toContain("cdp-year-bar-muted");
+    expect(bars[1].className).toContain("cdp-year-bar-accent");
+  });
+
+  it("DataItemRow：序号药丸 + 标题 + 描述（涨跌着色贯通）", () => {
+    const { getByTestId } = render(
+      <DataItemRow index="01" title="营收 27,930 百万 +9.52%" desc="主营业务收入。" data-testid="dir" pillTestid="dir-pill" />,
+    );
+    expect(getByTestId("dir").querySelector(".cdp-number-pill")).not.toBeNull();
+    expect(getByTestId("dir-pill")).toHaveTextContent("01");
+    expect(getByTestId("dir").querySelector(".cdp-data-item-title .cdp-delta-text-up")).toHaveTextContent("+9.52%");
+    expect(getByTestId("dir").querySelector(".cdp-data-item-desc")).toHaveTextContent("主营业务收入。");
   });
 });

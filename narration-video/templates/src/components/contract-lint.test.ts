@@ -7,11 +7,11 @@ describe("组件契约 lint（§6.4 缺点 4 物理隔离 + §11.1 #9）", () =>
   });
 
   // 终审 C1 护栏：vitest 下 `?raw` 曾因 test.css 缺省(false)被 stub 成空串，
-  // lint 扫 35 个空串恒绿。此测试钉住「每份组件 CSS 真实文本非空」，
-  // 且必须恰好 36 份（35 + 三十三轮 M4.5 chart/EChart.css，磁盘实数为准）——
+  // lint 扫空串恒绿。此测试钉住「每份组件 CSS 真实文本非空」，
+  // 且必须恰好 44 份（36 + 三十四轮 M2b 收编 8 内部件，磁盘实数为准）——
   // 杜绝假绿复现（§6.4 缺点 4 物理隔离）。
-  it("护栏：36 份组件 CSS 的 ?raw 文本全部非空（防 lint 假绿）", () => {
-    expect(COMPONENT_CSS.length).toBe(36);
+  it("护栏：44 份组件 CSS 的 ?raw 文本全部非空（防 lint 假绿）", () => {
+    expect(COMPONENT_CSS.length).toBe(44);
     for (const { file, css } of COMPONENT_CSS) {
       expect(css.length, `?raw 为空串：${file}（test.css 未开启？）`).toBeGreaterThan(0);
     }

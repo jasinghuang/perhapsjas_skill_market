@@ -61,7 +61,6 @@
 // 场景内构图与配色走组件 + token，需要局部配色时用 scope() 注入 CSS 自定义属性（token 覆写，不改组件本体）。
 import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { createPrimitive } from "./components/factory";
 import { CaptionLayer } from "./engine/CaptionLayer";
 import {
   BarGrow,
@@ -69,6 +68,7 @@ import {
   Breathe,
   Card,
   Counter,
+  DataItemRow,
   DecorBar,
   DecorDot,
   DonutMeter,
@@ -77,24 +77,30 @@ import {
   Grid,
   HeroNumber,
   HeroTitle,
+  JisCheck,
   KenBurns,
   Kicker,
   MarkerBlock,
+  MotionCell,
   NumberPill,
   PathDraw,
+  PostIt,
   ProgressDots,
   QuoteBlock,
   Rule,
   SeededParticles,
   SplitCompare,
   StackedBlocks,
+  StaggerRow,
   StagePad,
   StatCell,
   StatInline,
+  StepCard,
   StepStairs,
   Table,
   TimelineTrack,
   TypedTerminal,
+  YearBarGroup,
 } from "./components";
 
 /** 局部 token 覆写：向子树注入 CSS 自定义属性（dev 页合法手段，不改组件本体） */
@@ -106,13 +112,6 @@ const MONO_CN = '"JetBrains Mono", "Noto Sans SC", "SF Mono", monospace';
 /** 24px 双层硬阴影（featured 专用；offset 色按屏纪律选） */
 const SHADOW_ORANGE = "24px 24px 0 var(--accent-3), 24px 24px 0 4px var(--surface-3)";
 const SHADOW_PINK = "24px 24px 0 var(--accent-2), 24px 24px 0 4px var(--surface-3)";
-
-/** 展示页 stagger 行（十二轮 F3）：factory 原语 stagger 对直接子元素逐个错峰 reveal（铁律 5 语义） */
-const StaggerRow = createPrimitive("showcase-stagger-row", {
-  tag: "div",
-  variants: ["default"],
-  defaultVariant: "default",
-});
 
 /** dev 页结构性微调（零颜色，仅尺寸/字体）；自含 <style>，不入组件 CSS */
 const SHOWCASE_TWEAKS = `
@@ -649,56 +648,6 @@ const STEP_DEFS: StepDef[] = [
   { n: "04", title: "成片", desc: "录屏导出成片，一张网页承载完整表达。", tone: "green" },
 ];
 
-/** 流程步骤卡：大 mono 序号（display-2 96px 档）+ Kicker 标题 + 描述两句。
-    配色序列 cream → pink（墨字）→ yellow（墨字）→ green（cream 字）收尾；零阴影（参考构图无投影）。
-    视觉终审三轮 F1：步骤卡间三角箭头已删除（用户拍板），卡片间距保持 Grid gutter 28px */
-function StepCard({ def }: { def: StepDef }) {
-  const variant = def.tone === "green" ? "accent" : "plain";
-  const bg =
-    def.tone === "pink" ? "var(--accent-2)" : def.tone === "yellow" ? "var(--accent-4)" : undefined;
-  const creamText = def.tone === "green";
-  return (
-    <Card
-      variant={variant}
-      data-testid={`step-card-${def.tone}`}
-      style={{
-        position: "relative",
-        height: 320,
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-2)",
-        padding: 28,
-        ...(bg ? { background: bg } : {}),
-      }}
-    >
-      <span
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--t-display-2)",
-          lineHeight: 0.85,
-          color: creamText ? "var(--surface)" : "var(--text)",
-        }}
-      >
-        {def.n}
-      </span>
-      <Kicker
-        variant="plain" // 十三轮一致性：plain 变体颜色继承（green 卡 accent 变体自动 cream 字）
-        style={{
-          fontSize: 34,
-          lineHeight: 1,
-          fontWeight: 700,
-          letterSpacing: "0.04em",
-        }}
-      >
-        {def.title}
-      </Kicker>
-      <BodyCopy style={{ fontSize: 24, lineHeight: 1.4, color: creamText ? "var(--surface)" : "var(--text-2)" }}>
-        {def.desc}
-      </BodyCopy>
-    </Card>
-  );
-}
-
 function FlowSlide() {
   return (
     <SlideShell index="06" topbar="HOW IT WORKS" pill="FOUR STEPS" caption="从稿子到成片，一共四步">
@@ -708,7 +657,15 @@ function FlowSlide() {
         <Rule variant="dashed" data-testid="flow-rule" style={scope({ "--rule-w": "3px", margin: "0 0 var(--space-4)" })} />
         <Grid variant="even" columns={4} data-testid="step-cards" style={{ marginBottom: "var(--space-4)", ...scope({ "--shadow-card-sm": "none" }) }}>
           {STEP_DEFS.map((def) => (
-            <StepCard key={def.n} def={def} />
+            <StepCard
+              key={def.n}
+              index={def.n}
+              title={def.title}
+              desc={def.desc}
+              tone={def.tone}
+              style={{ height: 320 }}
+              data-testid={`step-card-${def.tone}`}
+            />
           ))}
         </Grid>
         <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-6)", marginTop: "auto" }}>
@@ -822,28 +779,6 @@ function MediaSlide() {
 }
 
 /* ── Slide 9 · 动效实验室 = 全部动效词汇陈列（十轮 F5；强调色：green + pink 点缀） ── */
-
-function MotionCell({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div
-      style={{
-        background: "var(--surface)",
-        border: "4px solid var(--surface-3)",
-        padding: "var(--space-4)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-3)",
-      }}
-    >
-      <span
-        style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-label)", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-mute)" }}
-      >
-        {label}
-      </span>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>{children}</div>
-    </div>
-  );
-}
 
 function MotionLabSlide() {
   return (
@@ -1124,90 +1059,15 @@ function TerminalSlide() {
 
 /* ── Slide 13 · 便签墙 = 参考 scatterbrain s1（五色便签 + 图钉） ── */
 
-interface PostItDef {
-  id: string;
-  label: string;
-  text: string;
-  tone: "pink" | "yellow" | "green" | "orange" | "cream";
-  width: number;
-  height: number;
-  left: number;
-  top: number;
-  /** 构图级微旋转（印章同款构图 transform 许可——旋转 bbox 落带内为安全框验收项） */
-  rotate: number;
-}
-
 /** 便签墙 5 卡错落排布：主角卡 520×320 居中偏上，4 张小卡 240×240 四角环绕（左右镜像对称）；
     wall 坐标 x[0,1728] × y[0,~623]——位置已按旋转 bbox（+4~5px 扩展）预演算在带内 */
-const POST_IT_DEFS: PostItDef[] = [
+const POST_IT_DEFS = [
   { id: "hero", label: "BIG IDEA", text: "别让想法溜走", tone: "yellow", width: 520, height: 320, left: 604, top: 24, rotate: -2 },
   { id: "pink", label: "NOTE 01", text: "先把想法贴墙", tone: "pink", width: 240, height: 240, left: 80, top: 100, rotate: -3 },
   { id: "green", label: "NOTE 02", text: "组件负责构图", tone: "green", width: 240, height: 240, left: 1408, top: 100, rotate: 2 },
   { id: "orange", label: "NOTE 03", text: "引擎驱动动效", tone: "orange", width: 240, height: 240, left: 320, top: 372, rotate: 2 },
   { id: "cream", label: "NOTE 04", text: "配色听 token 的", tone: "cream", width: 240, height: 240, left: 1168, top: 372, rotate: -2 },
-];
-
-const POST_IT_BG: Record<PostItDef["tone"], string> = {
-  pink: "var(--accent-2)",
-  yellow: "var(--accent-4)",
-  green: "var(--accent-1)",
-  orange: "var(--accent-3)",
-  cream: "var(--surface)",
-};
-
-/** 便签卡：Card accent + inline 底色覆写（S6 步卡先例——四色显式覆写、零改组件）；
-    亮底（yellow/cream）用 plain 变体保持墨字对比度，深色三色用 accent 变体 cream 字 */
-function PostIt({ def }: { def: PostItDef }) {
-  const darkInk = def.tone === "yellow" || def.tone === "cream";
-  return (
-    <Card
-      variant={darkInk ? "plain" : "accent"}
-      data-testid={`post-it-${def.id}`}
-      style={{
-        position: "absolute",
-        left: def.left,
-        top: def.top,
-        width: def.width,
-        height: def.height,
-        boxSizing: "border-box", // 外框 = 构图尺寸（内衬/边框计入——旋转 bbox 预演算依据）
-        transform: `rotate(${def.rotate}deg)`,
-        background: POST_IT_BG[def.tone],
-        padding: 28,
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-3)",
-      }}
-    >
-      {/* 图钉（CSS 几何）：8px 墨点居中于左上卡角（卡角 = padding 框外缘 -4px 边框；-4 边框 − 4 半径 = -8；随卡旋转） */}
-      <div
-        data-testid={`post-it-pin-${def.id}`}
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          top: -8,
-          left: -8,
-          width: 8,
-          height: 8,
-          borderRadius: "50%",
-          background: "var(--surface-3)",
-        }}
-      />
-      <Kicker variant="plain" style={{ fontSize: "var(--t-label)" }}>
-        {def.label}
-      </Kicker>
-      <span
-        style={{
-          fontFamily: "var(--font-display-cn)",
-          fontWeight: 900,
-          fontSize: def.id === "hero" ? 44 : 28,
-          lineHeight: 1.15,
-        }}
-      >
-        {def.text}
-      </span>
-    </Card>
-  );
-}
+] as const;
 
 function StickyWallSlide() {
   return (
@@ -1222,7 +1082,16 @@ function StickyWallSlide() {
           style={{ position: "relative", flex: 1, minHeight: 0, ...scope({ "--shadow-card-sm": "none" }) }}
         >
           {POST_IT_DEFS.map((def) => (
-            <PostIt key={def.id} def={def} />
+            <PostIt
+              key={def.id}
+              label={def.label}
+              text={def.text}
+              tone={def.tone}
+              rotate={def.rotate}
+              emphasis={def.id === "hero"}
+              data-testid={`post-it-${def.id}`}
+              style={{ position: "absolute", left: def.left, top: def.top, width: def.width, height: def.height }}
+            />
           ))}
         </div>
         {/* 底部 mono 小注 */}
@@ -1349,41 +1218,6 @@ const SPEC_LEDGER = [
   ["SC-03", "2026-07-30", "CASCADE REVERB", "V3.0"],
 ];
 
-/** JIS 勾选框（CSS 几何，dev 页）：24×24 墨框方块；checked = 墨底 + cream 对勾
-    （12×7 L 形 3px 左/下边框，rotate -45deg） */
-function JisCheck({ checked, testid }: { checked: boolean; testid?: string }) {
-  return (
-    <div
-      data-testid={testid}
-      aria-hidden="true"
-      style={{
-        width: 24,
-        height: 24,
-        flexShrink: 0,
-        border: "2px solid var(--text)",
-        background: checked ? "var(--text)" : "transparent",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        boxSizing: "border-box",
-      }}
-    >
-      {checked ? (
-        <div
-          style={{
-            width: 12,
-            height: 7,
-            boxSizing: "border-box",
-            borderLeft: "3px solid var(--surface)",
-            borderBottom: "3px solid var(--surface)",
-            transform: "rotate(-45deg) translateY(-1px)",
-          }}
-        />
-      ) : null}
-    </div>
-  );
-}
-
 function SpecSheetSlide() {
   return (
     <SlideShell index="15" topbar="SPEC SHEET" pill="CATALOGUE" caption="一张规格表，说清一切">
@@ -1440,7 +1274,7 @@ function SpecSheetSlide() {
                   >
                     {row.value}
                   </span>
-                  <JisCheck checked={row.checked} testid={`jis-check-${i + 1}`} />
+                  <JisCheck checked={row.checked} data-testid={`jis-check-${i + 1}`} />
                 </div>
               ))}
             </div>
@@ -1772,24 +1606,6 @@ const YOY_GROUPS = [
 const YOY_MAX = 30000; // 千元上限：y 轴 0/10,000/20,000/30,000 百万元
 const YOY_TICKS = [0, 10000, 20000, 30000];
 
-/** 双年柱组：2024 灰 surface-2 柱 + 2025 绿 accent-1 柱（4px 墨框）；柱高 = 数值 / YOY_MAX（审计断言依据）。
-    组容器须显式 height 100%（% 柱高的解析基准——父级 flex 不撑高会致 % 解析为 0） */
-function YearBarGroup({ group }: { group: (typeof YOY_GROUPS)[number] }) {
-  const slug = group.group === "营业收入" ? "rev" : "profit";
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-2)", height: "100%" }}>
-      <div
-        data-testid={`yoy-bar-${slug}-24`}
-        style={{ width: 140, height: `${(group.year24 / YOY_MAX) * 100}%`, background: "var(--surface-2)", border: "4px solid var(--text)" }}
-      />
-      <div
-        data-testid={`yoy-bar-${slug}-25`}
-        style={{ width: 140, height: `${(group.year25 / YOY_MAX) * 100}%`, background: "var(--accent-1)", border: "4px solid var(--text)" }}
-      />
-    </div>
-  );
-}
-
 function YearOverYearSlide() {
   return (
     <SlideShell index="21" topbar="YEAR ON YEAR" pill="2024 VS 2025" caption="两年对比，看增长成色">
@@ -1842,9 +1658,19 @@ function YearOverYearSlide() {
               />
             ))}
             <div style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "space-around", alignItems: "flex-end" }}>
-              {YOY_GROUPS.map((g) => (
-                <YearBarGroup key={g.group} group={g} />
-              ))}
+              {YOY_GROUPS.map((g) => {
+                const slug = g.group === "营业收入" ? "rev" : "profit";
+                return (
+                  <YearBarGroup
+                    key={g.group}
+                    max={YOY_MAX}
+                    bars={[
+                      { value: g.year24, tone: "muted", "data-testid": `yoy-bar-${slug}-24` },
+                      { value: g.year25, tone: "accent", "data-testid": `yoy-bar-${slug}-25` },
+                    ]}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>
@@ -2030,37 +1856,6 @@ const OP_DATA_ITEMS = [
   { title: "净资本负债比 20.00%", desc: "核心资本充足。" },
 ];
 
-/** A股涨跌语义（二十四轮全局落地）：文本内 "+NN.NN%" 增减片段 → accent-3 橙字
-    （涨橙/跌绿规则，本 deck 无跌例）；无涨跌片段的文本原样 */
-function DeltaText({ text }: { text: string }) {
-  const m = text.match(/\+[0-9]+(?:\.[0-9]+)?%/);
-  if (!m || m.index === undefined) return <>{text}</>;
-  return (
-    <>
-      {text.slice(0, m.index)}
-      <span style={{ color: "var(--accent-3)" }}>{m[0]}</span>
-      {text.slice(m.index + m[0].length)}
-    </>
-  );
-}
-
-/** 数据列条目（两列共用）：NumberPill accent 序号 + Kicker 标题 + BodyCopy 一句 */
-function DataItemRow({ item, i, testidPrefix, pillPrefix = testidPrefix }: { item: { title: string; desc: string }; i: number; testidPrefix: string; pillPrefix?: string }) {
-  return (
-    <div data-testid={`${testidPrefix}-${i + 1}`} style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-3)" }}>
-      <NumberPill number={`0${i + 1}`} variant="accent" data-testid={`${pillPrefix}-pill-${i + 1}`} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <Kicker variant="plain" style={{ fontSize: 34, lineHeight: 1, fontWeight: 700, letterSpacing: "0.04em" }}>
-          <DeltaText text={item.title} />
-        </Kicker>
-        <BodyCopy style={{ fontSize: 24, lineHeight: 1.4, color: "var(--text-2)" }}>
-          <DeltaText text={item.desc} />
-        </BodyCopy>
-      </div>
-    </div>
-  );
-}
-
 function HighlightsSlide() {
   return (
     <SlideShell index="24" topbar="HIGHLIGHTS & OUTLOOK" pill="FIVE NOTES" caption="五个亮点，一个展望">
@@ -2075,7 +1870,7 @@ function HighlightsSlide() {
               年度亮点
             </Kicker>
             {HIGHLIGHT_ITEMS.map((item, i) => (
-              <DataItemRow key={item.title} item={item} i={i} testidPrefix="hl-item" pillPrefix="hl" />
+              <DataItemRow key={item.title} index={`0${i + 1}`} title={item.title} desc={item.desc} data-testid={`hl-item-${i + 1}`} pillTestid={`hl-pill-${i + 1}`} />
             ))}
           </div>
           <div data-testid="hl-ops-list" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)", minWidth: 0 }}>
@@ -2083,7 +1878,7 @@ function HighlightsSlide() {
               经营数据
             </Kicker>
             {OP_DATA_ITEMS.map((item, i) => (
-              <DataItemRow key={item.title} item={item} i={i} testidPrefix="hl-ops-item" pillPrefix="hl-ops" />
+              <DataItemRow key={item.title} index={`0${i + 1}`} title={item.title} desc={item.desc} data-testid={`hl-ops-item-${i + 1}`} pillTestid={`hl-ops-pill-${i + 1}`} />
             ))}
           </div>
           {/* 页边注窄栏：280px（hairline 3px 墨左边线 + mono 小注；二十六轮 F5：字号 20 → var(--t-label) 24px——最小字号规则，不得再小） */}

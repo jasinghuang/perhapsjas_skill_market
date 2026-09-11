@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { registrySize, setRenderMode } from "../../engine/animationRuntime";
-import { Card, Rule, Grid, StagePad, Table, SplitCompare } from "./";
+import { Card, Rule, Grid, StagePad, Table, SplitCompare, JisCheck, StepCard, MotionCell } from "./";
 
 beforeEach(() => setRenderMode(false));
 afterEach(() => setRenderMode(false));
@@ -95,5 +95,41 @@ describe("结构组组件", () => {
     expect(getByTestId("sc-split").className).toContain("cdp-split-compare");
     expect(getByTestId("sc-split").className).not.toContain("cdp-split-compare-center");
     expect(getByTestId("sc-center").className).toContain("cdp-split-compare-center");
+  });
+
+  it("JisCheck：checked 态墨底 + 对勾；未选态零对勾", () => {
+    const { getByTestId } = render(
+      <div>
+        <JisCheck checked data-testid="jc-on" />
+        <JisCheck checked={false} data-testid="jc-off" />
+      </div>,
+    );
+    expect(getByTestId("jc-on").className).toContain("cdp-jis-check-checked");
+    expect(getByTestId("jc-on").querySelector(".cdp-jis-check-mark")).not.toBeNull();
+    expect(getByTestId("jc-off").className).not.toContain("cdp-jis-check-checked");
+    expect(getByTestId("jc-off").querySelector(".cdp-jis-check-mark")).toBeNull();
+  });
+
+  it("StepCard：tone 映射（green 走 accent 变体 + 类名）+ 三件套", () => {
+    const { getByTestId } = render(
+      <div>
+        <StepCard index="01" title="写稿" desc="口播稿定节奏。" tone="cream" data-testid="sc-cream" />
+        <StepCard index="02" title="构图" desc="选组件。" tone="green" data-testid="sc-green" />
+      </div>,
+    );
+    expect(getByTestId("sc-cream").className).toContain("cdp-card-plain");
+    expect(getByTestId("sc-cream").className).not.toContain("cdp-step-card-accent-");
+    expect(getByTestId("sc-green").className).toContain("cdp-card-accent");
+    expect(getByTestId("sc-green").className).toContain("cdp-step-card-accent-1");
+    expect(getByTestId("sc-green").querySelector(".cdp-step-card-index")).toHaveTextContent("02");
+    expect(getByTestId("sc-green").querySelector(".cdp-step-card-title")).toHaveTextContent("构图");
+  });
+
+  it("MotionCell：标签 + 展示区包裹 children", () => {
+    const { getByTestId } = render(
+      <MotionCell label="COUNTER · 滚动计数" data-testid="mc"><Card>内容</Card></MotionCell>,
+    );
+    expect(getByTestId("mc").querySelector(".cdp-motion-cell-label")).toHaveTextContent("COUNTER · 滚动计数");
+    expect(getByTestId("mc").querySelector(".cdp-motion-cell-body .cdp-card")).not.toBeNull();
   });
 });

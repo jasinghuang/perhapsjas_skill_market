@@ -5,3 +5,5 @@ export { DonutMeter } from "./DonutMeter";
 export { StatCard } from "./StatCard";
 export { StatCell } from "./StatCell";
 export { StatInline } from "./StatInline";
+export { YearBarGroup } from "./YearBarGroup";
+export { DataItemRow } from "./DataItemRow";

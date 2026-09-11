@@ -1,5 +1,5 @@
 // 样式词典页（M2b 验收工具；dev-only，不入章节层）。
-// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 36 组件全变体目录。
+// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 44 组件全变体目录。
 // 页面壳：深色 shell 底（var(--shell)）、1920 居中；每区段 mono 区段头（cream，编号 + 标题）
 // + 全幅 cream 内容面板（4px 墨框、水平内衬 96px——与安全框规格一致）。
 // 布局纪律：区段内容水平 ≥96px 内；无横向溢出；组件格容器只允许 inline 布局属性，
@@ -20,20 +20,25 @@ import {
   Breathe,
   Card,
   Counter,
+  DataItemRow,
   DecorBar,
   DecorDot,
   DecorRing,
+  DeltaText,
   DonutMeter,
   EChart,
   Figure,
   Grid,
   HeroNumber,
   HeroTitle,
+  JisCheck,
   KenBurns,
   Kicker,
   MarkerBlock,
+  MotionCell,
   NumberPill,
   PathDraw,
+  PostIt,
   ProgressDots,
   QuoteBlock,
   RevealList,
@@ -42,15 +47,18 @@ import {
   SeededParticles,
   SplitCompare,
   StackedBlocks,
+  StaggerRow,
   StagePad,
   StatCard,
   StatCell,
   StatInline,
+  StepCard,
   StepSequence,
   StepStairs,
   Table,
   TimelineTrack,
   TypedTerminal,
+  YearBarGroup,
 } from "./components";
 
 /** 局部 token 覆写：向子树注入 CSS 自定义属性（dev 页合法手段，不改组件本体） */
@@ -657,7 +665,7 @@ function SemanticSection() {
   );
 }
 
-/* ── 06 · 组件全览 COMPONENTS（36 组件 × 全变体） ── */
+/* ── 06 · 组件全览 COMPONENTS（44 组件 × 全变体） ── */
 
 /** 组件格尺寸提示（M2b 三轮定稿：按内容自适应——每组件按其内容需要设计尺寸）。
     每组件一行：内容区建议 minW / minH（内容自然尺寸的舒适下限，不设上限——格高 = 内容自然高
@@ -671,6 +679,7 @@ const SIZE_HINTS: Record<string, { minW?: number; minH?: number; span?: number; 
   "body-copy": { minH: 56 },
   "quote-block": { minH: 88 }, // 两变体竖排
   "number-pill": { minH: 56 }, // 三药丸单行 → 矮格
+  "delta-text": { minH: 88 },  // 涨/跌两行示例 → 中格
   // DATA · 数据
   "hero-number": { minH: 72 },   // 数字 + 标注 → 中格（~170）
   "counter": { minH: 64 },       // 数字 + 标注 → 中格（~160）
@@ -679,6 +688,8 @@ const SIZE_HINTS: Record<string, { minW?: number; minH?: number; span?: number; 
   "stat-card": { minH: 128 },    // 三变体并排
   "stat-cell": { span: 2, minW: 1080, minH: 560 }, // 定版四卡 block 2×2（S20 同构，自然字号）→ 大格 ~690
   "stat-inline": { minH: 300 },  // 两变体竖排全宽 → 大格（300-420）
+  "year-bar-group": { minH: 200 }, // 双柱 220 高展示台 → 中格
+  "data-item-row": { minH: 96 },   // 单行条目（药丸 + 标题 + 描述）→ 矮格
   // STRUCTURE · 结构
   "card": { minH: 96 },
   "rule": { minH: 64 },          // 条形 → 矮格
@@ -686,10 +697,14 @@ const SIZE_HINTS: Record<string, { minW?: number; minH?: number; span?: number; 
   "stage-pad": { minH: 144 },
   "table": { span: 2, minW: 1080, minH: 160 },       // 两变体并排（跨列）
   "split-compare": { span: 2, minW: 1080, minH: 216 }, // 两变体并排（跨列）
+  "jis-check": { minH: 64 },    // 两态勾选框 → 矮格
+  "step-card": { minH: 300 },   // 两卡并排 248×300 → 大格
+  "motion-cell": { minH: 220 }, // 标签 + 展示区 → 中格
   // REVEAL · 揭示
   "reveal-text": { minH: 80 },
   "reveal-list": { span: 2, minW: 1080, minH: 144 }, // 两变体并排（跨列）
   "step-sequence": { span: 2, minW: 1080, minH: 280 }, // plain + cards 并排（跨列）
+  "stagger-row": { minH: 96 }, // 错峰入场行包装（四点行）→ 矮格
   // DECOR · 装饰
   "decor-dot": { minH: 56 },
   "decor-bar": { minH: 56 },
@@ -697,6 +712,7 @@ const SIZE_HINTS: Record<string, { minW?: number; minH?: number; span?: number; 
   "stacked-blocks": { minH: 280 }, // 280×280 自然态
   "step-stairs": { span: 2, minW: 1080, minH: 280 }, // 三卡阶梯 200/240/280（跨列）
   "marker-block": { minH: 96 },
+  "post-it": { minH: 220 }, // 两便签并排 248×200（微旋转）→ 中格
   // MEDIA · 素材
   "figure": { span: 2, minW: 1080, minH: 160 }, // 四变体单行 220/140（跨列）
   "typed-terminal": { minH: 96 },
@@ -810,7 +826,7 @@ function ComponentsSection() {
   const stepData = [{ title: "进场" }, { title: "节奏" }, { title: "收束" }];
   return (
     <Section index="06" title="组件全览 COMPONENTS">
-      <CompGroup label="TEXT · 文字（5）">
+      <CompGroup label="TEXT · 文字（6）">
         <CompCell name="hero-title">
           <Variant label="plain"><HeroTitle data-testid="variant-hero-title-plain" style={{ fontSize: 56, lineHeight: 0.92 }}>口播视频</HeroTitle></Variant>
           <Variant label="stamp"><HeroTitle variant="stamp" data-testid="variant-hero-title-stamp" style={{ fontSize: 28, lineHeight: 1, padding: "8px 14px" }}>口播视频</HeroTitle></Variant>
@@ -837,8 +853,12 @@ function ComponentsSection() {
           <Variant label="accent"><NumberPill number="02" variant="accent" data-testid="variant-number-pill-accent" /></Variant>
           <Variant label="invert"><NumberPill number="03" variant="invert" data-testid="variant-number-pill-invert" /></Variant>
         </CompCell>
+        <CompCell name="delta-text" extraScope={{ "--t-body": "28px" }}>
+          <Variant label="up · 涨橙"><BodyCopy><DeltaText text="营业收入 +9.52%" /></BodyCopy></Variant>
+          <Variant label="down · 跌绿"><BodyCopy><DeltaText text="归母净利 -3.20%" /></BodyCopy></Variant>
+        </CompCell>
       </CompGroup>
-      <CompGroup label="DATA · 数据（7）">
+      <CompGroup label="DATA · 数据（9）">
         <CompCell name="hero-number">
           <Variant label="plain"><HeroNumber value="+47%" variant="plain" data-testid="variant-hero-number-plain" /></Variant>
           <Variant label="accent"><HeroNumber value="+47%" variant="accent" data-testid="variant-hero-number-accent" /></Variant>
@@ -883,8 +903,20 @@ function ComponentsSection() {
           </div>
           <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>默认档 · block 绿底 cream 字（与 KEY METRICS 定版一致）；pill / pillFilled / plain 为组件能力（展示页未使用）</MonoLabel>
         </CompCell>
+        <CompCell name="year-bar-group">
+          <Variant label="muted / accent · 柱高 = value / max">
+            <div style={{ height: 200, display: "flex", alignItems: "flex-end" }}>
+              <YearBarGroup max={100} bars={[{ value: 62, tone: "muted" }, { value: 88, tone: "accent" }]} />
+            </div>
+          </Variant>
+        </CompCell>
+        <CompCell name="data-item-row" extraScope={{ "--t-body": "28px" }}>
+          <Variant label="序号药丸 + 标题 + 描述（涨跌自动着色）">
+            <DataItemRow index="01" title="营收 27,930 百万 +9.52%" desc="主营业务收入稳步抬升。" />
+          </Variant>
+        </CompCell>
       </CompGroup>
-      <CompGroup label="STRUCTURE · 结构（6）">
+      <CompGroup label="STRUCTURE · 结构（9）">
         <CompCell name="card">
           <Variant label="plain"><Card variant="plain" data-testid="variant-card-plain" style={{ width: 150, padding: 16 }}><BodyCopy>奶油底</BodyCopy></Card></Variant>
           <Variant label="invert"><div style={INVERT_TEXT}><Card variant="invert" data-testid="variant-card-invert" style={{ width: 150, padding: 16 }}><BodyCopy>墨底</BodyCopy></Card></div></Variant>
@@ -941,8 +973,9 @@ function ComponentsSection() {
         <CompCell name="split-compare" extraScope={{ "--split-min-w": "0px", "--split-seam-pad": "88px" }}>
           {/* 面板阴影 --shadow-card（二十一轮 F1 双层签名）——格内密度 scope 自动压 none，自然态见 showcase S17；
               组件级 min-width 1200 以 scope 压回 0（跨列 1088 宽内按内容自适应——两变体并排单行），
-              中缝净空 96→88（仍 ≥ 圆章 60 半跨 + 24 阴影 = 84，零文字压章纪律保持），
-              其余（BEFORE/AFTER 标题、VS 圆章 120）全部自然态，组件默认档不变 */}
+              中缝净空 96→88（仍 ≥ 圆章 60 半跨 + 18 阴影 = 78，零文字压章纪律保持），
+              VS 圆章不压缩：--seal-size 保持默认 120（字号 54 / 阴影 18 由组件比例公式驱动——
+              三十四轮 M2b 比例化）；其余（BEFORE/AFTER 标题）自然态，组件默认档不变 */}
           <Variant label="default · split 左右分对齐">
             <SplitCompare
               before={["散落的文档", "模糊的归属"]}
@@ -959,8 +992,21 @@ function ComponentsSection() {
             />
           </Variant>
         </CompCell>
+        <CompCell name="jis-check">
+          <Variant label="checked · 墨底白勾"><JisCheck checked /></Variant>
+          <Variant label="unchecked · 空格"><JisCheck checked={false} /></Variant>
+        </CompCell>
+        <CompCell name="step-card">
+          <Variant label="cream"><StepCard index="01" title="写稿" desc="口播稿定节奏。" tone="cream" style={{ width: 246, height: 280 }} /></Variant>
+          <Variant label="green · accent 色"><StepCard index="02" title="构图" desc="为每一步选组件。" tone="green" style={{ width: 246, height: 280 }} /></Variant>
+        </CompCell>
+        <CompCell name="motion-cell" extraScope={{ "--t-label": "24px" }}>
+          <MotionCell label="COUNTER · 滚动计数" style={{ width: 300, height: 200 }}>
+            <Counter to={47} />
+          </MotionCell>
+        </CompCell>
       </CompGroup>
-      <CompGroup label="REVEAL · 揭示（3）">
+      <CompGroup label="REVEAL · 揭示（4）">
         <CompCell name="reveal-text">
           <Variant label="words"><RevealText text="逐词 揭示 测试" variant="words" data-testid="variant-reveal-text-words" /></Variant>
           <Variant label="mask"><RevealText text="逐词 揭示 测试" variant="mask" data-testid="variant-reveal-text-mask" /></Variant>
@@ -979,8 +1025,15 @@ function ComponentsSection() {
           <Variant label="plain"><StepSequence steps={stepData} currentStep={1} variant="plain" data-testid="variant-step-sequence-plain" /></Variant>
           <Variant label="cards"><StepSequence steps={stepData} currentStep={1} variant="cards" data-testid="variant-step-sequence-cards" /></Variant>
         </CompCell>
+        <CompCell name="stagger-row">
+          <Variant label="stagger · 逐条错峰入场">
+            <StaggerRow stagger reveal="rise" duration="mid" style={{ display: "flex", gap: "var(--space-3)" }}>
+              <DecorDot /><DecorDot /><DecorDot /><DecorDot />
+            </StaggerRow>
+          </Variant>
+        </CompCell>
       </CompGroup>
-      <CompGroup label="DECOR · 装饰（6）">
+      <CompGroup label="DECOR · 装饰（7）">
         <CompCell name="decor-dot">
           <Variant label="plain"><DecorDot variant="plain" data-testid="variant-decor-dot-plain" /></Variant>
           <Variant label="glow"><DecorDot variant="glow" data-testid="variant-decor-dot-glow" /></Variant>
@@ -997,21 +1050,33 @@ function ComponentsSection() {
           <Variant label="default · 4×160 错位叠放"><StackedBlocks data-testid="variant-stacked-blocks-default" /></Variant>
         </CompCell>
         <CompCell name="step-stairs">
-          <Variant label="default · 卡高递增 200/240/280 · 顶部橙条">
-            <StepStairs
-              data-testid="variant-step-stairs-default"
-              items={[
-                { value: "42%", note: "参与度提升" },
-                { value: "2.7×", note: "吞吐倍数" },
-                { value: "25", note: "屏数" },
-              ]}
-            />
-          </Variant>
+          {/* 全宽包装：StepStairs 根 width:100% 需解析到格内容宽（1088）——否则落在
+              shrink-to-fit 的 Variant 上，三卡各 ~137px、注文压宽（M2b 复核实测） */}
+          <div style={{ width: "100%" }}>
+            <Variant label="default · 卡高递增 200/240/280 · 顶部橙条">
+              <StepStairs
+                data-testid="variant-step-stairs-default"
+                items={[
+                  { value: "42%", note: "参与度提升" },
+                  { value: "2.7×", note: "吞吐倍数" },
+                  { value: "25", note: "屏数" },
+                ]}
+              />
+            </Variant>
+          </div>
         </CompCell>
         <CompCell name="marker-block">
           <Variant label="plain"><MarkerBlock data-testid="variant-marker-block-plain"><BodyCopy>奶油底 · 墨字</BodyCopy></MarkerBlock></Variant>
           <Variant label="accent"><div style={INVERT_TEXT}><MarkerBlock variant="accent" data-testid="variant-marker-block-accent"><BodyCopy>pink 底 · cream 字</BodyCopy></MarkerBlock></div></Variant>
           <Variant label="invert · 封面主角块"><div style={INVERT_TEXT}><MarkerBlock variant="invert" data-testid="variant-marker-block-invert"><BodyCopy>墨底 · cream 字</BodyCopy></MarkerBlock></div></Variant>
+        </CompCell>
+        <CompCell name="post-it" extraScope={{ "--t-label": "24px" }}>
+          <Variant label="tone 五色 · 图钉便签（微旋转）">
+            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+              <PostIt label="NOTE 01" text="先把想法贴墙" tone="pink" rotate={-2} style={{ position: "relative", width: 248, height: 180 }} />
+              <PostIt label="BIG IDEA" text="别让想法溜走" tone="yellow" rotate={2} style={{ position: "relative", width: 248, height: 180 }} />
+            </div>
+          </Variant>
         </CompCell>
       </CompGroup>
       <CompGroup label="MEDIA · 素材（3）">
@@ -1171,7 +1236,7 @@ export function StyleGuide() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 样式词典 · 全部 token 视觉表达 + 36 组件目录
+          creative-mode · 样式词典 · 全部 token 视觉表达 + 44 组件目录
         </span>
         <span
           style={{

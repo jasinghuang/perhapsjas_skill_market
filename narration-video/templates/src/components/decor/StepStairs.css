@@ -54,4 +54,6 @@
   line-height: 1;
   letter-spacing: 0.06em;
   color: var(--text-mute);
+  /* 三十四轮 M2b：注文恒单行（组件级保证——卡宽收窄时不再换行成两行；消费端给足卡宽为构图职责） */
+  white-space: nowrap;
 }

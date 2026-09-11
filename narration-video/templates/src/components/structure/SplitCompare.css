@@ -91,24 +91,25 @@
   text-align: center;
 }
 
-/* 中央 VS 圆章：accent-2 圆（二十七轮 F2：140px → 120px——覆盖区收窄、净空更从容）
-   + 4px 墨框 + cream 大字 + 24px 墨硬阴影，absolute 压两半交界 */
+/* 中央 VS 圆章：accent-2 圆 + 4px 墨框 + cream 大字 + 墨硬阴影，absolute 压两半交界。
+   三十四轮 M2b 比例化：--seal-size（默认 120px）驱动直径；字号 = 直径 × 0.45（默认 54px）；
+   阴影偏移 = 直径 × 0.15（默认 18px）——任意 --seal-size 下比例正确（消费端按版面覆写一个变量即可） */
 .cdp-split-compare-seal {
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 120px;
-  height: 120px;
+  width: var(--seal-size, 120px);
+  height: var(--seal-size, 120px);
   border-radius: 50%;
   background: var(--accent-2);
   border: var(--card-border);
-  box-shadow: 24px 24px 0 var(--surface-3);
+  box-shadow: calc(var(--seal-size, 120px) * 0.15) calc(var(--seal-size, 120px) * 0.15) 0 var(--surface-3);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-display-en);
-  font-size: var(--t-h2);
+  font-size: calc(var(--seal-size, 120px) * 0.45);
   line-height: 1;
   letter-spacing: 0.02em;
   color: var(--surface);

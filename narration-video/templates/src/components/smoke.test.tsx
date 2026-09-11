@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { setRenderMode } from "../engine/animationRuntime";
 import {
-  HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill,
-  HeroNumber, Counter, BarGrow, DonutMeter, StatCard, StatCell, StatInline,
-  Card, Rule, Grid, StagePad, Table, SplitCompare,
-  RevealText, RevealList, StepSequence,
-  DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock, StepStairs,
+  HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill, DeltaText,
+  HeroNumber, Counter, BarGrow, DonutMeter, StatCard, StatCell, StatInline, YearBarGroup, DataItemRow,
+  Card, Rule, Grid, StagePad, Table, SplitCompare, JisCheck, StepCard, MotionCell,
+  RevealText, RevealList, StepSequence, StaggerRow,
+  DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock, StepStairs, PostIt,
   Figure, TypedTerminal, PathDraw,
   SeededParticles, Breathe, KenBurns,
   TimelineTrack, ProgressDots,
@@ -42,14 +42,15 @@ vi.mock("echarts/renderers", () => ({ SVGRenderer: { kind: "SVGRenderer" } }));
 
 // 终审 M3：逐组件 presence 断言——统一出口每个组件必须在画布真实渲染，
 // 只查 ".cdp" 根类会漏掉「组件已导出但从未渲染」的假绿。
-// 全部 36 组件（35 + 三十三轮 M4.5 EChart）。
+// 全部 44 组件（36 + 三十四轮 M2b 收编 8 内部件）。
 const ALL_NAMES = [
   "stage-pad",
-  "hero-title", "kicker", "body-copy", "quote-block", "number-pill",
+  "hero-title", "kicker", "body-copy", "quote-block", "number-pill", "delta-text",
   "hero-number", "counter", "bar-grow", "donut", "stat-card", "stat-cell", "stat-inline",
-  "card", "rule", "grid", "table", "split-compare",
-  "reveal-text", "reveal-list", "step-seq",
-  "decor-dot", "decor-bar", "decor-ring", "stacked-blocks", "marker-block", "step-stairs",
+  "year-bar-group", "data-item",
+  "card", "rule", "grid", "table", "split-compare", "jis-check", "step-card", "motion-cell",
+  "reveal-text", "reveal-list", "step-seq", "stagger-row",
+  "decor-dot", "decor-bar", "decor-ring", "stacked-blocks", "marker-block", "step-stairs", "post-it",
   "figure", "terminal", "path-draw",
   "particles", "breathe", "kenburns",
   "timeline", "progress-dots",
@@ -77,7 +78,7 @@ afterEach(() => {
 
 describe("双画布冒烟（§11.2 组件契约测试）", () => {
   for (const dims of STAGE_SIZES) {
-    it(`全部 36 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
+    it(`全部 44 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
       const { container } = render(
         <div style={{ width: dims.width, height: dims.height }}>
           <StagePad>
@@ -106,6 +107,15 @@ describe("双画布冒烟（§11.2 组件契约测试）", () => {
             <DonutMeter value={0.42} label="转化率" /><Rule />
             <Table header={["A", "B"]} rows={[["1", "2"]]} />
             <BodyCopy>正文</BodyCopy><QuoteBlock>引用</QuoteBlock>
+            {/* 三十四轮 M2b 收编 8 内部件（presence + 根类） */}
+            <DeltaText text="增长 +9.52%" />
+            <YearBarGroup max={100} bars={[{ value: 62, tone: "muted" }, { value: 88, tone: "accent" }]} />
+            <DataItemRow index="01" title="营收 27,930 百万" desc="主营业务收入。" pillTestid="smoke-data-item-pill" />
+            <JisCheck checked />
+            <StepCard index="01" title="写稿" desc="口播稿定节奏。" tone="cream" style={{ height: 320 }} />
+            <MotionCell label="MOTION"><DecorDot /></MotionCell>
+            <StaggerRow stagger reveal="rise" duration="mid"><span>一</span><span>二</span></StaggerRow>
+            <PostIt label="NOTE 01" text="先把想法贴墙" tone="pink" />
             <div style={{ width: 320, height: 200 }}>
               <EChart option={{ series: [{ type: "bar", data: [1, 2, 3] }] }} data-testid="smoke-echart" />
             </div>
