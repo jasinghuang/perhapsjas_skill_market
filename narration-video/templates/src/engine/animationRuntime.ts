@@ -71,6 +71,144 @@ export function registrySize(): number {
   return registry.size;
 }
 
+// ── M3b Task 5：动画审计面（audit() 的 WAAPI 侧） ──
+// M4 遗留口径缺口：animations() 只是求和，无法归因"引擎注册的动画"与"章节层手写/CSS 泄漏的
+// 动画"。本模块给 waapi() 创建的底层动画打模块内 Symbol 标记（OWNED），
+// describeUnownedAnimations() 据此把 document.getAnimations() 拆成 owned / unowned，
+// 并给出至多 5 条可读定位与 running 统计——门禁（M3b）据此判定泄漏面。
+
+/** 打标用的模块内 Symbol：只有经本模块 waapi() 创建的底层 Animation 带它 */
+const OWNED = Symbol("waapi-owned");
+
+/** unownedHints 条数上限：门禁报错够定位即可，不逐条刷屏 */
+const UNOWNED_HINT_LIMIT = 5;
+
+/** 单条 hint 字符上限：怪异 target 的巨型 className 不得撑爆门禁报告 */
+const HINT_MAX_CHARS = 80;
+
+/** WAAPI 查询面的审计计数（M3b Task 5）。cursorBridge.audit() 在其上补注册表两项。 */
+export interface WaapiAudit {
+  /** document.getAnimations() 计数（jsdom 无此 API → 0） */
+  waapi: number;
+  /** 其中经本模块 waapi() 适配器创建的（已打标） */
+  owned: number;
+  /** waapi − owned：未注册动画 = 章节层手写/CSS 泄漏面 */
+  unowned: number;
+  /** 未注册动画中 playState === "running" 的数量 */
+  unownedRunning: number;
+  /** 未注册动画的可读定位，至多 5 条 */
+  unownedHints: string[];
+  /** 全部 WAAPI 动画中 running 的数量 */
+  running: number;
+}
+
+/** 打标：不可扩展/冻结的 Animation 替身退化为"未打标"——方向是宁误报不漏报（门禁安全侧） */
+function markOwned(animation: Animation): void {
+  try {
+    (animation as unknown as Record<symbol, boolean>)[OWNED] = true;
+  } catch {
+    /* 保留未打标态：审计会把该引擎动画计入 unowned，不影响其它路径 */
+  }
+}
+
+function isOwned(anim: unknown): boolean {
+  return (
+    anim !== null && typeof anim === "object" && (anim as Record<symbol, unknown>)[OWNED] === true
+  );
+}
+
+function isRunning(anim: unknown): boolean {
+  return (
+    anim !== null && typeof anim === "object" && (anim as { playState?: unknown }).playState === "running"
+  );
+}
+
+/** document.getAnimations() 查询面：jsdom 无此 API → 空（guard 风格同 cursorBridge.animations） */
+function queryAnimations(): unknown[] {
+  const get = document.getAnimations;
+  if (typeof get !== "function") return [];
+  const list = get.call(document);
+  return Array.isArray(list) ? list : [];
+}
+
+function clip(s: string): string {
+  return s.length > HINT_MAX_CHARS ? `${s.slice(0, HINT_MAX_CHARS)}…` : s;
+}
+
+/** 读属性（元素替身可能没有 getAttribute、也可能抛错）：任何异常一律归空串 */
+function attr(el: object, name: string): string {
+  const get = (el as { getAttribute?: unknown }).getAttribute;
+  if (typeof get !== "function") return "";
+  try {
+    const value = (get as (n: string) => unknown).call(el, name);
+    return typeof value === "string" ? value.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * effect.target → 可读选择器 `tag#id.class`（类名至多 2 个）。
+ * **逐层兜底**：无 target / 文本节点 / 非元素 / 无 tagName / 属性读取抛错，一律给标签化兜底串。
+ * 本函数是门禁判据来源，任何怪异 target 都不允许让它抛错。
+ */
+function selectorOf(target: unknown): string {
+  if (target === null || typeof target !== "object") return "(no-target)";
+  try {
+    const nodeType = (target as { nodeType?: unknown }).nodeType;
+    if (nodeType === 3) return "#text";
+    if (nodeType !== 1) return "(non-element)";
+    const tagName = (target as { tagName?: unknown }).tagName;
+    if (typeof tagName !== "string" || tagName === "") return "(element)";
+    const id = attr(target, "id");
+    const classes = attr(target, "class").split(/\s+/).filter(Boolean).slice(0, 2);
+    const selector = tagName.toLowerCase() + (id ? `#${id}` : "") + classes.map((c) => `.${c}`).join("");
+    return clip(selector);
+  } catch {
+    return "(unreadable)";
+  }
+}
+
+/** 单条动画的可读定位：CSS 动画取 animationName，其余取 effect.target 的选择器 */
+function describeAnimation(anim: unknown): string {
+  try {
+    const name = (anim as { animationName?: unknown } | null)?.animationName;
+    if (typeof name === "string" && name !== "") return `css:${clip(name)}`;
+    const effect = (anim as { effect?: unknown } | null)?.effect;
+    const target = (effect as { target?: unknown } | null | undefined)?.target ?? null;
+    return `waapi:${selectorOf(target)}`;
+  } catch {
+    return "waapi:(unreadable)";
+  }
+}
+
+/**
+ * 审计面（M3b Task 5）：把 document.getAnimations() 按 OWNED 标记拆成 owned / unowned，
+ * 给出未注册动画的 running 数与至多 5 条可读定位。jsdom 无 WAAPI 查询面 → 全 0 且不抛。
+ */
+export function describeUnownedAnimations(): WaapiAudit {
+  const all = queryAnimations();
+  let owned = 0;
+  let unowned = 0;
+  let unownedRunning = 0;
+  let running = 0;
+  const unownedHints: string[] = [];
+
+  for (const anim of all) {
+    const animRunning = isRunning(anim);
+    if (animRunning) running++;
+    if (isOwned(anim)) {
+      owned++;
+      continue;
+    }
+    unowned++;
+    if (animRunning) unownedRunning++;
+    if (unownedHints.length < UNOWNED_HINT_LIMIT) unownedHints.push(describeAnimation(anim));
+  }
+
+  return { waapi: all.length, owned, unowned, unownedRunning, running, unownedHints };
+}
+
 /** WAAPI 适配器：把 element.animate 包装进注册表（预览自动播放；render 模式创建即冻结） */
 export function waapi(
   el: Element,
@@ -88,6 +226,7 @@ export function waapi(
       : 1;
   const total = delay + duration * iterations;
   const animation = el.animate(keyframes, opts);
+  markOwned(animation); // M3b Task 5：审计面据此把引擎动画与章节层泄漏的动画区分开
   animation.pause();
 
   const handle = register({

@@ -3,6 +3,7 @@ import {
   allFinished,
   animationWindowMs,
   canvasAnim,
+  describeUnownedAnimations,
   register,
   registrySize,
   resumeAll,
@@ -57,6 +58,8 @@ beforeEach(() => {
 afterEach(() => {
   setRenderMode(false);
   vi.unstubAllGlobals();
+  // 用例内按需 stub 的 WAAPI 查询面不残留到后续用例（jsdom 本无此 API）
+  Reflect.deleteProperty(document, "getAnimations");
 });
 
 describe("动画运行时注册表", () => {
@@ -282,5 +285,170 @@ describe("动画运行时注册表", () => {
     seekAll(10);
     expect(seeked).toBe(2);
     h.dispose();
+  });
+});
+
+describe("describeUnownedAnimations（M3b Task 5 · audit 的 WAAPI 面）", () => {
+  interface ProbeAnim {
+    playState: "paused" | "running" | "finished" | "idle";
+    currentTime: number;
+    effect: { target: unknown } | null;
+    animationName?: string;
+    play(): void;
+    pause(): void;
+    cancel(): void;
+  }
+
+  function probeAnim(target: unknown, animationName?: string): ProbeAnim {
+    const anim: ProbeAnim = {
+      playState: "paused",
+      currentTime: 0,
+      effect: { target },
+      play: () => {
+        anim.playState = "running";
+      },
+      pause: () => {
+        anim.playState = "paused";
+      },
+      cancel: () => {
+        anim.playState = "idle";
+      },
+    };
+    if (animationName !== undefined) anim.animationName = animationName;
+    return anim;
+  }
+
+  /** 假 WAAPI 查询面：document.getAnimations() 返回给定数组（jsdom 本无此 API） */
+  function stubAnimations(anims: unknown[]): void {
+    Object.defineProperty(document, "getAnimations", { configurable: true, value: () => anims });
+  }
+
+  /** 经引擎 waapi() 创建的动画（走打标路径）：元素 animate 返回可观察替身 */
+  function engineAnim(opts: KeyframeAnimationOptions = { duration: 100 }): {
+    handle: ReturnType<typeof waapi>;
+    anim: ProbeAnim;
+  } {
+    let made: ProbeAnim | null = null;
+    const el = document.createElement("div");
+    Object.defineProperty(el, "animate", {
+      configurable: true,
+      value: () => {
+        made = probeAnim(el);
+        return made as unknown as Animation;
+      },
+    });
+    const handle = waapi(el, [{ opacity: 0 }, { opacity: 1 }], opts);
+    return { handle, anim: made as unknown as ProbeAnim };
+  }
+
+  it("非空护栏（jsdom 常态）：无 document.getAnimations → 全 0 且不抛", () => {
+    expect((document as { getAnimations?: unknown }).getAnimations).toBeUndefined();
+    expect(() => describeUnownedAnimations()).not.toThrow();
+    expect(describeUnownedAnimations()).toEqual({
+      waapi: 0,
+      owned: 0,
+      unowned: 0,
+      unownedRunning: 0,
+      running: 0,
+      unownedHints: [],
+    });
+  });
+
+  it("unowned = 未打标动画；引擎 waapi() 创建的计入 owned", () => {
+    const { handle, anim } = engineAnim();
+    expect(anim.playState).toBe("running"); // 非 render：创建即播（底层动画真在跑）
+    stubAnimations([anim, probeAnim(null), probeAnim(null, "slide-in")]);
+
+    const a = describeUnownedAnimations();
+    expect(a.waapi).toBe(3);
+    expect(a.owned).toBe(1); // 经 waapi() 创建 → 已打标
+    expect(a.unowned).toBe(2); // 未打标 → 归因到章节层泄漏面
+    handle.dispose();
+  });
+
+  it("unownedHints：WAAPI 取 effect.target 可读选择器、CSS 动画取 animationName；至多 5 条", () => {
+    const target = document.createElement("div");
+    target.id = "stage";
+    target.className = "slide active extra"; // 类名至多取 2 个（hint 要短）
+    stubAnimations([
+      probeAnim(target),
+      probeAnim(null, "ken-burns"),
+      probeAnim(null),
+      probeAnim(null),
+      probeAnim(null),
+      probeAnim(null),
+    ]);
+
+    const a = describeUnownedAnimations();
+    expect(a.unowned).toBe(6);
+    expect(a.unownedHints).toHaveLength(5); // 超出的同类信息不再重复（门禁报错够定位即可）
+    expect(a.unownedHints[0]).toBe("waapi:div#stage.slide.active");
+    expect(a.unownedHints[1]).toBe("css:ken-burns");
+  });
+
+  it("怪异 target 不抛：文本节点 / 无 target / 无 tagName，逐层给兜底定位", () => {
+    stubAnimations([
+      probeAnim(document.createTextNode("t")),
+      probeAnim(null),
+      { playState: "paused", effect: null },
+      { playState: "paused", effect: {} },
+      probeAnim({ nodeType: 1 }), // 元素形但无 tagName
+    ]);
+
+    const a = describeUnownedAnimations();
+    expect(a.unowned).toBe(5);
+    expect(a.unownedHints).toEqual([
+      "waapi:#text",
+      "waapi:(no-target)",
+      "waapi:(no-target)",
+      "waapi:(no-target)",
+      "waapi:(element)",
+    ]);
+  });
+
+  it("怪异 target 不抛（续）：getAttribute 抛错 / null 条目——审计面绝不因单条怪异数据崩", () => {
+    stubAnimations([
+      probeAnim({
+        nodeType: 1,
+        tagName: "DIV",
+        getAttribute: () => {
+          throw new Error("boom");
+        },
+      }),
+      null,
+    ]);
+
+    expect(() => describeUnownedAnimations()).not.toThrow();
+    expect(describeUnownedAnimations().unownedHints).toEqual(["waapi:div", "waapi:(no-target)"]);
+  });
+
+  it("巨型 className 不撑爆单条 hint（截断，报告不刷屏）", () => {
+    const huge = document.createElement("span");
+    huge.className = "c".repeat(5000);
+    stubAnimations([probeAnim(huge)]);
+    expect(describeUnownedAnimations().unownedHints[0].length).toBeLessThan(200);
+  });
+
+  it("running / unownedRunning 只数 playState==='running'；render 模式下引擎动画恒 paused", () => {
+    const { handle, anim: engine } = engineAnim(); // 非 render：创建即播
+    const runningForeign = probeAnim(null);
+    runningForeign.play();
+    stubAnimations([engine, runningForeign, probeAnim(null)]);
+
+    const a = describeUnownedAnimations();
+    expect(a.running).toBe(2); // 引擎 1 + 未打标 running 1（paused 的不数）
+    expect(a.unownedRunning).toBe(1); // running 里未打标的只有 1
+    handle.dispose();
+
+    // render 模式：waapi() 创建即冻结（register 内 pause）→ 引擎动画不进 running
+    setRenderMode(true);
+    const frozen = engineAnim();
+    expect(frozen.anim.playState).toBe("paused");
+    stubAnimations([frozen.anim, runningForeign]);
+    const b = describeUnownedAnimations();
+    expect(b.owned).toBe(1);
+    expect(b.running).toBe(1);
+    expect(b.unownedRunning).toBe(1);
+    frozen.handle.dispose();
   });
 });

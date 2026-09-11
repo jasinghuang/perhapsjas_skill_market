@@ -3,10 +3,30 @@
 // jumpTo / getState / ready / animations。仅显式安装（App 在 ?headless=1 或 dev 模式调用
 // installBridge）；生产构建不暴露——模块导入本身无任何副作用。
 //
+// M3b Task 5 追加：audit()（动画审计面）。**追加而不破坏**——上述四方法契约逐字不动，
+// 只是桥多挂一个成员（与 M4-3 同款追加策略）。
+//
 // ready() 无内建超时（契约不含）——消费方（截图模块 / M5 / M3b）需自行包 timeout：
 // 停滞的 load（没等到 load 也没等到 error）会一直挂起，这是"等页面定下来"的本意。
 
-import { registrySize } from "./animationRuntime";
+import {
+  animationWindowMs,
+  describeUnownedAnimations,
+  registrySize,
+  type WaapiAudit,
+} from "./animationRuntime";
+
+/**
+ * 动画审计面（M3b Task 5）：WAAPI 查询面的归因计数 + 引擎注册表两项。
+ * 与 `animations()` 的区别是**可归因**——后者只求和，无法区分"引擎注册的动画"与
+ * "章节层手写/CSS 泄漏的动画"（M4 遗留口径缺口）。
+ */
+export interface AnimationAudit extends WaapiAudit {
+  /** 引擎注册表容量（canvasAnim 等帧函数逃生舱动画也在此计） */
+  registry: number;
+  /** 注册表声明的最大时长（ms）；空注册表为 0 */
+  windowMs: number;
+}
 
 /** 就绪语义：双 rAF（等 React commit 落定）→ document.fonts.ready + 所有 img 就绪 */
 export interface PresentationBridge {
@@ -21,6 +41,11 @@ export interface PresentationBridge {
    *  逃生舱 canvasAnim 也必须计入，否则"零动画"门禁漏检）。jsdom 无 WAAPI 查询面 → guard
    *  归 0，此时计数全部由注册表部分贡献。（分镜门禁/覆盖率断言共用） */
   animations(): number;
+  /** 动画审计面（**M3b Task 5 追加成员**——jumpTo/getState/ready/animations 四方法契约不动）。
+   *  把 WAAPI 查询面按"引擎 waapi() 是否打标"拆成 owned / unowned（附至多 5 条可读定位与
+   *  running 统计），并补注册表容量与窗口时长。门禁据此区分引擎动画与章节层泄漏的动画。
+   *  jsdom 无 WAAPI 查询面 → WAAPI 面全 0（不抛）。 */
+  audit(): AnimationAudit;
 }
 
 declare global {
@@ -133,4 +158,13 @@ export function ready(): Promise<void> {
 export function animations(): number {
   const waapi = typeof document.getAnimations === "function" ? document.getAnimations().length : 0;
   return waapi + registrySize();
+}
+
+/**
+ * 动画审计面（M3b Task 5 追加；四方法契约不动）：WAAPI 面归因 + 注册表两项。
+ * 合成而非重复实现——拆解与定位全在 animationRuntime（打标与同源查询共享一处），
+ * 本函数只补注册表容量与窗口时长，保证两处读数永远同一时间点。
+ */
+export function audit(): AnimationAudit {
+  return { ...describeUnownedAnimations(), registry: registrySize(), windowMs: animationWindowMs() };
 }

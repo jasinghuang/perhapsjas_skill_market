@@ -4,6 +4,7 @@ import { setRenderMode } from "./engine/animationRuntime";
 import { DEFAULT_HOLD_MS } from "./engine/constants";
 import {
   animations,
+  audit,
   installBridge,
   ready,
   shouldInstallBridge,
@@ -49,6 +50,8 @@ export default function App() {
       }),
       ready,
       animations,
+      // M3b Task 5 追加成员：动画审计面（四方法契约不动）
+      audit,
     });
     return uninstallBridge;
   }, []);

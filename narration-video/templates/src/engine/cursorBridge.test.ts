@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { canvasAnim } from "./animationRuntime";
 import {
   animations,
+  audit,
   installBridge,
   ready,
   shouldInstallBridge,
   uninstallBridge,
+  type AnimationAudit,
   type PresentationBridge,
 } from "./cursorBridge";
 
@@ -34,12 +36,27 @@ function stubFonts(readyPromise: Promise<unknown>): void {
   Object.defineProperty(document, "fonts", { configurable: true, value: { ready: readyPromise } });
 }
 
+/** 全零审计面（M3b Task 5 追加成员；形状与 AnimationAudit 逐字一致） */
+function emptyAudit(): AnimationAudit {
+  return {
+    waapi: 0,
+    owned: 0,
+    unowned: 0,
+    unownedRunning: 0,
+    unownedHints: [],
+    registry: 0,
+    windowMs: 0,
+    running: 0,
+  };
+}
+
 function makeBridge(overrides: Partial<PresentationBridge> = {}): PresentationBridge {
   return {
     jumpTo: vi.fn(),
     getState: () => ({ chapter: 0, step: 0 }),
     ready: async () => {},
     animations: () => 0,
+    audit: emptyAudit,
     ...overrides,
   };
 }
@@ -301,5 +318,58 @@ describe("cursorBridge · animations()（Ruling M4-1：WAAPI + 引擎注册表�
       value: () => [],
     });
     expect(animations()).toBe(0);
+  });
+});
+
+describe("cursorBridge · audit()（M3b Task 5 追加面）", () => {
+  it("形状冻结：恰好 8 个字段（接口约定逐字，多/少都红）", () => {
+    expect(Object.keys(audit()).sort()).toEqual(Object.keys(emptyAudit()).sort());
+  });
+
+  it("jsdom 常态（无 getAnimations）不抛：WAAPI 面全 0，注册表项照报", () => {
+    expect((document as { getAnimations?: unknown }).getAnimations).toBeUndefined();
+    expect(audit()).toEqual(emptyAudit());
+  });
+
+  it("合成 WAAPI 面 + 注册表：waapi/running/hints 与 registry/windowMs 同报（归因口径）", () => {
+    // 非执行 rAF 桩：canvasAnim 创建即播会排帧
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    Object.defineProperty(document, "getAnimations", {
+      configurable: true,
+      value: () => [
+        { playState: "running", effect: null },
+        { playState: "paused", effect: null },
+        { playState: "finished", effect: null },
+      ],
+    });
+    const anim = canvasAnim(() => {}, 900);
+
+    expect(audit()).toEqual({
+      waapi: 3,
+      owned: 0, // 3 条全未打标（引擎 waapi 适配器没参与）——泄漏面
+      unowned: 3,
+      unownedRunning: 1,
+      unownedHints: ["waapi:(no-target)", "waapi:(no-target)", "waapi:(no-target)"],
+      registry: 1, // canvasAnim 不计入 WAAPI 面，只在此处
+      windowMs: 900,
+      running: 1,
+    });
+
+    anim.dispose();
+    expect(audit().registry).toBe(0);
+    expect(audit().windowMs).toBe(0);
+  });
+
+  it("追加而不破坏：audit 经 window.__presentation 可调用，四方法契约仍在", () => {
+    installBridge(makeBridge({ audit }));
+    const bridge = window.__presentation;
+    expect(bridge).toBeDefined();
+    expect(typeof bridge!.audit).toBe("function");
+    expect(bridge!.audit()).toEqual(audit());
+    // 冻结的四方法逐字仍在（jumpTo/getState 透传已由安装面用例钉住）
+    expect(typeof bridge!.jumpTo).toBe("function");
+    expect(typeof bridge!.getState).toBe("function");
+    expect(typeof bridge!.ready).toBe("function");
+    expect(typeof bridge!.animations).toBe("function");
   });
 });

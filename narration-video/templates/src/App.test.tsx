@@ -139,6 +139,9 @@ describe("App 装配 · 游标桥（M4）", () => {
     expect(bridge).toBeDefined();
     expect(typeof bridge!.animations).toBe("function");
     expect(typeof bridge!.ready).toBe("function");
+    // M3b Task 5：audit 为追加成员（jsdom 无 WAAPI 查询面 → waapi 恒 0）
+    expect(typeof bridge!.audit).toBe("function");
+    expect(bridge!.audit().waapi).toBe(0);
 
     act(() => bridge!.jumpTo(0, 1));
     expect(screen.getByTestId("scene-1")).toBeInTheDocument();
@@ -167,6 +170,8 @@ describe("App 装配 · 游标桥（M4）", () => {
       uninstallBridge: vi.fn(),
       ready: () => Promise.resolve(),
       animations: () => 0,
+      // 桥面语义的替身（App 只把它们装进 installBridge 参数）：成员名与 PresentationBridge 对齐
+      audit: () => ({ waapi: 0, owned: 0, unowned: 0, unownedRunning: 0, unownedHints: [], registry: 0, windowMs: 0, running: 0 }),
     }));
 
     const { default: GuardedApp } = await import("./App");
