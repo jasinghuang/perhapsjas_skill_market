@@ -1,5 +1,5 @@
 // 素材承载（§6.2）：墨框 + 硬阴影 + 遮罩揭示；无素材渲染 placeholder 卡（诚实原则）。
-import { createPrimitive } from "../factory";
+import { createPrimitive } from "../_internal/factory";
 
 export interface FigureProps {
   src?: string;

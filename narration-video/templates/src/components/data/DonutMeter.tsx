@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { waapi } from "../../engine/animationRuntime";
-import { durationMs, MotionDuration } from "../motion";
+import { durationMs, MotionDuration } from "../_internal/motion";
 
 const R = 54;
 const CIRC = 2 * Math.PI * R;

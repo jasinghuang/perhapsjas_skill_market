@@ -1,5 +1,6 @@
 // 样式词典页（M2b 验收工具；dev-only，不入章节层）。
-// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 44 组件全变体目录。
+// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 44 组件全变体目录
+// （组件数/组序/组计数一律由 components/manifest.ts 派生，不写死）。
 // 页面壳：深色 shell 底（var(--shell)）、1920 居中；每区段 mono 区段头（cream，编号 + 标题）
 // + 全幅 cream 内容面板（4px 墨框、水平内衬 96px——与安全框规格一致）。
 // 布局纪律：区段内容水平 ≥96px 内；无横向溢出；组件格容器只允许 inline 布局属性，
@@ -60,6 +61,9 @@ import {
   TypedTerminal,
   YearBarGroup,
 } from "./components";
+// 单一注册表：组件数/组序/组标题计数一律派生（新增组件只改 manifest.ts）
+import { COMPONENTS, GROUPS } from "./components/manifest";
+import type { GroupId } from "./components/manifest";
 
 /** 局部 token 覆写：向子树注入 CSS 自定义属性（dev 页合法手段，不改组件本体） */
 const scope = (vars: Record<string, string>): CSSProperties => vars as unknown as CSSProperties;
@@ -665,7 +669,7 @@ function SemanticSection() {
   );
 }
 
-/* ── 06 · 组件全览 COMPONENTS（44 组件 × 全变体） ── */
+/* ── 06 · 组件全览 COMPONENTS（44 组件 × 全变体；组序 = GROUPS，组计数派生） ── */
 
 /** 组件格尺寸提示（M2b 三轮定稿：按内容自适应——每组件按其内容需要设计尺寸）。
     每组件一行：内容区建议 minW / minH（内容自然尺寸的舒适下限，不设上限——格高 = 内容自然高
@@ -821,12 +825,20 @@ function CompGroup({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
+/** 组标题：标签由 GROUPS 派生 + 计数由 manifest 派生——"TEXT · 文字（6）"。 */
+function groupLabel(id: GroupId): string {
+  const g = GROUPS.find((x) => x.id === id);
+  const count = COMPONENTS.filter((c) => c.group === id).length;
+  return `${g?.labelEn} · ${g?.labelZh}（${count}）`;
+}
+
 function ComponentsSection() {
   const tableData = { header: ["组件", "变体"], rows: [["Card", "plain"], ["Table", "zebra"]] };
   const stepData = [{ title: "进场" }, { title: "节奏" }, { title: "收束" }];
-  return (
-    <Section index="06" title="组件全览 COMPONENTS">
-      <CompGroup label="TEXT · 文字（6）">
+  /** 组 → 组件格（组顺序与标题由 GROUPS + manifest 派生；格内为手写变体目录）。 */
+  const groupCells: Record<GroupId, ReactNode> = {
+    text: (
+      <>
         <CompCell name="hero-title">
           <Variant label="plain"><HeroTitle data-testid="variant-hero-title-plain" style={{ fontSize: 56, lineHeight: 0.92 }}>口播视频</HeroTitle></Variant>
           <Variant label="stamp"><HeroTitle variant="stamp" data-testid="variant-hero-title-stamp" style={{ fontSize: 28, lineHeight: 1, padding: "8px 14px" }}>口播视频</HeroTitle></Variant>
@@ -857,8 +869,10 @@ function ComponentsSection() {
           <Variant label="up · 涨橙"><BodyCopy><DeltaText text="营业收入 +9.52%" /></BodyCopy></Variant>
           <Variant label="down · 跌绿"><BodyCopy><DeltaText text="归母净利 -3.20%" /></BodyCopy></Variant>
         </CompCell>
-      </CompGroup>
-      <CompGroup label="DATA · 数据（9）">
+      </>
+    ),
+    data: (
+      <>
         <CompCell name="hero-number">
           <Variant label="plain"><HeroNumber value="+47%" variant="plain" data-testid="variant-hero-number-plain" /></Variant>
           <Variant label="accent"><HeroNumber value="+47%" variant="accent" data-testid="variant-hero-number-accent" /></Variant>
@@ -915,8 +929,10 @@ function ComponentsSection() {
             <DataItemRow index="01" title="营收 27,930 百万 +9.52%" desc="主营业务收入稳步抬升。" />
           </Variant>
         </CompCell>
-      </CompGroup>
-      <CompGroup label="STRUCTURE · 结构（9）">
+      </>
+    ),
+    structure: (
+      <>
         <CompCell name="card">
           <Variant label="plain"><Card variant="plain" data-testid="variant-card-plain" style={{ width: 150, padding: 16 }}><BodyCopy>奶油底</BodyCopy></Card></Variant>
           <Variant label="invert"><div style={INVERT_TEXT}><Card variant="invert" data-testid="variant-card-invert" style={{ width: 150, padding: 16 }}><BodyCopy>墨底</BodyCopy></Card></div></Variant>
@@ -1005,8 +1021,10 @@ function ComponentsSection() {
             <Counter to={47} />
           </MotionCell>
         </CompCell>
-      </CompGroup>
-      <CompGroup label="REVEAL · 揭示（4）">
+      </>
+    ),
+    reveal: (
+      <>
         <CompCell name="reveal-text">
           <Variant label="words"><RevealText text="逐词 揭示 测试" variant="words" data-testid="variant-reveal-text-words" /></Variant>
           <Variant label="mask"><RevealText text="逐词 揭示 测试" variant="mask" data-testid="variant-reveal-text-mask" /></Variant>
@@ -1032,8 +1050,10 @@ function ComponentsSection() {
             </StaggerRow>
           </Variant>
         </CompCell>
-      </CompGroup>
-      <CompGroup label="DECOR · 装饰（7）">
+      </>
+    ),
+    decor: (
+      <>
         <CompCell name="decor-dot">
           <Variant label="plain"><DecorDot variant="plain" data-testid="variant-decor-dot-plain" /></Variant>
           <Variant label="glow"><DecorDot variant="glow" data-testid="variant-decor-dot-glow" /></Variant>
@@ -1078,8 +1098,10 @@ function ComponentsSection() {
             </div>
           </Variant>
         </CompCell>
-      </CompGroup>
-      <CompGroup label="MEDIA · 素材（3）">
+      </>
+    ),
+    media: (
+      <>
         <CompCell name="figure">
           {/* 跨列（SIZE_HINTS）：四变体单行自然宽度 220/140（3×220+140+3×16 = 872 ≤ 1128），
               占位 min-height 140（既有 sg-figure-short 密度档，320 自然态见 05 区段） */}
@@ -1097,8 +1119,10 @@ function ComponentsSection() {
           <Variant label="stroke"><div style={{ width: 180 }}><PathDraw d="M 8 88 L 30 20 L 55 60 L 92 12" variant="stroke" data-testid="variant-path-draw-stroke" /></div></Variant>
           <Variant label="filled"><div style={{ width: 180 }}><PathDraw d="M 8 88 L 30 20 L 55 60 L 92 12" variant="filled" data-testid="variant-path-draw-filled" /></div></Variant>
         </CompCell>
-      </CompGroup>
-      <CompGroup label="AMBIENT · 氛围（3）">
+      </>
+    ),
+    ambient: (
+      <>
         <CompCell name="seeded-particles">
           <Variant label="drift"><SeededParticles seed={7} count={30} variant="drift" className="sg-particles-scaled" data-testid="variant-seeded-particles-drift" /></Variant>
           <Variant label="static"><SeededParticles seed={7} count={30} variant="static" className="sg-particles-scaled" data-testid="variant-seeded-particles-static" /></Variant>
@@ -1119,8 +1143,10 @@ function ComponentsSection() {
             </div>
           </Variant>
         </CompCell>
-      </CompGroup>
-      <CompGroup label="FUNCTION · 功能（2）">
+      </>
+    ),
+    chrome: (
+      <>
         <CompCell name="timeline-track">
           <Variant label="line"><TimelineTrack points={["稿", "镜", "画", "声", "片"]} activeIndex={2} variant="line" data-testid="variant-timeline-track-line" /></Variant>
           <Variant label="nodes"><TimelineTrack points={["稿", "镜", "画", "声", "片"]} activeIndex={2} variant="nodes" data-testid="variant-timeline-track-nodes" /></Variant>
@@ -1129,8 +1155,10 @@ function ComponentsSection() {
           <Variant label="dots"><ProgressDots total={5} current={2} variant="dots" data-testid="variant-progress-dots-dots" /></Variant>
           <Variant label="bars"><ProgressDots total={5} current={2} variant="bars" data-testid="variant-progress-dots-bars" /></Variant>
         </CompCell>
-      </CompGroup>
-      <CompGroup label="CHART · 图表（3）">
+      </>
+    ),
+    chart: (
+      <>
         {/* EChart 真渲染（dev 页同 showcase）：SVGRenderer 在真实浏览器可用；主题 "cm" 由
             模块级 registerTheme 注入——三格 option 零 color / 零 textStyle：系列色 = 主题色板
             [accent-1, accent-2, accent-3, accent-4] 自动分配（bar 色板序 / line 第一色 / pie 扇区序）。 */}
@@ -1189,7 +1217,16 @@ function ComponentsSection() {
             </div>
           </Variant>
         </CompCell>
-      </CompGroup>
+      </>
+    ),
+  };
+  return (
+    <Section index="06" title="组件全览 COMPONENTS">
+      {GROUPS.map((g) => (
+        <CompGroup key={g.id} label={groupLabel(g.id)}>
+          {groupCells[g.id]}
+        </CompGroup>
+      ))}
     </Section>
   );
 }
@@ -1236,7 +1273,7 @@ export function StyleGuide() {
             color: "var(--surface)",
           }}
         >
-          creative-mode · 样式词典 · 全部 token 视觉表达 + 44 组件目录
+          {`creative-mode · 样式词典 · 全部 token 视觉表达 + ${COMPONENTS.length} 组件目录`}
         </span>
         <span
           style={{

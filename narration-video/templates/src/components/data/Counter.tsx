@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { canvasAnim } from "../../engine/animationRuntime";
-import { durationMs, MotionDuration } from "../motion";
+import { durationMs, MotionDuration } from "../_internal/motion";
 
 export interface CounterProps {
   to: number;

@@ -3,7 +3,7 @@
 // 新激活条目 mount 触发入场动画（revealAnim 自接，Ruling P3-1）。
 import { useEffect, useRef } from "react";
 import { AnimHandle } from "../../engine/animationRuntime";
-import { RevealPreset, revealAnim, staggerMs } from "../motion";
+import { RevealPreset, revealAnim, staggerMs } from "../_internal/motion";
 
 export interface RevealListProps {
   items: string[];

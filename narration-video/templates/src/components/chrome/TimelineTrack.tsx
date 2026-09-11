@@ -1,7 +1,7 @@
 // 时间轴自绘（§6.2 功能组）：生长线（scaleX waapi）+ 节点状态纯派生（铁律 6）。
 import { useEffect, useRef } from "react";
 import { waapi } from "../../engine/animationRuntime";
-import { durationMs } from "../motion";
+import { durationMs } from "../_internal/motion";
 
 export interface TimelineTrackProps {
   points: string[];

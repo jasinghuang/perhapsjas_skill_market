@@ -1,7 +1,7 @@
 // 动效档位与预设（§5.1 动效 token 的组件层消费入口）。
 // 所有动画必经引擎注册表（铁律 1）；时长/缓动从主题动效 token 读取，零硬编码。
 
-import { AnimHandle, waapi } from "../engine/animationRuntime";
+import { AnimHandle, waapi } from "../../engine/animationRuntime";
 
 export type MotionDuration = "fast" | "mid" | "slow";
 export type RevealPreset = "fade" | "rise" | "wipe";

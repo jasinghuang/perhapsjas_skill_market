@@ -1,7 +1,7 @@
 // SVG 路径自绘（原版核心视觉演示之一）：pathLength 归一化 + stroke-dashoffset 动画（白名单 P2-1）。
 import { useEffect, useRef } from "react";
 import { waapi } from "../../engine/animationRuntime";
-import { durationMs, MotionDuration } from "../motion";
+import { durationMs, MotionDuration } from "../_internal/motion";
 
 export interface PathDrawProps {
   d: string;

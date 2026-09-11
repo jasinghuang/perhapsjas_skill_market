@@ -1,7 +1,7 @@
 // 缓推（有限时长 draw(t)，Ruling P3-3）：对容器做缓慢缩放平移，终态冻结。
 import { useEffect, useRef } from "react";
 import { canvasAnim } from "../../engine/animationRuntime";
-import { durationMs, MotionDuration } from "../motion";
+import { durationMs, MotionDuration } from "../_internal/motion";
 
 export interface KenBurnsProps {
   src?: string;

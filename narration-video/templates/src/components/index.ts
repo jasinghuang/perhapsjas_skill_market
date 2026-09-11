@@ -2,6 +2,8 @@
 // Ruling P2-4：主题 CSS 随组件统一出口装配——章节层 import components 即得全部样式。
 // 共 44 份组件 CSS（36 + 三十四轮 M2b 收编 8 内部件：PostIt/JisCheck/StepCard/MotionCell/
 // DeltaText/DataItemRow/YearBarGroup/StaggerRow）。
+// This list is asserted against manifest.ts by check-fast；新增组件先改 manifest，再同步本文件。
+// （内部件 factory/motion/seededRandom 不在此出口——见 _internal/；其单测随之同目录。）
 import "../theme/tokens.css";
 import "./text/HeroTitle.css";
 import "./text/Kicker.css";
@@ -44,8 +46,8 @@ import "./media/PathDraw.css";
 import "./ambient/SeededParticles.css";
 import "./ambient/Breathe.css";
 import "./ambient/KenBurns.css";
-import "./function/TimelineTrack.css";
-import "./function/ProgressDots.css";
+import "./chrome/TimelineTrack.css";
+import "./chrome/ProgressDots.css";
 import "./chart/EChart.css";
 
 export { HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill, DeltaText } from "./text";
@@ -55,5 +57,5 @@ export { RevealText, RevealList, StepSequence, StaggerRow } from "./reveal";
 export { DecorDot, DecorBar, DecorRing, StackedBlocks, MarkerBlock, StepStairs, PostIt } from "./decor";
 export { Figure, TypedTerminal, PathDraw } from "./media";
 export { SeededParticles, Breathe, KenBurns } from "./ambient";
-export { TimelineTrack, ProgressDots } from "./function";
+export { TimelineTrack, ProgressDots } from "./chrome";
 export { EChart } from "./chart";

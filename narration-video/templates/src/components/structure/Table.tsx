@@ -1,4 +1,4 @@
-import { createPrimitive } from "../factory";
+import { createPrimitive } from "../_internal/factory";
 
 export interface TableProps {
   header?: string[];

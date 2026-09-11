@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { durationMs, RevealPreset, revealAnim, staggerMs } from "./motion";
-import { registrySize } from "../engine/animationRuntime";
+import { registrySize } from "../../engine/animationRuntime";
 
 // 终审 M9：无本地 FakeAnim 副本——Element.prototype.animate 的 WAAPI stub
 // 由全局 test-setup.ts 安装（Ruling P2-11），此处直接用 document.createElement。

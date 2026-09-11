@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { setRenderMode } from "../engine/animationRuntime";
+import { COMPONENTS } from "./manifest";
 import {
   HeroTitle, Kicker, BodyCopy, QuoteBlock, NumberPill, DeltaText,
   HeroNumber, Counter, BarGrow, DonutMeter, StatCard, StatCell, StatInline, YearBarGroup, DataItemRow,
@@ -42,20 +43,9 @@ vi.mock("echarts/renderers", () => ({ SVGRenderer: { kind: "SVGRenderer" } }));
 
 // 终审 M3：逐组件 presence 断言——统一出口每个组件必须在画布真实渲染，
 // 只查 ".cdp" 根类会漏掉「组件已导出但从未渲染」的假绿。
-// 全部 44 组件（36 + 三十四轮 M2b 收编 8 内部件）。
-const ALL_NAMES = [
-  "stage-pad",
-  "hero-title", "kicker", "body-copy", "quote-block", "number-pill", "delta-text",
-  "hero-number", "counter", "bar-grow", "donut", "stat-card", "stat-cell", "stat-inline",
-  "year-bar-group", "data-item",
-  "card", "rule", "grid", "table", "split-compare", "jis-check", "step-card", "motion-cell",
-  "reveal-text", "reveal-list", "step-seq", "stagger-row",
-  "decor-dot", "decor-bar", "decor-ring", "stacked-blocks", "marker-block", "step-stairs", "post-it",
-  "figure", "terminal", "path-draw",
-  "particles", "breathe", "kenburns",
-  "timeline", "progress-dots",
-  "echart",
-];
+// 全部 44 组件（36 + 三十四轮 M2b 收编 8 内部件）——清单由 manifest.ts 派生
+// （单一注册表；class 序 = 既有清单逐条不变，渲染树与遍历序均不变）。
+const ALL_NAMES = COMPONENTS.map((c) => c.class);
 
 const STAGE_SIZES = [
   { width: 1920, height: 1080 }, // 16:9
@@ -78,7 +68,7 @@ afterEach(() => {
 
 describe("双画布冒烟（§11.2 组件契约测试）", () => {
   for (const dims of STAGE_SIZES) {
-    it(`全部 44 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
+    it(`全部 ${COMPONENTS.length} 组件在 ${dims.width}×${dims.height} 画布渲染且逐组件 presence`, () => {
       const { container } = render(
         <div style={{ width: dims.width, height: dims.height }}>
           <StagePad>

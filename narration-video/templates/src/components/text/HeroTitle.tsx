@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
-import { createPrimitive } from "../factory";
-import type { MotionDuration, RevealPreset } from "../motion";
+import { createPrimitive } from "../_internal/factory";
+import type { MotionDuration, RevealPreset } from "../_internal/motion";
 
 export interface HeroTitleProps {
   /** 字阶档位（消费 --t-display-1/--t-display-2/--t-h1/--t-h2；默认 display-1） */

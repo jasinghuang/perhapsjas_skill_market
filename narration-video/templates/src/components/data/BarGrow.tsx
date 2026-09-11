@@ -3,7 +3,7 @@
 // 时长读 --dur-* 动效 token，easing 读 --ease-out（fallback 与 tokens.css 同值）。
 import { useEffect, useRef } from "react";
 import { waapi } from "../../engine/animationRuntime";
-import { durationMs, MotionDuration } from "../motion";
+import { durationMs, MotionDuration } from "../_internal/motion";
 
 export interface BarGrowProps {
   /** 0-1 */

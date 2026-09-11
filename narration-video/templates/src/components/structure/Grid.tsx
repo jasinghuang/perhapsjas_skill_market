@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { createPrimitive } from "../factory";
+import { createPrimitive } from "../_internal/factory";
 
 export interface GridProps {
   variant?: "even" | "half";

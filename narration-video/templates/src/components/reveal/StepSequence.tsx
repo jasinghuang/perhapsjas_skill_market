@@ -3,7 +3,7 @@
 // 激活步骤的标记 mount 触发入场动画。
 import { useEffect, useRef } from "react";
 import { AnimHandle } from "../../engine/animationRuntime";
-import { revealAnim, staggerMs } from "../motion";
+import { revealAnim, staggerMs } from "../_internal/motion";
 
 export interface StepSeqStep {
   title: string;

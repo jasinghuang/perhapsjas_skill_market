@@ -2,7 +2,7 @@
 // Ruling P3-1：动态拆分内容自接 revealAnim（不走工厂 stagger）。
 import { useEffect, useRef } from "react";
 import { AnimHandle } from "../../engine/animationRuntime";
-import { RevealPreset, revealAnim, staggerMs } from "../motion";
+import { RevealPreset, revealAnim, staggerMs } from "../_internal/motion";
 
 export interface RevealTextProps {
   text: string;

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { canvasAnim } from "../../engine/animationRuntime";
-import { createPrimitive } from "../factory";
-import { durationMs, MotionDuration } from "../motion";
+import { createPrimitive } from "../_internal/factory";
+import { durationMs, MotionDuration } from "../_internal/motion";
 
 export interface HeroNumberProps {
   value: string;

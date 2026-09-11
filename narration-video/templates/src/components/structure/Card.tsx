@@ -1,4 +1,4 @@
-import { createPrimitive } from "../factory";
+import { createPrimitive } from "../_internal/factory";
 
 /** 卡片（§5.1 --card-* 的消费端）。variants: plain / invert（反色）/ accent（强调底） */
 export const Card = createPrimitive("card", {

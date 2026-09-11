@@ -1,5 +1,5 @@
 // 步骤进度点（§6.2 功能组）：on 状态纯派生自 current（铁律 6）。
-import { createPrimitive } from "../factory";
+import { createPrimitive } from "../_internal/factory";
 
 export interface ProgressDotsProps {
   total: number;

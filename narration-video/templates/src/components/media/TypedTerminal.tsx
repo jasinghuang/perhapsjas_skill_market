@@ -2,7 +2,7 @@
 // 打字过程 = 有限 canvasAnim 帧函数：draw(t) 只依赖 t 与捕获值，可 seek。
 import { useEffect, useRef } from "react";
 import { canvasAnim } from "../../engine/animationRuntime";
-import { durationMs, MotionDuration } from "../motion";
+import { durationMs, MotionDuration } from "../_internal/motion";
 
 export interface TypedTerminalProps {
   lines: string[];

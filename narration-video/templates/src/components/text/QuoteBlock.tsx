@@ -1,4 +1,4 @@
-import { createPrimitive } from "../factory";
+import { createPrimitive } from "../_internal/factory";
 
 /** 引用块。variants: rule（左粗条）/ block（强调色底块） */
 export const QuoteBlock = createPrimitive("quote-block", {

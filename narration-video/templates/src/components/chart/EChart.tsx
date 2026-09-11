@@ -17,7 +17,7 @@ import { BarChart, LineChart, PieChart, RadarChart } from "echarts/charts";
 import { GridComponent, LegendComponent, RadarComponent, TooltipComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
 import tokensCss from "../../theme/tokens.css?raw";
-import { MotionDuration, RevealPreset, revealAnim } from "../motion";
+import { MotionDuration, RevealPreset, revealAnim } from "../_internal/motion";
 import { buildEchartsTheme } from "./echarts-theme";
 
 // 按需注册（模块级一次）：4 图表 + 4 组件 + SVGRenderer（Ruling P4.5-1）。

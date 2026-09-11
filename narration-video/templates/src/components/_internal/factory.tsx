@@ -9,7 +9,7 @@ import {
   useEffect,
   useRef,
 } from "react";
-import { AnimHandle } from "../engine/animationRuntime";
+import { AnimHandle } from "../../engine/animationRuntime";
 import { MotionDuration, RevealPreset, revealAnim, staggerMs } from "./motion";
 
 export interface PrimitiveProps {

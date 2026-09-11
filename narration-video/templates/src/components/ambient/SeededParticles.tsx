@@ -2,8 +2,8 @@
 // 粒子位置由 seed 确定性生成；运动 = 有限时长 draw(t)（Ruling P3-3：t ≥ durMs 渲染终态）。
 import { useEffect, useRef } from "react";
 import { canvasAnim } from "../../engine/animationRuntime";
-import { durationMs, MotionDuration } from "../motion";
-import { seededRandom } from "../seededRandom";
+import { durationMs, MotionDuration } from "../_internal/motion";
+import { seededRandom } from "../_internal/seededRandom";
 
 export interface SeededParticlesProps {
   seed: number;
