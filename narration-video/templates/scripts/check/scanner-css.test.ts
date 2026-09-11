@@ -212,3 +212,31 @@ describe("章节层 CSS 扫描器 · 修复轮 1（括号深度泄漏面）", ()
     ]);
   });
 });
+
+// 修复轮 1b（评审 ②）：`url()` 裸内容里的字面 `{` `}` 不得作 token 边界——内联 SVG data URI
+// 被 `{` 切断后，碎片既不在 url() 内（URL_RE 剥不掉）又含裸色名 ⇒ blocker 级假阳性。
+describe("章节层 CSS 扫描器 · 修复轮 1b（url() 内的字面括号不作边界）", () => {
+  it("内联 SVG data URI（引号形态，含 `.x{fill:red}`）零 finding", () => {
+    const css = `.cdp-x { background-image: url("data:image/svg+xml,<style>.x{fill:red}</style>"); }`;
+    expect(scanChapterCss([{ path: "a.css", css }])).toEqual([]);
+  });
+
+  // 这一条才是本轮的真 RED：引号形态被字符串态意外保护，裸形态（CSS 合法）今天误报
+  it("内联 SVG data URI（裸形态，含 `.x{fill:red}`）零 finding——不得把碎片当声明", () => {
+    const css = `.cdp-x { background-image: url(data:image/svg+xml,<style>.x{fill:red}</style>); }`;
+    expect(scanChapterCss([{ path: "a.css", css }])).toEqual([]);
+  });
+
+  // 反向护栏（防把门禁修软）：URL 态只吞 url() 内容，其后真实声明照常判且定位正确
+  it("URL 态不吞后续声明：url() 之后的裸色仍被报且定位到第 2 行", () => {
+    const css = `.cdp-x { background: url(a.svg); }\n.cdp-y { color: #ff0000; }`;
+    expect(scanChapterCss([{ path: "a.css", css }])).toEqual([
+      {
+        rule: "禁硬编码色",
+        severity: "blocker",
+        location: "a.css:2",
+        message: "裸色值（须走 var(--*) token，white/black 豁免）",
+      },
+    ]);
+  });
+});

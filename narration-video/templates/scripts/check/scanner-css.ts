@@ -16,7 +16,8 @@
  *   间距成员     warning  #5b   margin/padding/gap 裸 px ∉ tokens.css --space 集合（0 豁免）
  *
  * 预处理管线（M3b 门禁可信度收紧——行级预处理 → 声明级状态机，K-10 / K-12）：
- *   1) tokenizeCss 单遍状态机（`inComment` / `inString`（`\` 转义）/ `parenDepth`）把源码
+ *   1) tokenizeCss 单遍状态机（`inComment` / `inString`（`\` 转义）/ `urlDepth`（`url(` 裸
+ *      内容，见 2b）/ `parenDepth`）把源码
  *      切成声明段：`/*` 仅在非字符串非注释时开注释、`*\/` 仅注释态闭合——字符串内的 `/*`
  *      （K-12）不再把后续声明吞进注释态；注释内容整体丢弃。字符串内的裸换行即终止字符串
  *      （CSS bad-string：字符串不得含有裸换行）——未闭合引号的抑制面从"文件余下全部"收窄到
@@ -25,10 +26,14 @@
  *      结构判定：`.foo\(` 不改变括号深度）。
  *   2) token 边界：`{` `}` **无条件**（并复位 parenDepth——"深度永不为 0"会让后续边界全部
  *      失效，是与 K-12 同型的静默漏检面，评审 I-1）；`;` 仍需 parenDepth === 0 门控
- *      （url(data:…;base64,…) 的 `;` 不是边界）。每条声明 = 一个 token 段的文本 + 起始行；
+ *      （url(data:…;base64,…) 的 `;` 不是边界）。每个 token 段的文本 + 起始行 = 一条声明候选；
  *      行号在扫描时逐字符跟随（首个非空白字符入段时的当前行——注释内换行同样计数），
  *      不做"文本内换行重数"：注释字符整体丢弃，重数会把注释里的换行漏掉、把声明误标到
  *      注释行上。跨行声明值（K-10）整体参与判定，违规落声明起始行而非续行（stylelint 同款）。
+ *   2b) URL 态（评审修复轮 1b）：`url(`（词界起、大小写不敏感）后到 URL 内配对深度归零的
+ *      `)` 之前，`{` `}` `;` `(` `)` 一律不作 token 边界——裸内容里的字面括号（内联 SVG
+ *      data URI `<style>.x{fill:red}</style>`）不得把段切断：切断后碎片既不在 url() 内
+ *      （URL_RE 剥不掉）又含裸色名 ⇒ blocker 级假阳性，而门禁的假 blocker 会教作者绕门禁。
  *   3) 前导剥离（等价现网 lastBrace 切片）：段终止于 `{` 即规则头/At 规则前导——
  *      "丢弃最后一个顶层 `{` 之前的文本"整段丢弃（不产出声明），判定式即
  *      `顶层 : 的下标 > 该段最后一个顶层 { 的下标`。单行规则 `.x { color: #f00; }`
@@ -41,13 +46,13 @@
  *      （token 化豁免）与 url() 内容（防 pink.png 类资源名误报）。
  * emoji 检查不走分词管线——原文行上判（注释内 emoji 仍计，负样本钉死）。
  *
- * 残余面（已核可构造、未归零——均为非法 CSS 或极端形态，取舍见 task-1-report「修复轮 1」）：
+ * 残余面（已核可构造、未归零——均为非法 CSS 或极端形态，取舍见 task-1-report「修复轮 1/1b」）：
  *   a) 坏字符串（未闭合引号）跨行吞并：坏字符串里的 `;` 不是边界 ⇒ 与紧随声明并入同一段，
  *      声明级字符串剥离（按对到段尾容错）把该段 `"` 之后整段剥掉 ⇒ 紧随声明的裸色不报。
- *   b) url() 裸内容里的 `{` `}`：`{` `}` 无条件作边界 ⇒ 内嵌字面括号的 url（如内联 SVG
- *      data URI 带 `<style>.x{fill:red}</style>`）会被切断，切口之后的片段可能被当成声明
- *      → **误报**（比静默漏检响；取向是宁响不漏）。base64/percent-encoding 形态（含 `;`）
- *      不受影响——实测 `url(data:image/png;base64,AAA=)` 零 finding。
+ *   b) **未闭合的 `url(`**（无配对 `)`）：URL 态不退出 ⇒ 其后内容并入同一段，URL_RE 因缺
+ *      `)` 剥不掉 ⇒ 段内一切裸色名/hex 照报（`url(…<style>.x{fill:red}` 会误报）——方向是
+ *      **响**不是漏。合法闭合的 url（含字面 `{` `}` `;` 的内联 SVG data URI）已由 URL 态保护，
+ *      实测零 finding；base64 形态 `url(data:image/png;base64,AAA=)` 同样零 finding。
  *
  * 字阶/间距集合从 src/theme/tokens.css 解析（Ruling P4-1——与主题同源，主题改档门禁
  * 自动跟随）。Ruling P4-6（T6 落地）：弃 `?raw` 改 node:fs 读取——tsx（node 环境）
@@ -160,7 +165,12 @@ function topLevelMarkers(seg: string): { brace: number; colon: number } {
   for (let i = 0; i < seg.length; i++) {
     const ch = seg[i];
     if (ch === "\\") {
-      i++; // 转义：跳过被转义字符——字符串外同样成立（与 tokenizeCss 同款，评审 I-1①）
+      // 转义：跳过被转义字符——字符串外同样成立（与 tokenizeCss 同款，评审 I-1①）。
+      // 防御性：在「`{` `}` 为无条件边界 + 字符串外转义」两者齐备的当下，这里是**无判别
+      // 向量**的（转义括号只出现在选择器里，而选择器段已被 `{` 边界整段丢弃）；保留的理由
+      // 是将来若再改边界规则，转义选择器这条泄漏不会重新打开，且它只可能把极端非法输入
+      // 推向"报"而非"漏"。
+      i++;
       continue;
     }
     if (quote !== "") {
@@ -183,10 +193,11 @@ function topLevelMarkers(seg: string): { brace: number; colon: number } {
  * tokenizeCss：单遍状态机把 CSS 源码切成声明段（M3b）。
  *
  * 状态：`inComment` / `inString`（`"` `'`，`\` 转义；裸换行即终止 = CSS bad-string）/
- * `parenDepth`；`/*` 仅在非字符串非注释时开注释，`*\/` 仅注释态生效；`\` 在字符串外同样
- * 转义（被转义字符不参与结构判定）。token 边界：`{` `}` 无条件（并复位 parenDepth ——
- * 未闭合 `(` 不得让后续边界永久失效），`;` 需 parenDepth === 0。每段产出一条声明的条件
- * （等价现网"前导剥离 + includes(':') 弱门"两条语义）：
+ * `urlDepth`（`url(` 裸内容，内部无边界）/ `parenDepth`；`/*` 仅在非字符串非注释非 URL 时
+ * 开注释，`*\/` 仅注释态生效；`\` 在字符串外同样转义（被转义字符不参与结构判定）。
+ * token 边界：`{` `}` 无条件（并复位 parenDepth —— 未闭合 `(` 不得让后续边界永久失效），
+ * `;` 需 parenDepth === 0。每段产出一条声明的条件（等价现网"前导剥离 + includes(':')
+ * 弱门"两条语义）：
  *   ① 段终止于 `{` 者（规则头/At 规则前导）被前导剥离整段丢弃（补入的 `{` 是该段
  *      最后一个顶层 `{`，顶层 `:` 必在它之前 ⇒ 判定式 `colon > brace` 不成立）；
  *   ② 段内顶层 `:` 不存在 → 非声明段，跳过一切结构化判定。
@@ -201,6 +212,7 @@ export function tokenizeCss(css: string): CssDeclaration[] {
   let inComment = false;
   let quote = ""; // 非空 = 字符串态（值为当前引号）
   let parenDepth = 0;
+  let urlDepth = 0; // > 0 = URL 态（`url(` 裸内容内；`{` `}` `;` `(` `)` 均不作边界）
 
   /** 入段：记录首个非空白字符的行（声明归属行的唯一真相源），再追加字符。 */
   const put = (ch: string): void => {
@@ -246,6 +258,37 @@ export function tokenizeCss(css: string): CssDeclaration[] {
         line++;
         quote = "";
       }
+      continue;
+    }
+    if (urlDepth > 0) {
+      // URL 态：`url(` 的裸内容——`{` `}` `;` `(` `)` 一律不作 token 边界，`)` 仅在 URL 内
+      // 配对深度归零时退出。理由：裸内容里的字面括号（内联 SVG data URI，如
+      // `url(data:…,<style>.x{fill:red}</style>)`）被 `{` 切断后，碎片既不在 url() 内
+      // （URL_RE 剥不掉）又含裸色名 ⇒ blocker 级假阳性（门禁假 blocker 会教作者绕门禁）。
+      put(ch);
+      if (ch === "\\" && css[i + 1] !== undefined) {
+        if (css[i + 1] === "\n") line++;
+        put(css[i + 1]); // URL 内转义同样整体入文本
+        i++;
+      } else if (ch === '"' || ch === "'") {
+        quote = ch; // URL 内的引号串走公共字符串态（串内 `/*` 不置注释、`)` 不算配对）
+      } else if (ch === "(") {
+        urlDepth++;
+      } else if (ch === ")") {
+        urlDepth--;
+      } else if (ch === "\n") {
+        line++;
+      }
+      continue;
+    }
+    if (
+      (ch === "u" || ch === "U") &&
+      css.slice(i, i + 4).toLowerCase() === "url(" &&
+      (i === 0 || !/[-\w]/.test(css[i - 1])) // 词界守卫：`myurl(` / `--url(` 不算 url 函数
+    ) {
+      put(css.slice(i, i + 4)); // `url(` 原样入段（内容随段保留，判定前由 URL_RE 剥离）
+      urlDepth = 1;
+      i += 3;
       continue;
     }
     if (ch === "\\" && css[i + 1] !== undefined) {
