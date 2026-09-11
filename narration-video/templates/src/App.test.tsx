@@ -127,3 +127,32 @@ describe("App 装配", () => {
     expect(screen.getByTestId("scene-1")).toBeInTheDocument();
   });
 });
+
+describe("App 装配 · 游标桥（M4）", () => {
+  it("dev 模式安装 window.__presentation（无 headless 参数也装）：jumpTo 直达 + getState 反映游标", () => {
+    // vitest 下 import.meta.env.DEV === true → 走 dev 分支（生产分支的判据由
+    // cursorBridge.test.ts 的 shouldInstallBridge 纯函数单测钉住）
+    expect(import.meta.env.DEV).toBe(true);
+    render(<App />);
+
+    const bridge = window.__presentation;
+    expect(bridge).toBeDefined();
+    expect(typeof bridge!.animations).toBe("function");
+    expect(typeof bridge!.ready).toBe("function");
+
+    act(() => bridge!.jumpTo(0, 1));
+    expect(screen.getByTestId("scene-1")).toBeInTheDocument();
+    expect(bridge!.getState()).toEqual({ chapter: 0, step: 1 });
+
+    act(() => bridge!.jumpTo(0, 0));
+    expect(screen.getByTestId("scene-0")).toBeInTheDocument();
+    expect(bridge!.getState()).toEqual({ chapter: 0, step: 0 });
+  });
+
+  it("卸载即拆除：桥不残留到页面之外", () => {
+    const { unmount } = render(<App />);
+    expect(window.__presentation).toBeDefined();
+    unmount();
+    expect(window.__presentation).toBeUndefined();
+  });
+});

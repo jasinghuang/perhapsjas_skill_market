@@ -2,6 +2,13 @@ import { useEffect, useMemo, useRef } from "react";
 import { chapters } from "./chapters/manifest";
 import { setRenderMode } from "./engine/animationRuntime";
 import { DEFAULT_HOLD_MS } from "./engine/constants";
+import {
+  animations,
+  installBridge,
+  ready,
+  shouldInstallBridge,
+  uninstallBridge,
+} from "./engine/cursorBridge";
 import { stageConfig } from "./engine/runtime-config";
 import { Stage } from "./engine/Stage";
 import { useAudioPlayer } from "./engine/useAudioPlayer";
@@ -22,6 +29,29 @@ export default function App() {
   const chapter = chapters[stepper.chapter];
   const narration = chapter.narrations[stepper.step] ?? "";
   const audioSrc = narration ? `/audio/${chapter.folder}/${stepper.step}.mp3` : null;
+
+  // 游标桥（M4 §7 决策 1）：?headless=1 或 dev 模式安装 window.__presentation，
+  // 供分镜截图/无头门禁/渲染管线确定性驱动游标；生产构建不暴露（见 shouldInstallBridge）。
+  // 桥只装一次（依赖为空）→ jumpTo/getState 经 ref 读**最新** stepper，杜绝陈旧闭包。
+  const stepperRef = useRef(stepper);
+  useEffect(() => {
+    stepperRef.current = stepper;
+  });
+
+  useEffect(() => {
+    if (!shouldInstallBridge(params, import.meta.env.DEV)) return;
+    installBridge({
+      jumpTo: (chapter, step) => stepperRef.current.jumpTo(chapter, step),
+      // getState 读的是**已 commit** 的游标：跳转后先 await ready() 再读（契约语义）
+      getState: () => ({
+        chapter: stepperRef.current.chapter,
+        step: stepperRef.current.step,
+      }),
+      ready,
+      animations,
+    });
+    return uninstallBridge;
+  }, []);
 
   // 每步推进：音频驱动（audio.ended 且 动画窗口结束 → 停留垫 → next）
   useEffect(() => {
