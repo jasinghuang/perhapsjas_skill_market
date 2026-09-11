@@ -252,9 +252,41 @@ describe("章节层 CSS 扫描器 · 修复轮 2（URL 态终止条件）", () =
     expect(f.filter((x) => x.rule === "禁硬编码色").map((x) => x.location)).toEqual(["a.css:2"]);
   });
 
-  it("URL 态不跨行：`url(` 后紧跟换行同样退出（空白 = CSS bad-url 重锚点）", () => {
+  it("URL 态不跨行：`url(` 后紧跟换行同样退出（换行 = 行级重锚点）", () => {
     const css = `@import url(\n.b { color: #f00; }`;
     const f = scanChapterCss([{ path: "a.css", css }]);
     expect(f.filter((x) => x.rule === "禁硬编码色").map((x) => x.location)).toEqual(["a.css:2"]);
+  });
+});
+
+// 修复轮 3（复审 N-1/N-2）：`url( … )` 的**前导/尾随空白是合法 CSS**（Chromium 实测
+// `el.style.backgroundImage = "url( a/*b.png )"` 归一为合法 url），故空白不得终止 URL 态：
+// 否则 url 内容里的字面 `/*` 会被当注释开头、吞掉其后全部（N-1，与 K-12 同型）；或空格一加
+// 就让 1b 负样本回归假 blocker（N-2）。终止 = 配对 `)` ∪ 换行（`\n`/`\r`）∪ EOF
+// ⇒ 不变量：URL 态最多存活到本行末。
+describe("章节层 CSS 扫描器 · 修复轮 3（URL 态仅按换行/配对括号终止）", () => {
+  it("N-1：url( a/*b.png ) 内的字面 `/*` 不得被当注释开头（后续声明必须仍被报）", () => {
+    const css = `.a { background: url( a/*b.png ); }\n.b { color: #f00; /* 说明 */ }`;
+    expect(scanChapterCss([{ path: "a.css", css }]).map((x) => x.location)).toEqual(["a.css:2"]);
+    // 实务形态：`url( ../img/*.png )` / `url( icons/*.svg )` 同机制
+    const practical = `.a { background: url( ../img/*.png ); }\n.b { color: #f00; }`;
+    expect(scanChapterCss([{ path: "a.css", css: practical }]).map((x) => x.location)).toEqual([
+      "a.css:2",
+    ]);
+  });
+
+  it("N-1 变体：同段内 url 之后的真实声明照常检查（URL 态不得吞掉段内后续）", () => {
+    const css = `.a { background: url( a/*b.png ); color: #f00; }`;
+    expect(scanChapterCss([{ path: "a.css", css }]).map((x) => x.location)).toEqual(["a.css:1"]);
+  });
+
+  it("N-1 复审反例：url( x/*y ) 之后的行照常判（不得为漏）", () => {
+    const css = `@import url( x/*y ); }\n.b { color: #f00; }`;
+    expect(scanChapterCss([{ path: "a.css", css }]).map((x) => x.location)).toEqual(["a.css:2"]);
+  });
+
+  it("N-2：带空格的裸形态内联 SVG data URI 零 finding（1b 负样本的普通排版写法）", () => {
+    const css = `.cdp-x { background-image: url( data:image/svg+xml,<style>.x{fill:red}</style> ); }`;
+    expect(scanChapterCss([{ path: "a.css", css }])).toEqual([]);
   });
 });
