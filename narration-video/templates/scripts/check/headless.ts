@@ -83,10 +83,12 @@ import {
   FONT_RULE,
   SAFE_MARGIN_RULE,
   STAGE_SELECTOR,
+  diffFamilies,
   safeMarginArgs,
+  unionFamilies,
   type CollectorFinding,
   type CollectorResult,
-  type FontsCollectorResult,
+  type FontsSample,
 } from "./collectors";
 import { FindingBag, type Finding } from "./findings";
 import { startServe, type ServeHandle } from "./serve";
@@ -290,26 +292,65 @@ export function overflowVerdict(
   return collectorVerdict(spec, chapterId, result);
 }
 
+/** #14 的判定输入：加载面（终帧读一次）+ 使用面（**全 deck 并集**）+ 读数。 */
+export interface FontsVerdictInput {
+  /** `document.fonts` 中 `status === "loaded"` 的家族（**全 deck 跑完后**读一次：加载跨步累积） */
+  loadedFamilies: readonly string[];
+  /** 渲染文本用到的家族（**全 deck 跨步并集**：`unionFamilies` 求，不是末帧那一张脸） */
+  usedFamilies: readonly string[];
+  fontFaceCount: number;
+  familyCount: number;
+  /** 全 deck 采样面累计（读数：渲染文本元素数） */
+  examined: number;
+}
+
 /**
- * #14 字体面 → findings / notes（Task 8；**无步定位**：字体加载跨步累积，全套步跑完后才做一次）。
- * info（无主题字体文本）走 note 通道；blocker（加载了没人用）进袋。
+ * #14 字体面 → findings / notes（Task 8；**无步定位**：字体加载跨步累积，全套步跑完后才判一次）。
+ *
+ * 判据（修复轮 1 / C1 重新推导，语义写死在这里）：
+ *   · **使用面 = 全 deck 跨步并集**。字体是惰性加载的，`status === "loaded"` 本身就是"曾经被
+ *     用过"的证明；只采末帧会把"只在开场步出现的 display 字体 / 只在代码步出现的 mono"判成
+ *     "加载了没人用"——真实 deck 上必假报（评审复现）。故每 step 采一次、Node 侧求并集。
+ *   · `loaded ⊄ used` → **blocker**（真"加载了没人用"：主题声明与真实排版漂移）。这条在并集
+ *     语义下**更难触发但没消失**——eager-load（`document.fonts.load`）、伪元素
+ *     `::before/::after` 的字形、canvas `fillText`、采样时不可见的节点都会让字体 loaded
+ *     却不进使用面，故消息里给出这些诊断方向。
+ *   · `loaded` 为空 → **info**（不是 blocker）：全 deck 没有主题字体**被加载**，判据没有可判定的
+ *     面。这是原"`examined === 0` → info"逃逸口在并集语义下的**替代物**——原逃逸口是为
+ *     "只采末帧"兜底而存在（末帧可能恰好没有主题字体文本），并集语义下它既没必要、又会**掩盖**
+ *     真 blocker（`loaded` 非空却没进使用面时 `examined` 也可能是 0），故按"加载面为空"重新定。
  */
-export function fontsVerdict(result: FontsCollectorResult): StepVerdict {
-  const findings: Finding[] = [];
-  const notes: string[] = [];
-  for (const cf of result.findings as readonly CollectorFinding[]) {
-    if (cf.severity === "info") {
-      notes.push(`#14 ${FONT_RULE} · [info] ${cf.message}`);
-      continue;
-    }
-    findings.push({
-      rule: cf.rule,
-      severity: cf.severity,
-      location: `#14 ${FONT_RULE}（全 deck 跑完后的单次读数）· ${cf.location}`,
-      message: cf.message,
-    });
+export function fontsVerdict(input: FontsVerdictInput): StepVerdict {
+  const missing = diffFamilies(input.loadedFamilies, input.usedFamilies);
+  if (missing.length > 0) {
+    return {
+      findings: [
+        {
+          rule: FONT_RULE,
+          severity: "blocker",
+          location: `#14 ${FONT_RULE}（全 deck 跑完后的单次判定：加载面 ${input.loadedFamilies.length} 个 / 使用面并集 ${input.usedFamilies.length} 个）`,
+          message:
+            `字体已加载但全 deck 无渲染文本使用：${missing.join("、")}——status === "loaded" 的家族` +
+            `必须被渲染文本实际用到（否则主题声明、字体加载面与真实排版已经漂移）；` +
+            `若这些家族只出现在伪元素（::before/::after）字形、canvas fillText、或采样时不可见的节点里，` +
+            `本检查的采样面看不到它们——请先确认是不是这类加载来源`,
+        },
+      ],
+      notes: [],
+    };
   }
-  return { findings, notes };
+  if (input.loadedFamilies.length === 0) {
+    return {
+      findings: [],
+      notes: [
+        `#14 ${FONT_RULE} · [info] 全 deck 没有任何主题字体被加载（status === "loaded" 的家族 0 个；` +
+          `FontFace ${input.fontFaceCount} 条 / 去重家族 ${input.familyCount}，采样面 ${input.examined} 个文本元素，` +
+          `使用面并集 ${input.usedFamilies.length} 个家族）——渲染文本全走系统/UA 字体，` +
+          `"加载面 ⊆ 使用面"没有可判定的面（info 而非 blocker：这不是缺陷态，是读数为零）`,
+      ],
+    };
+  }
+  return { findings: [], notes: [] };
 }
 
 /**
@@ -469,6 +510,9 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
   let stepsRun = 0;
   // 各收集器的检查面**分列**（Task 8：合计会把"某个收集器整体失效"掩在别家的大数字里）
   const examinedBy = { overflow: 0, safeMargins: 0, contrast: 0 };
+  // #14 的使用面逐帧切片（跑完后求并集）+ 采样面累计（修复轮 1 / C1）
+  const fontUsedSets: string[][] = [];
+  let fontExamined = 0;
   let blockerMsgs = 0;
   let infoMsgs = 0;
 
@@ -520,11 +564,13 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
         break;
       }
 
-      // 采集顺序固定：DOM 收集器（溢出 → 安全边距 → 对比度）→ 动画审计 → 取走窗口内消息
-      // （窗口 = 上一步取走之后至此刻，含该步自己的 jumpTo→ready 渲染期——见文件头 ① 的两处标注）。
+      // 采集顺序固定：DOM 收集器（溢出 → 安全边距 → 对比度）→ 字体面**采样** → 动画审计 →
+      // 取走窗口内消息（窗口 = 上一步取走之后至此刻，含该步自己的 jumpTo→ready 渲染期——
+      // 见文件头 ① 的两处标注）。字体面每步都采（使用面要跨步求并集：见字体收集器的文件头）。
       const overflow = await collectOverflow(page);
       const safeMargins = await collectFrom(page, COLLECT_SAFE_MARGINS_SRC, SAFE_MARGIN_ARGS);
       const contrast = await collectFrom(page, COLLECT_CONTRAST_SRC, CONTRAST_ARGS);
+      const fontsSample = (await collectFrom(page, COLLECT_FONTS_SRC, {})) as FontsSample;
       const audit = await auditAnimations(page);
       const events = window.drain();
 
@@ -543,21 +589,34 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
       examinedBy.overflow += overflow.examined;
       examinedBy.safeMargins += safeMargins.examined;
       examinedBy.contrast += contrast.examined;
+      // #14 的使用面**逐步累积**（并集在跑完后求：字体惰性加载，"加载了没人用"必须按全 deck 判）
+      fontUsedSets.push(fontsSample.usedFamilies);
+      fontExamined += fontsSample.examined;
       stepsRun += 1;
     }
 
-    // #14 字体面：**全部步跑完后做一次**（字体加载跨步累积——`only` 模式读数不同，故只在
-    // 整轮跑完时判）。中止时不判：部分步的使用面会造出"加载了没人用"的假 blocker。
-    let fonts: FontsCollectorResult | null = null;
+    // #14 字体面：**全部步跑完后判一次**（加载跨步累积 + 使用面 = 各步并集——`only` 模式读数
+    // 不同，故只在整轮跑完时判）。中止时不判：部分步的使用面会造出"加载了没人用"的假 blocker。
+    let fonts: FontsSample | null = null;
+    let fontsUnion: string[] = [];
     if (aborted === null) {
-      fonts = (await collectFrom(page, COLLECT_FONTS_SRC, {})) as FontsCollectorResult;
-      const fontVerdict = fontsVerdict(fonts);
+      fonts = (await collectFrom(page, COLLECT_FONTS_SRC, {})) as FontsSample;
+      fontUsedSets.push(fonts.usedFamilies); // 终帧也是采样面的一员（幂等：同一帧重复并入无副作用）
+      fontExamined += fonts.examined;
+      fontsUnion = unionFamilies(fontUsedSets);
+      const fontVerdict = fontsVerdict({
+        loadedFamilies: fonts.loadedFamilies,
+        usedFamilies: fontsUnion,
+        fontFaceCount: fonts.fontFaceCount,
+        familyCount: fonts.familyCount,
+        examined: fontExamined,
+      });
       bag.addAll(fontVerdict.findings);
       for (const n of fontVerdict.notes) bag.addNote(n, "info");
     } else {
       bag.addNote(
-        `#14 ${FONT_RULE}：未执行（pass 在 ${aborted} 中止——字体加载跨步累积，部分步的使用面会` +
-          `造出"加载了没人用"的假 blocker）`,
+        `#14 ${FONT_RULE}：未执行（pass 在 ${aborted} 中止——加载跨步累积 + 使用面按全 deck 并集判，` +
+          `部分步的并集会造出"加载了没人用"的假 blocker）`,
         "readout",
       );
     }
@@ -590,8 +649,8 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
         ? "未执行（中止）"
         : `FontFace ${fonts.fontFaceCount} 条 / 去重家族 ${fonts.familyCount} / status==="loaded" ` +
           `${fonts.loadedFamilies.length}（${fonts.loadedFamilies.length === 0 ? "无" : fonts.loadedFamilies.join("、")}）` +
-          ` / used ${fonts.usedFamilies.length}（${fonts.usedFamilies.length === 0 ? "无" : fonts.usedFamilies.join("、")}）` +
-          ` / 主题字体文本元素 ${fonts.examined}`;
+          ` / used **并集** ${fontsUnion.length}（${fontsUnion.length === 0 ? "无" : fontsUnion.join("、")}）` +
+          ` / 采样面 ${fontExamined} 个文本元素（每步一次 + 终帧一次）`;
     bag.addNote(
       `#16 采集读数：已跑 ${stepsRun} 步；检查面 examined（**分列**——合计会把某个收集器整体失效` +
         `掩在别家的大数字里）：溢出 ${examinedBy.overflow} / 安全边距 ${examinedBy.safeMargins} / ` +

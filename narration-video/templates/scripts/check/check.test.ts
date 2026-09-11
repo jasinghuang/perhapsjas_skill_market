@@ -11,9 +11,13 @@
  * playwright 替身（vi.mock 是文件级）截胡。
  */
 
+import { createElement } from "react";
 import { describe, expect, it } from "vitest";
+import { render } from "@testing-library/react";
 import type { AnimationAudit } from "../../src/engine/cursorBridge";
 import type { ChapterDef } from "../../src/chapters/manifest";
+import { ExampleChapter } from "../../src/chapters/01-example";
+import { SAFE_AREA_BASE } from "../../src/engine/safe-area";
 import { FindingBag } from "./findings";
 import {
   CHECK_REPORT_TITLE,
@@ -26,7 +30,9 @@ import {
 import {
   ConsoleWindow,
   animationEscapeVerdict,
+  collectorExaminedGuard,
   examinedGuard,
+  fontsVerdict,
   frameLocation,
   isPageScriptLocation,
   judgeStep,
@@ -34,7 +40,14 @@ import {
   withRenderMode,
   type RawConsoleEvent,
 } from "./headless";
-import { STAGE_SELECTOR, type CollectorResult } from "./collectors";
+import {
+  CONTRAST_RULE,
+  FONT_RULE,
+  SAFE_MARGIN_RULE,
+  STAGE_SELECTOR,
+  unionFamilies,
+  type CollectorResult,
+} from "./collectors";
 
 // ── URL 归一 ──
 
@@ -184,6 +197,153 @@ describe("#16 ② 溢出收集结果 → Finding（定位到步）", () => {
     );
     expect(verdict.findings).toEqual([]);
     expect(verdict.notes.join()).toContain("渐变背景");
+  });
+});
+
+// ── 修复轮 1（I3）：Task 8 新增判级面的单测 ──
+//
+// 为什么补在这里：`headless.ts` 的 Task 8 判级面（#14 的 fontsVerdict / 收集器级护栏的新
+// label / judgeStep 的两个新面）此前**零单测**——它们只在真机 pass 里跑到，回归时没人拦。
+// 本文件是 headless 判据的既有测试位（不做浏览器驱动，纯判据）。
+
+describe("修复轮 1（I3）：收集器级非空护栏的 label / hint", () => {
+  it("#20 / #18 各自的文案带自己的检查名（三条检查不共用同一句措辞）", () => {
+    const margins = collectorExaminedGuard(SAFE_MARGIN_RULE, 0, "文本元素")!;
+    expect(margins.severity).toBe("blocker");
+    expect(margins.location).toBe(STAGE_SELECTOR);
+    expect(margins.message).toContain(SAFE_MARGIN_RULE);
+    expect(margins.message).toContain("文本元素");
+
+    const contrast = collectorExaminedGuard(CONTRAST_RULE, 0, "文本元素")!;
+    expect(contrast.message).toContain(CONTRAST_RULE);
+    expect(contrast.message).not.toContain(SAFE_MARGIN_RULE); // 两条检查的面不得互相冒充
+    expect(contrast.message).toContain("文本元素");
+  });
+
+  it("> 0 → null（护栏只在什么都没查时报）", () => {
+    expect(collectorExaminedGuard(SAFE_MARGIN_RULE, 4, "文本元素")).toBeNull();
+    expect(collectorExaminedGuard(CONTRAST_RULE, 1, "文本元素")).toBeNull();
+    // 旧面（溢出）文案逐字不变（T7 面不动）
+    expect(examinedGuard(0)!.message).toContain("溢出收集器");
+    expect(examinedGuard(0)!.message).toContain("元素");
+  });
+});
+
+describe("修复轮 1（I3）：judgeStep 的 #20 / #18 存在臂与缺省臂", () => {
+  const PAGE = "http://localhost:5174/?render=1&headless=1";
+  const marginsFinding = {
+    rule: SAFE_MARGIN_RULE,
+    severity: "warning" as const,
+    location: "div#scene-0",
+    message: "文本元素越出内容带（左 16px）",
+  };
+  const contrastInfo = {
+    rule: CONTRAST_RULE,
+    severity: "info" as const,
+    location: "div#grad",
+    message: "渐变背景不可判定",
+  };
+
+  it("存在臂：两面的 finding 都归位到该步（warning 进袋、info 进 note）", () => {
+    const verdict = judgeStep(
+      {
+        spec: { chapter: 0, step: 0 },
+        chapterId: "example",
+        consoleEvents: [],
+        overflow: overflowOf(),
+        safeMargins: { findings: [marginsFinding], examined: 2 },
+        contrast: { findings: [contrastInfo], examined: 2 },
+        audit: auditOf(),
+      },
+      { pageUrl: PAGE, renderMode: true },
+    );
+    const marginFinding = verdict.findings.find((f) => f.rule === SAFE_MARGIN_RULE);
+    expect(marginFinding).toBeDefined();
+    expect(marginFinding!.severity).toBe("warning");
+    expect(marginFinding!.location).toContain("章节 0 第 0 步");
+    expect(marginFinding!.location).toContain("div#scene-0");
+    expect(verdict.findings.some((f) => f.rule === CONTRAST_RULE)).toBe(false); // info 不判级
+    expect(verdict.notes.join()).toContain("渐变背景不可判定");
+  });
+
+  it("缺省臂：未采（字段缺省）→ **不产出该面 finding**（防「漏接采集却静默通过」）", () => {
+    const verdict = judgeStep(
+      {
+        spec: { chapter: 0, step: 0 },
+        chapterId: "example",
+        consoleEvents: [],
+        overflow: overflowOf(),
+        audit: auditOf(),
+      },
+      { pageUrl: PAGE, renderMode: true },
+    );
+    expect(verdict.findings).toEqual([]);
+    expect(verdict.notes).toEqual([]);
+  });
+});
+
+describe("修复轮 1（C1）：#14 fontsVerdict 的三条判据（使用面 = 全 deck 并集）", () => {
+  it("并集覆盖加载面 → 无 finding 也无 info（真实 deck 的常态）", () => {
+    const v = fontsVerdict({
+      loadedFamilies: ["JetBrains Mono"],
+      usedFamilies: unionFamilies([["Times", "JetBrains Mono"], ["Times"]]),
+      fontFaceCount: 317,
+      familyCount: 5,
+      examined: 6,
+    });
+    expect(v.findings).toEqual([]);
+    expect(v.notes).toEqual([]);
+  });
+
+  it("加载面多出使用面 → blocker 带家族名清单（真「加载了没人用」，不因改成并集而消失）", () => {
+    const v = fontsVerdict({
+      loadedFamilies: ["Archivo Black"],
+      usedFamilies: ["Times"],
+      fontFaceCount: 317,
+      familyCount: 5,
+      examined: 3,
+    });
+    const blocker = v.findings.find((f) => f.severity === "blocker")!;
+    expect(blocker.rule).toBe(FONT_RULE);
+    expect(blocker.message).toContain("Archivo Black");
+    // 采样面看不到的加载来源要给出诊断方向（伪元素 / canvas 绘制 / 隐藏节点）
+    expect(blocker.message).toContain("伪元素");
+  });
+
+  it("加载面为空 → info（不是 blocker）：全 deck 没有任何主题字体被加载", () => {
+    const v = fontsVerdict({
+      loadedFamilies: [],
+      usedFamilies: ["Times"],
+      fontFaceCount: 0,
+      familyCount: 0,
+      examined: 6,
+    });
+    expect(v.findings).toEqual([]);
+    expect(v.notes).toHaveLength(1);
+    expect(v.notes[0]).toContain(FONT_RULE);
+    expect(v.notes[0]).toContain("没有任何主题字体");
+  });
+});
+
+describe("修复轮 1（I2）：示例章节（门禁标杆）的文字落在安全框内", () => {
+  it("三个 scene div 都带安全边距（margin 而非 padding——#20 查 border box）", () => {
+    for (const step of [0, 1, 2]) {
+      // 本文件是 .ts（不是 .tsx）：JSX 不可用 → 用 createElement 等价的调用形式
+      const { container, unmount } = render(createElement(ExampleChapter, { step }));
+      const scene = container.querySelector(`[data-testid="scene-${step}"]`)!;
+      const st = getComputedStyle(scene);
+      // 数字来自 §12b V1 的基准档案（SAFE_AREA_BASE）——与章节侧派生所用的单一源互为独立表述
+      expect(st.marginTop, `step ${step} 顶边距`).toBe(`${SAFE_AREA_BASE.top}px`);
+      expect(st.marginLeft, `step ${step} 左边距`).toBe(`${SAFE_AREA_BASE.content}px`);
+      expect(st.marginRight, `step ${step} 右边距`).toBe(`${SAFE_AREA_BASE.content}px`);
+      expect(scene.className).not.toContain("padding-"); // 别把修法换回 padding（实测无效）
+      unmount();
+    }
+  });
+
+  it("标杆非空：安全框数字是真约束（不是 0——否则上一条恒真）", () => {
+    expect(SAFE_AREA_BASE.top).toBeGreaterThan(0);
+    expect(SAFE_AREA_BASE.content).toBeGreaterThan(0);
   });
 });
 

@@ -38,6 +38,7 @@ import {
   outOfBandPx,
   safeBand,
   safeMarginArgs,
+  unionFamilies,
   type Band,
   type CollectorResult,
 } from "./collectors";
@@ -283,7 +284,9 @@ describe("源码串：#20/#18/#14（与 #16 同规——String.raw 模板 + 注�
     expect(COLLECT_CONTRAST_SRC).toContain(CAPTION_LAYER_SELECTOR);
     expect(COLLECT_SAFE_MARGINS_SRC).toContain(SAFE_MARGIN_RULE);
     expect(COLLECT_CONTRAST_SRC).toContain(CONTRAST_RULE);
-    expect(COLLECT_FONTS_SRC).toContain(FONT_RULE);
+    // #14 的规则名**不在**源码串里：修复轮 1（C1）起字体收集器只采样不判定
+    // （使用面要跨步求并集），判定归 Node 侧 fontsVerdict——故断言的是采样器不做判定
+    expect(COLLECT_FONTS_SRC).not.toContain("severity");
   });
 
   it("规则名与 §11.1 门禁清单的检查名一致（报告可逐条对照）", () => {
@@ -400,6 +403,36 @@ describe("纯判据 diffFamilies（#14：loaded 多出 used）", () => {
 
   it("loaded 为空 → 空数组（全 deck 没有主题字体被加载是合法态，不是差集）", () => {
     expect(diffFamilies([], ["Times New Roman"])).toEqual([]);
+  });
+});
+
+describe("纯判据 unionFamilies（#14 使用面**跨步并集**——修复轮 1 / C1 的根因）", () => {
+  it("并集：只在**非末帧**用过的家族也进使用面（C1 假报的根因就是只采末帧）", () => {
+    expect(
+      unionFamilies([
+        ["Archivo Black", "Space Grotesk"],
+        ["Space Grotesk"],
+      ]),
+    ).toEqual(["Archivo Black", "Space Grotesk"]);
+  });
+
+  it("按 CSS 家族名语义去重（大小写/引号/空白），保序且保留首次出现的原样", () => {
+    expect(unionFamilies([['  "Noto Sans SC" '], ["noto sans sc"], ["NOTO SANS SC"]])).toEqual([
+      "Noto Sans SC",
+    ]);
+  });
+
+  it("空输入 / 全空集不制造家族（全 deck 无文本的合法态）", () => {
+    expect(unionFamilies([])).toEqual([]);
+    expect(unionFamilies([[], []])).toEqual([]);
+  });
+
+  it("并集喂给 diffFamilies：非末帧用过的家族不再是假差集（两条判据的合成语义）", () => {
+    const loaded = ["JetBrains Mono"];
+    const frameA = ["Times", "JetBrains Mono"];
+    const frameB = ["Times"]; // 末帧：mono 已不在渲染文本里
+    expect(diffFamilies(loaded, frameB)).toEqual(["JetBrains Mono"]); // 旧（只采末帧）→ 假 blocker
+    expect(diffFamilies(loaded, unionFamilies([frameA, frameB]))).toEqual([]); // 新（并集）→ 无 finding
   });
 });
 
@@ -558,7 +591,7 @@ describe("tsx 子进程真机护栏（文件路径；keepNames 只在这条路�
     const parsed = JSON.parse(r.stdout.slice(r.stdout.indexOf(marker) + marker.length).trim()) as {
       margins: CollectorResult;
       contrast: CollectorResult;
-      fonts: CollectorResult & { loadedFamilies: string[] };
+      fonts: CollectorResult & { loadedFamilies: string[]; usedFamilies: string[] };
     };
     // 真布局下的判别力（不是"没崩"就算过）：越界 + 低对比各报一条，caption 两条都不报
     expect(parsed.margins.examined).toBe(1);
@@ -566,10 +599,12 @@ describe("tsx 子进程真机护栏（文件路径；keepNames 只在这条路�
     expect(parsed.margins.findings.some((f) => f.location.includes("caption"))).toBe(false);
     expect(parsed.contrast.examined).toBe(1);
     expect(parsed.contrast.findings.some((f) => f.severity === "warning")).toBe(true);
-    // 真实 FontFaceSet（夹具无 @font-face）→ loaded 空 → examined 0 → info
+    // #14 采样器（修复轮 1 / C1 起只采样不判定）：真实 FontFaceSet（夹具无 @font-face）→ loaded 空；
+    // 采样面 = 两个渲染文本元素（正文 div + 字幕 span——#14 的使用面是整页，见 collectors.ts）
     expect(parsed.fonts.loadedFamilies).toEqual([]);
-    expect(parsed.fonts.examined).toBe(0);
-    expect(parsed.fonts.findings[0]?.severity).toBe("info");
+    expect(parsed.fonts.usedFamilies.length).toBeGreaterThan(0);
+    expect(parsed.fonts.examined).toBe(2);
+    expect(parsed.fonts.findings).toEqual([]); // 判定的位置在 Node 侧（使用面要跨步求并集）
   }, 180_000);
 
   it("负控制：把「真函数」交给 page.evaluate 必然崩 __name（钉住护栏力度——它不是在防空气）", () => {

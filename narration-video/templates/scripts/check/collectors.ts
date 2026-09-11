@@ -398,8 +398,33 @@ function diffFamilies(loaded, used) {
 }
 `;
 
-/** 家族面 + 差集（字体收集器与 Node 侧 `diffFamilies` 共用，顺序不可调换：差集依赖 cleanFamily）。 */
-const FAMILY_DIFF_DEFS = FAMILIES_DEFS + DIFF_FAMILIES_DEFS;
+/**
+ * 家族名**并集**（修复轮 1 / C1 的修法本体）：`#14` 的"使用面"必须跨步累积——字体是**惰性加载**
+ * 的，`status === "loaded"` 本身就是"曾经被用过"的证明；只采末帧必然把"只在开场步用过的
+ * display 字体 / 只在代码步用过的 mono"判成"加载了没人用"（假 blocker）。
+ * 去重口径与 `diffFamilies` 一致（CSS 家族名不区分大小写、引号/空白归一），保序且保留首次原样。
+ */
+const UNION_FAMILIES_DEFS = String.raw`
+function unionFamilies(sets) {
+  var out = [];
+  var seen = [];
+  for (var i = 0; i < sets.length; i++) {
+    var set = sets[i] || [];
+    for (var j = 0; j < set.length; j++) {
+      var fam = cleanFamily(set[j]);
+      if (fam === "") continue;
+      var key = fam.toLowerCase();
+      if (seen.indexOf(key) !== -1) continue;
+      seen.push(key);
+      out.push(fam);
+    }
+  }
+  return out;
+}
+`;
+
+/** 家族面 + 差集 + 并集（Node 侧三个包装共用一份文本，顺序不可调换：后两者依赖 cleanFamily）。 */
+const FAMILY_DIFF_DEFS = FAMILIES_DEFS + DIFF_FAMILIES_DEFS + UNION_FAMILIES_DEFS;
 
 /** 定义组 → 可调用形态（Node 侧专用；页面侧用的是 `*_DEFS` 原文，两侧同一份文本）。 */
 function wrapJudge(defs: string, name: string): string {
@@ -556,7 +581,12 @@ export const COLLECT_SAFE_MARGINS_SRC =
     if (over.top > 0) edges.push("上 " + pxText(over.top) + "px");
     if (over.bottom > 0) edges.push("下 " + pxText(over.bottom) + "px");
     if (edges.length === 0) continue;
+    // 文案按**实际用的那条带**拼（修复轮 1 / M2）：chrome 命中的消息里不该出现内容带的数字
     var where = isChrome ? "chrome 带" : "内容带";
+    var bandText = isChrome
+      ? "chrome 带元素水平 ≥" + chromeBand.left + "px（垂直不设限——chrome 本来就住在内容带之上）"
+      : "内容元素左右 ≥" + contentBand.left + "px、顶 ≥" + contentBand.top + "px、底 ≤" +
+        contentBand.bottom + "px";
     var hint = isChrome ? "" : "；若为 chrome 带元素请加 data-safe-band=\"chrome\"";
     findings.push({
       rule: "文字安全边距",
@@ -564,8 +594,7 @@ export const COLLECT_SAFE_MARGINS_SRC =
       location: describe(el),
       message:
         "文本元素越出" + where + "（" + edges.join("、") + "，画布 " + size.width + "×" + size.height + "）" +
-        "——§12b V1 安全框：内容元素左右 ≥" + contentBand.left + "px、顶 ≥" + contentBand.top +
-        "px、底 ≤" + contentBand.bottom + "px；chrome 带元素水平 ≥" + chromeBand.left + "px。" +
+        "——§12b V1 安全框：" + bandText + "。" +
         "贴边文字在平台常驻 UI / 裁切下会丢" + hint,
     });
   }
@@ -711,7 +740,10 @@ export const COLLECT_CONTRAST_SRC =
     return hit;
   }
 
-  // 有效背景：自身底色优先；transparent 才 hit-test + 祖先链逐层合成
+  // 有效背景：自身底色优先；transparent 才 hit-test + 祖先链逐层合成。
+  // ownImage（background-image / 渐变）先于自身色值判（修复轮 1 / M1）：它不是"背景读取"而是
+  // "**不可判定**"（像素内容不由色值定义），先兜到 info 档——否则会把渐变上方的文字按底色
+  // 硬算出一个假比值。
   function backdropOf(el, pt, ownColor, ownImage) {
     if (ownImage) return { kind: "image", from: el };
     var acc = { r: 0, g: 0, b: 0, a: 0 };
@@ -808,49 +840,53 @@ export const COLLECT_CONTRAST_SRC =
   return { findings: findings, examined: examined };
 }`;
 
-// ── #14 字体加载收集器 ──
+// ── #14 字体加载收集器（采样器：判定在 Node 侧 fontsVerdict） ──
 
-/** #14 收集器的返回：比通用面多两张家族清单（报告要贴"loaded / used"两张清单）。 */
-export interface FontsCollectorResult extends CollectorResult {
+/**
+ * #14 的**一次采样**（每个 step 一次 + 全 deck 跑完后一次）。比通用面多两张家族清单
+ * （报告要贴"loaded / used"两张清单）。
+ */
+export interface FontsSample extends CollectorResult {
   /** `document.fonts` 的**全部** FontFace 条数（噪音面：同一家族的子集/字重各算一条） */
   fontFaceCount: number;
   /** 去重后的家族数（不过滤 status 时的那张脸） */
   familyCount: number;
-  /** `status === "loaded"` 的家族（去重、保序）——判据的"加载面" */
+  /** 本次采样时刻 `status === "loaded"` 的家族（去重、保序）——判据的"加载面" */
   loadedFamilies: string[];
-  /** 渲染文本 computed font-family 里出现过的家族（去重、保序）——判据的"使用面" */
+  /** **本帧**渲染文本 computed font-family 里出现过的家族（去重、保序）——"使用面"的一帧切片 */
   usedFamilies: string[];
 }
 
 /**
- * 页面侧收集器（#14 无头半边）：`document.fonts` 里 **`status === "loaded"`** 的家族必须被
- * 渲染文本实际用到（`loaded ⊄ used` → blocker 带家族名清单）。
+ * 页面侧**采样器**（#14 无头半边）——**只采样，不判定**。
+ *
+ * 为什么判定挪到 Node 侧（修复轮 1 / C1）：使用面必须**跨步求并集**。字体是**惰性加载**的，
+ * `status === "loaded"` 本身就是"曾经被用过"的证明；只采末帧的话，任何"只在非末帧用过的
+ * 主题字体"（只在开场步出现的 display 字体 / 只在代码步出现的 mono）都会被判成
+ * "加载了没人用"——真实 deck 上必假报。而采样器在页面里拿不到别的帧，故：**每帧采一次
+ * `usedFamilies`，Node 侧 `unionFamilies` 求并集，`fontsVerdict`（headless.ts）在全部步跑完后
+ * 判一次**（`diffFamilies` / `unionFamilies` 与这里同一份源码文本，见文件头"两侧同一文本"）。
  *
  * 三处口径（都是实测定的，不是推理）：
- *   · **必须按 `status === "loaded"` 过滤**：实测 317 条 FontFace / 去重 5 家族 / 按 loaded
+ *   · **加载面必须按 `status === "loaded"` 过滤**：实测 317 条 FontFace / 去重 5 家族 / 按 loaded
  *     过滤只剩 1——不过滤 status 等于拿"声明面"比"声明面"（左右同源的同义反复，抓不到原版 #8）；
  *   · **使用面 = 整页渲染文本**（不是画布子树、也不排除字幕）：`document.fonts` 是**文档级**
  *     事实源，采样面必须与它同域——否则框架层 chrome / 字幕消费的字体加载会被判成
  *     "加载了没人用"的假 blocker；
- *   · **`examined` = 用了主题字体（loaded 家族）的文本元素数**：全 deck 无主题字体文本
- *     （示例章节正文走 UA 默认字体）→ `examined === 0` → **info**（不是 blocker）——
- *     这不是缺陷态，是"没有可判定的使用面"。
- * `args = { rootSelector?: string }` → `FontsCollectorResult`。
+ *   · **`examined` = 本次采样到的渲染文本元素数**（与其他收集器的"检查面"同义；判定不看它，
+ *     它是读数——判据是 `loaded ⊆ used 并集`）。
+ * `args = { rootSelector?: string }` → `FontsSample`（`findings` 恒空：本收集器不判级）。
  */
 export const COLLECT_FONTS_SRC =
   String.raw`function (args) {` +
   TEXT_SURFACE_SRC +
-  FAMILY_DIFF_DEFS +
+  FAMILIES_DEFS +
   String.raw`
   var opts = args || {};
   var rootSelector =
     typeof opts.rootSelector === "string" && opts.rootSelector !== "" ? opts.rootSelector : "body";
-  var findings = [];
+  var findings = []; // 采样器不判级：判定归 Node 侧（使用面要跨步求并集）
   var examined = 0;
-
-  function push(severity, location, message) {
-    findings.push({ rule: "字体加载", severity: severity, location: location, message: message });
-  }
 
   var faces = [];
   if (document.fonts && typeof document.fonts.forEach === "function") {
@@ -884,37 +920,14 @@ export const COLLECT_FONTS_SRC =
     if (skipTag(el)) continue;
     if (!hasDirectText(el)) continue;
     if (!isVisible(el)) continue;
+    examined++;
     var fams = splitFamilies(getComputedStyle(el).fontFamily);
-    var usesTheme = false;
     for (var k = 0; k < fams.length; k++) {
       var fk = fams[k].toLowerCase();
       if (usedKeys.indexOf(fk) === -1) {
         usedKeys.push(fk);
         used.push(fams[k]);
       }
-      if (loadedKeys.indexOf(fk) !== -1) usesTheme = true;
-    }
-    if (usesTheme) examined++;
-  }
-
-  if (examined === 0) {
-    push(
-      "info",
-      "document.fonts",
-      "全 deck 无主题字体文本（status === \"loaded\" 的家族 " + loaded.length + " 个：" +
-        (loaded.length === 0 ? "无" : loaded.join("、")) + "）——渲染文本全走系统/UA 字体，" +
-        "#14 的\"加载面 ⊆ 使用面\"没有可判定的使用面（info 而非 blocker：这不是缺陷态，是读数为零）"
-    );
-  } else {
-    var missing = diffFamilies(loaded, used);
-    if (missing.length > 0) {
-      push(
-        "blocker",
-        "document.fonts",
-        "字体已加载但全 deck 无文本使用：" + missing.join("、") + "——status === \"loaded\" 的家族" +
-          "必须被渲染文本实际用到（否则主题声明、字体加载面与真实排版已经漂移）；" +
-          "已加载 " + loaded.length + " 个：" + loaded.join("、")
-      );
     }
   }
 
@@ -939,6 +952,9 @@ const outOfBandImpl = fromSrc<(rect: Rect, band: Band, tolerancePx: number) => E
 const diffFamiliesImpl = fromSrc<(loaded: readonly string[], used: readonly string[]) => string[]>(
   wrapJudge(FAMILY_DIFF_DEFS, "diffFamilies"),
 );
+const unionFamiliesImpl = fromSrc<(sets: readonly (readonly string[])[]) => string[]>(
+  wrapJudge(FAMILY_DIFF_DEFS, "unionFamilies"),
+);
 
 /** 相对亮度比（WCAG 2.x；半透明前景先与背景合成）。浏览器侧跑的是同一份源码文本。 */
 export function contrastRatio(fg: Rgb, bg: Rgb): number {
@@ -957,6 +973,14 @@ export function outOfBandPx(
 /** `loaded ⊄ used` 的差集（家族名不区分大小写/引号；保序去重）。浏览器侧跑的是同一份源码文本。 */
 export function diffFamilies(loaded: readonly string[], used: readonly string[]): string[] {
   return diffFamiliesImpl(loaded, used);
+}
+
+/**
+ * 家族名并集（#14 的"使用面"跨步累积；口径同 `diffFamilies`：大小写/引号/空白归一、保序去重）。
+ * 浏览器侧跑的是同一份源码文本。
+ */
+export function unionFamilies(sets: readonly (readonly string[])[]): string[] {
+  return unionFamiliesImpl(sets);
 }
 
 // ── 安全带的构造（数字单一源：src/engine/safe-area.ts；本文件只做坐标换算） ──

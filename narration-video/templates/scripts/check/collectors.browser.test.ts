@@ -35,9 +35,11 @@ import {
   STAGE_SELECTOR,
   contrastRatio,
   safeMarginArgs,
+  unionFamilies,
   type CollectorResult,
-  type FontsCollectorResult,
+  type FontsSample,
 } from "./collectors";
+import { fontsVerdict } from "./headless";
 
 // jsdom 缺 TransformStream（Node 有）——playwright-core 加载期就要它。补在**动态 import 之前**。
 (globalThis as { TransformStream?: unknown }).TransformStream ??= WebTransformStream;
@@ -131,6 +133,28 @@ const FAKE_FONTS_ONLY_UNLOADED = `Object.defineProperty(document, "fonts", {
   }
 });`;
 
+/** 两个家族各只在**一帧**里出现过（C1① 的"只在非末帧用过"）——两份都是 loaded。 */
+const FAKE_FONTS_TWO_FRAMES = `Object.defineProperty(document, "fonts", {
+  configurable: true,
+  value: {
+    forEach: function (cb) {
+      cb({ family: "Probe Only A", status: "loaded" }, 0, this);
+      cb({ family: "Probe Only B", status: "loaded" }, 1, this);
+    }
+  }
+});`;
+
+/** 加载了但任何采样面都没用过（C1② 的反向护栏：真 blocker 不能因为改成并集就消失）。 */
+const FAKE_FONTS_NEVER_USED = `Object.defineProperty(document, "fonts", {
+  configurable: true,
+  value: {
+    forEach: function (cb) {
+      cb({ family: "Probe Never", status: "loaded" }, 0, this);
+      cb({ family: "Probe Unloaded", status: "unloaded" }, 1, this);
+    }
+  }
+});`;
+
 /** 拆掉假面（own property 删掉后自动落回 Document.prototype 的真实访问器）。 */
 const FAKE_FONTS_TEARDOWN = `delete document.fonts;`;
 
@@ -165,6 +189,29 @@ describe("#20 文字安全边距（真布局）", () => {
     expect(out.findings.some((f) => f.location.includes("caption"))).toBe(false);
     expect(out.findings.some((f) => f.location.includes("#empty"))).toBe(false);
     expect(out.examined).toBe(TEXT_ELEMENTS); // 含 <svg><text>，不含空 div 与 caption
+  });
+
+  it("chrome 标记元素**真的越 chrome 带**时：消息只印 chrome 带的数字（修复轮 1 / M2）", async () => {
+    // 主夹具里的 chrome 元素在带内（left:80 ≥ 64）→ 不报；这条给一个真越界的：
+    // left:40 → 越 chrome 带 24px（它必然也越内容带 56px，但那条数字不该出现在消息里）
+    await page.setContent(
+      [
+        '<!doctype html><html><head><style>html, body { margin: 0; padding: 0; }</style></head><body>',
+        `<div data-testid="stage-frame" style="position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;background:#ffffff">`,
+        `<div id="chrome-out" data-safe-band="chrome" style="position:absolute;left:40px;top:20px;color:#111111;font-size:32px">越界顶栏</div>`,
+        `</div></body></html>`,
+      ].join("\n"),
+    );
+    const out = (await page.evaluate(
+      `(${COLLECT_SAFE_MARGINS_SRC})(${JSON.stringify(MARGIN_ARGS)})`,
+    )) as CollectorResult;
+
+    expect(out.findings).toHaveLength(1);
+    const f = out.findings[0];
+    expect(f.message).toContain("左 24px"); // 40 → 64 的差（按 chrome 带量化）
+    expect(f.message).toContain("chrome 带元素水平 ≥64px");
+    expect(f.message).not.toContain("内容元素左右 ≥"); // 文案按实际用的那条带拼（M2 的修复点）
+    expect(f.message).not.toContain('data-safe-band="chrome"'); // 已是 chrome 元素，不再给标记指引
   });
 
   it("非空护栏：examined = 文本元素数（不是画布元素数，也不是命中数）", async () => {
@@ -258,69 +305,120 @@ describe("#18 对比度（真浏览器：自身底色优先 + 祖先链采样）
   });
 });
 
-// ── #14 字体加载（无头半边） ──
+// ── #14 字体加载（无头半边；修复轮 1 / C1 起 = 采样器 + Node 侧跨步并集判定） ──
 
-describe("#14 字体加载（真浏览器：document.fonts 的 loaded 读法）", () => {
-  it("真实 FontFaceSet（夹具页没有 @font-face）：loaded 空 → examined 0 → info（不是 blocker）", async () => {
-    const out = await runOnFixture<FontsCollectorResult>(COLLECT_FONTS_SRC, {});
+/** 采样一次（就地解析 document.fonts 的假面是否生效）。 */
+async function sampleFonts(): Promise<FontsSample> {
+  return (await page.evaluate(`(${COLLECT_FONTS_SRC})(${JSON.stringify({})})`)) as FontsSample;
+}
+
+describe("#14 字体加载（真浏览器采样 + Node 侧判定）", () => {
+  it("真实 FontFaceSet（夹具页没有 @font-face）：loaded 空、采样面非空、收集器自己不判级", async () => {
+    const out = await runOnFixture<FontsSample>(COLLECT_FONTS_SRC, {});
     expect(Array.isArray(out.loadedFamilies)).toBe(true);
     expect(out.loadedFamilies).toEqual([]);
-    expect(out.examined).toBe(0);
-    expect(out.findings).toHaveLength(1);
-    expect(out.findings[0].severity).toBe("info");
-    expect(out.findings[0].rule).toBe(FONT_RULE);
-    expect(out.findings[0].message).toContain("无主题字体文本");
     // 使用面照样读出来（读数：全走 UA/系统字体也要看得见）
     expect(out.usedFamilies.join(" ")).toContain("Probe Used");
+    expect(out.examined).toBe(TEXT_ELEMENTS + 1); // 10 个舞台内 + caption 的 span（#14 使用面 = 整页）
+    expect(out.findings).toEqual([]); // 判定在 Node 侧（使用面要跨步求并集）
   });
 
-  it("status==='loaded' 才算：unloaded 家族不进 loaded 面；loaded ⊄ used → blocker 带家族名清单", async () => {
+  it("status==='loaded' 才算：unloaded 家族不进 loaded 面；引号/大小写不制造假差集", async () => {
     await page.setContent(FIXTURE_HTML);
     await page.evaluate(FAKE_FONTS_SETUP);
-    const out = (await page.evaluate(
-      `(${COLLECT_FONTS_SRC})(${JSON.stringify({})})`,
-    )) as FontsCollectorResult;
+    const out = await sampleFonts();
     await page.evaluate(FAKE_FONTS_TEARDOWN);
 
     expect(out.fontFaceCount).toBe(5); // 317 条那类噪音的缩小版：同家族多 Face 要计数
     expect(out.familyCount).toBe(4); // 去重后 4 个家族
     expect(out.loadedFamilies).toEqual(["Probe Used", "Probe Quoted", "Probe Unused"]);
     expect(out.loadedFamilies).not.toContain("Probe Unloaded"); // 不过滤 status = 同义反复
-
-    expect(out.findings).toHaveLength(1);
-    const f = out.findings[0];
-    expect(f.severity).toBe("blocker");
-    // 差集面 = 冒号后、破折号前的那段（消息尾部的"已加载 N 个：…"是读数，不是差集）
-    const missingPart = f.message.split("——")[0];
-    expect(missingPart).toContain("Probe Unused"); // 加载了没人用
-    expect(missingPart).not.toContain("Probe Quoted"); // 引号/大小写不制造假差集
-    expect(missingPart).not.toContain("Probe Unloaded");
+    expect(out.usedFamilies).toContain("Probe Quoted"); // 带引号的家族名进了使用面（去引号后匹配）
   });
 
-  it("examined = 用主题字体的文本元素数（document.fonts 是文档级 → 使用面取整页渲染文本，含字幕）", async () => {
-    await page.setContent(FIXTURE_HTML);
-    await page.evaluate(FAKE_FONTS_SETUP);
-    const out = (await page.evaluate(
-      `(${COLLECT_FONTS_SRC})(${JSON.stringify({})})`,
-    )) as FontsCollectorResult;
-    await page.evaluate(FAKE_FONTS_TEARDOWN);
-    // 10 个舞台内文本元素 + caption 的 span（框架级 chrome 也消费字体，故 #14 不排除它）
-    expect(out.examined).toBe(TEXT_ELEMENTS + 1);
-  });
-
-  it("全 unloaded（正文全走 UA 默认字体的实况）→ examined 0 → info，不报 blocker", async () => {
+  it("全 unloaded（正文全走 UA 默认字体的实况）→ loaded 空（Node 侧判为 info，不是 blocker）", async () => {
     await page.setContent(FIXTURE_HTML);
     await page.evaluate(FAKE_FONTS_ONLY_UNLOADED);
-    const out = (await page.evaluate(
-      `(${COLLECT_FONTS_SRC})(${JSON.stringify({})})`,
-    )) as FontsCollectorResult;
+    const out = await sampleFonts();
     await page.evaluate(FAKE_FONTS_TEARDOWN);
 
     expect(out.loadedFamilies).toEqual([]);
-    expect(out.examined).toBe(0);
-    expect(out.findings).toHaveLength(1);
-    expect(out.findings[0].severity).toBe("info");
-    expect(out.findings.some((f) => f.severity === "blocker")).toBe(false);
+    expect(out.examined).toBeGreaterThan(0); // 文字照样采到（只是没有主题字体）
+    expect(out.findings).toEqual([]);
+  });
+
+  // ── C1 的两条必带证据（修复轮 1） ──
+
+  it("C1①：只在**非末帧**用过的字体不再假报（跨步并集 vs 只采末帧，同一份真实采样对照）", async () => {
+    // 帧 A：正文用 "Probe Only A"（真实 deck 里"只在开场步出现的 display 字体"的缩小版）
+    await page.setContent(
+      [
+        '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0">',
+        '<div style="font-family:\'Probe Only A\',sans-serif;font-size:32px">开场帧</div>',
+        "</body></html>",
+      ].join("\n"),
+    );
+    await page.evaluate(FAKE_FONTS_TWO_FRAMES); // 帧 A 的字体确实加载了（用过即 loaded）
+    const frameA = await sampleFonts();
+    expect(frameA.usedFamilies).toContain("Probe Only A");
+
+    // 帧 B（末帧）：不再用 Probe Only A——但它仍是 loaded（惰性加载的战利品：用过即加载）
+    await page.setContent(
+      [
+        '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0">',
+        '<div style="font-family:\'Probe Only B\',sans-serif;font-size:32px">末帧</div>',
+        "</body></html>",
+      ].join("\n"),
+    );
+    const frameB = await sampleFonts(); // document.fonts 的假面是 document 的 own property，setContent 不重置
+    expect(frameB.usedFamilies).toContain("Probe Only B");
+    expect(frameB.loadedFamilies).toEqual(["Probe Only A", "Probe Only B"]);
+    await page.evaluate(FAKE_FONTS_TEARDOWN);
+
+    // 旧读法（只采末帧）：loaded 里的 Probe Only A 不在末帧使用面 → **假 blocker**（C1 的机理）
+    const stale = fontsVerdict({
+      loadedFamilies: frameB.loadedFamilies,
+      usedFamilies: frameB.usedFamilies,
+      fontFaceCount: frameB.fontFaceCount,
+      familyCount: frameB.familyCount,
+      examined: frameB.examined,
+    });
+    expect(stale.findings.some((f) => f.severity === "blocker")).toBe(true);
+
+    // 新读法（跨步并集）：Probe Only A 在帧 A 真的用过 → 无 finding（也不该多出 info）
+    const union = unionFamilies([frameA.usedFamilies, frameB.usedFamilies]);
+    const fresh = fontsVerdict({
+      loadedFamilies: frameB.loadedFamilies,
+      usedFamilies: union,
+      fontFaceCount: frameB.fontFaceCount,
+      familyCount: frameB.familyCount,
+      examined: frameA.examined + frameB.examined,
+    });
+    expect(fresh.findings).toEqual([]);
+    expect(fresh.notes).toEqual([]);
+  });
+
+  it("C1②：真的「loaded 但全 deck 从未使用」仍报 blocker（反向护栏，构造得出）", async () => {
+    // 假面里有 Probe Never（loaded），而夹具页的文本一个都没用它
+    await page.setContent(FIXTURE_HTML);
+    await page.evaluate(FAKE_FONTS_NEVER_USED);
+    const sample = await sampleFonts();
+    await page.evaluate(FAKE_FONTS_TEARDOWN);
+
+    expect(sample.loadedFamilies).toEqual(["Probe Never"]);
+    expect(sample.usedFamilies).not.toContain("Probe Never");
+
+    const verdict = fontsVerdict({
+      loadedFamilies: sample.loadedFamilies,
+      usedFamilies: unionFamilies([sample.usedFamilies]),
+      fontFaceCount: sample.fontFaceCount,
+      familyCount: sample.familyCount,
+      examined: sample.examined,
+    });
+    const blocker = verdict.findings.find((f) => f.severity === "blocker");
+    expect(blocker).toBeDefined();
+    expect(blocker!.rule).toBe(FONT_RULE);
+    expect(blocker!.message).toContain("Probe Never");
   });
 });
 
