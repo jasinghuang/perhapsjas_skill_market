@@ -5,10 +5,11 @@
 // 布局纪律：区段内容水平 ≥96px 内；无横向溢出；组件格容器只允许 inline 布局属性，
 // 颜色零裸色（一律 token 化）；组件格内 --shadow-card 覆写 none（目录密度优先，
 // 硬阴影语义见 05 区段 Card 行）；网格单元零阴影（展示页铁律同款）。
-// 组件格网格规范化（M2b）：3 列等宽 560（容器 1728 = 1920 − 2×96，gap 24）、组内行高统一
-// （默认 360 / DATA 420——stat-cell 四档全览需）；格子 border-box 无横向溢出；内容区垂直居中；
-// 标注口径（M2b 复核）：短标注 ≤40 字 + 最多 2 行截断省略（CLAMP_2），考据信息不入展示页；
-// 展示内容必须完全落格内（四边留白 ≥16px）；密度压缩经 extraScope / CELL_TWEAKS（组件本体不动）。
+// 组件格网格（M2b 三轮定稿——按内容自适应，去统一尺寸）：3 列等宽 560（容器 1728 = 1920 − 2×96，
+// gap 24）、无统一行高——每格高度 = 内容自然高 + 上下 24 内衬，align-items: start 上缘对齐；
+// 每组件一行 SIZE_HINTS 尺寸提示（内容区 minW/minH + 密集组件 grid-column: span 2 跨列给足空间）；
+// 标注口径：短标注 ≤40 字、最多 2 行截断（CLAMP_2）、用户可读（无实现者黑话/考据）；
+// 内容必须完全落格内（包含性断言：四边留白 ≥16px）；密度压缩经 extraScope / CELL_TWEAKS（组件本体不动）。
 // token 标注一律运行时读 :root 计算值（getComputedStyle(documentElement)），与 tokens.css 同源。
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -658,15 +659,71 @@ function SemanticSection() {
 
 /* ── 06 · 组件全览 COMPONENTS（36 组件 × 全变体） ── */
 
+/** 组件格尺寸提示（M2b 三轮定稿：按内容自适应——每组件按其内容需要设计尺寸）。
+    每组件一行：内容区建议 minW / minH（内容自然尺寸的舒适下限，不设上限——格高 = 内容自然高
+    + 上下 24 内衬），密集组件 span: 2 跨列给足展示空间。
+    取值原则：圆环/条形/徽标类 → 小格（minH 64-96）；数字+标注 → 中格（160-200）；
+    多卡片/图表 → 大格（300-420）；scale 缩放档预留——本轮全部组件自然尺寸落格，无需缩放。 */
+const SIZE_HINTS: Record<string, { minW?: number; minH?: number; span?: number; scale?: number }> = {
+  // TEXT · 文字
+  "hero-title": { minH: 96 }, // 三变体竖排（双语双行）→ 中格
+  "kicker": { minH: 56 },     // 三变体单行 → 矮格
+  "body-copy": { minH: 56 },
+  "quote-block": { minH: 88 }, // 两变体竖排
+  "number-pill": { minH: 56 }, // 三药丸单行 → 矮格
+  // DATA · 数据
+  "hero-number": { minH: 72 },   // 数字 + 标注 → 中格（~170）
+  "counter": { minH: 64 },       // 数字 + 标注 → 中格（~160）
+  "bar-grow": { minH: 80 },      // 条形 → 矮格（~120 内容）
+  "donut-meter": { minH: 168 },  // 圆环 144 + 标注 → 小格（~260）
+  "stat-card": { minH: 128 },    // 三变体并排
+  "stat-cell": { span: 2, minW: 1080, minH: 160 }, // 四档 descStyle 4 列全览（跨列给足宽）
+  "stat-inline": { minH: 300 },  // 两变体竖排全宽 → 大格（300-420）
+  // STRUCTURE · 结构
+  "card": { minH: 96 },
+  "rule": { minH: 64 },          // 条形 → 矮格
+  "grid": { minH: 96 },
+  "stage-pad": { minH: 144 },
+  "table": { span: 2, minW: 1080, minH: 160 },       // 两变体并排（跨列）
+  "split-compare": { span: 2, minW: 1080, minH: 216 }, // 两变体并排（跨列）
+  // REVEAL · 揭示
+  "reveal-text": { minH: 80 },
+  "reveal-list": { span: 2, minW: 1080, minH: 144 }, // 两变体并排（跨列）
+  "step-sequence": { span: 2, minW: 1080, minH: 280 }, // plain + cards 并排（跨列）
+  // DECOR · 装饰
+  "decor-dot": { minH: 56 },
+  "decor-bar": { minH: 56 },
+  "decor-ring": { minH: 72 },
+  "stacked-blocks": { minH: 280 }, // 280×280 自然态
+  "step-stairs": { span: 2, minW: 1080, minH: 280 }, // 三卡阶梯 200/240/280（跨列）
+  "marker-block": { minH: 96 },
+  // MEDIA · 素材
+  "figure": { span: 2, minW: 1080, minH: 160 }, // 四变体单行 220/140（跨列）
+  "typed-terminal": { minH: 96 },
+  "path-draw": { minH: 96 },
+  // AMBIENT · 氛围
+  "seeded-particles": { minH: 176 }, // canvas 240×180 密度档（既有 CELL_TWEAKS）
+  "breathe": { minH: 96 },
+  "ken-burns": { minH: 136 }, // 两卡 240×135 并排
+  // FUNCTION · 功能
+  "timeline-track": { minH: 104 },
+  "progress-dots": { minH: 64 },
+  // CHART · 图表
+  "echart-bar": { minH: 280 }, // 480×260 真渲染 → 大格
+  "echart-line": { minH: 280 },
+  "echart-pie": { minH: 280 },
+};
+
 /** 组件格：cream 底 + 4px 墨框 + 字阶压缩 scope；容器仅 inline 布局属性（零裸色）。
-    网格规范化（M2b）：格子严格等宽等高（宽 560 = 容器 1728 − 2×24 gap ÷ 3；行高由 CompGroup 统一），
-    内衬 12px → 内容宽 = 560 − 2×12 − 2×4 边框 = 528 = 格宽 − 32（标注限宽依据）；
-    顶部 mono 组件名 + 内容区 flex 垂直居中；内容超限 overflow hidden 裁切（优先不溢出）。 */
+    按内容自适应（M2b 三轮）：无统一行高——格高 = 内容自然高 + 上下 24 内衬（padding ≥24），
+    上缘对齐（align-items: start）；内容区按 SIZE_HINTS 设 minW/minH 舒适下限、跨列格
+    grid-column: span 2；内容区水平居中，内容超限 overflow hidden 兜底（不主动截断）。 */
 function CompCell({ name, extraScope, children }: {
   name: string;
   extraScope?: Record<string, string>;
   children: ReactNode;
 }) {
+  const hint = SIZE_HINTS[name] ?? {};
   return (
     <div
       data-testid={`comp-cell-${name}`}
@@ -679,10 +736,11 @@ function CompCell({ name, extraScope, children }: {
         boxSizing: "border-box",
         minWidth: 0, // 网格轨道防撑破（长标注 min-content 不再顶宽列——右侧裁切根因）
         overflow: "hidden",
-        padding: "12px",
+        padding: "var(--space-3)", // 24 上下内衬（自适应规格下限）
         display: "flex",
         flexDirection: "column",
         gap: "var(--space-2)",
+        gridColumn: hint.span ? `span ${hint.span}` : undefined,
       }}
     >
       <div
@@ -700,7 +758,7 @@ function CompCell({ name, extraScope, children }: {
       >
         {name}
       </div>
-      <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div
           style={{
             display: "flex",
@@ -710,7 +768,9 @@ function CompCell({ name, extraScope, children }: {
             alignContent: "center",
             justifyContent: "center",
             maxWidth: "100%",
-            maxHeight: "100%",
+            minWidth: hint.minW,
+            minHeight: hint.minH,
+            ...(hint.scale ? { transform: `scale(${hint.scale})`, transformOrigin: "center center" } : {}),
           }}
         >
           {children}
@@ -720,27 +780,23 @@ function CompCell({ name, extraScope, children }: {
   );
 }
 
-function CompGroup({ label, rowHeight = 360, children }: {
-  label: string;
-  /** 统一行高（默认 360；内容密集组可上调——组内等高纪律不变） */
-  rowHeight?: number;
-  children: ReactNode;
-}) {
+function CompGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div style={{ marginBottom: "var(--space-5)" }}>
       <MonoLabel color="var(--text-mute)" style={{ display: "block", marginBottom: "var(--space-3)" }}>
         {label}
       </MonoLabel>
-      {/* 严格等宽等高网格：容器 = 1920 − 2×96 内容边距 = 1728（面板 4px 墨框计入 96 内）；
-          3 列 = (1728 − 2×24) / 3 = 560；minmax(0,1fr) 防内容 min-width 撑破列宽（右侧裁切根因） */}
+      {/* 按内容自适应网格：容器 = 1920 − 2×96 内容边距 = 1728（面板 4px 墨框计入 96 内）；
+          3 列 = (1728 − 2×24) / 3 = 560，minmax(0,1fr) 防内容 min-width 撑破列宽（右侧裁切根因）；
+          align-items: start 上缘对齐 + 自然高度（去统一行高）；gap 24 同列相邻格间隙一致 */}
       <div
         style={{
           width: 1728,
           boxSizing: "border-box",
           display: "grid",
           gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-          gridAutoRows: rowHeight,
           gap: "var(--space-3)",
+          alignItems: "start",
         }}
       >
         {children}
@@ -761,7 +817,7 @@ function ComponentsSection() {
           <Variant label="latin + cn · 双语双行">
             <HeroTitle latin="CREATIVE" cn="创意模式" data-testid="variant-hero-title-bilingual" style={{ fontSize: 40 }} />
           </Variant>
-          <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>构图级例外：stamp 阴影按 featured 纪律</MonoLabel>
+          <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>stamp 阴影色随主题强调色</MonoLabel>
         </CompCell>
         <CompCell name="kicker">
           <Variant label="plain"><Kicker variant="plain" data-testid="variant-kicker-plain">CHAPTER 01</Kicker></Variant>
@@ -782,22 +838,17 @@ function ComponentsSection() {
           <Variant label="invert"><NumberPill number="03" variant="invert" data-testid="variant-number-pill-invert" /></Variant>
         </CompCell>
       </CompGroup>
-      {/* DATA 组行高 420（> 默认 360）：stat-cell 四档 descStyle 全览（2×2 + 每格标注）在
-          18px 字号地板下最低需 ~330 内容高——360 行高将迫使字号破地板或整体缩放模糊；
-          组内七格等高纪律不变（等高优先于跨组同值）。 */}
-      <CompGroup label="DATA · 数据（7）" rowHeight={420}>
+      <CompGroup label="DATA · 数据（7）">
         <CompCell name="hero-number">
           <Variant label="plain"><HeroNumber value="+47%" variant="plain" data-testid="variant-hero-number-plain" /></Variant>
           <Variant label="accent"><HeroNumber value="+47%" variant="accent" data-testid="variant-hero-number-accent" /></Variant>
         </CompCell>
         <CompCell name="counter">
           <Variant label="default · 挂载滚动 0→47"><Counter to={47} data-testid="variant-counter-default" /></Variant>
-          <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>构图级例外：S3 底部小卡 display-2 48px 档</MonoLabel>
         </CompCell>
         <CompCell name="bar-grow">
           <Variant label="solid"><div style={{ width: 240 }}><BarGrow value={0.7} variant="solid" data-testid="variant-bar-grow-solid" /></div></Variant>
           <Variant label="accent"><div style={{ width: 240 }}><BarGrow value={0.7} variant="accent" data-testid="variant-bar-grow-accent" /></div></Variant>
-          <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>构图级例外：S5 柱状图行高 56px（组件原生 24px）</MonoLabel>
         </CompCell>
         <CompCell name="donut-meter">
           <Variant label="default · value 0.42"><DonutMeter value={0.42} label="转化率" data-testid="variant-donut-meter-default" /></Variant>
@@ -807,10 +858,23 @@ function ComponentsSection() {
           <Variant label="invert"><StatCard number="+47%" label="打开率" variant="invert" data-testid="variant-stat-card-invert" /></Variant>
           <Variant label="accent"><StatCard number="+47%" label="打开率" variant="accent" data-testid="variant-stat-card-accent" /></Variant>
         </CompCell>
-        <CompCell name="stat-cell" extraScope={{ "--t-display-2": "28px", "--t-body": "18px", "--space-4": "8px" }}>
-          {/* 四档 descStyle 2×2 双列全览（列宽 256）；格内密度 scope：display-2 40→28 / body 20→18 /
-              卡内衬 24→8，药丸 desc 内衬 4/8 收窄（CELL_TWEAKS）——四档同屏在 420 行高内无缩放可读 */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "var(--space-2)", width: "100%" }}>
+        <CompCell name="stat-inline" extraScope={{ "--space-4": "16px" }}>
+          {/* 两变体竖排全宽（BY THE NUMBERS 卡片自然宽度）；标注与展示上下分区：短标注在上、
+              展示卡在下，8px 间距互不重叠；卡衬 24→16 收紧卡高（大格 ~440 落 300-420+ 档） */}
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            <Variant label="default · 大数字 + 药丸标签 + 描述块">
+              <StatInline value="42%" label="参与度提升" desc="参与度相对基线提升 42 个百分点。" data-testid="variant-stat-inline-default" />
+            </Variant>
+            <Variant label="filled · 对角绿填充">
+              <StatInline filled value="9.4M" label="样本总值" desc="样本数据总值 940 万美元。" data-testid="variant-stat-inline-filled" />
+            </Variant>
+          </div>
+        </CompCell>
+        {/* 置组尾：跨列格不占行导致前一行留洞（auto-placement 不回填），组尾跨列只留尾行洞 */}
+        <CompCell name="stat-cell" extraScope={{ "--t-body": "18px", "--space-4": "16px" }}>
+          {/* 四档 descStyle 单行 4 列全览（跨列 1088 内容宽 → 每列 260）；数字保持 display-2 40 不缩，
+              仅 body 20→18 + 卡衬 24→16 让药丸 desc 在列宽内单行贴文——四档同屏自然可读 */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "var(--space-2)", width: "100%" }}>
             <Variant label="block · 绿底 cream 字">
               <StatCell index="/01" value="42%" label="参与度提升" desc="一句描述，突出样式。" descStyle="block" data-testid="variant-stat-cell-block" />
             </Variant>
@@ -822,19 +886,6 @@ function ComponentsSection() {
             </Variant>
             <Variant label="plain · 无底无框 + 跌绿 delta">
               <StatCell index="/04" value="9,637" label="归母净利 · 百万元" desc="回调一档，落袋为安。" descStyle="plain" delta="▼ -3.20%" deltaTone="down" data-testid="variant-stat-cell-plain" />
-            </Variant>
-          </div>
-        </CompCell>
-        <CompCell name="stat-inline" extraScope={{ "--t-display-2": "32px", "--space-4": "16px" }}>
-          {/* 两变体左右并排（各 256 宽）；标注与展示上下分区：短标注（≤40 字单行）在上、展示卡在下，
-              二者 8px 间距互不重叠。格内密度 scope：display-2 40→32 / 卡衬 24→16（stat-card 同档
-              先例）——filled 大数字 9.4M + 药丸标签在 256 列宽内不顶出卡内衬（包含性断言 ≥16px） */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "var(--space-2)", width: "100%" }}>
-            <Variant label="default · 大数字 + 药丸标签 + 描述块">
-              <StatInline value="42%" label="参与度提升" desc="参与度相对基线提升 42 个百分点。" data-testid="variant-stat-inline-default" />
-            </Variant>
-            <Variant label="filled · 对角绿填充">
-              <StatInline filled value="9.4M" label="样本总值" desc="样本数据总值 940 万美元。" data-testid="variant-stat-inline-filled" />
             </Variant>
           </div>
         </CompCell>
@@ -865,7 +916,7 @@ function ComponentsSection() {
           </Variant>
         </CompCell>
         <CompCell name="stage-pad">
-          <Variant label="default · 96/64 消费端（格内 16px）">
+          <Variant label="default · 96/64 消费端">
             <div
               style={{
                 position: "relative",
@@ -883,34 +934,25 @@ function ComponentsSection() {
           </Variant>
         </CompCell>
         <CompCell name="table">
-          {/* 两变体并排：表最小内容宽 272（3 列 × 20px 字 + 8/24 衬垫 + 边框），并排需 2×272+16 > 内容宽 528，
-              以 scale(0.9) 视觉收缩（字 18px ≥ 全局最小——不破字号地板）；layout 280 / 视觉 252 ×2 + 16 = 520 */}
-          <div style={{ display: "flex", gap: "var(--space-2)" }}>
-            <div style={{ width: 256, overflow: "visible" }}>
-              <div style={{ width: 280, transform: "scale(0.9)", transformOrigin: "top left" }}>
-                <Variant label="bordered"><Table variant="bordered" {...tableData} data-testid="variant-table-bordered" /></Variant>
-              </div>
+          {/* 两变体并排（跨列 1128 宽 → 各 540）：表格自然列宽，无缩放 */}
+          <div style={{ display: "flex", gap: "var(--space-2)", width: "100%" }}>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <Variant label="bordered"><Table variant="bordered" {...tableData} data-testid="variant-table-bordered" /></Variant>
             </div>
-            <div style={{ width: 256, overflow: "visible" }}>
-              <div style={{ width: 280, transform: "scale(0.9)", transformOrigin: "top left" }}>
-                <Variant label="zebra"><Table variant="zebra" {...tableData} data-testid="variant-table-zebra" /></Variant>
-              </div>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <Variant label="zebra"><Table variant="zebra" {...tableData} data-testid="variant-table-zebra" /></Variant>
             </div>
           </div>
         </CompCell>
-        <CompCell name="split-compare" extraScope={{ "--split-min-w": "0px", "--split-seam-pad": "24px", "--space-5": "16px", "--t-h3": "18px" }}>
+        <CompCell name="split-compare" extraScope={{ "--split-min-w": "0px", "--split-seam-pad": "88px" }}>
+          {/* 面板阴影 --shadow-card（二十一轮 F1 双层签名）——格内密度 scope 自动压 none，自然态见 showcase S17；
+              组件级 min-width 1200 以 scope 压回 0（跨列 1088 宽内按内容自适应——两变体并排单行），
+              中缝净空 96→88（仍 ≥ 圆章 60 半跨 + 24 阴影 = 84，零文字压章纪律保持），
+              其余（BEFORE/AFTER 标题、VS 圆章 120）全部自然态，组件默认档不变 */}
           <Variant label="default · split 左右分对齐">
-            {/* 面板阴影 --shadow-card（二十一轮 F1 双层签名）——格内密度 scope 自动压 none，自然态见 showcase S17；
-                二十七轮 F2：组件级 min-width 1200 + 中缝侧 96px 净空 + VS 圆章 120px——格内以 scope 压回
-                （min-w 0 + seam-pad 24 + 两半 padding 16 + h3 18，VS 圆章 72 经 CELL_TWEAKS 收窄，
-                组件默认档不变） */}
-            {/* 格内密度：默认 BEFORE/AFTER 标题经组件 API 直传空串隐去（变体对照重点在分屏结构与 VS 圆章；
-                组件默认档不变）——面板 126 → 92 高，两变体竖排在 360 行高内无缩放 */}
             <SplitCompare
               before={["散落的文档", "模糊的归属"]}
               after={["一份稿子驱动", "角色清晰"]}
-              beforeTitle=""
-              afterTitle=""
               data-testid="variant-split-compare-default"
             />
           </Variant>
@@ -919,8 +961,6 @@ function ComponentsSection() {
               before={["散落的文档", "模糊的归属"]}
               after={["一份稿子驱动", "角色清晰"]}
               align="center"
-              beforeTitle=""
-              afterTitle=""
               data-testid="variant-split-compare-center"
             />
           </Variant>
@@ -931,8 +971,8 @@ function ComponentsSection() {
           <Variant label="words"><RevealText text="逐词 揭示 测试" variant="words" data-testid="variant-reveal-text-words" /></Variant>
           <Variant label="mask"><RevealText text="逐词 揭示 测试" variant="mask" data-testid="variant-reveal-text-mask" /></Variant>
         </CompCell>
-        {/* 格内密度：条目用 --t-h3（cell 24 → 18）收窄列表宽（190+218+16 ≤ 528）——两变体并排单行，无裁切 */}
-        <CompCell name="reveal-list" extraScope={{ "--t-h3": "18px" }}>
+        {/* 跨列（SIZE_HINTS）：两变体并排单行，条目 --t-h3 自然档 24 不缩 */}
+        <CompCell name="reveal-list">
           <Variant label="plain">
             <RevealList items={["口播稿 → 步进节奏", "组件构图 → 主题 token", "动画 → 引擎驱动"]} activeCount={3} variant="plain" data-testid="variant-reveal-list-plain" />
           </Variant>
@@ -940,8 +980,8 @@ function ComponentsSection() {
             <RevealList items={["口播稿 → 步进节奏", "组件构图 → 主题 token", "动画 → 引擎驱动"]} activeCount={3} variant="numbered" data-testid="variant-reveal-list-numbered" />
           </Variant>
         </CompCell>
-        {/* 格内密度：--space-3 24→12 收紧 cards 变体卡内衬与间距（321→225 高）——两变体并排单行适配 360 行高 */}
-        <CompCell name="step-sequence" extraScope={{ "--space-3": "12px" }}>
+        {/* 跨列（SIZE_HINTS）：plain 与 cards 并排单行，卡内衬/间距自然档（cards 321 高不压缩） */}
+        <CompCell name="step-sequence">
           <Variant label="plain"><StepSequence steps={stepData} currentStep={1} variant="plain" data-testid="variant-step-sequence-plain" /></Variant>
           <Variant label="cards"><StepSequence steps={stepData} currentStep={1} variant="cards" data-testid="variant-step-sequence-cards" /></Variant>
         </CompCell>
@@ -982,14 +1022,12 @@ function ComponentsSection() {
       </CompGroup>
       <CompGroup label="MEDIA · 素材（3）">
         <CompCell name="figure">
-          {/* 四变体单行 4 列 grid（列宽 120）：格内缩图 220→120；占位 min-height 96（CELL_TWEAKS），
-              3/4 竖版 120×160 撑高单行（184 ≤ 280）；标注在列宽内换行 */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "var(--space-2)", width: "100%" }}>
-            <Variant label="frame"><Figure variant="frame" className="sg-figure-short" data-testid="variant-figure-frame" /></Variant>
-            <Variant label="bare"><Figure variant="bare" className="sg-figure-short" data-testid="variant-figure-bare" /></Variant>
-            <Variant label="plain"><Figure variant="plain" className="sg-figure-short" data-testid="variant-figure-plain" /></Variant>
-            <Variant label="ratio 3:4 · 竖版"><Figure variant="frame" ratio="3 / 4" className="sg-figure-short" data-testid="variant-figure-ratio" /></Variant>
-          </div>
+          {/* 跨列（SIZE_HINTS）：四变体单行自然宽度 220/140（3×220+140+3×16 = 872 ≤ 1128），
+              占位 min-height 140（既有 sg-figure-short 密度档，320 自然态见 05 区段） */}
+          <Variant label="frame"><div style={{ width: 220 }}><Figure variant="frame" className="sg-figure-short" data-testid="variant-figure-frame" /></div></Variant>
+          <Variant label="bare"><div style={{ width: 220 }}><Figure variant="bare" className="sg-figure-short" data-testid="variant-figure-bare" /></div></Variant>
+          <Variant label="plain"><div style={{ width: 220 }}><Figure variant="plain" className="sg-figure-short" data-testid="variant-figure-plain" /></div></Variant>
+          <Variant label="ratio 3:4 · 竖版"><div style={{ width: 140 }}><Figure variant="frame" ratio="3 / 4" className="sg-figure-short" data-testid="variant-figure-ratio" /></div></Variant>
         </CompCell>
         <CompCell name="typed-terminal">
           <Variant label="default · 打字挂载即播">
@@ -1038,9 +1076,9 @@ function ComponentsSection() {
             模块级 registerTheme 注入——三格 option 零 color / 零 textStyle：系列色 = 主题色板
             [accent-1, accent-2, accent-3, accent-4] 自动分配（bar 色板序 / line 第一色 / pie 扇区序）。 */}
         <CompCell name="echart-bar">
-          <Variant label="bar · 柱状图（保留现有演示数据）">
-            {/* 格内 380×220（原 420×280）：360 行高内容区 280 高——label 16 + 8 + chart 220 + 16 + 注 16 = 276 */}
-            <div style={{ width: 380, height: 220 }}>
+          <Variant label="bar · 柱状图">
+            {/* 图表真渲染大格：480×260 按内容（大格 ~410） */}
+            <div style={{ width: 480, height: 260 }}>
               <EChart
                 data-testid="variant-echart-bar"
                 option={{
@@ -1055,11 +1093,11 @@ function ComponentsSection() {
               />
             </div>
           </Variant>
-          <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>动效：ECharts 本体 animation 恒 false</MonoLabel>
+          <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>图表动画由页面引擎统一驱动</MonoLabel>
         </CompCell>
         <CompCell name="echart-line">
-          <Variant label="line · 折线图（主题色板第一色）">
-            <div style={{ width: 380, height: 220 }}>
+          <Variant label="line · 折线图">
+            <div style={{ width: 480, height: 260 }}>
               <EChart
                 data-testid="variant-echart-line"
                 option={{
@@ -1072,8 +1110,8 @@ function ComponentsSection() {
           </Variant>
         </CompCell>
         <CompCell name="echart-pie">
-          <Variant label="pie · 饼图 · 中文标签（主题色板扇区）">
-            <div style={{ width: 380, height: 220 }}>
+          <Variant label="pie · 饼图 · 中文标签">
+            <div style={{ width: 480, height: 260 }}>
               <EChart
                 data-testid="variant-echart-pie"
                 option={{
@@ -1097,28 +1135,13 @@ function ComponentsSection() {
   );
 }
 
-/** 组件格结构性微调（零颜色，仅尺寸/裁切——网格规范化密度适配）；dev 页自含 <style>，不入组件 CSS */
+/** 组件格结构性微调（零颜色，仅尺寸/裁切）；dev 页自含 <style>，不入组件 CSS。
+    按内容自适应后仅保留两处既有密度档：figure 占位 320→140（05 区段保留 320 自然态）、
+    seeded-particles canvas 400×300→240×180（容器随 canvas——两变体并排单行） */
 const CELL_TWEAKS = `
-.sg-figure-short .cdp-figure-placeholder { min-height: 96px; }
-/* seeded-particles 容器 400×300 → 240×180（canvas 同步）：两变体并排 496 ≤ 528，360 行高适配 */
+.sg-figure-short .cdp-figure-placeholder { min-height: 140px; }
 .sg-particles-scaled { width: 240px; height: 180px; }
 .sg-particles-scaled canvas { width: 240px; height: 180px; }
-/* stat-cell 药丸 desc 内衬 8/16 → 4/8：desc 单行贴文（2×2 列宽 256 内不折行），组件默认档不变 */
-.sg-cell-stat-cell .cdp-stat-cell-desc-block,
-.sg-cell-stat-cell .cdp-stat-cell-desc-pill,
-.sg-cell-stat-cell .cdp-stat-cell-desc-pill-filled { padding: 4px 8px; }
-/* stacked-blocks 280×280 → 220×220（块 160→120、错位 40→30、阴影 18→12）：360 行高适配 */
-.sg-cell-stacked-blocks .cdp-stacked-blocks { width: 220px; height: 220px; }
-.sg-cell-stacked-blocks .cdp-stacked-block { width: 120px; height: 120px; box-shadow: 12px 12px 0 var(--surface-3); }
-.sg-cell-stacked-blocks .cdp-stacked-block:nth-child(2) { top: 30px; left: 30px; }
-.sg-cell-stacked-blocks .cdp-stacked-block:nth-child(3) { top: 60px; left: 60px; }
-.sg-cell-stacked-blocks .cdp-stacked-block:nth-child(4) { top: 90px; left: 90px; }
-/* step-stairs 卡高 200/240/280（组件 inline 注入）→ 160/190/220：保持 30px 步进阶梯轮廓，360 行高适配 */
-.sg-cell-step-stairs .cdp-step-stairs-card:nth-child(1) { height: 160px !important; }
-.sg-cell-step-stairs .cdp-step-stairs-card:nth-child(2) { height: 190px !important; }
-.sg-cell-step-stairs .cdp-step-stairs-card:nth-child(3) { height: 220px !important; }
-/* split-compare VS 圆章 120 → 72（阴影 24 → 12）：压缩面板 92 高内不再溢出 */
-.sg-cell-split-compare .cdp-split-compare-seal { width: 72px; height: 72px; box-shadow: 12px 12px 0 var(--surface-3); }
 `;
 
 /** 样式词典页（?styleguide=1 dev-only 验收工具，与 ThemeShowcase / FontPreview 同级） */
