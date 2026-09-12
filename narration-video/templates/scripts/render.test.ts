@@ -11,6 +11,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
+import { MOCK_AUDIO_DEFAULT, MOCK_AUDIO_REALISTIC, type MockAudioProfile } from "./render/audio";
 import type { EncodeOptions, EncodeResult } from "./render/encode";
 import type { CaptureFramesOptions, CapturedStep, FrameSpec } from "./render/frames";
 import type { Timeline, TimelineStep } from "./render/timeline";
@@ -105,6 +106,7 @@ describe("parseArgs（未知 flag = 响亮失败：用法错误的唯一载体�
     expect(args).toEqual({
       outDir: DEFAULT_OUT_DIR,
       mockAudio: false,
+      realisticAudio: false,
       concurrency: 2,
       only: undefined,
       verifyDeterminism: false,
@@ -153,8 +155,19 @@ describe("parseArgs（未知 flag = 响亮失败：用法错误的唯一载体�
     expect([args.mockAudio, args.verifyDeterminism, args.help]).toEqual([true, true, true]);
   });
 
+  it("--realistic-audio 开关（M5b T1：拟真档 mock 的形状）", () => {
+    expect(parseArgs(["--mock-audio", "--realistic-audio"], "/tmp").realisticAudio).toBe(true);
+    expect(parseArgs(["--mock-audio"], "/tmp").realisticAudio).toBe(false);
+  });
+
+  // 拟真档是 `--mock-audio` 的**修饰**：单给它什么都不生产（没有音轨要合成），静默忽略等于骗人
+  it("--realistic-audio 单给（没有 --mock-audio）→ 用法错误（不静默空转）", () => {
+    expect(() => parseArgs(["--realistic-audio"], "/tmp")).toThrow(RenderUsageError);
+    expect(() => parseArgs(["--realistic-audio"], "/tmp")).toThrow(/--mock-audio/);
+  });
+
   it("RENDER_USAGE 列出全部 flag（用法文案与解析器同源）", () => {
-    for (const flag of ["--mock-audio", "--only", "--concurrency", "--out", "--verify-determinism", "--help"]) {
+    for (const flag of ["--mock-audio", "--realistic-audio", "--only", "--concurrency", "--out", "--verify-determinism", "--help"]) {
       expect(RENDER_USAGE).toContain(flag);
     }
   });
@@ -332,6 +345,7 @@ describe("determinismPairs（负样本：同一步内两个不同 t 的产物帧
 
 interface Recorded {
   calls: string[];
+  mock?: { chapters: readonly RenderChapter[]; repoRoot: string; profile?: MockAudioProfile };
   capture?: { specs: readonly FrameSpec[]; opts: CaptureFramesOptions };
   encode?: EncodeOptions;
   verify?: import("./render/verify").VerifyOptions;
@@ -346,8 +360,9 @@ function makeDeps(
   return {
     repoRoot: repo,
     loadChapters: async () => CHAPTERS,
-    synthesizeMockAudio: async () => {
+    synthesizeMockAudio: async (opts) => {
       rec.calls.push("mock");
+      rec.mock = opts;
       return { files: [], durationsFile: "public/audio-durations.json", durations: {}, staleFiles: [] };
     },
     startServe: async () => {
@@ -415,7 +430,7 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     const rec: Recorded = { calls: [] };
     const { io, lines } = makeIo();
     const code = await runRender(
-      { outDir: path.join(repo, "render"), mockAudio: true, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
+      { outDir: path.join(repo, "render"), mockAudio: true, realisticAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
       makeDeps(repo, rec),
       io,
     );
@@ -444,6 +459,29 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     ]);
   });
 
+  it("mock 音轨的档案：--realistic-audio → MOCK_AUDIO_REALISTIC；缺省 → MOCK_AUDIO_DEFAULT（M5b T1）", async () => {
+    const repo = tmpRepo("profile");
+    seedRepo(repo);
+    const rec: Recorded = { calls: [] };
+    const { io } = makeIo();
+    await runRender(
+      { outDir: path.join(repo, "render"), mockAudio: true, realisticAudio: true, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
+      makeDeps(repo, rec),
+      io,
+    );
+    expect(rec.mock?.profile).toEqual(MOCK_AUDIO_REALISTIC);
+    expect(rec.mock?.chapters).toEqual(CHAPTERS);
+    expect(rec.mock?.repoRoot).toBe(repo);
+
+    const rec2: Recorded = { calls: [] };
+    await runRender(
+      { outDir: path.join(repo, "render"), mockAudio: true, realisticAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
+      makeDeps(repo, rec2),
+      makeIo().io,
+    );
+    expect(rec2.mock?.profile).toEqual(MOCK_AUDIO_DEFAULT);
+  });
+
   it("两条数组都取自时间轴且逐条同源（T5 有护栏：stepMs 双源不一致即 throw）", async () => {
     const repo = tmpRepo("sync");
     seedRepo(repo, {
@@ -453,7 +491,7 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     const rec: Recorded = { calls: [] };
     const { io } = makeIo();
     await runRender(
-      { outDir: path.join(repo, "render"), mockAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
+      { outDir: path.join(repo, "render"), mockAudio: false, realisticAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
       makeDeps(repo, rec),
       io,
     );
@@ -469,7 +507,7 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     const rec: Recorded = { calls: [] };
     const { io } = makeIo();
     await runRender(
-      { outDir: path.join(repo, "render"), mockAudio: false, concurrency: 2, only: [0], verifyDeterminism: false, help: false },
+      { outDir: path.join(repo, "render"), mockAudio: false, realisticAudio: false, concurrency: 2, only: [0], verifyDeterminism: false, help: false },
       makeDeps(repo, rec),
       io,
     );
@@ -486,7 +524,7 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     const rec: Recorded = { calls: [] };
     const { io, lines } = makeIo();
     const code = await runRender(
-      { outDir: path.join(repo, "render"), mockAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
+      { outDir: path.join(repo, "render"), mockAudio: false, realisticAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
       makeDeps(repo, rec),
       io,
     );
@@ -504,7 +542,7 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     const rec: Recorded = { calls: [] };
     const { io, errors, lines } = makeIo();
     const code = await runRender(
-      { outDir: path.join(repo, "render"), mockAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
+      { outDir: path.join(repo, "render"), mockAudio: false, realisticAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
       makeDeps(repo, rec, {
         verifyRender: async (opts) => {
           rec.calls.push("verify");
@@ -531,6 +569,7 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     const args: RenderArgs = {
       outDir: path.join(repo, "render"),
       mockAudio: false,
+      realisticAudio: false,
       concurrency: 2,
       only: [0, 1],
       verifyDeterminism: true,
@@ -553,7 +592,7 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     const rec: Recorded = { calls: [] };
     const { io } = makeIo();
     const code = await runRender(
-      { outDir: path.join(repo, "render"), mockAudio: false, concurrency: 2, only: undefined, verifyDeterminism: true, help: false },
+      { outDir: path.join(repo, "render"), mockAudio: false, realisticAudio: false, concurrency: 2, only: undefined, verifyDeterminism: true, help: false },
       makeDeps(repo, rec, {
         runDeterminism: async (opts) => {
           rec.calls.push("determinism");
@@ -573,7 +612,7 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     const { io } = makeIo();
     await expect(
       runRender(
-        { outDir: path.join(repo, "render"), mockAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
+        { outDir: path.join(repo, "render"), mockAudio: false, realisticAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
         makeDeps(repo, rec),
         io,
       ),

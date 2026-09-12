@@ -13,6 +13,9 @@
 // 长度取 `estimateNarrationMs`（引擎侧唯一那份估时公式）：mock 的目的是"占位"，让成片节奏与
 // 未合成预览（同一公式）**同节奏**——换真实 TTS 之后 durations.json 换成实测值即可，管线不动。
 //
+// M5b T1 追加 `MockAudioProfile`（mp3 的**形状**：起手静音 / 采样率 / 声道数）：缺省档
+// `MOCK_AUDIO_DEFAULT` 与 M5a 逐字一致；`MOCK_AUDIO_REALISTIC` 是"真 TTS 开箱"档，见其注释。
+//
 // 不做的事（有意）：**不清理**目标目录。`public/audio/` 可能是真实 TTS 产物（用户资产），
 // 生成物清理只该发生在自己造的目录（T4 的帧目录）里；多出来的 mp3 由 `staleFiles` 报出
 // ——#13 门禁会拦"每章 mp3 数 ≠ 非空 narrations 数"，比静默删用户文件安全。
@@ -35,6 +38,37 @@ export interface MockAudioChapter {
   narrations: readonly string[];
 }
 
+/**
+ * mock 音轨的档案（M5b T1）：把 mp3 的**形状**参数化。
+ *
+ * M5a 的 mock 是"lavfi 正弦 48k 立体声、起手即满幅"——便于占位，却**掩盖了真 TTS 的形状**：
+ * 真 TTS 的 mp3 常见 44.1k / 单声道 / 头部带 80~200ms 起手静音。后者正是自校验层 K-82③
+ * 失明的触发条件（起手静音 ≥50ms ⇒ "步起点 ±50ms"窗口两侧皆静音 ⇒ 该步整条跳过）。
+ * 拟真档让"真音频开箱"在秒级、无浏览器的层面可重复：同一个管线、只换 mp3 的形状。
+ */
+export interface MockAudioProfile {
+  /** 起手静音 ms（真 TTS 常见 80~200；拟真档 120——实测 ≥50 即触发上文那条失明） */
+  leadSilenceMs: number;
+  /** 采样率 Hz（真 TTS 常见 44100；成片规格是 48000，音轨图的 aformat 会归一） */
+  sampleRate: number;
+  /** 声道数（真 TTS 常见单声道；成片规格是双声道，音轨图的 aformat 会归一） */
+  channels: 1 | 2;
+}
+
+/** 缺省档：与 M5a 的行为**逐字一致**（0 起手静音 / 48000 / 双声道——不传 profile 即它）。 */
+export const MOCK_AUDIO_DEFAULT: MockAudioProfile = {
+  leadSilenceMs: 0,
+  sampleRate: AUDIO_SAMPLE_RATE,
+  channels: AUDIO_CHANNELS,
+};
+
+/** 拟真档（`--realistic-audio`）：真 TTS 的典型形状——渲染链的开箱体检档。 */
+export const MOCK_AUDIO_REALISTIC: MockAudioProfile = {
+  leadSilenceMs: 120,
+  sampleRate: 44100,
+  channels: 1,
+};
+
 export interface SynthesizeMockAudioOptions {
   chapters: readonly MockAudioChapter[];
   /** 模板根（mp3 与 durations.json 的锚点）；默认 `scripts/../..`（= 模板根，与 storyboard.ts 同款） */
@@ -44,6 +78,8 @@ export interface SynthesizeMockAudioOptions {
   ffprobePath?: string;
   /** 正弦基频（默认 440Hz；第 k 步 +110Hz——相邻步在听感与频谱读数上都可区分） */
   baseFrequency?: number;
+  /** 音轨形状（默认 `MOCK_AUDIO_DEFAULT`——与 M5a 逐字一致；`MOCK_AUDIO_REALISTIC` = 真 TTS 形状） */
+  profile?: MockAudioProfile;
 }
 
 export interface SynthesizeMockAudioResult {
@@ -81,6 +117,7 @@ export async function synthesizeMockAudio(
   }
   const repoRoot = opts.repoRoot ?? DEFAULT_REPO_ROOT;
   const base = opts.baseFrequency ?? 440;
+  const profile = opts.profile ?? MOCK_AUDIO_DEFAULT;
   const files: string[] = [];
   const durations: Record<string, number[]> = {};
   const written = new Set<string>();
@@ -101,20 +138,19 @@ export async function synthesizeMockAudio(
       const abs = path.join(repoRoot, rel);
       fs.mkdirSync(path.dirname(abs), { recursive: true }); // 模板此前无 public/：本层首建
       const seconds = (estimateNarrationMs(narration) / 1000).toFixed(3);
-      // sine 是单声道 ⇒ 显式 -ac 2 到成片规格（aformat 在音轨图里还会再兜一层）
-      runFfmpeg(
-        [
-          "-v", "error",
-          "-f", "lavfi",
-          "-i", `sine=frequency=${base + step * 110}:sample_rate=${AUDIO_SAMPLE_RATE}:duration=${seconds}`,
-          "-ac", String(AUDIO_CHANNELS),
-          "-c:a", "libmp3lame",
-          "-q:a", "9",
-          abs,
-          "-y",
-        ],
-        opts.ffmpegPath,
-      );
+      // sine 是单声道 ⇒ 显式 -ac <档案声道数> 到该档案的规格（aformat 在音轨图里还会再兜一层）。
+      // 起手静音（>0 时）用 adelay 垫在**文件里**：真 TTS 的静音是 mp3 内容的一部分，
+      // 所以它也必须进 ffprobe 实测时长（durations.json 与时间轴都该看见它）。
+      const args = [
+        "-v", "error",
+        "-f", "lavfi",
+        "-i", `sine=frequency=${base + step * 110}:sample_rate=${profile.sampleRate}:duration=${seconds}`,
+      ];
+      if (profile.leadSilenceMs > 0) {
+        args.push("-af", `adelay=${profile.leadSilenceMs}:all=1`);
+      }
+      args.push("-ac", String(profile.channels), "-c:a", "libmp3lame", "-q:a", "9", abs, "-y");
+      runFfmpeg(args, opts.ffmpegPath);
       // 写进 durations.json 的必须是**实测**（编解码后 mp3 比请求长度多出帧对齐的零头）
       durations[chapter.id].push(probeDurationMs(abs, opts.ffprobePath));
       files.push(rel);

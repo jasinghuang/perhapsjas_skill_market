@@ -53,7 +53,13 @@ import { fileURLToPath } from "node:url";
 import "./check/loader-hooks"; // 模块副作用：非 vitest 环境注册 .css/.json/资产加载钩子（manifest React 链）
 import { withRenderMode } from "./check/headless";
 import { startServe, type ServeHandle } from "./check/serve";
-import { synthesizeMockAudio, type SynthesizeMockAudioResult } from "./render/audio";
+import {
+  MOCK_AUDIO_DEFAULT,
+  MOCK_AUDIO_REALISTIC,
+  synthesizeMockAudio,
+  type MockAudioProfile,
+  type SynthesizeMockAudioResult,
+} from "./render/audio";
 import {
   encodeVideo,
   type AudioSegment,
@@ -116,6 +122,8 @@ export interface RenderArgs {
   outDir: string;
   /** 先合成 mock 音轨（T5 的 `synthesizeMockAudio`：lavfi 正弦 + ffprobe 实测时长表） */
   mockAudio: boolean;
+  /** 拟真档音轨形状（`MOCK_AUDIO_REALISTIC`：起手静音 120ms / 44100 / 单声道）——只在 `mockAudio` 时生效 */
+  realisticAudio: boolean;
   /** 帧流并发（**0 归 1**：0/负数会除零或空跑） */
   concurrency: number;
   /** 只渲这些步（specs 下标：章节序 → 章内步序；升序去重后的**子时间轴**） */
@@ -150,6 +158,7 @@ export interface RenderDeps {
   synthesizeMockAudio?: (opts: {
     chapters: readonly RenderChapter[];
     repoRoot: string;
+    profile?: MockAudioProfile;
   }) => Promise<SynthesizeMockAudioResult>;
   startServe?: (opts: { repoRoot: string }) => Promise<ServeHandle>;
   scanAnimationWindows?: (opts: {
@@ -165,12 +174,13 @@ export interface RenderDeps {
 // ── 命令行解析 ──
 
 export const RENDER_USAGE = [
-  "用法：tsx scripts/render.ts [--mock-audio] [--only <i,j,…>] [--concurrency <n>] [--out <dir>] [--verify-determinism] [--help]",
+  "用法：tsx scripts/render.ts [--mock-audio] [--realistic-audio] [--only <i,j,…>] [--concurrency <n>] [--out <dir>] [--verify-determinism] [--help]",
   "  （npm run render 即本入口；自起 Vite + Chromium 逐帧 seek 出 mp4，前置 ffmpeg）",
   "  ⚠️ 经 npm 传 flag 必须加 --（npm 11 会把 --mock-audio 当成 npm 自己的配置项、不转发给脚本；",
   "     漏了它 = mock 分支根本不跑，只在 stderr 留一条 Unknown cli config）：",
   "     npm run render -- --mock-audio",
   "  --mock-audio          先合成 mock 音轨（lavfi 正弦 + ffprobe 实测时长 → public/audio/ + public/audio-durations.json）",
+  "  --realistic-audio     拟真档音轨形状（起手静音 120ms / 44100Hz / 单声道——真 TTS 的典型形状）；须与 --mock-audio 同用",
   "  --only <i,j,…>        只渲这些步（specs 下标：章节序 → 章内步序；编码/自校验同步只处理这些步）",
   "  --concurrency <n>     帧流并发（默认 2；每 worker 一个浏览器进程——本机负载常高，别开大）",
   "  --out <dir>           输出根目录（默认 <模板根>/render）：出片 <dir>/<slug>.mp4，中间产物 <dir>/<slug>/",
@@ -178,7 +188,8 @@ export const RENDER_USAGE = [
   "  --help                打印本用法",
 ].join("\n");
 
-const USAGE_FLAGS = "--mock-audio / --only / --concurrency / --out / --verify-determinism / --help";
+const USAGE_FLAGS =
+  "--mock-audio / --realistic-audio / --only / --concurrency / --out / --verify-determinism / --help";
 
 /** 并发数：非负整数（`0` 归 1——0/负数会除零或空跑；归一发生在 CLI 层，见 frames.partition 的注释）。 */
 function parseConcurrency(value: string, flag: string): number {
@@ -212,6 +223,7 @@ export function parseArgs(argv: readonly string[], cwd: string): RenderArgs {
   const out: RenderArgs = {
     outDir: DEFAULT_OUT_DIR,
     mockAudio: false,
+    realisticAudio: false,
     concurrency: DEFAULT_CONCURRENCY,
     only: undefined,
     verifyDeterminism: false,
@@ -238,6 +250,9 @@ export function parseArgs(argv: readonly string[], cwd: string): RenderArgs {
       case "--mock-audio":
         out.mockAudio = true;
         break;
+      case "--realistic-audio":
+        out.realisticAudio = true;
+        break;
       case "--verify-determinism":
         out.verifyDeterminism = true;
         break;
@@ -257,6 +272,14 @@ export function parseArgs(argv: readonly string[], cwd: string): RenderArgs {
       default:
         throw new RenderUsageError(`未知参数 ${arg}——支持的标志：${USAGE_FLAGS}`);
     }
+  }
+  // `--realistic-audio` 是 `--mock-audio` 的**修饰**（音轨形状只在合成那一刻有意义）：
+  // 单给它什么都不生产，静默忽略等于让用户以为"拟真档出片了"。顺序无关，故在循环后判。
+  if (out.realisticAudio && !out.mockAudio) {
+    throw new RenderUsageError(
+      "--realistic-audio 只在 --mock-audio 同用时有意义（它改的是待合成音轨的形状）——" +
+        "单给不会合成任何音轨；要出拟真档成片请写：npm run render -- --mock-audio --realistic-audio",
+    );
   }
   return out;
 }
@@ -704,10 +727,13 @@ export async function runRender(
 
   // ── 1) mock 音轨（**必须最早**：durations 是它的产物，时间轴吃 durations） ──
   if (args.mockAudio) {
-    const result = await (deps.synthesizeMockAudio ?? synthesizeMockAudio)({ chapters, repoRoot });
+    const profile = args.realisticAudio ? MOCK_AUDIO_REALISTIC : MOCK_AUDIO_DEFAULT;
+    const result = await (deps.synthesizeMockAudio ?? synthesizeMockAudio)({ chapters, repoRoot, profile });
     io.log(
       `[render] mock 音轨：写出 ${result.files.length} 个 mp3 → ${AUDIO_SUBDIR}/` +
-        `（时长 ffprobe 实测 → ${result.durationsFile}）`,
+        `（时长 ffprobe 实测 → ${result.durationsFile}；形状 ${
+          args.realisticAudio ? "拟真档" : "缺省档"
+        }：起手静音 ${profile.leadSilenceMs}ms / ${profile.sampleRate}Hz / ${profile.channels}ch）`,
     );
     for (const stale of result.staleFiles) {
       io.error(

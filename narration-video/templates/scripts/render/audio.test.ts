@@ -9,6 +9,7 @@
  * 全部用例在**临时 repoRoot** 里跑（真实 `public/` 不该被测试写脏）——`repoRoot` 可注入正是
  * 为了这个（T7 的 CLI 传真实模板根）。
  */
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -16,7 +17,39 @@ import { afterAll, describe, expect, it } from "vitest";
 import { estimateNarrationMs } from "../../src/engine/hold";
 import { resolveAudioMs } from "../storyboard/data";
 import { probeDurationMs } from "./encode";
-import { synthesizeMockAudio } from "./audio";
+import { MOCK_AUDIO_REALISTIC, synthesizeMockAudio } from "./audio";
+import { SILENCE_RMS } from "./verify";
+
+/** ffprobe 读 mp3 的流规格（拟真档的两个读数：采样率 / 声道数）。 */
+function probeStream(file: string): { sampleRate: number; channels: number } {
+  const r = spawnSync(
+    "ffprobe",
+    ["-v", "error", "-show_entries", "stream=sample_rate,channels", "-of", "json", file],
+    { encoding: "utf8" },
+  );
+  if (r.status !== 0) throw new Error(`ffprobe 失败：${file}\n${r.stderr}`);
+  const stream = (JSON.parse(r.stdout) as { streams: { sample_rate: string; channels: number }[] }).streams[0];
+  return { sampleRate: Number.parseInt(stream.sample_rate, 10), channels: stream.channels };
+}
+
+/**
+ * 起手静音实测（ms）：mp3 解码成 s16le 单声道，找第一个 `|样点| ≥ SILENCE_RMS` 的位置。
+ * 阈值与自校验层同一个常量（那边判"有没有内容"用的是它）——不另立一份口径。
+ */
+function leadSilenceMs(file: string, sampleRate = 44100): number {
+  const r = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-i", file, "-ac", "1", "-ar", String(sampleRate), "-f", "s16le", "-"],
+    { encoding: "buffer", maxBuffer: 64 * 1024 * 1024 },
+  );
+  if (r.status !== 0) throw new Error(`ffmpeg 解码失败：${file}\n${r.stderr}`);
+  const buf = r.stdout as Buffer;
+  const samples = new Int16Array(buf.buffer, buf.byteOffset, buf.length >> 1);
+  for (let i = 0; i < samples.length; i++) {
+    if (Math.abs(samples[i]) >= SILENCE_RMS) return (i / sampleRate) * 1000;
+  }
+  return Number.POSITIVE_INFINITY;
+}
 
 const tmpDirs: string[] = [];
 afterAll(() => {
@@ -106,6 +139,38 @@ describe("synthesizeMockAudio", () => {
     await expect(
       synthesizeMockAudio({ chapters: CHAPTERS, repoRoot, ffmpegPath: "/nonexistent-ffmpeg-for-test" }),
     ).rejects.toThrow(/brew install ffmpeg/);
+  });
+});
+
+// ── M5b T1：拟真档（`--realistic-audio`） ──
+//
+// 为什么需要它：M5a 的 mock 是"lavfi 正弦 48k 立体声、起手即满幅"，它**掩盖**了真 TTS 的形状
+// （起手 80~200ms 静音 / 44.1k / 单声道）——K-82③ 的边界失明就是这么漏过去的。拟真档把真形状
+// 装进同一个管线，让"真音频开箱"这件事在**秒级、无浏览器**的层面可重复。
+describe("synthesizeMockAudio：拟真档（M5b T1）", () => {
+  it("拟真档 mp3 读数：44100 / 单声道 / 起手 120ms 静音（真 TTS 的典型形状）", async () => {
+    const repoRoot = tmpRepo();
+    const r = await synthesizeMockAudio({ chapters: CHAPTERS, repoRoot, profile: MOCK_AUDIO_REALISTIC });
+    const file = path.join(repoRoot, "public/audio/01-example/0.mp3");
+
+    expect(probeStream(file)).toEqual({ sampleRate: 44100, channels: 1 });
+    // 起手静音实测：mp3 编解码的零头让它是 120ms 上下（实测 ≈119.4ms），不是逐字 120
+    const lead = leadSilenceMs(file);
+    expect(lead).toBeGreaterThan(110);
+    expect(lead).toBeLessThan(130);
+    // durations.json 仍是 ffprobe 实测，且长度 = 估时 + 起手静音（+ 编码零头）
+    const want = estimateNarrationMs(CHAPTERS[0].narrations[0]);
+    expect(r.durations.example[0]).toBeGreaterThanOrEqual(want + 110);
+    expect(r.durations.example[0]).toBeLessThan(want + 200);
+    expect(r.durations.example[0]).toBe(probeDurationMs(file));
+  });
+
+  it("缺省档（不传 profile）与 M5a 逐字一致：48000 / 双声道 / 无起手静音", async () => {
+    const repoRoot = tmpRepo();
+    await synthesizeMockAudio({ chapters: CHAPTERS, repoRoot });
+    const file = path.join(repoRoot, "public/audio/01-example/0.mp3");
+    expect(probeStream(file)).toEqual({ sampleRate: 48000, channels: 2 });
+    expect(leadSilenceMs(file, 48000)).toBeLessThan(5);
   });
 });
 

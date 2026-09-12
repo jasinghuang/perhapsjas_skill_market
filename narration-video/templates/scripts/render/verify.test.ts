@@ -227,15 +227,6 @@ describe("视频内容边界：逐帧差信号 → 步起点（窗口内 argmax�
 });
 
 describe("音轨边界：与理想 PCM 的窗口对齐（样本级）", () => {
-  /** 一段单频正弦 PCM。 */
-  function tone(samples: number, hz: number, amp = 12000): Int16Array {
-    const out = new Int16Array(samples);
-    for (let i = 0; i < samples; i++) {
-      out[i] = Math.round(amp * Math.sin((2 * Math.PI * hz * i) / SAMPLE_RATE));
-    }
-    return out;
-  }
-
   /** 真 deck 形状的理想音轨：步 0 = 440Hz（3400ms）、步 1 = 550Hz（2150ms）、步 2 = 静音。 */
   function idealDeck(): Int16Array {
     const seg = (ms: number, hz: number | null) => {
@@ -285,7 +276,9 @@ describe("音轨边界：与理想 PCM 的窗口对齐（样本级）", () => {
     const aligned = audioBoundaryReadings(ideal, ideal.slice(), tl, SAMPLE_RATE);
     expect(aligned).toHaveLength(3);
     expect(aligned.map((r) => r.expectedMs)).toEqual([0, 3400, 5550]);
-    expect(aligned.map((r) => r.actualMs === null)).toEqual([false, false, false]);
+    // 步 2 是**真无声步**（1900ms 整段无内容）→ 跳过（M5b T1 的锚点修法：锚点是"步起点之后第一个
+    // 有声 onset"；旧读数在窗口左半"借"上一步的尾巴当判据——那是上一步的边界，不是这一步的内容起点）
+    expect(aligned.map((r) => r.actualMs === null)).toEqual([false, false, true]);
     expect(aligned[1].actualMs).toBeCloseTo(3400, 1);
     expect(aligned[1].detail).toContain("相关性");
 
@@ -312,6 +305,139 @@ describe("音轨边界：与理想 PCM 的窗口对齐（样本级）", () => {
 
   it("AUDIO_BOUNDARY_TOLERANCE_MS = 10（紧口径：实测样本级对齐 0~3ms；4 帧那套会真过松）", () => {
     expect(AUDIO_BOUNDARY_TOLERANCE_MS).toBe(10);
+  });
+});
+
+// ── M5b T1：音轨边界的锚点 = **内容起点**（K-82③ 的实测修复） ──
+//
+// 缺陷（台账 K-82③ ③，真 fixture 实测）：真音频（TTS 产出、以及 M5b 新增的"拟真档" mock）的 mp3
+// 头部常带 80~200ms **起手静音**，而每步末尾是静置垫（真 deck 400ms）——现行判据的"步起点 ±50ms"
+// 窗口：左半是上一步的垫静音、右半是这一步的起手静音 ⇒ 每步都落进"窗口两侧都是静音"的跳过分支
+// ⇒ `judged = 0` ⇒ 撞上 verifyRender 的空判面护栏（`judged === 0 && hasSignal(idealPcm)`）
+// ⇒ **对正确产物报红**。更糟的是失明：把产物整体右移 30ms（恒定 A/V 偏移）喂进来，读数仍是
+// `judged = 0`——偏移也测不到。
+//
+// 修法：锚点从"步起点"改成"步起点之后**第一个有声 onset**"（内容起点）。**onset 必须在参考轨
+// （ideal）上找**——在产物轨上找会把任何真实偏移当成基准，判据变恒真。容差口径（±10ms）一律不动。
+describe("音轨边界的锚点 = 内容起点（M5b T1 / K-82③）", () => {
+  /** 起手静音量级：真 TTS 常见 80~200ms；实测 ≥50ms 就让现行逻辑整层失明。 */
+  const LEAD_MS = 120;
+
+  /**
+   * 真 deck 形状的三步音轨：每步 = 起手静音 + 1500ms 单频正弦 + 静置垫静音。
+   * **垫 ≥ 50ms 是关键**——它让"步起点 ±50ms"窗口的左半也是静音（缺陷的触发条件）。
+   */
+  function deckWithLead(leadMs: number): Int16Array {
+    const parts: Int16Array[] = [];
+    for (const [stepMs, hz] of [
+      [3400, 440],
+      [2150, 550],
+      [1900, 660],
+    ] as const) {
+      const total = Math.round((stepMs * SAMPLE_RATE) / 1000);
+      const lead = Math.round((leadMs * SAMPLE_RATE) / 1000);
+      const body = Math.round((1500 * SAMPLE_RATE) / 1000);
+      parts.push(new Int16Array(lead), tone(body, hz), new Int16Array(total - lead - body));
+    }
+    return concatPcm(parts);
+  }
+
+  /** 产物整体晚 `ms` 毫秒（首段前补等长静音）——恒定 A/V 偏移的注入。 */
+  function delayed(pcm: Int16Array, ms: number): Int16Array {
+    return concatPcm([new Int16Array(Math.round((ms * SAMPLE_RATE) / 1000)), pcm]);
+  }
+
+  /** 与 verifyRender 同一套判据（读数 → checkBoundaries；空判面护栏由调用方读 judged 自行判）。 */
+  function checkAll(ideal: Int16Array, product: Int16Array) {
+    const readings = audioBoundaryReadings(ideal, product, tl, SAMPLE_RATE);
+    return {
+      readings,
+      checked: checkBoundaries(
+        readings,
+        AUDIO_BOUNDARY_TOLERANCE_MS,
+        "音轨边界",
+        `±${AUDIO_BOUNDARY_TOLERANCE_MS}ms`,
+      ),
+    };
+  }
+
+  it("判据①：拟真音频（起手静音 120ms）下边界层不得整层失明——judged > 0 且 failures === 0", () => {
+    const ideal = deckWithLead(LEAD_MS);
+    const { readings, checked } = checkAll(ideal, ideal.slice());
+
+    // 现行逻辑在这份 fixture 上 judged === 0（三条全走"窗口两侧都是静音"）⇒ 空判面护栏对正确产物报红
+    expect(checked.judged).toBe(3);
+    expect(checked.failures).toEqual([]);
+    readings.forEach((r, i) => {
+      const start = tl.steps[i]!.startMs;
+      expect(r.actualMs).not.toBeNull();
+      // 读数锚在**内容起点**（起手静音之后 115.0ms：5ms 判决窗的起点），不是步起点——expectedMs 与 detail 都写明
+      expect(r.expectedMs).toBeGreaterThan(start + 100);
+      expect(r.expectedMs).toBeLessThan(start + LEAD_MS);
+      expect(r.detail).toContain("锚点 = 内容起点");
+    });
+  });
+
+  it("判据②：mock 档（无起手静音）读数与现行**逐字相同**（零行为改变，回归护栏）", () => {
+    const { readings, checked } = checkAll(deckWithLead(0), deckWithLead(0));
+    expect(checked.judged).toBe(3);
+    expect(checked.failures).toEqual([]);
+    // 字面量 = 修改前实现的原始读数（2026-09-12 取证，见 task-1-report.md §RED 的 mock 档读数块）。
+    // 锚点修法若不慎改成"在产物轨上找 onset"、或顺手动了容差/窗口口径，这里会逐字红。
+    expect(
+      readings.map((r) => ({
+        label: r.label,
+        expectedMs: r.expectedMs,
+        actualMs: r.actualMs,
+        detail: r.detail,
+        failure: r.failure ?? null,
+      })),
+    ).toEqual([
+      {
+        label: "步 s#0 起",
+        expectedMs: 0,
+        actualMs: 0,
+        detail: "零偏移代价 0.0 vs 全局最优 0.0（@-150.0ms）、相关性 1.000、RMS 产物 8485 / 时间轴 8485",
+        failure: null,
+      },
+      {
+        label: "步 s#1 起",
+        expectedMs: 3400,
+        actualMs: 3400,
+        detail: "零偏移代价 0.0 vs 全局最优 0.0（@0.0ms）、相关性 1.000、RMS 产物 6000 / 时间轴 6000",
+        failure: null,
+      },
+      {
+        label: "步 s#2 起",
+        expectedMs: 5550,
+        actualMs: 5550,
+        detail: "零偏移代价 0.0 vs 全局最优 0.0（@0.0ms）、相关性 1.000、RMS 产物 6000 / 时间轴 6000",
+        failure: null,
+      },
+    ]);
+  });
+
+  it("判据③：判别力反证——注入 +30ms 恒定偏移必须报红（修完不许把检测力修丢）", () => {
+    const ideal = deckWithLead(LEAD_MS);
+    const { checked } = checkAll(ideal, delayed(ideal, 30));
+    expect(checked.judged).toBe(3);
+    expect(checked.failures).toHaveLength(3);
+    for (const f of checked.failures) {
+      expect(f).toContain("差 30.0ms 超出容差 ±10ms");
+      expect(f).toContain("锚点 = 内容起点");
+    }
+  });
+
+  it("真无声步（步起点后 500ms 内无内容）→ 跳过：不是失败、也不算「没测到」", () => {
+    const silent = new Int16Array(Math.round((tl.totalMs * SAMPLE_RATE) / 1000));
+    const { readings, checked } = checkAll(silent, silent.slice());
+    expect(checked.judged).toBe(0);
+    expect(checked.failures).toEqual([]);
+    for (const r of readings) {
+      expect(r.actualMs).toBeNull();
+      expect(r.failure).toBeUndefined();
+      expect(r.detail).toContain("步起点后 500ms 内无内容");
+    }
   });
 });
 
@@ -412,6 +538,15 @@ describe("verifyRender 护栏（I2）：segments[i].stepMs 必须 === timeline.s
     ).rejects.toThrow(/segments\[1\]\.stepMs 2250 ≠ 时间轴第 1 步/);
   });
 });
+
+/** 一段单频正弦 PCM（音轨理想波形的构造，与 ffmpeg 侧无关）。 */
+function tone(samples: number, hz: number, amp = 12000): Int16Array {
+  const out = new Int16Array(samples);
+  for (let i = 0; i < samples; i++) {
+    out[i] = Math.round(amp * Math.sin((2 * Math.PI * hz * i) / SAMPLE_RATE));
+  }
+  return out;
+}
 
 /** Int16 PCM 顺序拼接（音轨理想波形的构造，与 ffmpeg 侧无关）。 */
 function concatPcm(parts: readonly Int16Array[]): Int16Array {

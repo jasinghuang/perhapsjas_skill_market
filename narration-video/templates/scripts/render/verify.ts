@@ -497,6 +497,13 @@ export const AUDIO_ALIGNMENT_SLACK = 1.5;
 export const AUDIO_ALIGNMENT_COST_FLOOR = 200;
 /** 内容判据：容差内最优对齐处的相关系数下限（AAC 有损 + 同源内容，实测 ~0.99）。 */
 export const AUDIO_CONTENT_MIN_CORRELATION = 0.6;
+/**
+ * 内容锚点的前视窗（ms）：从**步起点**起在这个范围内找第一个有声 onset（内容起点）；
+ * 找不到 = 真无声步（跳过）。500ms 远大于真 TTS 的起手静音（实测常见 80~200ms）。
+ */
+export const AUDIO_ONSET_LOOKAHEAD_MS = 500;
+/** onset 的判决窗（ms）：窗口 RMS ≥ `SILENCE_RMS` 即算"有内容"——与静音判据同一个阈值。 */
+export const AUDIO_ONSET_WINDOW_MS = 5;
 
 export interface AudioAlignmentReading {
   /** 定位到的偏移（ms，**正 = 产物内容比时间轴晚**）——aligned 时取容差内最优、否则取全局最优 */
@@ -627,9 +634,40 @@ export function measureAudioAlignment(opts: {
 }
 
 /**
- * 音轨边界读数：**每步起点一条**（含步 0——音轨的起点也要对得上）。
+ * **参考轨**上"步起点之后第一个有声 onset"（= 这一步的内容起点）的样点下标；前视窗内没有内容 → null。
  *
- * 跳过（不参与判定）：窗口两侧都是静音（无声过场 / 未合成音频）、产物音轨短到放不下窗口。
+ * **必须在参考轨（ideal）上找**：在产物轨上找，任何真实偏移都会把 onset 一起带走——锚点跟着
+ * 产物走，判据退化成恒真（永远"对齐"）。参考轨的 onset 才是"时间轴说这里该有内容"的位置，
+ * 两者一比，偏移才落在读数里。
+ */
+export function findContentOnset(
+  ideal: Int16Array,
+  fromSample: number,
+  limitSample: number,
+  sampleRate: number,
+): number | null {
+  const windowSamples = Math.max(1, Math.round((AUDIO_ONSET_WINDOW_MS * sampleRate) / 1000));
+  const end = Math.min(
+    fromSample + Math.round((AUDIO_ONSET_LOOKAHEAD_MS * sampleRate) / 1000),
+    limitSample,
+  );
+  for (let i = Math.max(0, fromSample); i + windowSamples <= end; i++) {
+    if (rms(ideal, i, windowSamples) >= SILENCE_RMS) return i;
+  }
+  return null;
+}
+
+/**
+ * 音轨边界读数：**每步一条**（含步 0——音轨的起点也要对得上）。
+ *
+ * **锚点 = 内容起点**（K-82③ 的修法）：从步起点往前视 `AUDIO_ONSET_LOOKAHEAD_MS` 找**参考轨上**
+ * 第一个有声 onset，在**那里**测对齐。为什么不是步起点：真 TTS / 拟真档的 mp3 头部常带
+ * 80~200ms 起手静音，而每步末尾是静置垫——"步起点 ±50ms"窗口两侧皆静音 ⇒ 该步整条跳过 ⇒
+ * 全跳时 `judged === 0` 撞上 `verifyRender` 的空判面护栏，对**正确产物报红**（且恒定偏移也测不到）。
+ * 锚点落在内容上之后，容差口径（±10ms）一律不动：读数里的 `expectedMs` 就是内容起点（= 步起点
+ * + onset 偏移），`δ = actualMs − expectedMs` 仍是"产物内容比时间轴晚多少"。
+ *
+ * 跳过（不参与判定）：前视窗内没有内容（真无声步 / 未合成音频）、产物音轨短到放不下窗口。
  * 报红：· 产物该处静音而时间轴有内容（段丢失 / 被截）
  *        · 容差内最优对齐处相关性过低（内容不符：段挂错 / 段序错位）
  *        · 零偏移代价显著高于最优（与时间轴错位，报出定位到的偏移）
@@ -644,44 +682,47 @@ export function audioBoundaryReadings(
   const halfWindow = Math.round((AUDIO_ALIGNMENT_HALF_WINDOW_MS * sampleRate) / 1000);
   const search = Math.round((AUDIO_ALIGNMENT_SEARCH_MS * sampleRate) / 1000);
   const tolerance = Math.round((AUDIO_BOUNDARY_TOLERANCE_MS * sampleRate) / 1000);
+  const limit = Math.min(ideal.length, product.length);
   for (const step of timeline.steps) {
     const label = `步 ${step.chapterId}#${step.step} 起`;
-    const expectedMs = step.startMs;
-    const atSample = Math.round((expectedMs * sampleRate) / 1000);
-    // 窗口取 [at−50ms, at+50ms)，截到两轨都有的范围（产物比时间轴短时窗口收窄，不越界）
-    const lo = Math.max(0, atSample - halfWindow);
-    const hi = Math.min(product.length, ideal.length, atSample + halfWindow);
-    const n = hi - lo;
-    if (n <= 0) {
+    const startSample = Math.round((step.startMs * sampleRate) / 1000);
+    if (startSample >= limit) {
       readings.push({
         label,
-        expectedMs,
+        expectedMs: step.startMs,
         actualMs: null,
         detail: "产物音轨短到该步起点之前放不下对齐窗口——音轨总长那条是它的判据",
       });
       continue;
     }
-    const idealRms = rms(ideal, lo, n);
-    const productRms = rms(product, lo, n);
-    if (idealRms < SILENCE_RMS && productRms < SILENCE_RMS) {
+    // onset 在**参考轨**上找（见 findContentOnset 的注释）；产物比时间轴短时前视窗截到 min 长度
+    const onsetSample = findContentOnset(ideal, startSample, limit, sampleRate);
+    if (onsetSample === null) {
       readings.push({
         label,
-        expectedMs,
+        expectedMs: step.startMs,
         actualMs: null,
-        detail: "窗口两侧都是静音（无声过场 / 未合成音频）——这条不参与判定",
+        detail: `步起点后 ${AUDIO_ONSET_LOOKAHEAD_MS}ms 内无内容（无声过场 / 未合成音频）——这条不参与判定`,
       });
       continue;
     }
+    // 期望值 = **内容起点**（不是步起点）：onset 在参考轨上的位置就是"内容该在这里开始"。
+    // 位置取到 0.1ms（0.05ms 的量化远在 ±10ms 容差之下，而整份读数是要给人看的——
+    // 步起点 + 整样点偏移会渲染成 `@115.04166666666667ms` 这种噪声）
+    const onsetOffsetMs = Math.round(((onsetSample - startSample) / sampleRate) * 10000) / 10;
+    const expectedMs = step.startMs + onsetOffsetMs;
     const a = measureAudioAlignment({
       ideal,
       product,
-      atSample,
+      atSample: onsetSample,
       halfWindowSamples: halfWindow,
       searchSamples: search,
       toleranceSamples: tolerance,
       sampleRate,
     });
     const numbers =
+      // 锚点偏移非零时明写"锚点是内容起点"——否则读者会把 expectedMs 当成步起点
+      (onsetSample !== startSample ? `锚点 = 内容起点（步起点 +${onsetOffsetMs.toFixed(1)}ms）；` : "") +
       `零偏移代价 ${a.acceptCost.toFixed(1)} vs 全局最优 ${a.bestCost.toFixed(1)}（@${a.bestDriftMs.toFixed(1)}ms）、` +
       `相关性 ${a.correlation.toFixed(3)}、RMS 产物 ${a.productRms.toFixed(0)} / 时间轴 ${a.idealRms.toFixed(0)}`;
     if (!a.aligned) {
