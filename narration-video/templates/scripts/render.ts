@@ -61,6 +61,7 @@ import {
   type SynthesizeMockAudioResult,
 } from "./render/audio";
 import {
+  encodeAudioTrack,
   encodeVideo,
   type AudioSegment,
   type EncodeOptions,
@@ -216,6 +217,11 @@ export interface RenderDeps {
   verifyRender?: (opts: VerifyOptions) => Promise<RenderVerifyReport>;
   /** 失败降级（M5b T4）：verify 未过 / seek 断言抛错 → 实时捕获出片（`--no-fallback` 关） */
   realtimeCapture?: (opts: RealtimeOptions) => Promise<RealtimeResult>;
+  /**
+   * 只造音轨（M5b 终审 C-1）：降级路径在**编码前失败**时自建音轨用（编码后失败则复用
+   * `encodeVideo` 的产物）。缺省 = 真实现（同一份 `buildAudioFilterComplex`）。
+   */
+  encodeAudioTrack?: typeof encodeAudioTrack;
   runDeterminism?: (opts: DeterminismOptions) => Promise<DeterminismReport>;
   /**
    * 进度上报（M5b T5，M4-3 款追加字段）：导出服务（页面按钮，§9）拿它做进度条。
@@ -233,7 +239,7 @@ export interface RenderDeps {
 // ── 命令行解析 ──
 
 export const RENDER_USAGE = [
-  "用法：tsx scripts/render.ts [--mock-audio] [--realistic-audio] [--only <i,j,…>] [--concurrency <n>] [--out <dir>] [--no-subs] [--no-srt] [--verify-determinism] [--help]",
+  "用法：tsx scripts/render.ts [--mock-audio] [--realistic-audio] [--only <i,j,…>] [--concurrency <n>] [--out <dir>] [--no-subs] [--no-srt] [--verify-determinism] [--all-steps] [--no-fallback] [--help]",
   "  （npm run render 即本入口；自起 Vite + Chromium 逐帧 seek 出 mp4，前置 ffmpeg）",
   "  ⚠️ 经 npm 传 flag 必须加 --（npm 11 会把 --mock-audio 当成 npm 自己的配置项、不转发给脚本；",
   "     漏了它 = mock 分支根本不跑，只在 stderr 留一条 Unknown cli config）：",
@@ -1048,9 +1054,10 @@ export async function runRender(
     // 同一组合在 `scripts/check/headless.ts:593`（无头 pass）也是这么写的；两个函数都幂等。
     // （注：`withHeadless` 的**定义与导出**在 `scripts/shot/session.ts`，headless.ts 只 import 它。）
     const baseUrl = withHeadless(withRenderMode(serve.url));
-    // 字幕开关（M5b T3）的归一**只在这一处**：下面三个消费者吃同一个 `url`——帧流捕捉、自校验的
-    // 跨会话重采（`recaptureCompare` 用 `opts.url`）、确定性终验（`runDeterminism`）。`withHeadless` /
-    // `withRenderMode` / `withNoSubs` 都幂等且保留既有 query，故三段可叠、顺序无关。
+    // 字幕开关（M5b T3）的归一**只在这一处**：下面**四个**消费者吃同一个 `url`——窗口预扫
+    // （`scanAnimationWindows`）、帧流捕捉、自校验的跨会话重采（`recaptureCompare` 用 `opts.url`）、
+    // 确定性终验（`runDeterminism`）。`withHeadless` / `withRenderMode` / `withNoSubs` 都幂等且
+    // 保留既有 query，故三段可叠、顺序无关（`render.test.ts` 有一条"四处逐字相同"的用例钉着）。
     // 漏归一任何一处 = 重采那侧带着字幕层重拍 ⇒ 与"无字幕"的产物帧 md5 不符 ⇒ 对**正确产物**报假红
     //（成片无字幕、重采有字幕）；`--no-subs` 的成片能过自校验，正是这条归一在重采路径上生效的证据。
     const url = args.noSubs ? withNoSubs(baseUrl) : baseUrl;
@@ -1126,6 +1133,34 @@ export async function runRender(
     const degrade = async (reason: string): Promise<number> => {
       io.error(`[render] 确定性链路失败：${reason}`);
       io.log(`[render] 已降级为实时捕获（确定性链路失败：${reason}）`);
+      // ── 音轨（C-1，终审）：编码前失败时也要有 ──
+      // `encoded` 只在 `encodeVideo` **之后**才有值，而 §8 步骤 4 的主触发（帧流 seek 断言失败）
+      // 发生在 encode **之前** ⇒ 旧口径把 null 交给实时捕获 ⇒ 产物只有 video 流（评审真机实测：
+      // 经 `POST /__export/run` 触发降级 → `/file` 交出的 .realtime.mp4 **无 audio 流**）。
+      // 音轨与帧流无关（只吃 segments 与时间轴），故这里**自建**：同一份 `segments`
+      // （`public/audio/<folder>/<step>.mp3` + 时间轴 stepMs）走同一份 `encodeAudioTrack`。
+      let audioTrack = encoded?.audioPath ?? null;
+      if (audioTrack === null) {
+        try {
+          audioTrack = await (deps.encodeAudioTrack ?? encodeAudioTrack)({
+            outDir: workDir,
+            segments,
+            fps: sub.fps,
+          });
+          io.log(
+            `[render] 降级前未走到编码 ⇒ 按时间轴自建音轨：${displayPath(audioTrack)}——` +
+              `降级产物**有声**（与确定性路径同一份段与 stepMs）`,
+          );
+        } catch (e) {
+          // 残余路径：连音轨都造不出来（ffmpeg 挂了）。逃生舱照旧出片，但**响亮标注无声**——
+          // "出了片但没有声音"必须是一行日志，不是用户自己发现的事。
+          audioTrack = null;
+          io.error(
+            `[render] 自建音轨失败：${e instanceof Error ? e.message : String(e)}——` +
+              `本次降级产物**无声**（只有画面）；上游失败原因见上一行`,
+          );
+        }
+      }
       let result: RealtimeResult;
       try {
         result = await (deps.realtimeCapture ?? captureRealtime)({
@@ -1137,7 +1172,7 @@ export async function runRender(
           outDir: args.outDir,
           slug: stageConfig.slug,
           timeline: sub,
-          audioTrack: encoded?.audioPath ?? null,
+          audioTrack,
           viewport,
           // 不做跨机像素稳定：降级产物按定义不可确定复现（§11.2 只对确定性成片负责）
           io,

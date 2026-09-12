@@ -445,6 +445,8 @@ describe("judgeNegativeSamples（有动画的步逐对必判；静态步/单帧�
 interface Recorded {
   calls: string[];
   mock?: { chapters: readonly RenderChapter[]; repoRoot: string; profile?: MockAudioProfile };
+  /** 窗口预扫的入参（`--no-subs` 归一的四个消费者之一——终审 I-1） */
+  scan?: { url: string; chapters: readonly { steps: number }[] };
   capture?: { specs: readonly FrameSpec[]; opts: CaptureFramesOptions };
   encode?: EncodeOptions;
   verify?: import("./render/verify").VerifyOptions;
@@ -468,8 +470,9 @@ function makeDeps(
       rec.calls.push("serve");
       return { url: "http://localhost:5174/", stop: async () => void rec.calls.push("serve:stop") };
     },
-    scanAnimationWindows: async () => {
+    scanAnimationWindows: async (opts) => {
       rec.calls.push("scan");
+      rec.scan = opts;
       return { animMsByStep: [[3000, 0, 0]], frameCountByStep: [[1, 0, 0]] };
     },
     captureFrames: async (specs, opts) => {
@@ -682,6 +685,37 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     expect(rec.determinism?.timeline.steps.map((s) => s.step)).toEqual([0, 1]);
     expect(rec.determinism?.softwareGL).toBe(true);
     expect(rec.determinism?.url).toContain("render=1");
+  });
+
+  it("--no-subs 的归一喂**四个**消费者，且四处 URL **逐字相同**（终审 I-1：管线本身要有牙）", async () => {
+    const repo = tmpRepo("nosubs-url");
+    seedRepo(repo, {
+      durations: { example: [1750, 1750] },
+      files: ["public/audio/01-example/0.mp3", "public/audio/01-example/1.mp3"],
+    });
+    const rec: Recorded = { calls: [] };
+    const { io } = makeIo();
+    // CLI 面到编排面：`--no-subs` 的解析 + 那行归一（`withNoSubs(baseUrl)`）
+    const args = parseArgs(["--no-subs", "--verify-determinism"], repo);
+    expect(args.noSubs).toBe(true);
+    const code = await runRender(
+      { ...args },
+      makeDeps(repo, rec),
+      io,
+    );
+    expect(code).toBe(0);
+
+    // 四处消费者：窗口预扫 / 帧流捕捉 / 自校验的跨会话重采 / 确定性终验。
+    // 漏归一任何一处 ⇒ 重采那侧带着字幕层重拍 ⇒ 与无字幕产物帧 md5 不符 ⇒ 对**正确产物**假红
+    //（成片无字幕、重采有字幕）；四处**逐字相同**才是"同一个 URL"的强口径。
+    const urls = [rec.scan?.url, rec.capture?.opts.url, rec.verify?.url, rec.determinism?.url];
+    for (const url of urls) {
+      expect(url, "四个消费者都要拿到归一的 URL").toBeDefined();
+      expect(url).toContain("no-subs=1");
+      expect(url).toContain("render=1");
+      expect(url).toContain("headless=1");
+    }
+    expect(new Set(urls).size).toBe(1);
   });
 
   it("--all-steps 把采样面开关透到两个消费者（自校验重采 + 确定性终验）；缺省 = false（老采样面）", async () => {

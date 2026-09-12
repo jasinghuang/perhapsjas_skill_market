@@ -358,6 +358,44 @@ export const CONCAT_LIST_NAME = "concat.txt";
 export const VIDEO_TRACK_NAME = "video.mp4";
 export const AUDIO_TRACK_NAME = "audio.m4a";
 
+export interface EncodeAudioOptions {
+  /** 中间产物目录（音轨落 `<outDir>/audio.m4a`——与 `encodeVideo` 同一个文件名） */
+  outDir: string;
+  /** 与时间轴**同序同长**的音轨段（`buildAudioSegments` 的产出；mp3 路径或 null=静音段） */
+  segments: readonly AudioSegment[];
+  fps: number;
+  /** 覆盖 ffmpeg 可执行（测试用；默认 PATH 上的 ffmpeg） */
+  ffmpegPath?: string;
+}
+
+/**
+ * 只造**音轨**（单次 `filter_complex` + AAC）→ 返回 `<outDir>/audio.m4a`。
+ *
+ * 从 `encodeVideo` 里外提（M5b 终审 C-1）：降级逃生舱在**编码前失败**时也要有音轨——那一路
+ * 没有视频帧可编码（失败正发生在帧流阶段），但音轨与帧流无关（它只吃 `segments` 与时间轴），
+ * 正是"降级不得失声"（计划 I3）的素材。两条路径共用这一份命令 ⇒ 不会有第二份会漂移的音轨图。
+ */
+export async function encodeAudioTrack(opts: EncodeAudioOptions): Promise<string> {
+  const { inputs, filter } = buildAudioFilterComplex(opts.segments, opts.fps);
+  fs.mkdirSync(opts.outDir, { recursive: true });
+  const audioPath = path.join(opts.outDir, AUDIO_TRACK_NAME);
+  runFfmpeg(
+    [
+      "-v", "error",
+      ...splitInputSpecs(inputs),
+      "-filter_complex", filter,
+      "-map", "[out]",
+      "-c:a", "aac",
+      "-ar", String(AUDIO_SAMPLE_RATE),
+      "-ac", String(AUDIO_CHANNELS),
+      audioPath,
+      "-y",
+    ],
+    opts.ffmpegPath ?? "ffmpeg",
+  );
+  return audioPath;
+}
+
 /**
  * 出片：清单 → 视频轨（concat + cfr 30）→ 音轨（单次 filter_complex + AAC）→ mux（`-shortest`）。
  *
@@ -397,9 +435,11 @@ export async function encodeVideo(opts: EncodeOptions): Promise<EncodeResult> {
       );
     }
   });
-  // 清单与音轨图先构造（纯函数）：坏数据在这里就炸，不落到磁盘上
+  // 清单与音轨图先构造（纯函数）：坏数据在这里就炸，不落到磁盘上。
+  // 音轨图的构造实体在 `encodeAudioTrack` 里（同一条命令、同一处护栏）；这里这一调用只为**次序**：
+  // 段参数错（空串 / 含单引号的路径 / 非正 stepMs）不该先花掉一次视频编码——与修复前同一处 fail-fast。
   const list = buildVideoConcatList(opts.captured, opts.fps, opts.stepMsByStep);
-  const { inputs, filter } = buildAudioFilterComplex(opts.segments, opts.fps);
+  buildAudioFilterComplex(opts.segments, opts.fps);
 
   fs.mkdirSync(opts.outDir, { recursive: true });
   // 产物目录：T7 传 `<模板根>/render/<slug>.mp4`，目录通常已存在；不存在时给 ffmpeg 一句
@@ -407,7 +447,6 @@ export async function encodeVideo(opts: EncodeOptions): Promise<EncodeResult> {
   fs.mkdirSync(path.dirname(opts.output), { recursive: true });
   const listPath = path.join(opts.outDir, CONCAT_LIST_NAME);
   const videoPath = path.join(opts.outDir, VIDEO_TRACK_NAME);
-  const audioPath = path.join(opts.outDir, AUDIO_TRACK_NAME);
   fs.writeFileSync(listPath, list);
 
   const ffmpegPath = opts.ffmpegPath ?? "ffmpeg";
@@ -429,20 +468,13 @@ export async function encodeVideo(opts: EncodeOptions): Promise<EncodeResult> {
     ffmpegPath,
   );
 
-  runFfmpeg(
-    [
-      "-v", "error",
-      ...splitInputSpecs(inputs),
-      "-filter_complex", filter,
-      "-map", "[out]",
-      "-c:a", "aac",
-      "-ar", String(AUDIO_SAMPLE_RATE),
-      "-ac", String(AUDIO_CHANNELS),
-      audioPath,
-      "-y",
-    ],
+  // 音轨命令只有一份（`encodeAudioTrack`）——降级路径在编码前失败时吃的就是它（同一份 filter_complex）
+  const audioPath = await encodeAudioTrack({
+    outDir: opts.outDir,
+    segments: opts.segments,
+    fps: opts.fps,
     ffmpegPath,
-  );
+  });
 
   // mux：两轨都已编码，`-c copy` 只搬运；`-shortest` 收在较短的一侧（视频尾部的超发在这里被丢掉）
   runFfmpeg(

@@ -15,7 +15,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import type { EncodeOptions, EncodeResult } from "./encode";
+import type { EncodeAudioOptions, EncodeOptions, EncodeResult } from "./encode";
 import type { CapturedStep, FrameSpec } from "./frames";
 import { buildTimeline, type Timeline, type TimelineStep } from "./timeline";
 import type { VerifyOptions } from "./verify";
@@ -245,6 +245,8 @@ interface Recorded {
   realtime?: RealtimeOptions;
   verify?: VerifyOptions;
   encode?: EncodeOptions;
+  /** C-1：编码前失败时自建音轨的入参（段与 fps 必须与确定性路径同一份） */
+  audio?: EncodeAudioOptions;
 }
 
 function makeIo(): { io: RenderIo; lines: string[]; errors: string[] } {
@@ -397,11 +399,11 @@ describe("runRender 失败路径接线：确定性链路失败 → 实时捕获�
     expect(rec.realtime?.url).not.toContain("render=1");
   });
 
-  it("seek 断言抛错（captureFrames throw）→ 降级；此时没有编码产物 ⇒ audioTrack=null 且日志明写无声", async () => {
+  it("seek 断言抛错（captureFrames throw，**编码前失败**）→ 降级仍**自建音轨**（C-1：降级不得失声）", async () => {
     const repo = tmpRepo("seek-throw");
     seedRepo(repo);
     const rec: Recorded = { calls: [] };
-    const { io, lines } = makeIo();
+    const { io, lines, errors } = makeIo();
     const code = await runRender(
       baseArgs(repo),
       makeDeps(repo, rec, {
@@ -409,16 +411,60 @@ describe("runRender 失败路径接线：确定性链路失败 → 实时捕获�
           rec.calls.push("capture");
           throw new Error("seek 断言失败：窗口内动画未归位");
         },
+        encodeAudioTrack: async (opts) => {
+          rec.calls.push("audio");
+          rec.audio = opts;
+          return path.join(opts.outDir, "audio.m4a");
+        },
       }),
       io,
     );
 
     expect(code).toBe(0);
-    expect(rec.calls).toEqual(["serve", "scan", "capture", "realtime", "serve:stop"]);
-    expect(rec.realtime?.audioTrack).toBeNull();
+    // encode 没跑过 ⇒ 没有编码产物可复用 ⇒ 降级路径**自建**音轨（旧口径在这条路上交无声片：
+    // §8 步骤 4 的主触发恰好在 encode 之前，评审真机实测产物只有 video 流）
+    expect(rec.calls).toEqual(["serve", "scan", "capture", "audio", "realtime", "serve:stop"]);
+    expect(rec.realtime?.audioTrack).toBe(path.join(repo, "render", "presentation", "audio.m4a"));
+    // 音源与确定性路径**同一份**：segments（public/audio/<folder>/<step>.mp3 + 时间轴 stepMs）+ fps
+    expect(rec.audio?.fps).toBe(30);
+    expect(rec.audio?.segments.map((s) => s.stepMs)).toEqual(
+      rec.realtime?.timeline.steps.map((s) => s.stepMs),
+    );
+    expect(rec.audio?.outDir).toBe(path.join(repo, "render", "presentation"));
+    expect(lines.join("\n")).toContain("自建音轨");
     expect(lines.join("\n")).toContain(
       "已降级为实时捕获（确定性链路失败：seek 断言失败：窗口内动画未归位）",
     );
+    // 不再出现"无声"的降级标注（那时有声）；注意别把步骤行里的"无声过场（无音频）"读成它
+    expect(lines.join("\n") + errors.join("\n")).not.toContain("降级产物**无声**");
+    expect(errors.join("\n")).not.toContain("自建音轨失败");
+  });
+
+  it("编码前失败 **且**自建音轨也失败 → 照旧出片，但响亮标注**无声**（残余路径，不许静默）", async () => {
+    const repo = tmpRepo("audio-throw");
+    seedRepo(repo);
+    const rec: Recorded = { calls: [] };
+    const { io, errors } = makeIo();
+    const code = await runRender(
+      baseArgs(repo),
+      makeDeps(repo, rec, {
+        captureFrames: async () => {
+          rec.calls.push("capture");
+          throw new Error("seek 断言失败");
+        },
+        encodeAudioTrack: async () => {
+          rec.calls.push("audio");
+          throw new Error("ffmpeg 不可用");
+        },
+      }),
+      io,
+    );
+
+    expect(code).toBe(0); // 逃生舱的意义是"仍能交给用户一条片子"
+    expect(rec.calls).toEqual(["serve", "scan", "capture", "audio", "realtime", "serve:stop"]);
+    expect(rec.realtime?.audioTrack).toBeNull();
+    expect(errors.join("\n")).toContain("自建音轨失败");
+    expect(errors.join("\n")).toContain("无声");
   });
 
   it("自校验自身抛错（verifyRender throw，如跨会话重采的 seek 断言）→ 降级", async () => {

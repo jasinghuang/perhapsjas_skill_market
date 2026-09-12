@@ -33,6 +33,7 @@ import { chapters } from "../../src/chapters/manifest";
 import { stageConfig } from "../../src/engine/runtime-config";
 import { withRenderMode } from "../check/headless";
 import { startServe, type ServeHandle } from "../check/serve";
+import { runRender, type RenderArgs } from "../render";
 import { synthesizeMockAudio } from "./audio";
 import { runFfmpeg } from "./encode";
 import {
@@ -246,5 +247,67 @@ describe("实时捕获真机臂", () => {
     expect(errors.join("\n")).not.toContain("一步都没动");
     // 告警是"不判定格"（页面已挂载）或"没有任何游标观测"（页面还没挂上）——两者都不拦产物
     expect(errors.join("\n")).toMatch(/不判定格|没有任何游标观测/);
+  }, 900_000);
+
+  /**
+   * C-1（终审修复波）：**编码前失败 ⇒ 降级产物必须有音轨**。
+   *
+   * 这条是评审真机实测缺口的那一面：`degrade()` 旧口径只复用 `encodeVideo` 的产物，而
+   * §8 步骤 4 的主触发（帧流 seek 断言失败）发生在 encode **之前** ⇒ `audioTrack: null` ⇒
+   * 产物只有 video 流（评审经 `POST /__export/run` 触发降级后，`/file` 交出的
+   * `presentation.realtime.mp4` **无 audio 流**；日志响亮但按钮用户看不到）。
+   *
+   * 本臂用**真 deps** 跑整条 `runRender`（真 Vite / 真时间轴 / 真 ffmpeg 造音轨 / 真录制），
+   * 只把 `captureFrames` 换成"抛错"（= 编码前的失败，机制与真 seek 断言失败同一处 catch），
+   * 再用 **ffprobe 独立读数**（`probeOutput`，与本仓代码无关的一条通路）证明产物有 audio 流。
+   */
+  it("C-1：编码前失败（帧流抛错）→ 降级产物**有音轨**（自建，与确定性路径同一份段）", async () => {
+    const degradeOut = tempDir("degrade-out");
+    // 章节 timing.json 落盘（runRender 从 repoRoot 读它；夹具的 timeline 用的是内存里的
+    // `chapters[0].timing`）——不写这个，两边的停留垫不同源（step 1 的 600ms 覆盖缺失），
+    // 声明时长会差 200ms，本臂的"音轨长度 = 声明时长"就变成空对空
+    const timingDir = path.join(repoRoot, "src", "chapters", "01-example");
+    fs.mkdirSync(timingDir, { recursive: true });
+    fs.writeFileSync(path.join(timingDir, "timing.json"), JSON.stringify(chapters[0].timing));
+    const lines: string[] = [];
+    const errors: string[] = [];
+    const args: RenderArgs = {
+      outDir: degradeOut,
+      mockAudio: false, // 盘上已有 public/audio 的 mp3 + durations（render 链只读它们）
+      realisticAudio: false,
+      concurrency: 1,
+      only: undefined,
+      verifyDeterminism: false,
+      help: false,
+      noFallback: false,
+    };
+    const code = await runRender(
+      args,
+      {
+        repoRoot, // 与夹具同一个仓库根（public/audio/*.mp3 + audio-durations.json 在那里）
+        startServe: async () => ({ url: serve!.url, stop: async () => {} }), // 复用夹具已起的真 Vite
+        captureFrames: async () => {
+          throw new Error("seek 断言失败（真机臂：编码前失败）");
+        },
+        // encodeAudioTrack / realtimeCapture / verifyRender 等全部走真实现
+      },
+      { log: (l) => void lines.push(l), error: (l) => void errors.push(l) },
+    );
+    for (const l of [...lines, ...errors]) console.log(`  ${l}`);
+
+    expect(code).toBe(0); // 逃生舱出片即成功
+    const product = realtimeOutputPath(degradeOut, stageConfig.slug);
+    expect(fs.existsSync(product)).toBe(true);
+    const probe = probeOutput(product);
+    console.log(`[C-1 真机] 产物 ${path.basename(product)}：${JSON.stringify(probe)}`);
+    // 核心判据：**有音轨**（旧口径在这条路上只有 video 流）
+    expect(probe.hasVideo).toBe(true);
+    expect(probe.hasAudio).toBe(true);
+    // 音轨长度 = 时间轴声明时长（自建音轨按 stepMs 逐段切齐；这里用产物 timeline 的读数对照）
+    const declaredMs = timeline.totalMs;
+    expect(Math.abs(probe.audioMs - declaredMs)).toBeLessThan(120);
+    // 响亮标注"自建音轨"（这条路径不是"什么都没发生"）
+    expect(lines.join("\n")).toContain("自建音轨");
+    expect(errors.join("\n")).not.toContain("无声");
   }, 900_000);
 });
