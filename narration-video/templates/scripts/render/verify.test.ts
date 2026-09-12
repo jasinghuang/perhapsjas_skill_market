@@ -501,6 +501,39 @@ describe("跨会话采样点：min(3, 步数) 个步（必含首末步），每�
     expect(steps[0]).toBe(0);
     expect(steps[steps.length - 1]).toBe(29);
   });
+
+  // M5b T6：`--all-steps` 的可选扩面（**参数**，不改 `SAMPLE_STEPS_MAX` 常量——常量同时服务
+  // 每次渲染都跑的重采，改它 = 让每次渲染都全 deck 重采）。模板 deck 只有 3 步 = `min(3,3)`，
+  // 在它上面这个参数是 no-op ⇒ 取证必须用 **≥4 步**的表（这里 5 步）。
+  it("allSteps：5 步表全收（默认只够得着 3 步）——采样面确实扩大，且动画步仍取首末两帧", () => {
+    const five = buildTimeline({
+      chapters: [
+        {
+          id: "s",
+          folder: "01-s",
+          steps: 5,
+          narrations: Array.from({ length: 5 }, () => "这是第一句口播"),
+        },
+      ],
+      durations: null,
+      timings: {},
+      animMsByStep: [[0, 3000, 0, 1500, 0]],
+    });
+
+    // 默认口径：`min(3, 5)` = 3 步（首/中/末 = 0/2/4）——**恰好全落在静态步上**
+    // （这张表把"默认采样面可能整个错开动画"这件事也钉住了）
+    expect([...new Set(sampledFrames(five).map((p) => p.step))]).toEqual([0, 2, 4]);
+
+    const all = sampledFrames(five, { allSteps: true });
+    expect([...new Set(all.map((p) => p.step))]).toEqual([0, 1, 2, 3, 4]);
+    // 有动画的步（1/3）取首末两帧；静态步只有一帧（不成对——判据侧如实计数）
+    expect(all.filter((p) => p.step === 1).map((p) => p.index)).toEqual([0, 90]); // 3000ms 窗口 → 91 帧
+    expect(all.filter((p) => p.step === 3).map((p) => p.index)).toEqual([0, 45]); // 1500ms 窗口 → 46 帧
+    expect(all.filter((p) => p.step === 0).map((p) => p.index)).toEqual([0]); // 静态步单帧
+
+    // 空表仍是"宁炸不静默"（扩面不改这条）
+    expect(() => sampledFrames(EMPTY, { allSteps: true })).toThrow(/时间轴表为空/);
+  });
 });
 
 // ── 终审修复波（I2）：`segments` 的**数值**一致性护栏 ──

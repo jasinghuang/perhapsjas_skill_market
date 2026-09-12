@@ -5,6 +5,9 @@
 // M5/M3b 的事务；此处只钉住可在 vitest 里确定性复现的纪律：字段计算、降级语义、
 // 门禁正反样本、HTML 必需元素与转义。
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { shotPath } from "./shot/capture";
 import {
@@ -15,9 +18,12 @@ import {
 } from "./shot/verify-sequential";
 import {
   AUDIO_MISSING_TEXT,
+  LOCAL_THEME_KEYS,
   SILENT_STEP_TEXT,
   STEP_MS_MISSING_TEXT,
+  STORYBOARD_THEME,
   THEME_SNAPSHOT_NOTE,
+  THEME_TOKEN_MAP,
   VOCAB_MISSING_TEXT,
   ambientExemptKeys,
   buildStoryboardData,
@@ -387,6 +393,61 @@ describe("renderStoryboardHtml：每帧图 / 文案 / 时长 / 词汇 / ambient 
     const out = renderStoryboardHtml(gateStoryboard(evil, counts([0, 0, 0])));
     expect(out).toContain("&lt;img");
     expect(out).not.toContain('onerror="boom()"');
+  });
+});
+
+// ── 主题快照漂移护栏（M5 遗留 #4） ──
+//
+// 问题：`STORYBOARD_THEME` 是 tokens.css 的**离线快照**（分镜页自包含，不引 tokens.css）——
+// tokens.css 改色后分镜页会**静默掉色**：没有任何东西会报，页面还是"能看"的（只是配色旧了）。
+// 本护栏把"快照 == tokens.css"变成可执行的断言：任何一处 token 改值 → 本文件红。
+//
+// 读文件的两处环境坑（K-63④）：本文件跑在 jsdom，`new URL("../src/...", import.meta.url)`
+// 会被解析成 `http://localhost:3000/...`（jsdom 的 base）——必须 `fileURLToPath` + `path.join`。
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const TOKENS_CSS = path.join(REPO_ROOT, "src", "theme", "tokens.css");
+
+/**
+ * 极简 `--name: value;` 提取器（只够本护栏用）：先剥注释（`/* … *\/`，值尾的注释也在此剥掉），
+ * 再按声明取第一个候选。**不做**完整 CSS 解析——本护栏只读 tokens.css（`:root` 单块、
+ * 每行一条声明），多写一层解析器只会多一处可漂移的实现。
+ */
+function parseCssCustomProps(css: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const src = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const m of src.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;{}]+);/gi)) {
+    out.set(m[1], m[2].trim().toLowerCase());
+  }
+  return out;
+}
+
+describe("STORYBOARD_THEME 快照漂移护栏（tokens.css ↔ 分镜页快照）", () => {
+  it("映射到的每个 token 与快照逐字相等（改 tokens.css 一个色值 → 这里必须红）", () => {
+    const tokens = parseCssCustomProps(fs.readFileSync(TOKENS_CSS, "utf8"));
+    expect(tokens.size).toBeGreaterThan(40); // 解析器没瞎：tokens.css 当前 60+ 条自定义属性
+    for (const [key, names] of Object.entries(THEME_TOKEN_MAP)) {
+      for (const name of names) {
+        const value = tokens.get(name);
+        expect(value, `tokens.css 缺 ${name}（快照 ${key} 的映射目标）`).toBeDefined();
+        expect(
+          STORYBOARD_THEME[key as keyof typeof STORYBOARD_THEME].toLowerCase(),
+          `分镜页快照 ${key} = ${STORYBOARD_THEME[key as keyof typeof STORYBOARD_THEME]} ` +
+            `与 tokens.css 的 ${name} = ${value} 不一致——分镜页会静默掉色，请同步 data.ts 的快照`,
+        ).toBe(value);
+      }
+    }
+  });
+
+  it("覆盖完备：快照的每个键要么映射到 token、要么显式登记为本地色（新增键不登记即红）", () => {
+    const covered = new Set<string>([...Object.keys(THEME_TOKEN_MAP), ...LOCAL_THEME_KEYS]);
+    expect([...Object.keys(STORYBOARD_THEME)].sort()).toEqual([...covered].sort());
+  });
+
+  it("THEME_SNAPSHOT_NOTE 的三个值确实取自快照常量（文案与色值不会只改一侧）", () => {
+    expect(THEME_SNAPSHOT_NOTE).toContain(STORYBOARD_THEME.cream);
+    expect(THEME_SNAPSHOT_NOTE).toContain(STORYBOARD_THEME.ink);
+    expect(THEME_SNAPSHOT_NOTE).toContain(STORYBOARD_THEME.accent);
   });
 });
 

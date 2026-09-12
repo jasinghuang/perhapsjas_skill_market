@@ -259,6 +259,33 @@ describe("App 装配 · 无头/渲染不自驱（M3b Task 6）", () => {
   });
 });
 
+// M5b T3 评审 I1 的**页面侧一半**：`--no-subs` 的失效是**静默**的（参数名写歪 → 管线全绿、
+// 产物照带字幕——verify 比的是"产物帧 vs 重采帧"，两侧同错即同绿），故参数名必须被钉住。
+// 写侧（CLI 归一写的字面量 `no-subs`）在 `scripts/shot/session.test.ts` 的 withNoSubs 三条；
+// 本组钉读侧：App.tsx 读的就是那个名字 + 极性是"有参数 = 无字幕"。
+describe("App 装配 · 字幕开关（M5b T3 I1：参数名同一性 + 极性）", () => {
+  afterEach(() => {
+    vi.resetModules();
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("?no-subs=1 → 字幕层不在 DOM（CLI 写的参数名与页面读的必须是同一个）", async () => {
+    window.history.replaceState({}, "", "/?no-subs=1");
+    vi.resetModules();
+    const { default: NoSubsApp } = await import("./App");
+    render(<NoSubsApp />);
+    expect(screen.queryByTestId("caption-layer")).not.toBeInTheDocument();
+  });
+
+  it("负臂：不带参数（= CLI 不给 --no-subs）→ 字幕层照常进片", async () => {
+    window.history.replaceState({}, "", "/");
+    vi.resetModules();
+    const { default: PlainApp } = await import("./App");
+    render(<PlainApp />);
+    expect(screen.getByTestId("caption-layer")).toHaveTextContent("这是第一句口播");
+  });
+});
+
 describe("App 装配 · 导出接线（M5b Task 5）", () => {
   // 相对路径 `/__export/*` 是**同源**的载体：中间件随 dev server 启动，端口就是页面自己的
   // ⇒ 无跨源、无预检、无端口发现。故这里对 fetch 的实参逐字断言（Stage 的 EXPORT_ROUTES

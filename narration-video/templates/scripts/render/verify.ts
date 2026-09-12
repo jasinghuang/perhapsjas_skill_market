@@ -112,6 +112,11 @@ export interface VerifyOptions {
   /** 覆盖 ffmpeg / ffprobe 可执行（测试用；默认 PATH 上的同名命令） */
   ffmpegPath?: string;
   ffprobePath?: string;
+  /**
+   * 跨会话重采全 deck 化（M5b T6 的 CLI `--all-steps`）：缺省 false = `min(3, 步数)` 的采样面。
+   * 与 `DeterminismOptions.allSteps` 同一个 CLI 开关（两处采样面一起扩，见 `sampledFrames`）。
+   */
+  allSteps?: boolean;
 }
 
 /** 帧数/PNG 数口径：Σ `frameCount`（**≠** mp4 帧数——CFR 把静置帧复制成多帧）。空表 → throw。 */
@@ -820,23 +825,42 @@ export interface SampledFrame {
   tMs: number;
 }
 
-/** 采样步数上限（计划 §5 的取舍 ③：`min(3, 步数)`，**必含首末步**）。 */
+/** 采样步数上限（计划 §5 的取舍 ③：`min(3, 步数)`，**必含首末步**）。
+ *  **不得为了"全 deck 化"改这个常量**：它同时服务**每次渲染都跑**的跨会话重采
+ *  （`recaptureCompare`）与可选的双渲终验——改它 = 每次渲染都全 deck 重采（墙钟涨一个量级，
+ *  实测单帧重采中位 50ms）。要全 deck 是 CLI 参数 `--all-steps`（`sampledFrames` 的 `allSteps`）。 */
 export const SAMPLE_STEPS_MAX = 3;
 
+export interface SampledFramesOptions {
+  /**
+   * 全 deck 采样（CLI `--all-steps`）：取**每一个**步，而不是 `min(SAMPLE_STEPS_MAX, 步数)` 个
+   * 均匀步。缺省 undefined = 老采样面（行为逐字不变）。
+   *
+   * 代价与收益（M5b T6）：墙钟随步数线性涨（模板 deck 3 步上是 no-op——`min(3,3)` 本来就全取）；
+   * 收益是默认采样面**可能整个错开动画步**（实测：5 步表里默认只取 0/2/4，恰好全是静态步）。
+   */
+  allSteps?: boolean;
+}
+
 /**
- * 跨会话重采的采样点：`min(3, 步数)` 个步（首/中/末，必含首末步），每步取**首帧 + 末帧**
- * （单帧步只取一张；末帧是静置帧，落在 `animMs`——它承载"窗口之后画面冻在哪一拍"）。
+ * 跨会话重采的采样点：默认 `min(3, 步数)` 个步（首/中/末，必含首末步）；`allSteps` 时全收。
+ * 每步取**首帧 + 末帧**（单帧步只取一张；末帧是静置帧，落在 `animMs`——它承载"窗口之后画面
+ * 冻在哪一拍"）。
  */
-export function sampledFrames(timeline: Timeline): SampledFrame[] {
+export function sampledFrames(timeline: Timeline, opts: SampledFramesOptions = {}): SampledFrame[] {
   const steps = timeline.steps;
   if (steps.length === 0) {
     throw new Error("sampledFrames：时间轴表为空——没有可采样的帧；宁炸不静默");
   }
-  const count = Math.min(SAMPLE_STEPS_MAX, steps.length);
   const picked: number[] = [];
-  for (let i = 0; i < count; i++) {
-    const at = count === 1 ? 0 : Math.round((i * (steps.length - 1)) / (count - 1));
-    if (picked[picked.length - 1] !== at) picked.push(at);
+  if (opts.allSteps === true) {
+    for (let i = 0; i < steps.length; i++) picked.push(i);
+  } else {
+    const count = Math.min(SAMPLE_STEPS_MAX, steps.length);
+    for (let i = 0; i < count; i++) {
+      const at = count === 1 ? 0 : Math.round((i * (steps.length - 1)) / (count - 1));
+      if (picked[picked.length - 1] !== at) picked.push(at);
+    }
   }
   const out: SampledFrame[] = [];
   for (const at of picked) {
@@ -1077,7 +1101,7 @@ async function recaptureCompare(
   lines: string[],
   failures: string[],
 ): Promise<void> {
-  const points = sampledFrames(opts.timeline);
+  const points = sampledFrames(opts.timeline, { allSteps: opts.allSteps === true });
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "verify-recapture-"));
   const push = (line: string, failed: boolean): void => {
     lines.push(line);

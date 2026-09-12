@@ -35,3 +35,9 @@ T1 已在真机上出片并记录读数（见 `.superpowers/sdd/2026-09-12-M5b-s
 Ruling P2（金样缺席 = 跳过 + 明示，不得因缺文件而红）——闸门过后由落库那一步**一并** `cp`
 `templates/render/presentation.srt` → 本目录 `clip.srt`（同一次渲染的同一份 `buildSrtCues` 输入，
 "同源"由此保证；不许拿另一次渲染的 SRT 顶）。
+
+**T6（收口）回归消费复核（2026-09-12）**：本目录仍只有本 README（`clip.mp4` 缺席）⇒ 按 Ruling P2
+**跳过**，未产生任何"因缺文件而红"的判据；同时记一条正面证据——T6 的默认字幕臂真机跑（`--realistic-audio`
++ 固定 flag）产物 md5 = `3ec3bdef1085d4ed2473ea9f6d9554d2`，**与 T1 待审成片（`templates/render/presentation.mp4`）
+逐字节相同**：闸门过后要 `cp` 的正是这一份（`cmp` 直接过，不存在"待审的那条与现在能出的那条不是同一条"的漂移）。
+真机读数见 `.superpowers/sdd/2026-09-12-M5b-subtitles-export-service/task-6-report.md`。

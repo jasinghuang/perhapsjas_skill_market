@@ -25,6 +25,8 @@
 //      此处改为直接消费——键盘推进流程逐字未动。
 
 import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import type { Page } from "playwright";
 import {
   assertCursorStill,
@@ -123,6 +125,159 @@ export function summarizeVerification(verdicts: readonly VerifyVerdict[]): Verif
       : `结论：${mismatches.length} 步不一致——顺序推进与独立 mount 像素有差（渲染模型 = 独立 mount 的前置门禁未过）`,
   );
   return { lines, exitCode: mismatches.length > 0 ? 1 : 0, mismatches, exempt };
+}
+
+// ── 负对照自动化（M5 遗留 #6） ──
+
+export interface NegativeControlOptions {
+  /** 与 `verifySequential` 同一份：页面基址（`openSession` 内部归一 headless） */
+  url: string;
+  specs: readonly ShotSpec[];
+  chapterIds: readonly string[];
+  /** 免比对的氛围步键——负对照**只挑非豁免步**（氛围步本就不判负，改了也不报 mismatch） */
+  ambientKeys: ReadonlySet<string>;
+  /** 真参考图目录（= `captureSteps` 的 outDir，即 `<outDir>/shots/…` 所在） */
+  referenceDir: string;
+  /** 篡改副本的落点（缺省 = 临时目录，跑完删除）。给定时该目录内的同名结构会被覆盖 */
+  workDir?: string;
+  viewport?: { width: number; height: number };
+}
+
+export interface NegativeControlReport {
+  /** 控制通过 = 篡改臂确实报出 mismatch **且**非零退出，且真参考图字节零改动 */
+  ok: boolean;
+  lines: string[];
+  /** 被判定的那一步（篡改目标）；null = 没找到可篡改的非豁免参考图 */
+  target: string | null;
+  /** 篡改臂的判定（真人手工做这套时看到的就是它） */
+  verdicts: VerifyVerdict[];
+  /** 篡改臂 `summarizeVerification` 给出的退出码（必须 ≠ 0） */
+  exitCode: number;
+  /** 真参考图字节未被改动（篡改只作用于副本 + 副本跑完删除） */
+  referenceIntact: boolean;
+}
+
+/** 单字节翻转（**同长**篡改：长度不变、内容必变——`compareShotBytes` 两个分支都吃得住）。 */
+function flipMiddleByte(bytes: Uint8Array): Uint8Array {
+  if (bytes.length === 0) throw new Error("负对照：参考图是空文件——没有可篡改的内容");
+  const out = Uint8Array.from(bytes);
+  const at = Math.floor(out.length / 2);
+  out[at] = out[at] ^ 0xff;
+  return out;
+}
+
+/**
+ * `--verify-sequential` 的**负对照自动化**（M5 遗留 #6；M4 终审时人工做过一次）：
+ * 把一张**非豁免**参考图改成坏字节（副本，真图不动）→ 跑**同一条真链路**
+ * （`verifySequential` + `summarizeVerification`）→ 必须在那一步 mismatch + 非零退出。
+ *
+ * 为什么值得固化：`--verify-sequential` 的"全一致"结论只在判据**有牙**时才有意义；
+ * 判据被短路（比对被换成恒真、参考图读的是产物自己、路径拼错读到另一份图）时它会**静默全绿**，
+ * 而这是"渲染模型 = 独立 mount"的唯一前置门禁。
+ *
+ * 两处刻意的口径：
+ *   · **篡改副本而不是真图**：真图被改后哪怕进程崩在中途，`storyboard/index.html` 也会带着坏帧
+ *     留在盘上（那是"人眼看分镜"的现场）。副本 + `finally` 删除 = "跑完还原"的更强形态
+ *     （连还原这个动作都不需要），`referenceIntact` 把这条性质变成读数；
+ *   · **非豁免步一个都没有时判负**（不是跳过）：要了负对照却没执行 = 这次跑没有被证明有牙。
+ */
+export async function verifySequentialNegativeControl(
+  opts: NegativeControlOptions,
+): Promise<NegativeControlReport> {
+  const lines: string[] = [];
+  const owned = opts.workDir === undefined;
+  const workDir = opts.workDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "verify-negative-control-"));
+
+  // 候选：**按 specs 序**第一个既非豁免、参考图又真在盘上的步（确定性挑法——同一 deck 每次挑同一步）
+  let target: { spec: ShotSpec; chapterId: string; file: string } | null = null;
+  for (const spec of opts.specs) {
+    const chapterId = opts.chapterIds[spec.chapter];
+    if (chapterId === undefined) {
+      throw new Error(
+        `负对照：chapterIds 无第 ${spec.chapter} 项（章节 ${spec.chapter} 第 ${spec.step} 步）` +
+          `——须与章节 manifest 等长对位（与 verifySequential 同款）`,
+      );
+    }
+    if (opts.ambientKeys.has(ambientKey(spec.chapter, spec.step))) continue;
+    const file = shotPath(opts.referenceDir, chapterId, spec.step);
+    if (!fs.existsSync(file)) continue;
+    target = { spec, chapterId, file };
+    break;
+  }
+
+  if (target === null) {
+    return {
+      ok: false,
+      lines: [
+        `[失败] 负对照：无可篡改目标（${opts.specs.length} 个步里没有一个"非豁免且参考图存在"的步）` +
+          `——氛围步免比对，篡改它们不会报 mismatch；参考图缺失则先跑主流程截图（npm run storyboard）`,
+      ],
+      target: null,
+      verdicts: [],
+      exitCode: 0,
+      referenceIntact: true,
+    };
+  }
+
+  const where = `章节 ${target.spec.chapter} 第 ${target.spec.step} 步（${target.chapterId}）`;
+  const original = fs.readFileSync(target.file);
+  try {
+    // 副本：参考图整棵树里**被 spec 覆盖到的那些文件**照抄（verifySequential 也只读这些）
+    for (const spec of opts.specs) {
+      const chapterId = opts.chapterIds[spec.chapter]!;
+      const from = shotPath(opts.referenceDir, chapterId, spec.step);
+      if (!fs.existsSync(from)) continue;
+      const to = shotPath(workDir, chapterId, spec.step);
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      const isTarget = spec.chapter === target.spec.chapter && spec.step === target.spec.step;
+      fs.writeFileSync(to, isTarget ? flipMiddleByte(fs.readFileSync(from)) : fs.readFileSync(from));
+    }
+    lines.push(`[负对照] 篡改目标：${where}——改的是**副本**（${workDir}），真参考图不动`);
+
+    const verdicts = await verifySequential({
+      url: opts.url,
+      specs: opts.specs,
+      chapterIds: opts.chapterIds,
+      ambientKeys: opts.ambientKeys,
+      referenceDir: workDir,
+      diffDir: path.join(workDir, "verify"), // 差异现场也在副本目录里（随副本一起删）
+      viewport: opts.viewport,
+    });
+    const report = summarizeVerification(verdicts);
+    for (const line of report.lines) lines.push(`[负对照] ${line}`);
+
+    const targetVerdict = verdicts.find(
+      (v) =>
+        v.chapter === target.spec.chapter && v.step === target.spec.step && v.status === "mismatch",
+    );
+    const others = report.mismatches.filter((v) => v !== targetVerdict);
+    if (others.length > 0) {
+      lines.push(
+        `[负对照] 注意：另有 ${others.length} 步也报不一致（${others
+          .map((v) => `章节 ${v.chapter} 第 ${v.step} 步`)
+          .join("、")}）——本次只篡改了一步，这些差异另有来源（真差异嫌疑，单独复核）`,
+      );
+    }
+
+    const referenceIntact = fs.readFileSync(target.file).equals(Buffer.from(original));
+    const ok = targetVerdict !== undefined && report.exitCode !== 0 && referenceIntact;
+    if (ok) {
+      lines.push(
+        `[负对照] 复现：${where} mismatch + 退出码 ${report.exitCode}（判据有牙）；` +
+          `真参考图字节零改动=${referenceIntact}`,
+      );
+    } else {
+      lines.push(
+        `[失败] 负对照：篡改 ${where} 后**没有**复现 mismatch + 非零退出` +
+          `（篡改位判定=${targetVerdict === undefined ? "未报 mismatch" : "报 mismatch"}，` +
+          `退出码 ${report.exitCode}，真参考图零改动=${referenceIntact}）——` +
+          `判据失去判别力（比对被短路 / 参考图读错 / 篡改没落盘），"全一致"的结论不可信了`,
+      );
+    }
+    return { ok, lines, target: where, verdicts, exitCode: report.exitCode, referenceIntact };
+  } finally {
+    if (owned) fs.rmSync(workDir, { recursive: true, force: true });
+  }
 }
 
 // ── 浏览器驱动 ──

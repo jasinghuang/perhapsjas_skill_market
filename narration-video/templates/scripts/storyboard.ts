@@ -16,6 +16,9 @@
 //      给人看的排查材料），退出码 1 负责"拒绝通过"。
 //   5. **--verify-sequential 复用主流程截图作独立 mount 参考**（见 verify-sequential.ts 取舍 1），
 //      只新增键盘顺序推进这一条路径；氛围步免比对并注明（Ruling M4-2）。
+//      配套的 `--verify-negative-control`（M5b T6）再跑一遍**负对照**：篡改一张非豁免参考图的
+//      副本 → 必须在那一步 mismatch + 非零退出（判据有牙的证明）；它的 mismatch 是预期的，
+//      进退出码的是"没复现"。
 //   6. **dev server 不自动起**（计划 §执行环境注意）：连接失败由 capture/verify 给 "先 npm run dev"
 //      指引。
 
@@ -25,7 +28,11 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import "./check/loader-hooks"; // 模块副作用：非 vitest 环境注册 .css/.json/资产加载钩子（manifest React 链，终审 M-6）
 import { captureSteps, expandSpecs, withHeadless } from "./shot/capture";
-import { summarizeVerification, verifySequential } from "./shot/verify-sequential";
+import {
+  summarizeVerification,
+  verifySequential,
+  verifySequentialNegativeControl,
+} from "./shot/verify-sequential";
 import {
   ambientExemptKeys,
   buildStoryboardData,
@@ -51,12 +58,19 @@ const STORYBOARD_URL = "http://localhost:5174/?render=1";
 export interface StoryboardArgs {
   outDir: string;
   verifySequential: boolean;
+  /**
+   * `--verify-negative-control`（M5b T6，M5 遗留 #6）：随 `--verify-sequential` 跑一次**负对照**
+   * ——篡改一张非豁免参考图的副本 → 必须在那一步 mismatch + 非零退出。缺省不跑（它要再开一次
+   * 浏览器会话做整套顺序推进，属"可选冒烟"而非每次分镜的固定开销）。
+   */
+  negativeControl?: boolean;
 }
 
 /** 参数解析（未知 flag = 响亮失败，不静默忽略——拼错的 flag 只会让产出悄悄不对）。 */
 export function parseArgs(argv: readonly string[], cwd: string): StoryboardArgs {
   let outDir = DEFAULT_OUT_DIR;
   let verifySequential = false;
+  let negativeControl = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--out") {
@@ -65,13 +79,25 @@ export function parseArgs(argv: readonly string[], cwd: string): StoryboardArgs 
       outDir = path.resolve(cwd, value);
     } else if (arg === "--verify-sequential") {
       verifySequential = true;
+    } else if (arg === "--verify-negative-control") {
+      negativeControl = true;
     } else {
       throw new Error(
-        `未知参数 ${arg}——可用：--out <dir>（默认 <模板根>/storyboard）、--verify-sequential`,
+        `未知参数 ${arg}——可用：--out <dir>（默认 <模板根>/storyboard）、--verify-sequential、` +
+          `--verify-negative-control（须与 --verify-sequential 同用）`,
       );
     }
   }
-  return { outDir, verifySequential };
+  // 与 render 的 `--realistic-audio` 单给同款：负对照是 `--verify-sequential` 的**配套**，
+  // 单给它什么都不跑——静默忽略等于让用户以为"负对照跑过了"。
+  if (negativeControl && !verifySequential) {
+    throw new Error(
+      "--verify-negative-control 只在 --verify-sequential 同用时有意义（它篡改的是顺序校验的" +
+        "参考图）——单给不会跑任何校验；要跑负对照请写：" +
+        "npm run storyboard -- --verify-sequential --verify-negative-control",
+    );
+  }
+  return { outDir, verifySequential, negativeControl };
 }
 
 // ── 输入读取 ──
@@ -210,6 +236,20 @@ export async function runStoryboard(
     const report = summarizeVerification(verdicts);
     for (const line of report.lines) log(`[verify] ${line}`);
     if (report.exitCode !== 0) exitCode = 1;
+
+    // 负对照（可选，M5 遗留 #6）：篡改一张非豁免参考图的**副本** → 必须 mismatch + 非零退出。
+    // 它的 mismatch 是**预期**的，故不直接进退出码；进退出码的是"没复现"（判据失牙）。
+    if (args.negativeControl === true) {
+      const control = await verifySequentialNegativeControl({
+        url: STORYBOARD_URL,
+        specs,
+        chapterIds: chapters.map((c) => c.id),
+        ambientKeys,
+        referenceDir: args.outDir,
+      });
+      for (const line of control.lines) log(line);
+      if (!control.ok) exitCode = 1;
+    }
   }
 
   return { exitCode, data: gated, outDir: args.outDir };

@@ -164,6 +164,18 @@ export interface RenderArgs {
    * 给上它 = 严格模式（失败照旧抛 / 退出码 1），适合"我要的就是确定性产物"的场合。
    */
   noFallback?: boolean;
+  /**
+   * `--all-steps`：跨会话重采的采样面**全 deck 化**（缺省 = `min(3, 步数)` 个均匀步）。
+   *
+   * 为什么是**参数**而不是改 `SAMPLE_STEPS_MAX` 常量：那个常量同时服务**每次渲染都跑**的自校验
+   * 重采（`recaptureCompare`）——改常量 = 每次渲染都全 deck 重采（墙钟涨一个量级，实测单帧重采
+   * 中位 50ms）。这个开关同时扩两处采样面（自校验重采 + `--verify-determinism` 的双渲终验），
+   * 故**可以**单给（不是 `--verify-determinism` 的修饰）。
+   *
+   * 与 `noSubs?` 同款可选字段：undefined = 老采样面（`parseArgs([])` 的返回值逐字不变）。
+   * 注：模板 deck 只有 3 步（`min(3, 3)`）⇒ 在它上面这个开关是 **no-op**（取证须用 ≥4 步的夹具）。
+   */
+  allSteps?: boolean;
   help: boolean;
 }
 
@@ -237,6 +249,9 @@ export const RENDER_USAGE = [
   "  --no-srt              不写字幕副产物（默认写 <dir>/<slug>.srt：narrations × 时间轴表纯派生；",
   "                        与画面无关——--no-subs 不影响它），只影响 SRT 落盘",
   "  --verify-determinism  确定性终验：独立会话重采采样步 → 与产物帧逐字节比对 + 负样本（两个不同 t 必须不同）",
+  "  --all-steps           跨会话重采采样面全 deck 化（缺省 = min(3, 步数) 个均匀步，含首末步）；",
+  "                        同时扩自校验重采与 --verify-determinism 的终验。**不是**改 SAMPLE_STEPS_MAX 常量",
+  "                        （那个常量服务每次渲染的重采，改它 = 每次渲染都全 deck 重采）；模板 deck 3 步上是 no-op",
   "  --no-fallback         确定性链路失败（自校验未过 / seek 断言抛错）时**不走**实时捕获降级；",
   "                        缺省 = 降级出 <dir>/<slug>.realtime.mp4（实时播放 + 录屏 + 同一份音轨 mux；",
   "                        A/V 同步是近似的，见 KNOWN-ISSUES）；给上它 = 严格模式（失败即抛 / 退出码 1）",
@@ -244,7 +259,7 @@ export const RENDER_USAGE = [
 ].join("\n");
 
 const USAGE_FLAGS =
-  "--mock-audio / --realistic-audio / --only / --concurrency / --out / --no-subs / --no-srt / --verify-determinism / --no-fallback / --help";
+  "--mock-audio / --realistic-audio / --only / --concurrency / --out / --no-subs / --no-srt / --verify-determinism / --all-steps / --no-fallback / --help";
 
 /** 并发数：非负整数（`0` 归 1——0/负数会除零或空跑；归一发生在 CLI 层，见 frames.partition 的注释）。 */
 function parseConcurrency(value: string, flag: string): number {
@@ -319,6 +334,9 @@ export function parseArgs(argv: readonly string[], cwd: string): RenderArgs {
         break;
       case "--no-fallback":
         out.noFallback = true;
+        break;
+      case "--all-steps":
+        out.allSteps = true;
         break;
       case "--help":
       case "-h":
@@ -581,6 +599,8 @@ export interface DeterminismOptions {
   viewport?: { width: number; height: number };
   /** **必须与 captureFrames 那次相同** */
   softwareGL?: boolean;
+  /** 采样面全 deck 化（CLI `--all-steps`）；缺省 false = `min(SAMPLE_STEPS_MAX, 步数)` */
+  allSteps?: boolean;
 }
 
 export interface DeterminismReport {
@@ -592,11 +612,16 @@ export interface DeterminismReport {
 /** 一对负样本读数：同一步内两个不同 t 的**产物帧**的 md5。 */
 export interface DeterminismPair {
   label: string;
+  /** 步坐标（判据侧要把对与采样步对位——`--all-steps` 下采样步里有静态步，它们不产生对） */
+  chapter: number;
+  step: number;
+  /** 该步的动画窗口（ms）；对只可能来自 `animMs > 0` 的步（单帧步没有"两个 t"） */
+  animMs: number;
   tA: number;
   tB: number;
   md5A: string;
   md5B: string;
-  /** 两端完全相同（对称动画 / 静帧）——这一对不提供"判据有牙"的证据 */
+  /** 两端完全相同——**有动画的步出现它 = 该步帧流没画动画**（M5b T6：判据改为逐对必判） */
   identical: boolean;
 }
 
@@ -639,6 +664,9 @@ export function determinismPairs(
     const md5B = md5(path.join(outDir, paths[last.index]));
     out.push({
       label: `章节 ${step.chapterId} 第 ${step.step} 步`,
+      chapter: step.chapter,
+      step: step.step,
+      animMs: step.animMs,
       tA: first.tMs,
       tB: last.tMs,
       md5A,
@@ -647,6 +675,69 @@ export function determinismPairs(
     });
   }
   return out;
+}
+
+/**
+ * 负样本判据（M5b T6 口径修正）：**有动画的步必须有非恒等对 + 静态步如实计数**。
+ *
+ * 为什么从聚合式（"至少一对不同"）改成逐对式：`--all-steps` 把采样面扩到全 deck 后，
+ * 采样步里必然混进静态步（动画窗口 0ms → 单帧、本就不成对）——聚合式判据会被稀释成
+ * "只要全 deck 还剩一对不同就绿"，某一步的帧流没画动画不再能被看见。逐对判 + 如实计数
+ * 既保住判别力（每个动画步自己承压），又不把"静态步没有两拍"误报成失败。
+ *
+ * 纯函数（不碰 fs/浏览器）：单测直接覆盖 `--all-steps` 下的两类混排（见 render.test.ts）。
+ */
+export function judgeNegativeSamples(
+  pairs: readonly DeterminismPair[],
+  picked: readonly TimelineStep[],
+): { lines: string[]; failures: string[] } {
+  const lines: string[] = [];
+  const failures: string[] = [];
+  const key = (s: { chapter: number; step: number }): string => `${s.chapter}:${s.step}`;
+
+  for (const pair of pairs) {
+    if (pair.identical) {
+      const line =
+        `[失败] 负样本 ${pair.label}：该步有动画窗口（animMs=${pair.animMs}ms），` +
+        `t=${pair.tA}ms 与 t=${pair.tB}ms 的产物帧却完全相同（md5 ${pair.md5A}）——` +
+        `帧流没把这个窗口画出来（判据在这一步失牙）；若这条动画的 t=0 与 t=${pair.animMs}ms ` +
+        `本就同态（对称/循环动画），请收窄窗口或改采样口径，别让"重采逐字节一致"退化成空转判据`;
+      lines.push(line);
+      failures.push(line);
+    } else {
+      lines.push(
+        `负样本 ${pair.label}：t=${pair.tA}ms 与 t=${pair.tB}ms 的产物帧不同（md5 ${pair.md5A.slice(0, 8)}… ` +
+          `vs ${pair.md5B.slice(0, 8)}…）——逐字节比对不是空转`,
+      );
+    }
+  }
+
+  // 如实计数（不判负）：静态步没有"两个不同 t"可判；声明了窗口却只落单帧的步（窗口短于
+  // 采样间隔）同样不成对。两类都不冒充成"判据通过"，也不被静默丢掉。
+  const paired = new Set(pairs.map((p) => key(p)));
+  const staticSteps = picked.filter((s) => s.animMs <= 0);
+  const singleFrameSteps = picked.filter((s) => s.animMs > 0 && !paired.has(key(s)));
+  if (staticSteps.length > 0) {
+    lines.push(
+      `负样本：${staticSteps.length} 个静态步（动画窗口 0ms → 没有"两个不同 t"可判）如实计数：` +
+        staticSteps.map((s) => `章节 ${s.chapterId} 第 ${s.step} 步`).join("、"),
+    );
+  }
+  if (singleFrameSteps.length > 0) {
+    lines.push(
+      `负样本：${singleFrameSteps.length} 个步声明了动画窗口但只落单帧（窗口短到落不进第二帧，` +
+        `< 1000/fps ms）——无可判对，如实计数：` +
+        singleFrameSteps.map((s) => `章节 ${s.chapterId} 第 ${s.step} 步（animMs=${s.animMs}ms）`).join("、"),
+    );
+  }
+
+  if (pairs.length === 0) {
+    failures.push(
+      `[失败] 负样本：${picked.length} 个采样步里没有一步有两个不同 t 的帧（全是静态步/单帧步）` +
+        `——"重采逐字节一致"在这个 deck 上没有可判定的面；这不是产物错，是判据面为空（宁红不假绿）`,
+    );
+  }
+  return { lines, failures };
 }
 
 function md5File(file: string): string {
@@ -672,8 +763,8 @@ export async function runDeterminism(opts: DeterminismOptions): Promise<Determin
     throw new Error("runDeterminism：时间轴表为空——没有可重采的帧（空跑会「全绿」）；宁炸不静默");
   }
 
-  // 采样步（与 T6 同一份口径：min(3, 步数)，必含首末步）
-  const sampled = sampledFrames(timeline);
+  // 采样步（与 T6 同一份口径：默认 min(3, 步数)，必含首末步；--all-steps 时全收）
+  const sampled = sampledFrames(timeline, { allSteps: opts.allSteps === true });
   const picked: TimelineStep[] = [];
   for (const point of sampled) {
     const step = timeline.steps.find((s) => s.chapter === point.chapter && s.step === point.step)!;
@@ -682,26 +773,9 @@ export async function runDeterminism(opts: DeterminismOptions): Promise<Determin
 
   // 负样本先判（判据有没有牙，先于它给出的任何"一致"结论）
   const pairs = determinismPairs(sampled, opts.outDir, timeline, md5File);
-  for (const pair of pairs) {
-    lines.push(
-      pair.identical
-        ? `负样本 ${pair.label}：t=${pair.tA}ms 与 t=${pair.tB}ms 的产物帧相同（md5 ${pair.md5A}）` +
-            `——该步两端画面本就一样（对称动画 / 静帧），这一对不提供"判据有牙"的证据`
-        : `负样本 ${pair.label}：t=${pair.tA}ms 与 t=${pair.tB}ms 的产物帧不同（md5 ${pair.md5A.slice(0, 8)}… ` +
-            `vs ${pair.md5B.slice(0, 8)}…）——逐字节比对不是空转`,
-    );
-  }
-  if (pairs.length === 0) {
-    failures.push(
-      `[失败] 负样本：${picked.length} 个采样步里没有一步有两个不同 t 的帧（全是单帧步）` +
-        `——"重采逐字节一致"在这个 deck 上没有可判定的面；这不是产物错，是判据面为空（宁红不假绿）`,
-    );
-  } else if (pairs.every((p) => p.identical)) {
-    failures.push(
-      `[失败] 负样本：${pairs.length} 对"两个不同 t"的产物帧全部相同——"重采逐字节一致"退化为` +
-        `空转判据（帧流可能根本没画动画：时间轴窗口全 0 / 动画没接进注册表）`,
-    );
-  }
+  const negative = judgeNegativeSamples(pairs, picked);
+  lines.push(...negative.lines);
+  failures.push(...negative.failures);
 
   // 重采：整段帧流（采样步的每一帧）
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "render-determinism-"));
@@ -1164,6 +1238,7 @@ export async function runRender(
         segments,
         viewport,
         softwareGL: true,
+        allSteps: args.allSteps === true, // 采样面（缺省 = min(3, 步数)）
       });
     } catch (e) {
       // 自校验自己抛错（跨会话重采的 seek 断言是典型）：与"判据报红"同属确定性链路失败
@@ -1188,6 +1263,7 @@ export async function runRender(
         timeline: sub,
         viewport,
         softwareGL: true,
+        allSteps: args.allSteps === true, // 与自校验重采同一个开关（两处采样面一起扩）
       });
       for (const line of determinism.lines) io.log(`[determinism] ${line}`);
       for (const failure of determinism.failures) io.error(`[render] ${failure}`);

@@ -29,6 +29,7 @@ import {
   determinismPairs,
   displayPath,
   frameStepsDone,
+  judgeNegativeSamples,
   parseArgs,
   pickDeliverable,
   renderCli,
@@ -173,9 +174,18 @@ describe("parseArgs（未知 flag = 响亮失败：用法错误的唯一载体�
   });
 
   it("RENDER_USAGE 列出全部 flag（用法文案与解析器同源）", () => {
-    for (const flag of ["--mock-audio", "--realistic-audio", "--only", "--concurrency", "--out", "--verify-determinism", "--help"]) {
+    for (const flag of ["--mock-audio", "--realistic-audio", "--only", "--concurrency", "--out", "--verify-determinism", "--all-steps", "--help"]) {
       expect(RENDER_USAGE).toContain(flag);
     }
+  });
+
+  it("--all-steps 开关（M5b T6：扩采样面；**不是**改 SAMPLE_STEPS_MAX 常量）", () => {
+    expect(parseArgs(["--all-steps"], "/tmp").allSteps).toBe(true);
+    // 缺省 = 老行为（undefined，不是 false）：`SAMPLE_STEPS_MAX` 的 `min(3, 步数)` 采样面不动
+    expect(parseArgs([], "/tmp").allSteps).toBeUndefined();
+    // 它同时扩"每次渲染都跑的重采"与（给了 --verify-determinism 时的）确定性终验，
+    // 故**不**要求与 --verify-determinism 同用（那种耦合会让单给变成静默空转或无谓的用法错误）
+    expect(() => parseArgs(["--all-steps"], "/tmp")).not.toThrow();
   });
 });
 
@@ -332,7 +342,17 @@ describe("determinismPairs（负样本：同一步内两个不同 t 的产物帧
       return file.endsWith("0001.png") ? "md5-first" : "md5-last";
     });
     expect(pairs).toEqual([
-      { label: "章节 a 第 0 步", tA: 0, tB: 3000, md5A: "md5-first", md5B: "md5-last", identical: false },
+      {
+        label: "章节 a 第 0 步",
+        chapter: 0,
+        step: 0,
+        animMs: 3000,
+        tA: 0,
+        tB: 3000,
+        md5A: "md5-first",
+        md5B: "md5-last",
+        identical: false,
+      },
     ]);
     expect(read).toEqual(["/out/frames/a/0/0001.png", "/out/frames/a/0/0091.png"]);
   });
@@ -344,6 +364,79 @@ describe("determinismPairs（负样本：同一步内两个不同 t 的产物帧
     ]);
     const pairs = determinismPairs(sampledFrames(still), "/out", still, () => "same");
     expect(pairs.map((p) => p.identical)).toEqual([true]);
+  });
+});
+
+// ── 负样本判据口径（M5b T6 修正：有动画的步必须有非恒等对 + 静态步如实计数） ──
+//
+// 为什么必须修：`--all-steps` 把采样面扩到全 deck 后，采样步里会混进**静态步**（动画窗口 0ms
+// → 单帧、本就不成对），聚合式判据（"至少一对不同"）会被稀释——`--all-steps` 下只要全 deck
+// 还剩一对不同就绿，某一步的帧流没画动画不再能被看见。逐对判 + 如实计数才是"判据有牙"的形态。
+
+describe("judgeNegativeSamples（有动画的步逐对必判；静态步/单帧步如实计数）", () => {
+  /** 五步 fixture（≥4 步：默认采样的 `min(3, 步数)` 在这张表上只够得着 3 步）。 */
+  const fiveSteps = makeTimeline([
+    { chapterId: "a", step: 0, stepMs: 3400, frameCount: 91, animMs: 3000, holdMs: 400 },
+    { chapterId: "a", step: 1, stepMs: 2350, frameCount: 1 },
+    { chapterId: "a", step: 2, stepMs: 1900, frameCount: 1 },
+    { chapterId: "b", step: 0, stepMs: 2400, frameCount: 61, animMs: 2000, holdMs: 400, chapter: 1 },
+    { chapterId: "b", step: 1, stepMs: 1900, frameCount: 1, chapter: 1 },
+  ]);
+
+  const pairOf = (
+    step: TimelineStep,
+    identical: boolean,
+  ): ReturnType<typeof determinismPairs>[number] => ({
+    label: `章节 ${step.chapterId} 第 ${step.step} 步`,
+    chapter: step.chapter,
+    step: step.step,
+    animMs: step.animMs,
+    tA: 0,
+    tB: step.animMs,
+    md5A: `md5-${step.chapterId}-${step.step}`,
+    md5B: identical ? `md5-${step.chapterId}-${step.step}` : `md5b-${step.chapterId}-${step.step}`,
+    identical,
+  });
+
+  it("每个有动画的对都不同 → 零失败；行里给出「不是空转」的读数", () => {
+    const pairs = [pairOf(fiveSteps.steps[0], false), pairOf(fiveSteps.steps[3], false)];
+    const r = judgeNegativeSamples(pairs, fiveSteps.steps);
+    expect(r.failures).toEqual([]);
+    expect(r.lines.join("\n")).toContain("逐字节比对不是空转");
+  });
+
+  it("**判别力**：一步的动画没画出来（同一步两端帧相同），另一动画步不同 → 点名失牙的那一步（旧口径会放行）", () => {
+    const pairs = [pairOf(fiveSteps.steps[0], false), pairOf(fiveSteps.steps[3], true)];
+    const r = judgeNegativeSamples(pairs, fiveSteps.steps);
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]).toContain("章节 b 第 0 步");
+    expect(r.failures[0]).toContain("animMs=2000ms");
+    expect(r.failures[0]).toContain("失牙");
+    // 另一对（正常的那个）不因它连坐
+    expect(r.failures.join("\n")).not.toContain("章节 a 第 0 步");
+  });
+
+  it("静态步如实计数（不判负、列出坐标）——`--all-steps` 全 deck 采样下它们必然混进来", () => {
+    const pairs = [pairOf(fiveSteps.steps[0], false), pairOf(fiveSteps.steps[3], false)];
+    const r = judgeNegativeSamples(pairs, fiveSteps.steps);
+    expect(r.lines.join("\n")).toContain("3 个静态步");
+    expect(r.lines.join("\n")).toContain("章节 a 第 1 步");
+    expect(r.lines.join("\n")).toContain("章节 b 第 1 步");
+    expect(r.failures).toEqual([]);
+  });
+
+  it("判据面为空（全静态 / 全单帧）→ 报红，不静默全绿", () => {
+    const r = judgeNegativeSamples([], fiveSteps.steps);
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]).toContain("判据面为空");
+  });
+
+  it("有动画但只落单帧（窗口短于采样间隔）→ 如实计数（不判负），且不冒充'静态步'", () => {
+    const shortAnim = makeTimeline([{ chapterId: "a", step: 0, stepMs: 1400, frameCount: 1, animMs: 30, holdMs: 0 }]);
+    const r = judgeNegativeSamples([], shortAnim.steps);
+    expect(r.lines.join("\n")).toContain("只落单帧");
+    expect(r.lines.join("\n")).not.toContain("个静态步");
+    expect(r.failures).toHaveLength(1); // 判据面仍为空（这一条是"没有可判对"的报红，不是这一步判负）
   });
 });
 
@@ -589,6 +682,33 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     expect(rec.determinism?.timeline.steps.map((s) => s.step)).toEqual([0, 1]);
     expect(rec.determinism?.softwareGL).toBe(true);
     expect(rec.determinism?.url).toContain("render=1");
+  });
+
+  it("--all-steps 把采样面开关透到两个消费者（自校验重采 + 确定性终验）；缺省 = false（老采样面）", async () => {
+    const repo = tmpRepo("allsteps");
+    seedRepo(repo, {
+      durations: { example: [1750, 1750] },
+      files: ["public/audio/01-example/0.mp3", "public/audio/01-example/1.mp3"],
+    });
+    const base: RenderArgs = {
+      outDir: path.join(repo, "render"),
+      mockAudio: false,
+      realisticAudio: false,
+      concurrency: 2,
+      only: undefined,
+      verifyDeterminism: true,
+      help: false,
+    };
+    // 缺省：显式给 false（下游永远拿到布尔，不用各自判 undefined）
+    const recOff: Recorded = { calls: [] };
+    await runRender(base, makeDeps(repo, recOff), makeIo().io);
+    expect(recOff.verify?.allSteps).toBe(false);
+    expect(recOff.determinism?.allSteps).toBe(false);
+
+    const recOn: Recorded = { calls: [] };
+    await runRender({ ...base, allSteps: true }, makeDeps(repo, recOn), makeIo().io);
+    expect(recOn.verify?.allSteps).toBe(true);
+    expect(recOn.determinism?.allSteps).toBe(true);
   });
 
   it("确定性地验不过 → 退出码 1（终验是门，不是报表）", async () => {

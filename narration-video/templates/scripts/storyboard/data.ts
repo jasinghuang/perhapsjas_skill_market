@@ -120,6 +120,12 @@ export const VOCAB_MISSING_TEXT = "未标注";
 /**
  * 主题色静态快照（tokens.css 的 hex 直录）——分镜页离线自包含，不引 tokens.css、
  * 不随主题切换变化；note 文案由快照常量拼出，改色不会只改一侧。
+ *
+ * **漂移护栏（M5 遗留 #4，2026-09-12）**：快照"是 tokens.css 的副本"这件事由
+ * `THEME_TOKEN_MAP` 声明，`storyboard.test.ts` 逐条比对 tokens.css 的当前值——
+ * 改 tokens.css 一个色值而不动快照 ⇒ 该测试红（分镜页静默掉色的唯一警报）。
+ * `blocker` 不属于主题（分镜页自己的红章色，tokens.css 无对应 token）：显式登记在
+ * `LOCAL_THEME_KEYS`，免得"漏映射"与"本来就没有 token"混为一谈。
  */
 export const STORYBOARD_THEME = {
   cream: "#efe9d9",
@@ -132,6 +138,27 @@ export const STORYBOARD_THEME = {
   pass: "#1f8a4c",
   blocker: "#c0392b",
 } as const;
+
+/**
+ * 快照键 → tokens.css 自定义属性名（**数组**：一个快照值可能对应多条 token）。
+ *
+ * `ink` 映射两条是**有意的**：tokens.css 里 `--text` 与 `--surface-3` 都是 ink
+ * （字色与墨底），分镜页只有一个 `ink`——任一条被改成别的墨，分镜页都会有一侧掉色，
+ * 故两条都要守。`pass` 用 `--accent-1`（森林绿，Ruling M2b-6），`accent` 用 `--accent-3`（橙）。
+ */
+export const THEME_TOKEN_MAP = {
+  cream: ["--surface"],
+  cream2: ["--surface-2"],
+  ink: ["--text", "--surface-3"],
+  ink2: ["--text-2"],
+  muted: ["--text-mute"],
+  faint: ["--text-faint"],
+  accent: ["--accent-3"],
+  pass: ["--accent-1"],
+} as const satisfies Partial<Record<keyof typeof STORYBOARD_THEME, readonly string[]>>;
+
+/** 快照里**不来自 tokens.css** 的键（分镜页本地色）——显式登记，新增键不登记即红。 */
+export const LOCAL_THEME_KEYS = ["blocker"] as const;
 
 export const THEME_SNAPSHOT_NOTE =
   `配色为 tokens.css 的离线快照（cream ${STORYBOARD_THEME.cream} / ink ${STORYBOARD_THEME.ink} / ` +

@@ -16,7 +16,15 @@ import { fileURLToPath } from "node:url";
 import type { Page } from "playwright";
 import { describe, expect, it, vi } from "vitest";
 import * as session from "./session";
-import { jumpToStep, openSession, readAnimations, readCursor, seekTo, withHeadless } from "./session";
+import {
+  jumpToStep,
+  openSession,
+  readAnimations,
+  readCursor,
+  seekTo,
+  withHeadless,
+  withNoSubs,
+} from "./session";
 
 describe("withHeadless：URL 归一（幂等 + 保留既有 query）", () => {
   it("无 query → 追加 ?headless=1", () => {
@@ -30,6 +38,28 @@ describe("withHeadless：URL 归一（幂等 + 保留既有 query）", () => {
   it("已含 headless → 原样（幂等：openSession 内部再归一也不翻倍）", () => {
     expect(withHeadless("http://a:1/?headless=1")).toBe("http://a:1/?headless=1");
     expect(withHeadless(withHeadless("http://a:1/?render=1"))).toBe("http://a:1/?render=1&headless=1");
+  });
+});
+
+// M5b T3 评审 I1 的**会话侧一半**：`--no-subs` 的参数名同一性零覆盖——`session.ts` 写什么参数名、
+// `src/App.tsx` 就读什么参数名，两侧各写一个**字面量**，任一侧改名都是**静默失效**（管线全绿、
+// 产物带字幕：verify 比的是"产物帧 vs 重采帧"，两侧同错即同绿）。这里把写侧的字面量钉死；
+// 读侧的一半在 `src/App.test.tsx`（`?no-subs=1` → 字幕层不在 DOM）。
+describe("withNoSubs：URL 归一（参数名 = 页面读的那个字面量；幂等 + 保留既有 query）", () => {
+  it("无 query → 追加 ?no-subs=1（**参数名不得改**：改了 App.tsx 就静默读不到、字幕照进片）", () => {
+    expect(withNoSubs("http://localhost:5174")).toBe("http://localhost:5174/?no-subs=1");
+  });
+
+  it("既有 query 保留（?render=1 / headless 不被吞——渲染链三个消费者吃同一份 URL）", () => {
+    expect(withNoSubs("http://a:1/?render=1")).toBe("http://a:1/?render=1&no-subs=1");
+    expect(withNoSubs("http://a:1/?render=1&headless=1")).toBe(
+      "http://a:1/?render=1&headless=1&no-subs=1",
+    );
+  });
+
+  it("已含 no-subs → 原样（幂等：降级路径 realtimeUrl 之后再加也不会翻倍）", () => {
+    expect(withNoSubs("http://a:1/?no-subs=1")).toBe("http://a:1/?no-subs=1");
+    expect(withNoSubs(withNoSubs("http://a:1/?render=1"))).toBe("http://a:1/?render=1&no-subs=1");
   });
 });
 
