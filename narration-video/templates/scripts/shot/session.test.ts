@@ -77,6 +77,9 @@ describe("session 冻结面（接口约定 1：M5 与无头门禁的消费契约
       "assertCursorMatch",
       "assertCursorStill",
       "withHeadless",
+      // M5b Task 3 追加（接口约定 3 点名）：URL 归一到无字幕版；M5b T6 补进冻结面清单
+      // （K-62② 的同型先例：接口约定点了名的成员就该在"存在性 ⊆"清单里防误删）
+      "withNoSubs",
       "isMissingBrowserError",
       "chromiumMissingError",
       "CHROMIUM_INSTALL_HINT",
