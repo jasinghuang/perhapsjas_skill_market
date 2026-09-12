@@ -2,12 +2,8 @@
 // 引擎层计时（轮询/垫）合法——确定性黑名单只约束章节层；渲染走时间轴表不经此路径。
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  AUDIO_ESTIMATE_CHAR_MS,
-  AUDIO_ESTIMATE_MIN_MS,
-  EMPTY_NARRATION_MIN_MS,
-} from "./constants";
 import { allFinished, pauseAll, resumeAll } from "./animationRuntime";
+import { estimateNarrationMs } from "./hold";
 
 const POLL_MS = 50;
 
@@ -45,11 +41,8 @@ export function useAudioPlayer(): AudioPlayer {
     return audioRef.current;
   }, []);
 
-  const estimateMs = useCallback((narration: string): number => {
-    return narration
-      ? Math.max(AUDIO_ESTIMATE_MIN_MS, narration.length * AUDIO_ESTIMATE_CHAR_MS)
-      : EMPTY_NARRATION_MIN_MS;
-  }, []);
+  // 估时公式在引擎侧唯一一份（hold.ts 的 estimateNarrationMs）：本 hook 不再自带文本，
+  // 与渲染时间轴 timeline.ts 共用同一个函数（评审 I4 / Ruling R5）。
 
   /** 等动画窗口结束再执行（轮询；渲染路径不经此函数） */
   const afterAnimations = useCallback(
@@ -80,7 +73,7 @@ export function useAudioPlayer(): AudioPlayer {
         // 音频缺失兜底：估时（或空步默认）→ 等动画 → 垫
         timerRef.current = window.setTimeout(
           () => afterAnimations(scheduleHold),
-          estimateMs(narration),
+          estimateNarrationMs(narration),
         );
         return;
       }
@@ -92,14 +85,14 @@ export function useAudioPlayer(): AudioPlayer {
         // 音频加载失败（如 404）：视同无音频，走估时兜底推进
         timerRef.current = window.setTimeout(
           () => afterAnimations(scheduleHold),
-          estimateMs(narration),
+          estimateNarrationMs(narration),
         );
       };
       audio.play().catch(() => {
         // play() 拒绝（自动播放限制等）：错误统一由 onerror 处理，勿让 rejection 冒泡
       });
     },
-    [afterAnimations, clearTimer, estimateMs, getAudio, scheduleHold],
+    [afterAnimations, clearTimer, getAudio, scheduleHold],
   );
 
   const pause = useCallback(() => {
@@ -129,12 +122,12 @@ export function useAudioPlayer(): AudioPlayer {
       // 无计时器重武装 → 暂停后播放即死锁；判 error 走估时兜底
       timerRef.current = window.setTimeout(
         () => afterAnimations(scheduleHold),
-        estimateMs(last.narration),
+        estimateNarrationMs(last.narration),
       );
     }
     resumeAll();
     setPlaying(true);
-  }, [afterAnimations, clearTimer, estimateMs, scheduleHold]);
+  }, [afterAnimations, clearTimer, scheduleHold]);
 
   const stop = useCallback(() => {
     clearTimer();

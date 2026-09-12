@@ -5,7 +5,8 @@
 //
 // 模型：
 //   步长 stepMs = max(音频时长, 动画窗口) + 停留垫
-//     · 音频时长：public/audio-durations.json 实测；未合成（null）→ 与运行时同一条估时公式
+//     · 音频时长：public/audio-durations.json 实测；未合成（null）→ 与运行时**同一个**估时函数
+//       （engine/hold.ts 的 estimateNarrationMs，评审 I4 / Ruling R5）
 //     · 动画窗口：animMsByStep（T2 真机预扫的唯一产出；本任务只冻结形状，不自采）
 //     · 停留垫：resolveHoldMs（引擎侧唯一解析器：timing.json > 档案 > 默认 400ms）
 //   帧数 frameCount = 窗口帧 + 静置帧
@@ -25,13 +26,8 @@
 // src/ 不反向 import scripts/。音频时长对位复用 storyboard/data.ts 的
 // normalizeDurations / resolveAudioMs——"非空 narration 顺序对位"口径只此一份，分镜与渲染不得各写一套。
 
-import { resolveHoldMs, type TimingFile } from "../../src/engine/hold";
-import {
-  AUDIO_ESTIMATE_CHAR_MS,
-  AUDIO_ESTIMATE_MIN_MS,
-  EMPTY_NARRATION_MIN_MS,
-  SAMPLE_FPS,
-} from "../../src/engine/constants";
+import { estimateNarrationMs, resolveHoldMs, type TimingFile } from "../../src/engine/hold";
+import { SAMPLE_FPS } from "../../src/engine/constants";
 import { normalizeDurations, resolveAudioMs } from "../storyboard/data";
 
 /** 渲染采样帧率（= 引擎 SAMPLE_FPS，同一份常量；时间轴表默认 fps）。 */
@@ -86,14 +82,13 @@ export interface Timeline {
 }
 
 /**
- * 无音频步的估时（与运行时 useAudioPlayer.estimateMs **同一条公式**、同一份常量）：
- * 空 narration（无声过场）→ EMPTY_NARRATION_MIN_MS；有稿 → max(下限, 字数 × 字数单价)。
+ * 无音频步的估时——**转发**引擎侧唯一实现（`src/engine/hold.ts` 的 `estimateNarrationMs`，
+ * 评审 I4 / Ruling R5：公式文本从两处收敛到一处，运行时预览与渲染共用同一个函数）。
+ *
+ * 名字沿用计划冻结的接口面（接口约定 1 的 `estimateMsFromNarration`）；本文件不再持有公式文本，
+ * `timeline.test.ts` 用**引用相等**断言钉死"同一个函数"（重抄一份公式即红）。
  */
-export function estimateMsFromNarration(narration: string): number {
-  return narration
-    ? Math.max(AUDIO_ESTIMATE_MIN_MS, narration.length * AUDIO_ESTIMATE_CHAR_MS)
-    : EMPTY_NARRATION_MIN_MS;
-}
+export const estimateMsFromNarration = estimateNarrationMs;
 
 /**
  * 动画窗口的宽松读取：缺位 / 非法（非有限非正数）→ 0（无动画窗口）。

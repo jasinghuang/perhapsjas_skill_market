@@ -1,15 +1,23 @@
 // M5a Task 1：停留垫解析器（引擎侧**唯一**源头）单测。
+// M5a Task 2：本文件兼管 `estimateNarrationMs`（估时公式的引擎侧唯一实现，评审 I4 / Ruling R5）。
 //
 // 契约：① 三级优先 timing.json 的 dwell["<step>"] > 档案（RuntimeConfig.holdMs）> 引擎默认 400ms；
 //       ② **永不抛**（宽松）——预览路径拿到坏 timing.json 必须退回默认值，不能白屏。
 //       ③ 非法值 = "没写"：退回**下一级**（档案 → 默认），而不是直接跳默认（否则档案节奏被一步坏数据废掉）。
+//       ④ 估时公式（无音频步）只有一份文本，在本模块；预览（useAudioPlayer）与渲染
+//          （timeline.ts）双双 import 它——"同一个函数"由 timeline.test.ts 的引用相等断言钉死。
 //
 // 严格校验（throw）是**分镜侧**的契约，不在这里：见 scripts/storyboard.test.ts:188 与
 // scripts/storyboard/data.ts 的 readDwellMs（薄校验包装：先 assert 再委托本解析器）。
 
 import { describe, expect, it } from "vitest";
-import { DEFAULT_HOLD_MS } from "./constants";
-import { resolveHoldMs, type TimingFile } from "./hold";
+import {
+  AUDIO_ESTIMATE_CHAR_MS,
+  AUDIO_ESTIMATE_MIN_MS,
+  DEFAULT_HOLD_MS,
+  EMPTY_NARRATION_MIN_MS,
+} from "./constants";
+import { estimateNarrationMs, resolveHoldMs, type TimingFile } from "./hold";
 
 /** 手写 JSON 的现实：类型说 number，运行期可能是任何东西——用这个口子喂坏值。 */
 const bad = (v: unknown) => v as unknown as TimingFile;
@@ -54,5 +62,23 @@ describe("resolveHoldMs：停留垫三级解析（引擎侧唯一源头，宽松
     expect(resolveHoldMs({ dwell: { "0": 0 } }, 1)).toBe(DEFAULT_HOLD_MS);
     expect(resolveHoldMs({ dwell: { "1": 600 } }, 10)).toBe(DEFAULT_HOLD_MS); // "10" ≠ "1"
     expect(resolveHoldMs({ dwell: { "0": 0 } }, 0, 250)).toBe(0); // 覆盖 0 也是"写了"，不再落档案
+  });
+});
+
+// ── 无音频估时公式（M5a Task 2 / 评审 I4·Ruling R5：提取到引擎侧的**唯一一份**实现） ──
+
+describe("estimateNarrationMs：无音频步的估时公式", () => {
+  it("有稿：max(下限 1500, 字数 × 250)；空稿（无声过场）：1500", () => {
+    expect(estimateNarrationMs("这是第一句口播")).toBe(1750); // 7 字 × 250
+    expect(estimateNarrationMs("")).toBe(EMPTY_NARRATION_MIN_MS); // 空 narration → 默认
+    expect(estimateNarrationMs("甲")).toBe(AUDIO_ESTIMATE_MIN_MS); // 1 字 × 250 < 下限
+    expect(estimateNarrationMs("甲".repeat(6))).toBe(1500); // 恰好触下限（6×250）
+    expect(estimateNarrationMs("甲".repeat(7))).toBe(1750); // 过下限
+  });
+
+  it("常量口径与 constants.ts 同源（改单价/下限不会只改一侧）", () => {
+    expect(AUDIO_ESTIMATE_CHAR_MS).toBe(250);
+    expect(AUDIO_ESTIMATE_MIN_MS).toBe(1500);
+    expect(EMPTY_NARRATION_MIN_MS).toBe(1500);
   });
 });

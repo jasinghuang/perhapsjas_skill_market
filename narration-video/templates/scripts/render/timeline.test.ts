@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { DEFAULT_HOLD_MS, EMPTY_NARRATION_MIN_MS } from "../../src/engine/constants";
+import { estimateNarrationMs } from "../../src/engine/hold";
 import { chapters } from "../../src/chapters/manifest";
 import {
   RENDER_FPS,
@@ -33,7 +34,8 @@ describe("buildTimeline：步长 / 帧数 / 停留垫", () => {
     // max(1750,3000)+400 / max(1750,0)+400 / max(1500,0)+400
     expect(tl.steps.map((s) => s.stepMs)).toEqual([3400, 2150, 1900]);
     expect(tl.totalMs).toBe(7450);
-    // 估时公式与 useAudioPlayer.estimateMs 同一条（常量同一份）：7 字 × 250 = 1750；空步 → 1500
+    // 估时公式与运行时同一条（**同一个函数**：engine/hold.ts 的 estimateNarrationMs）：
+    // 7 字 × 250 = 1750；空步 → 1500
     expect(estimateMsFromNarration("这是第一句口播")).toBe(1750);
     expect(estimateMsFromNarration("")).toBe(EMPTY_NARRATION_MIN_MS);
     expect(estimateMsFromNarration("甲")).toBe(EMPTY_NARRATION_MIN_MS); // 1 字 × 250 < 下限
@@ -125,6 +127,16 @@ describe("buildTimeline：步长 / 帧数 / 停留垫", () => {
     expect(tl.steps).toEqual([]);
     expect(tl.totalMs).toBe(0);
     expect(tl.fps).toBe(RENDER_FPS);
+  });
+});
+
+// ── 估时公式单一源头（评审 I4 / Ruling R5） ──
+
+describe("估时公式的单一源头", () => {
+  it("本模块导出的 estimateMsFromNarration 与引擎侧 estimateNarrationMs 是**同一个函数**", () => {
+    // 两处各写一份"同一条公式"的文本 = 将来的漂移面（改一处忘另一处，读数还各自绿）。
+    // 引用相等是唯一能钉死"只有一份实现"的判据——重抄一份公式（哪怕逐字相同）即红。
+    expect(estimateMsFromNarration).toBe(estimateNarrationMs);
   });
 });
 
