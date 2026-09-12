@@ -695,9 +695,16 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     });
     const rec: Recorded = { calls: [] };
     const { io } = makeIo();
-    // CLI 面到编排面：`--no-subs` 的解析 + 那行归一（`withNoSubs(baseUrl)`）
-    const args = parseArgs(["--no-subs", "--verify-determinism"], repo);
+    // CLI 面到编排面：`--no-subs` 的解析 + 那行归一（`withNoSubs(baseUrl)`）。
+    // **`--out` 必须显式给**（终审复审 F）：`parseArgs` 的缺省 outDir 是模块锚定的**真**
+    // `<模板根>/render` ⇒ 漏了它，这条用例的 `runRender` 会把 SRT（encodeVideo 是替身、
+    // 只有 SRT 真写盘）写进**待审输出目录**，静默改写 `render/presentation.srt`
+    // （`golden/README.md` 的落库步骤正是 `cp` 它）。同级用例一律显式传 `path.join(repo,"render")`。
+    const args = parseArgs(["--no-subs", "--verify-determinism", "--out", path.join(repo, "render")], repo);
     expect(args.noSubs).toBe(true);
+    // **先把锚定钉住、再跑管线**：这一条断言必须在 runRender **之前**——`--out` 哪天被删掉时，
+    // 它在写盘前就红（而不是"跑完把待审 SRT 改掉了，然后才报"）
+    expect(args.outDir).toBe(path.join(repo, "render"));
     const code = await runRender(
       { ...args },
       makeDeps(repo, rec),
