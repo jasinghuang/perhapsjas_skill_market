@@ -2,7 +2,7 @@
 // （`--only` 与 timeline/encode/verify 的联动）、音频段装配（音画同源的输入面）、
 // 每步进度行、编排顺序与"无音频明示"。
 //
-// 真机臂（自起 Vite + Chromium + ffmpeg 出片）不在此处：那是 `npm run render --mock-audio`
+// 真机臂（自起 Vite + Chromium + ffmpeg 出片）不在此处：那是 `npm run render -- --mock-audio`
 // 的收口冒烟与 T4/T5/T6 三个 *.browser.test.ts 的事务。本文件钉住的是**接线**——
 // 三段联动（帧流 / 编码 / 自校验）的取值来源必须是**同一张（子）时间轴表**，
 // 以及"用法错误不得静默"的纪律（未知 flag → 退出码 2 的载体）。
@@ -23,6 +23,7 @@ import {
   assertWindowTableShape,
   buildAudioSegments,
   determinismPairs,
+  displayPath,
   parseArgs,
   renderCli,
   runRender,
@@ -431,7 +432,10 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     expect(rec.capture?.opts.softwareGL).toBe(true);
     expect(rec.verify?.softwareGL).toBe(true);
     // 渲染态 URL（captureFrames 直接 throw 非渲染态；预扫/verify 同样吃它）
+    // 修复轮 1（Minor 3）：headless 在 **CLI 层显式归一**（不是靠 openSession 内部补）——日志里打的
+    // 就是这个串，必须与页面实际吃到的一致；两个归一函数都幂等，重复调用无副作用。
     expect(rec.capture?.opts.url).toContain("render=1");
+    expect(rec.capture?.opts.url).toContain("headless=1");
     // 每步一行进度（成片口径的读数）
     expect(lines.filter((l) => l.startsWith("[render] 章节"))).toEqual([
       "[render] 章节 example 第 0 步 · 91 帧 · 3400ms · 音频 1750ms",
@@ -589,5 +593,30 @@ describe("renderCli（退出码约定与 check 入口一致）", () => {
   it("未知 flag → 2（不跑管线）", async () => {
     const { io } = makeIo();
     expect(await renderCli(["--nope"], io)).toBe(2);
+  });
+
+  // 修复轮 1（Minor 4）：npm 11 会把 `npm run render --mock-audio` 的 flag 当**自己的配置项**
+  // 吞掉（只在 stderr 留一条 Unknown cli config 警告），脚本根本收不到 —— 用户照抄即踩。
+  // 用法文案必须把 `--` 这个坑写在明面上（同一条事实在 render.ts 的 RENDER_USAGE 里）。
+  it("用法文案点名 npm 的 `--` 转发陷阱（用户照抄即踩的那条）", () => {
+    expect(RENDER_USAGE).toContain("npm run render -- --mock-audio");
+    expect(RENDER_USAGE).toMatch(/必须加 --/);
+  });
+});
+
+describe("displayPath（日志路径：库内相对、库外绝对）", () => {
+  const CWD = "/repo/narration-video/templates";
+
+  it("cwd 之内 → 相对路径（短、可点）", () => {
+    expect(displayPath(path.join(CWD, "render/presentation.mp4"), CWD)).toBe("render/presentation.mp4");
+  });
+
+  it("cwd 之外（--out 指到仓库外）→ 绝对路径（`../..` 串只是噪音，还得自己数层数）", () => {
+    expect(displayPath("/tmp/out/presentation.mp4", CWD)).toBe("/tmp/out/presentation.mp4");
+    expect(displayPath("/repo/other", CWD)).toBe("/repo/other");
+  });
+
+  it("就是 cwd 本身 → 绝对路径（空串会被 `||` 兜成别的，宁可直接给绝对）", () => {
+    expect(displayPath(CWD, CWD)).toBe(CWD);
   });
 });

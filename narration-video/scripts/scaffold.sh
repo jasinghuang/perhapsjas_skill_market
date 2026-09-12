@@ -48,6 +48,11 @@ rm -rf "$TARGET/node_modules" "$TARGET/dist" "$TARGET/storyboard" "$TARGET/.impe
 # M5a Task 7：渲染产出（render/<slug>.mp4 + 中间帧目录）同样是生成物，新项目应为空。
 # 单独一行（不动上面那行 M3b/M4 落的清理面——Ruling Q3）。
 rm -rf "$TARGET/render"
+# M5a T7 修复轮 1（Ruling R17）：`public/audio/`（mock/TTS 的 mp3）与 `public/audio-durations.json`
+# 与 render/ **同属**"模板工作区的生成物"——`cp -R` 会把它们一并拷进新项目（二者都已 gitignore，
+# 故只在"从跑过 --mock-audio 的本地工作区 scaffold"时发生；干净 clone 不复现）。同样是**单独一行**，
+# 上面两行逐字未动。新项目要音频时自己跑 `npm run render -- --mock-audio`（或 M6 的真 TTS）。
+rm -rf "$TARGET/public/audio" "$TARGET/public/audio-durations.json"
 
 # 2. 写运行时配置（slug + 舞台尺寸 = 档案最小参数；安全框由尺寸折算，不手写绝对值）
 cat > "$TARGET/src/engine/runtime-config.ts" <<EOF
@@ -104,10 +109,14 @@ cat <<EOF
                                  #   + 零动画门禁（帧数=总 step 数；氛围微动按步 timing.json 声明 ambient 豁免）
                                  #   加 --verify-sequential：顺序推进 vs 独立 mount 逐字节一致性校验
    npm run render                # 渲染导出：自起 Vite + 逐帧 seek → ffmpeg 出 render/<slug>.mp4 + 产物自校验
-                                 #   未合成音频时按估时出片（无声，CLI 会明示）；首次可用 --mock-audio 出占位音轨
-                                 #   （lavfi 正弦 + ffprobe 实测时长 → public/audio/ + audio-durations.json）
-                                 #   加 --only 0,2 只渲指定步（specs 下标）／--concurrency N／--verify-determinism
-                                 #   （独立会话重采逐字节比对 + 负样本；产物 render/ 不入库）
+                                 #   ⚠️ 经 npm 传 flag 必须加 --（npm 11 会把 --mock-audio 当成 npm 自己的
+                                 #      配置项、不转发给脚本——实测漏了它，mock 分支根本不会跑）：
+                                 #     npm run render -- --mock-audio（首次出占位音轨：lavfi 正弦 + ffprobe
+                                 #       实测时长 → public/audio/ + audio-durations.json）
+                                 #     npm run render -- --only 0,2（只渲指定步，specs 下标）
+                                 #     npm run render -- --concurrency 3
+                                 #     npm run render -- --verify-determinism（独立会话重采逐字节比对 + 负样本）
+                                 #   未合成音频时按估时出片（无声，CLI 会明示）；产物 render/ 不入库
 
 截图/渲染/全量门禁类命令前置（仅这些命令需要，浏览器不进 npm install）:
    npx playwright install chromium   # 首次执行一次；之后走缓存（跨项目复用）

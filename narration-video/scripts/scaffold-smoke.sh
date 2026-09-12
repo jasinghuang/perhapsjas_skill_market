@@ -3,6 +3,8 @@
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# 模板工作区本身（下面的"生成物不得进新项目"要用源的真实脏/净状态做前置）
+TEMPLATE_DIR="$SKILL_DIR/templates"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -45,11 +47,24 @@ grep -q 'npx playwright install chromium' "$TMP/demo/scripts/shot/session.ts"
 test ! -e "$TMP/demo/storyboard"
 # 设计钩子的本地状态（narrow ignore + hook 缓存）是工具态，不得随拷贝进新项目
 test ! -e "$TMP/demo/.impeccable"
-# M5a Task 7 渲染接线：入口在 package.json；模板工作区的渲染产出（render/）不得随拷贝进新项目
+# M5a Task 7 渲染接线：入口在 package.json；模板工作区的生成物不得随拷贝进新项目
 test -f "$TMP/demo/scripts/render.ts"
 test -d "$TMP/demo/scripts/render"
 grep -q '"render": "tsx scripts/render.ts"' "$TMP/demo/package.json"
-test ! -e "$TMP/demo/render"
+# 生成物清单（M5a T7 的 render/ + 修复轮 1 Ruling R17 的 public/audio 与 mock 时长表）。
+# **断言必须有牙**：干净模板树上"目标里没有 render/"是**恒真**的（源里本来就没有）——把清理行
+# 整条删掉也照样过（修复轮 1 评审点名）。故拆两支：① 钉住清理行**本身**（接线真在）；② 源脏时
+# 才验证目标确实被清干净（真判据；干净树上这一支自动跳过）。
+grep -qF 'rm -rf "$TARGET/render"' "$SKILL_DIR/scripts/scaffold.sh"
+grep -qF 'rm -rf "$TARGET/public/audio" "$TARGET/public/audio-durations.json"' "$SKILL_DIR/scripts/scaffold.sh"
+# 注意别写成"循环体里裸 test"——循环的退出码只取**最后一条**命令，前面某轮失败会被后面的空转
+# if 吞掉（本断言第一版就是这么写的，实测"目标脏"时仍返回 0）。故显式 FAIL + exit 1。
+for generated in render public/audio public/audio-durations.json; do
+  if [ -e "$TEMPLATE_DIR/$generated" ] && [ -e "$TMP/demo/$generated" ]; then
+    echo "FAIL: 模板工作区的生成物随拷贝进了新项目：$generated" >&2
+    exit 1
+  fi
+done
 
 # 2. 3:4 场景
 bash "$SKILL_DIR/scripts/scaffold.sh" "$TMP/tall" --slug tall --stage 3:4 >/dev/null

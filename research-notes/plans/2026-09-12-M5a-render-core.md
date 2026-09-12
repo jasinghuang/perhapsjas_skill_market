@@ -303,7 +303,7 @@ it("checkProbe：时长差 / 帧数差 / 帧率错 → 逐条失败项（非空�
   - viewport 取 `stageConfig.dims`；`softwareGL: true`（渲染 CLI 专属）
   - 无音频 deck：打印"未合成音频，按估时出片（无声）"（不是静默）
   - 每步进度一行：`[render] 章节 example 第 0 步 · 91 帧 · 3400ms`
-- [ ] **Step 4: 全量收口**：`npx vitest run` + `npx tsc --noEmit` + `npm run check`（blocker 0）+ `npm run build` + 真机 `npm run render --mock-audio` 出一条 mp4 + `bash narration-video/scripts/scaffold-smoke.sh`
+- [ ] **Step 4: 全量收口**：`npx vitest run` + `npx tsc --noEmit` + `npm run check`（blocker 0）+ `npm run build` + 真机 `npm run render -- --mock-audio` 出一条 mp4 + `bash narration-video/scripts/scaffold-smoke.sh`
 - [ ] **Step 5: 确定性终验**：`--verify-determinism` 重采采样步并与首渲逐字节比对（**含"两个不同 t 必须不同"的负样本**）
 - [ ] **Step 6: 文档记录**（先落盘再删工作区）：
   - §12 追加 M5a 行（含 commit）；M5 遗留 #2/#3/#5 标已落地（#1 已由 M3b 落地；#4/#6 归 M5b，在 M5b 占位计划里点名）

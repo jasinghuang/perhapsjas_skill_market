@@ -79,7 +79,7 @@ import {
   type SampledFrame,
   type VerifyOptions,
 } from "./render/verify";
-import { jumpToStep, openSession, readyWithTimeout, seekTo } from "./shot/session";
+import { jumpToStep, openSession, readyWithTimeout, seekTo, withHeadless } from "./shot/session";
 import {
   hasAudio,
   normalizeDurations,
@@ -167,6 +167,9 @@ export interface RenderDeps {
 export const RENDER_USAGE = [
   "用法：tsx scripts/render.ts [--mock-audio] [--only <i,j,…>] [--concurrency <n>] [--out <dir>] [--verify-determinism] [--help]",
   "  （npm run render 即本入口；自起 Vite + Chromium 逐帧 seek 出 mp4，前置 ffmpeg）",
+  "  ⚠️ 经 npm 传 flag 必须加 --（npm 11 会把 --mock-audio 当成 npm 自己的配置项、不转发给脚本；",
+  "     漏了它 = mock 分支根本不跑，只在 stderr 留一条 Unknown cli config）：",
+  "     npm run render -- --mock-audio",
   "  --mock-audio          先合成 mock 音轨（lavfi 正弦 + ffprobe 实测时长 → public/audio/ + public/audio-durations.json）",
   "  --only <i,j,…>        只渲这些步（specs 下标：章节序 → 章内步序；编码/自校验同步只处理这些步）",
   "  --concurrency <n>     帧流并发（默认 2；每 worker 一个浏览器进程——本机负载常高，别开大）",
@@ -668,6 +671,15 @@ export async function runDeterminism(opts: DeterminismOptions): Promise<Determin
 
 const DEFAULT_IO: RenderIo = { log: console.log, error: console.error };
 
+/**
+ * 日志用路径（T7 修复轮 1，Minor 8）：`cwd` 之内给相对路径（短、可点），**之外给绝对路径**——
+ * `--out` 指到仓库外时 `../../..` 的装饰串只增加噪音，读者还得自己数层数。
+ */
+export function displayPath(target: string, cwd = process.cwd()): string {
+  const rel = path.relative(cwd, target);
+  return rel === "" || rel.startsWith("..") ? target : rel;
+}
+
 function narrationOf(chapters: readonly RenderChapter[], step: TimelineStep): string {
   return chapters[step.chapter]?.narrations[step.step] ?? "";
 }
@@ -717,7 +729,11 @@ export async function runRender(
   // ── 3) 自起 Vite（默认永不复用外部服务——见文件头） ──
   const serve = await (deps.startServe ?? ((o: { repoRoot: string }) => startServe(o)))({ repoRoot });
   try {
-    const url = withRenderMode(serve.url);
+    // 显式归一（**不是**靠 openSession 内部补）：日志/进度行里打的就是这个 url，两处必须一致——
+    // 只打 `?render=1` 而页面实际吃 `?render=1&headless=1`，排查时会把"带没带 headless"读错。
+    // 同一组合在 `scripts/check/headless.ts:593`（无头 pass）也是这么写的；两个函数都幂等。
+    // （注：`withHeadless` 的**定义与导出**在 `scripts/shot/session.ts`，headless.ts 只 import 它。）
+    const url = withHeadless(withRenderMode(serve.url));
 
     // ── 4) 窗口预扫（animMsByStep 的唯一生产者） ──
     const scan = await (deps.scanAnimationWindows ?? scanAnimationWindows)({ url, chapters });
@@ -783,7 +799,7 @@ export async function runRender(
       fps: sub.fps,
     });
     io.log(
-      `[render] 编码完成：${path.relative(process.cwd(), encoded.output) || encoded.output}` +
+      `[render] 编码完成：${displayPath(encoded.output)}` +
         `（清单 ${path.basename(encoded.listPath)}）`,
     );
 
@@ -817,7 +833,7 @@ export async function runRender(
 
     io.log(
       ok
-        ? `[render] OK：${path.relative(process.cwd(), output) || output}（${(sub.totalMs / 1000).toFixed(3)}s）`
+        ? `[render] OK：${displayPath(output)}（${(sub.totalMs / 1000).toFixed(3)}s）`
         : "[render] 未通过：见上（退出码 1）",
     );
     return ok ? 0 : 1;
