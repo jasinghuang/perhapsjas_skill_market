@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
+import { DEFAULT_HOLD_MS } from "./engine/constants";
 
 class FakeAudio {
   static instances: FakeAudio[] = [];
@@ -237,5 +238,53 @@ describe("App 装配 · 无头/渲染不自驱（M3b Task 6）", () => {
     const { default: PlainApp } = await import("./App");
     render(<PlainApp />);
     expect(playStep).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("App 装配 · 停留垫解析（M5a Task 1）", () => {
+  // 与"无头/渲染不自驱"同法：拦下 useAudioPlayer，直接读 playStep 的实参（hold 的唯一出口）
+  const mockPlayer = () => {
+    const playStep = vi.fn();
+    vi.doMock("./engine/useAudioPlayer", () => ({
+      useAudioPlayer: () => ({
+        playing: false,
+        playStep,
+        pause: vi.fn(),
+        resume: vi.fn(),
+        stop: vi.fn(),
+      }),
+    }));
+    return playStep;
+  };
+
+  afterEach(() => {
+    vi.doUnmock("./engine/useAudioPlayer");
+    vi.resetModules();
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("holdMs 走解析：01-example/timing.json 的 dwell 覆盖进 playStep（不再是硬编码常量）", async () => {
+    vi.resetModules();
+    const playStep = mockPlayer();
+    const { default: PlainApp } = await import("./App");
+    render(<PlainApp />);
+
+    // step 0 无覆盖 → 引擎默认 400ms
+    expect(playStep).toHaveBeenLastCalledWith(
+      "这是第一句口播",
+      "/audio/01-example/0.mp3",
+      DEFAULT_HOLD_MS,
+      expect.any(Function),
+    );
+
+    // step 1 有覆盖（timing.json 的 dwell{"1":600}）→ 600ms，硬编码时这里会是 400
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(playStep).toHaveBeenLastCalledWith(
+      "这是第二句口播",
+      "/audio/01-example/1.mp3",
+      600,
+      expect.any(Function),
+    );
+    expect(playStep).toHaveBeenCalledTimes(2);
   });
 });

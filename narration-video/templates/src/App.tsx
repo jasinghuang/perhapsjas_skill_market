@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { chapters } from "./chapters/manifest";
 import { setRenderMode } from "./engine/animationRuntime";
-import { DEFAULT_HOLD_MS } from "./engine/constants";
 import {
   animations,
   audit,
@@ -10,6 +9,7 @@ import {
   shouldInstallBridge,
   uninstallBridge,
 } from "./engine/cursorBridge";
+import { resolveHoldMs } from "./engine/hold";
 import { stageConfig } from "./engine/runtime-config";
 import { Stage } from "./engine/Stage";
 import { useAudioPlayer } from "./engine/useAudioPlayer";
@@ -30,6 +30,9 @@ export default function App() {
   const chapter = chapters[stepper.chapter];
   const narration = chapter.narrations[stepper.step] ?? "";
   const audioSrc = narration ? `/audio/${chapter.folder}/${stepper.step}.mp3` : null;
+  // 停留垫逐帧解析（§3.1 三层：timing.json > 档案 > 引擎默认）——与渲染时间轴表同一份
+  // 解析器（engine/hold.ts），预览与成片节奏不会各算各的。随游标派生，无陈旧闭包问题。
+  const holdMs = resolveHoldMs(chapter.timing, stepper.step, stageConfig.holdMs);
 
   // 游标桥（M4 §7 决策 1）：?headless=1 或 dev 模式安装 window.__presentation，
   // 供分镜截图/无头门禁/渲染管线确定性驱动游标；生产构建不暴露（见 shouldInstallBridge）。
@@ -72,7 +75,7 @@ export default function App() {
       stoppedRef.current = false;
       return;
     }
-    player.playStep(narration, audioSrc, DEFAULT_HOLD_MS, stepper.next);
+    player.playStep(narration, audioSrc, holdMs, stepper.next);
     // stepper.chapter/step 变化即进入新的一步
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepper.chapter, stepper.step]);

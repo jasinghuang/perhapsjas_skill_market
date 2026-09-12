@@ -9,6 +9,10 @@ export interface RuntimeConfig {
   dims: StageDims;
   /** 安全框（档案绝对值由基准比例折算得出，见 engine/safe-area.ts） */
   safeArea: SafeArea;
+  /** 停留垫档案覆盖（ms；§3.1 三层停留垫的**中间层**：引擎默认 400ms → 本层 → timing.json
+   *  逐帧覆盖）。生产者是 scaffold（按平台节奏写），缺省 = 不覆盖 → 引擎默认。
+   *  解析唯一源头：engine/hold.ts 的 resolveHoldMs（运行时与渲染同一条）。 */
+  holdMs?: number;
 }
 
 const dims: StageDims = { width: 1920, height: 1080 };

@@ -3,9 +3,15 @@
 // ctx，注册即驱动，是 App 级"含帧函数组件的步骤能自动推进"测试的最小可行载体。
 import { KenBurns } from "../../components";
 import { stageConfig } from "../../engine/runtime-config";
+// 停留垫覆盖的载体（§3.1 三层停留垫的第三层）：**静态 import**（Vite 构建期就位，运行时零 IO）。
+// 解析归引擎侧 resolveHoldMs（宽松不抛）；分镜侧 readDwellMs 另包一层 throw（离线严格）。
+import timing from "./timing.json";
 
 // Ruling P4-4：示例章节即门禁标杆——narrations 结尾不带标点（V3 字幕结尾禁句号等）
 export const exampleNarrations = ["这是第一句口播", "这是第二句口播", ""];
+
+/** 该章的 timing.json（挂到 ChapterDef.timing，见 chapters/manifest.ts）。 */
+export const exampleTiming = timing;
 
 // 安全框（§12b V1 / 门禁 #20）：示例章节的文字也得落在内容带内——标杆一旦自带自家门禁认定的
 // 违规就自相矛盾，且 scaffold 全量拷贝模板（每个新项目开局带 4 条越界）。

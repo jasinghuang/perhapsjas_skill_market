@@ -19,8 +19,12 @@
 //   5. **animMs 分镜阶段恒 null**（零动画窗口），故 stepMs = audioMs + dwellMs；音频缺失时
 //      stepMs 也 null（显示 n/a（未合成））——不用 dwellMs 冒充。
 //   6. **门禁不改入参**：返回新帧对象（调用方持有的 plan 仍可复用/重跑）。
+//   7. **停留垫解析不在本层（M5a Task 1）**：解析/三级优先只有一份，在引擎侧
+//      `src/engine/hold.ts` 的 `resolveHoldMs`（宽松不抛——预览不能白屏）；本层是**离线门禁**，
+//      职责相反：把坏数据炸出来（throw）。故 `readDwellMs` = 薄校验包装：先 assert 再委托解析器，
+//      两侧分工写死在这里（`storyboard.test.ts:188` 的 throw 契约不得丢）。
 
-import { DEFAULT_HOLD_MS } from "../../src/engine/constants";
+import { resolveHoldMs, type TimingFile } from "../../src/engine/hold";
 
 // ── 输入模型 ──
 
@@ -33,16 +37,10 @@ export interface StoryboardChapter {
   narrations: readonly string[];
 }
 
-/** `src/chapters/<folder>/timing.json`（计划 §2 数据约定 3；文件可选，缺键 = 缺省）。
- *  键都是"step 序号的字符串形式"（JSON 对象键只能是字符串）。 */
-export interface TimingFile {
-  /** 该步停留垫覆盖值（ms；缺省 DEFAULT_HOLD_MS） */
-  dwell?: Record<string, number>;
-  /** 该帧"主导动画词汇"标注（Phase 3 设计、Checkpoint 2 确认的即是它） */
-  animation?: Record<string, string>;
-  /** 氛围声明（Ruling M4-2）：声明步允许动画计数 > 0，note 显示在分镜帧上 */
-  ambient?: Record<string, string>;
-}
+/** timing.json 的形态与解析归属引擎侧（**单一源头**，`src/engine/hold.ts`）——此处只做
+ *  转发，保证 `scripts/storyboard.ts` / `storyboard.test.ts` 的既有 import 面不动。
+ *  ⚠️ 方向：scripts/ → src/engine/（仓库惯例）；引擎侧不得反向 import 本文件。 */
+export type { TimingFile };
 
 /** 单条时长：数字 = 实测 ms；null = 该条未合成（单条 TTS 失败的合法产物）。 */
 export type DurationEntry = number | null;
@@ -188,8 +186,11 @@ export function normalizeDurations(raw: unknown): AudioDurations | null {
  * 根形态守卫（评审 F4）：timing.json 顶层须为对象。
  * 少了这道守卫，`timing?.dwell` 这类属性读取对数组/字符串/数字都静默返回 undefined（全默认），
  * 坏文件被当成"没写"——与 dwell 值非法的 throw 口径不一致。
+ *
+ * **导出（M5a Task 1）**：渲染侧（T7 编排 / 将来的 timing 读取）要吃同一张守卫——
+ * 另抄一份必漂移，故从模块私有改为导出（行为逐字不变）。
  */
-function normalizeTiming(raw: unknown, chapterId: string): TimingFile | undefined {
+export function normalizeTiming(raw: unknown, chapterId: string): TimingFile | undefined {
   if (raw === undefined) return undefined;
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw new Error(
@@ -232,16 +233,22 @@ function readStepKey<T>(
   return table[String(step)];
 }
 
+/**
+ * 停留垫（分镜侧）：**薄校验包装** —— 先 assert（离线门禁：坏数据宁炸不静默降级），
+ * 再把取值/三级优先委托给引擎侧唯一解析器 `resolveHoldMs`（运行时预览用的就是它）。
+ * 分工原因见文件头取舍 7：解析逻辑若在本层复制一份，预览与分镜的停留节奏必然漂移。
+ */
 function readDwellMs(timing: TimingFile | undefined, step: number, chapterId: string): number {
+  // 表形态校验（非对象 → throw）仍在 readStepKey 里——那是分镜侧的定位文案，不外包
   const raw = readStepKey(timing?.dwell, step, chapterId, "dwell");
-  if (raw === undefined) return DEFAULT_HOLD_MS;
-  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) {
+  if (raw !== undefined && (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0)) {
     throw new Error(
       `分镜数据：${chapterId}/timing.json 的 dwell["${step}"] 非法：${JSON.stringify(raw)}——` +
         `停留垫覆盖须为有限非负数（ms）`,
     );
   }
-  return raw;
+  // 取值与三级优先（timing.json > 档案 > 引擎默认）归引擎侧（此处无档案层，走默认）
+  return resolveHoldMs(timing, step);
 }
 
 function readAnnotation(
