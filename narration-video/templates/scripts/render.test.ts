@@ -533,7 +533,9 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     expect(rec.encode?.segments.map((s) => s.mp3)).toEqual([null, null, null]);
   });
 
-  it("warnings 整串打到 stderr（R7 泄漏告警的出口）；自校验失败 → 退出码 1", async () => {
+  // M5b T4：缺省下"自校验失败"改走实时捕获降级（出 .realtime.mp4、退出码 0），故本条要的是
+  // **严格模式**（`--no-fallback`）下的读数；降级路径本身在 realtime.test.ts 的接线用例里钉。
+  it("warnings 整串打到 stderr（R7 泄漏告警的出口）；--no-fallback 下自校验失败 → 退出码 1", async () => {
     const repo = tmpRepo("warn");
     seedRepo(repo, {
       durations: { example: [1750, 1750] },
@@ -542,7 +544,7 @@ describe("runRender 编排（顺序 = mock 音轨 → 窗口预扫 → 拍帧 �
     const rec: Recorded = { calls: [] };
     const { io, errors, lines } = makeIo();
     const code = await runRender(
-      { outDir: path.join(repo, "render"), mockAudio: false, realisticAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, help: false },
+      { outDir: path.join(repo, "render"), mockAudio: false, realisticAudio: false, concurrency: 2, only: undefined, verifyDeterminism: false, noFallback: true, help: false },
       makeDeps(repo, rec, {
         verifyRender: async (opts) => {
           rec.calls.push("verify");

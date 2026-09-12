@@ -5,6 +5,8 @@ import { register, setRenderMode } from "./animationRuntime";
 
 class FakeAudio {
   static instances: FakeAudio[] = [];
+  /** 置位后 play() 返回 **rejected** promise（自动播放策略：NotAllowedError）——用例手动开关 */
+  static rejectPlay = false;
   private _src: string | null = null;
   /** 资源选择失败后置位（真实 HTMLMediaElement.error 同义）；赋新 src 时复归 */
   error: { code: number } | null = null;
@@ -26,6 +28,14 @@ class FakeAudio {
   play() {
     this.playCalls++;
     this.ended = false;
+    if (FakeAudio.rejectPlay) {
+      // 浏览器实测的拒绝形态：DOMException("play() failed because the user didn't interact…")
+      return Promise.reject(
+        Object.assign(new Error("play() failed because the user didn't interact with the document first"), {
+          name: "NotAllowedError",
+        }),
+      );
+    }
     return Promise.resolve();
   }
   pause() {
@@ -57,6 +67,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   setRenderMode(false);
   FakeAudio.instances = [];
+  FakeAudio.rejectPlay = false;
   vi.stubGlobal("Audio", FakeAudio);
 });
 afterEach(() => {
@@ -179,6 +190,34 @@ describe("useAudioPlayer", () => {
     act(() => { result.current.resume(); }); // 失败资源上 play() 不再触发 error：无守卫则永久卡死
     vi.advanceTimersByTime(1500 + 50 + 400);
     expect(onDone).toHaveBeenCalledTimes(1); // 无守卫：0 次（死锁）
+  });
+
+  it("播放在策略拒绝（NotAllowedError）下不静默 stall：武装估时兜底并推进（产品缺陷修复）", async () => {
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useAudioPlayer());
+    FakeAudio.rejectPlay = true; // 本次 play() 返回 rejected promise
+    act(() => {
+      result.current.playStep("你好", "1.mp3", 400, onDone);
+    });
+    const audio = FakeAudio.instances[0];
+    expect(audio.playCalls).toBe(1);
+
+    await act(async () => {
+      await Promise.resolve(); // 让 play() 的 rejection 跑到 catch
+    });
+    vi.advanceTimersByTime(1499);
+    expect(onDone).not.toHaveBeenCalled(); // 未到估时点（推进不是"立刻跳步"）
+    vi.advanceTimersByTime(1); // 估时 1500ms 到点（2 字×250 < 1500 下限）
+    vi.advanceTimersByTime(50); // 动画窗口已空 → 直接进垫
+    vi.advanceTimersByTime(400);
+    expect(onDone).toHaveBeenCalledTimes(1);
+
+    // 同一失败上 onerror 也可能来一发（404 时浏览器两路都报）：不得双武装、不得推进两次
+    act(() => {
+      audio.fail();
+    });
+    vi.advanceTimersByTime(5000);
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 
   it("stop 清空定时与音频", () => {

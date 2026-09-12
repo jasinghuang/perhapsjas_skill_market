@@ -61,6 +61,25 @@ export function useAudioPlayer(): AudioPlayer {
     timerRef.current = window.setTimeout(() => onDoneRef.current(), holdRef.current);
   }, [clearTimer]);
 
+  /**
+   * 估时兜底（无音频 / 加载失败 / **play() 被拒** 三条同款）：`estimateMs → 等动画 → 垫 → 推进`。
+   *
+   * **幂等**：只在没有悬挂计时器时武装。必要性来自"同一次失败两路都报"——404 时浏览器既发
+   * `error` 事件、又让 `play()` 的 promise 以 NotSupportedError 拒绝，两次武装会拉起两条
+   * 并行的 `afterAnimations` 轮询链（`clearTimer` 只认 timerRef 里那一只，另一只在浏览器里
+   * 悬挂到点、无人能取消）。
+   */
+  const armEstimate = useCallback(
+    (narration: string) => {
+      if (timerRef.current !== null) return;
+      timerRef.current = window.setTimeout(
+        () => afterAnimations(scheduleHold),
+        estimateNarrationMs(narration),
+      );
+    },
+    [afterAnimations, scheduleHold],
+  );
+
   const playStep = useCallback(
     (narration: string, src: string | null, holdMs: number, onDone: () => void) => {
       clearTimer();
@@ -71,10 +90,7 @@ export function useAudioPlayer(): AudioPlayer {
 
       if (!src) {
         // 音频缺失兜底：估时（或空步默认）→ 等动画 → 垫
-        timerRef.current = window.setTimeout(
-          () => afterAnimations(scheduleHold),
-          estimateNarrationMs(narration),
-        );
+        armEstimate(narration);
         return;
       }
 
@@ -83,16 +99,17 @@ export function useAudioPlayer(): AudioPlayer {
       audio.onended = () => afterAnimations(scheduleHold);
       audio.onerror = () => {
         // 音频加载失败（如 404）：视同无音频，走估时兜底推进
-        timerRef.current = window.setTimeout(
-          () => afterAnimations(scheduleHold),
-          estimateNarrationMs(narration),
-        );
+        armEstimate(narration);
       };
       audio.play().catch(() => {
-        // play() 拒绝（自动播放限制等）：错误统一由 onerror 处理，勿让 rejection 冒泡
+        // play() 被自动播放策略拒（NotAllowedError）：**必须武装估时兜底**，否则整条推进链
+        // 静默 stall——没有任何事件会再来（onended 不响、onerror 是加载错误而非播放拒绝），
+        // 游标永久停在当前步（实测：裸 ?auto=1 预览与实时捕获录制都是"一帧死画面"且无提示）。
+        // 真人用 ?auto=1 打开预览（无 transport 无按钮，没有"点一下就好"的出路）踩的正是这一条。
+        armEstimate(narration);
       });
     },
-    [afterAnimations, clearTimer, getAudio, scheduleHold],
+    [afterAnimations, armEstimate, clearTimer, getAudio, scheduleHold],
   );
 
   const pause = useCallback(() => {
@@ -113,21 +130,19 @@ export function useAudioPlayer(): AudioPlayer {
         afterAnimations(scheduleHold);
       } else {
         audio.play().catch(() => {
-          // play() 拒绝：错误统一由 onerror 处理
+          // 同 playStep：被策略拒时武装估时兜底（否则暂停后播放会静默 stall——本分支无其他事件源）
+          armEstimate(last.narration);
         });
       }
     } else {
       // 兜底估时路径：重新计时（M1 简化，不恢复已流逝部分）
       // 含 audio.error 情形（M1 终审 parked ①）：失败资源上再 play() 不触发新 error 事件，
       // 无计时器重武装 → 暂停后播放即死锁；判 error 走估时兜底
-      timerRef.current = window.setTimeout(
-        () => afterAnimations(scheduleHold),
-        estimateNarrationMs(last.narration),
-      );
+      armEstimate(last.narration);
     }
     resumeAll();
     setPlaying(true);
-  }, [afterAnimations, clearTimer, scheduleHold]);
+  }, [afterAnimations, armEstimate, clearTimer, scheduleHold]);
 
   const stop = useCallback(() => {
     clearTimer();

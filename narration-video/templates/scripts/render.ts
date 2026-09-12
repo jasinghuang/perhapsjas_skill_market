@@ -78,6 +78,12 @@ import {
 } from "./render/frames";
 import { buildTimeline, type Timeline, type TimelineStep } from "./render/timeline";
 import { buildSrtCues, renderSrt } from "./render/srt";
+import {
+  captureRealtime,
+  realtimeUrl,
+  type RealtimeOptions,
+  type RealtimeResult,
+} from "./render/realtime";
 import { scanAnimationWindows, type WindowScanResult } from "./render/window-scan";
 import {
   sampledFrames,
@@ -149,6 +155,14 @@ export interface RenderArgs {
    * 交叉组合合法：`--no-subs` 仍然写 SRT（字幕文本不因画面免了就不给），`--no-srt` 也照常有字幕画面。
    */
   noSubs?: boolean;
+  /**
+   * `--no-fallback`：确定性链路失败时**不**走实时捕获降级（M5b T4 的逃生舱，缺省 = 降级）。
+   *
+   * 与 `noSubs?` / `noSrt?` 同款否定式开关（缺省 undefined = 默认行为），但关掉的是**失败路径**：
+   * 缺省下 seek 断言抛错或自校验未过都会降级出 `<slug>.realtime.mp4`（响亮：产物名 + 日志）；
+   * 给上它 = 严格模式（失败照旧抛 / 退出码 1），适合"我要的就是确定性产物"的场合。
+   */
+  noFallback?: boolean;
   help: boolean;
 }
 
@@ -187,6 +201,8 @@ export interface RenderDeps {
   captureFrames?: (specs: readonly FrameSpec[], opts: CaptureFramesOptions) => Promise<CapturedStep[]>;
   encodeVideo?: (opts: EncodeOptions) => Promise<EncodeResult>;
   verifyRender?: (opts: VerifyOptions) => Promise<RenderVerifyReport>;
+  /** 失败降级（M5b T4）：verify 未过 / seek 断言抛错 → 实时捕获出片（`--no-fallback` 关） */
+  realtimeCapture?: (opts: RealtimeOptions) => Promise<RealtimeResult>;
   runDeterminism?: (opts: DeterminismOptions) => Promise<DeterminismReport>;
 }
 
@@ -209,11 +225,14 @@ export const RENDER_USAGE = [
   "  --no-srt              不写字幕副产物（默认写 <dir>/<slug>.srt：narrations × 时间轴表纯派生；",
   "                        与画面无关——--no-subs 不影响它），只影响 SRT 落盘",
   "  --verify-determinism  确定性终验：独立会话重采采样步 → 与产物帧逐字节比对 + 负样本（两个不同 t 必须不同）",
+  "  --no-fallback         确定性链路失败（自校验未过 / seek 断言抛错）时**不走**实时捕获降级；",
+  "                        缺省 = 降级出 <dir>/<slug>.realtime.mp4（实时播放 + 录屏 + 同一份音轨 mux；",
+  "                        A/V 同步是近似的，见 KNOWN-ISSUES）；给上它 = 严格模式（失败即抛 / 退出码 1）",
   "  --help                打印本用法",
 ].join("\n");
 
 const USAGE_FLAGS =
-  "--mock-audio / --realistic-audio / --only / --concurrency / --out / --no-subs / --no-srt / --verify-determinism / --help";
+  "--mock-audio / --realistic-audio / --only / --concurrency / --out / --no-subs / --no-srt / --verify-determinism / --no-fallback / --help";
 
 /** 并发数：非负整数（`0` 归 1——0/负数会除零或空跑；归一发生在 CLI 层，见 frames.partition 的注释）。 */
 function parseConcurrency(value: string, flag: string): number {
@@ -285,6 +304,9 @@ export function parseArgs(argv: readonly string[], cwd: string): RenderArgs {
         break;
       case "--no-srt":
         out.noSrt = true;
+        break;
+      case "--no-fallback":
+        out.noFallback = true;
         break;
       case "--help":
       case "-h":
@@ -835,15 +857,75 @@ export async function runRender(
       `[render] 帧流捕捉：${specs.length} 步 · Σ ${sub.steps.reduce((n, s) => n + s.frameCount, 0)} 帧 · ` +
         `并发 ${args.concurrency} · 视口 ${viewport.width}×${viewport.height} · 软件渲染开 · ${url}`,
     );
-    const captured = await (deps.captureFrames ?? captureFrames)(specs, {
-      url,
-      outDir: workDir,
-      timeline: sub,
-      concurrency: args.concurrency,
-      viewport,
-      // 渲染 CLI 专属（§11.2 跨机像素稳定）：storyboard/门禁管线不开这条，它们只在本机消费
-      softwareGL: true,
-    });
+
+    /**
+     * 降级逃生舱（§8 step 4；M5b T4）：确定性链路失败 → 实时捕获出片。
+     *
+     * 位置在这里（时间轴/音轨段之后）：降级产物要**同一张子时间轴**（声明时长与录制窗口的出处）
+     * 与**同一份确定性音轨**（`encode` 出的 audio.m4a——降级不失声；没走到编码则 null，日志明写）。
+     * URL 用 `realtimeUrl(serve.url)` = **裸 `?auto=1`**，不是上面那条 `?render=1&headless=1`：
+     * 后者的两条参数都会摘掉页面自驱推进链，录出来是定格画面（实测死因①）。
+     * `--no-fallback` 时调用方不进来（严格模式）。
+     */
+    let encoded: EncodeResult | undefined;
+    const degrade = async (reason: string): Promise<number> => {
+      io.error(`[render] 确定性链路失败：${reason}`);
+      io.log(`[render] 已降级为实时捕获（确定性链路失败：${reason}）`);
+      let result: RealtimeResult;
+      try {
+        result = await (deps.realtimeCapture ?? captureRealtime)({
+          url: realtimeUrl(serve.url),
+          outDir: args.outDir,
+          slug: stageConfig.slug,
+          timeline: sub,
+          audioTrack: encoded?.audioPath ?? null,
+          viewport,
+          // 不做跨机像素稳定：降级产物按定义不可确定复现（§11.2 只对确定性成片负责）
+          io,
+        });
+      } catch (e) {
+        // 两侧原因都带上：只报降级的失败会让人以为是"逃生舱坏了"，而真因在确定性链路那侧
+        throw new Error(
+          `实时捕获降级也失败了——确定性链路：${reason}；降级：${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
+      io.log(
+        `[render] 降级产物：${displayPath(result.file)}（声明 ${(result.declaredMs / 1000).toFixed(3)}s · ` +
+          `实测 ${(result.durationMs / 1000).toFixed(3)}s）——实时捕获按墙钟走画面、按时间轴合成音轨，` +
+          `A/V 同步是**近似的**且未做自校验（见 KNOWN-ISSUES）`,
+      );
+      if (encoded !== undefined) {
+        // 自校验未过时 `<slug>.mp4` 已经在盘上（编码早于自校验）：它是**未通过自校验**的那一份，
+        // 别让下游（导出服务/人）把它当交付物。不替用户删——删除是破坏性动作，只响亮地说清楚。
+        io.error(
+          `[render] 未通过自校验的成片仍在 ${displayPath(encoded.output)}——**不是**交付物` +
+            `（交付物 = 上面的 .realtime.mp4）；本层不替用户删产物`,
+        );
+      }
+      // 出片即成功：逃生舱的意义就是"仍能交给用户一条片子"；降级由产物名（.realtime）+ 上面
+      // 两行响亮日志标注，想要严格模式用 --no-fallback
+      return 0;
+    };
+
+    let captured: CapturedStep[];
+    try {
+      captured = await (deps.captureFrames ?? captureFrames)(specs, {
+        url,
+        outDir: workDir,
+        timeline: sub,
+        concurrency: args.concurrency,
+        viewport,
+        // 渲染 CLI 专属（§11.2 跨机像素稳定）：storyboard/门禁管线不开这条，它们只在本机消费
+        softwareGL: true,
+      });
+    } catch (e) {
+      if (args.noFallback) throw e;
+      // 真因逐字来自异常本身（`captureFrames` 的每条 throw 都自带"帧流捕捉：…"定位与步骤信息），
+      // 本层**不再加前缀**——否则日志里出现"帧流捕捉失败：帧流捕捉失败：…"的叠字
+      return await degrade(e instanceof Error ? e.message : String(e));
+    }
     // R7 泄漏告警的出口：纯章节层泄漏动画的步会 windowMs=0（成片冻住）而自校验全绿——
     // 这条 warning 是唯一能看见它的地方，故整串打到 stderr（不截断）。
     for (const step of captured) {
@@ -852,7 +934,7 @@ export async function runRender(
 
     // ── 8) 编码（视频清单 + 单次 filter_complex 音轨 + mux） ──
     // 两个数组都从子时间轴取（T5 的护栏：两处 stepMs 不一致即在第一条 ffmpeg 命令前 throw）
-    const encoded = await (deps.encodeVideo ?? encodeVideo)({
+    encoded = await (deps.encodeVideo ?? encodeVideo)({
       output,
       outDir: workDir,
       captured,
@@ -882,17 +964,30 @@ export async function runRender(
     }
 
     // ── 9) 产物自校验（总量层 + 帧目录 + 两类边界 + 跨会话同刻重采） ──
-    const report = await (deps.verifyRender ?? verifyRender)({
-      output,
-      outDir: workDir,
-      timeline: sub,
-      url,
-      segments,
-      viewport,
-      softwareGL: true,
-    });
+    let report: RenderVerifyReport;
+    try {
+      report = await (deps.verifyRender ?? verifyRender)({
+        output,
+        outDir: workDir,
+        timeline: sub,
+        url,
+        segments,
+        viewport,
+        softwareGL: true,
+      });
+    } catch (e) {
+      // 自校验自己抛错（跨会话重采的 seek 断言是典型）：与"判据报红"同属确定性链路失败
+      if (args.noFallback) throw e;
+      return await degrade(`自校验抛错：${e instanceof Error ? e.message : String(e)}`);
+    }
     for (const line of report.lines) io.log(`[verify] ${line}`);
     for (const failure of report.failures) io.error(`[render] ${failure}`);
+    // ── 9.5) 失败路径接线（M5b T4）：自校验未过 → 降级逃生舱（`--no-fallback` 时照旧报红退出） ──
+    if (!report.ok && !args.noFallback) {
+      return await degrade(
+        `自校验未通过（${report.failures.length} 条失败：${report.failures[0] ?? "见上"}）`,
+      );
+    }
     let ok = report.ok;
 
     // ── 10) 确定性终验（可选：双渲对比 + 负样本） ──
