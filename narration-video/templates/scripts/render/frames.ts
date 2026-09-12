@@ -35,6 +35,8 @@
 //
 // `seek` 是同步写样式/画布（cursorBridge.seek 契约），但**截图截的是合成器那一拍**：seek 之后
 // 等两拍 rAF（paintAndSettle）再截，保证落盘的那张就是刚 seek 到的那一拍。
+// **落定有上限**（`settleWithTimeout`，T7 收口）：`page.evaluate` 不吃 Playwright 的默认超时，
+// 页面不产帧时帧流会永久挂住——vitest 有 300s 用例兜底，CLI 没有，故包一层 `Promise.race`。
 //
 // ## 依赖方向
 //
@@ -262,23 +264,63 @@ export function assertFrameCountOnDisk(
 
 // ── 单步 / 单 worker / 编排 ──
 
+/** 落定等待上限（ms）：超时即炸而不是永久挂住（见 `settleWithTimeout`）。 */
+export const PAINT_SETTLE_TIMEOUT_MS = 5_000;
+
+/**
+ * 等 `p` 落定；超过 `ms` → 抛带 `where` 定位的错误。
+ *
+ * 为什么必须有这个上限（T4 评审点名，T7 收口落地）：`page.evaluate` **不吃** Playwright 的
+ * 默认超时——页面不产帧时（合成器停摆 / 渲染被冻结 / 页面停在了别的 URL）等落定会**永久挂住**。
+ * vitest 全套还有 300s 的用例兜底，`npm run render` 的 CLI **没有**——它会一直挂着，不报错、
+ * 不退出，看起来像"渲染很慢"。上限取 5s：正常落定是两拍 rAF（毫秒级），5s 只会在真出问题时命中。
+ */
+export async function settleWithTimeout<T>(p: Promise<T>, ms: number, where: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `${where}：等两拍 rAF 落定超时（${ms}ms）——page.evaluate 不吃 Playwright 的默认超时，` +
+              `页面不产帧时帧流会永久挂住（渲染态未冻结 / 合成器停摆 / 页面停在了别的 URL）；` +
+              `宁炸不静默（CLI 没有 vitest 的用例超时兜底）`,
+          ),
+        ),
+      ms,
+    );
+  });
+  try {
+    return await Promise.race([p, timeout]);
+  } finally {
+    clearTimeout(timer); // 落定后就撤掉定时器：不给 event loop 留悬挂的 handle
+  }
+}
+
 /**
  * 等两拍 rAF：`seek` 之后截图前的那一下"落定"。
  *
  * seek 是同步写样式/画布，但截图截的是**合成器的那一拍**——不等一拍就可能落盘上一拍（第 k 张
  * 帧里是第 k−1 个 t 的画面，整条帧流系统性偏一拍，且两趟采集会一致地偏，跨会话逐字节检查反而
  * 全绿）。两拍：第一拍的 rAF 回调跑完才轮到 paint，第二拍回调时上一拍已产出。
+ *
+ * `where` 只进超时错误文案，**已导出**：T7 的确定性终验（scripts/render.ts）逐帧重采要同一份
+ * 落定语义——两处各写一份 evaluate 就是两条会漂移的时序。
  */
-async function paintAndSettle(page: Page): Promise<void> {
-  await page.evaluate(
-    () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+export async function paintAndSettle(page: Page, where: string): Promise<void> {
+  await settleWithTimeout(
+    page.evaluate(
+      () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+    ),
+    PAINT_SETTLE_TIMEOUT_MS,
+    `${where} 的两拍 rAF 落定`,
   );
 }
 
 /** 单帧：seek(t) → 等一拍落定 → 截图（不做 `animations: "disabled"`，同 capture.ts 取舍 1）。 */
-async function shootAt(page: Page, tMs: number, file: string): Promise<void> {
+async function shootAt(page: Page, tMs: number, file: string, where: string): Promise<void> {
   await seekTo(page, tMs);
-  await paintAndSettle(page);
+  await paintAndSettle(page, where);
   await page.screenshot({ path: file });
 }
 
@@ -320,7 +362,7 @@ async function captureStep(
   // 写前清目录：上一次渲的残留帧（帧数变小的步）会让"落盘张数 === frameCount"变成假话
   fs.rmSync(writeDir, { recursive: true, force: true });
   fs.mkdirSync(writeDir, { recursive: true });
-  for (let i = 0; i < paths.length; i++) await shootAt(page, times[i], paths[i]);
+  for (let i = 0; i < paths.length; i++) await shootAt(page, times[i], paths[i], where);
   assertFrameCountOnDisk(writeDir, paths, where);
 
   // 泄漏告警（R7）：读在帧循环**之后**——它要看见的是这一整段捕捉期里的动画状态；同时它也是

@@ -45,6 +45,9 @@ esac
 # .impeccable（设计钩子的本地状态：narrow ignore 与 hook 缓存，属工具态非模板内容）
 cp -R "$TEMPLATE_DIR" "$TARGET"
 rm -rf "$TARGET/node_modules" "$TARGET/dist" "$TARGET/storyboard" "$TARGET/.impeccable"
+# M5a Task 7：渲染产出（render/<slug>.mp4 + 中间帧目录）同样是生成物，新项目应为空。
+# 单独一行（不动上面那行 M3b/M4 落的清理面——Ruling Q3）。
+rm -rf "$TARGET/render"
 
 # 2. 写运行时配置（slug + 舞台尺寸 = 档案最小参数；安全框由尺寸折算，不手写绝对值）
 cat > "$TARGET/src/engine/runtime-config.ts" <<EOF
@@ -60,6 +63,13 @@ export interface RuntimeConfig {
   dims: StageDims;
   /** 安全框（档案绝对值由基准比例折算得出，见 engine/safe-area.ts） */
   safeArea: SafeArea;
+  /** 停留垫档案覆盖（ms；§3.1 三层停留垫的**中间层**：引擎默认 400ms → 本层 → timing.json
+   *  逐帧覆盖）。生产者是 scaffold（按平台节奏写），缺省 = 不覆盖 → 引擎默认。
+   *  解析唯一源头：engine/hold.ts 的 resolveHoldMs（运行时与渲染同一条）。
+   *  M5a Task 7 补：接口形状必须与模板 src/engine/runtime-config.ts **同形**——本文件由
+   *  scaffold 整份重写，字段少一个就是"生成物类型与引擎/渲染消费面不一致"（App.tsx 与
+   *  scripts/render.ts 都读 stageConfig.holdMs，缺字段 = 新项目 tsc 直接报 TS2339）。 */
+  holdMs?: number;
 }
 
 const dims: StageDims = $DIMS;
@@ -93,10 +103,15 @@ cat <<EOF
    npm run storyboard            # Phase 3 静态分镜：逐帧截图 + storyboard/index.html + storyboard.json
                                  #   + 零动画门禁（帧数=总 step 数；氛围微动按步 timing.json 声明 ambient 豁免）
                                  #   加 --verify-sequential：顺序推进 vs 独立 mount 逐字节一致性校验
-   npm run render                # 渲染导出（M5 实现中，当前占位）
+   npm run render                # 渲染导出：自起 Vite + 逐帧 seek → ffmpeg 出 render/<slug>.mp4 + 产物自校验
+                                 #   未合成音频时按估时出片（无声，CLI 会明示）；首次可用 --mock-audio 出占位音轨
+                                 #   （lavfi 正弦 + ffprobe 实测时长 → public/audio/ + audio-durations.json）
+                                 #   加 --only 0,2 只渲指定步（specs 下标）／--concurrency N／--verify-determinism
+                                 #   （独立会话重采逐字节比对 + 负样本；产物 render/ 不入库）
 
 截图/渲染/全量门禁类命令前置（仅这些命令需要，浏览器不进 npm install）:
    npx playwright install chromium   # 首次执行一次；之后走缓存（跨项目复用）
+   ffmpeg                            # 仅渲染导出需要（npm run render）：macOS 用 brew install ffmpeg，Linux 用 apt install ffmpeg
    npm run check                 # 全量门禁（= check:fast + 无头 pass）：自起 Vite + Chromium 逐 step 跑，十秒级；零 blocker 才算过
    dev server 需先运行（npm run dev）——storyboard 连不上会给指引，不自动起服
 

@@ -6,6 +6,8 @@
 >
 > 分工：本文件是**跨里程碑耐久登记**；里程碑交接的短期清单走设计文档 §12（如 "M5 遗留清单"），交接完成后并入本文件。
 
+**更新**：2026-09-12（M5a 渲染核心收口：新增 K-76~K-83——渲染链的已知边界六条 + 边界断言/测试基建两条；M5a 无 §0 结清项，K-31/K-32 的归属见 §1）
+
 **更新**：2026-09-12（M3b 收口：K-10/11/12/21 结清入 §0；新增 K-31/K-32 与 K-46~K-49、K-54~K-57）
 
 **更新**：2026-09-12（M3b 终审修复波：T1~T9 的 ~40 条 deferred minor 与执行期 Ruling 残留项**全量落盘**——§0 K-58/K-59〔本波修复〕、§1 K-60~K-65、§2 K-66~K-69、§3 K-70~K-72；自此 M3b 工作区（按 K-50 收尾即删）里不再有只活在 ledger 的 deferred。code commit `293f30d`）
@@ -56,6 +58,8 @@
 | K-63 | M3b T2/T3/T4 | 测试文档失真与覆盖缺口一批：① T2 两个 EChart 夹具头注释与 `fixtures.test.ts` 决策记录称"同一段源码分别注入两路径"，实际两份夹具正文不同、也无该交叉注入测试（**文档失真，判别力不受损**）；② T2 `isSrcSubdir` 的"非直接子目录不豁免"用例未覆盖 EChart 规则；③ T4 取整语义无测试区分（3:4 分数全为 .33，floor 与 round 同值——未来档案可能分叉）；④ T3 jsdom 下 `new URL(相对, import.meta.url)` 解析成 `http://localhost:3000/…`，读源码型测试须用 `fileURLToPath` + `path.join`（**已在测试注释注明**） | ① 改措辞（收尾轮顺手）；②③ 补用例；④ 已文档化，无需动作 |
 | K-64 | M3b T5/T8/T9 | 注释/文案与事实不符一批（一行级）：① T5 `clip()` 截断结果实为 **81** 字符（80 + 省略号），注释写 80；② T8 缺省臂注释称它"防漏接采集"，真正兜底的是 `collectorExaminedGuard`；③ T9 `headless.ts` 的 #19 读数在"durations 存在但读坏"时括注写"缺失"；④ T9 `useAudioPlayer.test.ts` 三处用例名/注释仍写 "404"（K-01 已澄清真实回落是 200 + text/html） | 文案更正轮（不改判据） |
 | K-65 | M3b T3③/T5① | 小硬化项一批：① `scaffold-smoke.sh` 的 playwright 安装提示 grep 依赖字面量物理位置（T9 逐字未动；该常量再迁会二次变红）；② `audit()` 的 `isRunning`/`isOwned` 与 `get.call(document)` 未包 try/catch（理论面：Proxy 条目 / monkeypatch 的 `getAnimations` 会让 audit 抛；真机只返回原生 Animation） | ① 改按内容/锚点匹配；② 视 M5 消费面决定是否加防御 |
+| K-82 | M5a T6 评审 minor ①②③ | **边界断言的已知边界**（真机判据的残余，三条）：① **首条边界（t=0）是单向搜索窗口**——左端被 clamp 到 0，30ms 级偏移可能报绿（实测相关性 0.615 仅高过 0.6 下限）；② **显著性判据在中位为 0 时退化为"峰值 > 0"**（真 deck 中位恰为 0，比值 ∞）——建议加绝对下限（如 `peak ≥ 0.3` 灰阶）或 `max(median, 0.1)`，未做；③ **真 TTS 起手静音 ≥50ms 时该步边界整条跳过**（窗口两侧皆静音），全跳则对**正确产物假红**（方向安全）——mock 音轨（lavfi 正弦起手即满幅）不触发，故 M5a 冒烟不受影响 | ① 右侧窗口或把相关性下限提到 0.7；② 加绝对下限；③ 真 TTS 接入（M6）后复核；三条均不改现有容差口径 |
+| K-83 | M5a T4/T5 执行观察 + T7 收口 | **全量套件的浏览器臂并发 flake**：首轮 `npx vitest run` 偶发红（`window-scan.browser.test.ts` 2 条"桥未安装"，归因 **Vite 冷启动 dep 重新预打包**让挂载超 10s；单独跑/连跑第二次均全绿）。随浏览器测试文件增多（T4 起 jsdom 自起 Vite + 真 Chromium 的并发文件数 3→4）触发率上升 | T7 收口实测：**先热一次缓存**（先单跑一个浏览器臂文件）后全量绿；根治方向 = 把浏览器臂文件串行化（`fileParallelism: false` 或独立 project），未做 |
 
 ---
 
@@ -81,6 +85,12 @@
 | K-67 | M3b T4/T5/T6 | 同值/键序/前缀/未消费（已注释或无语义影响）：① `SLIDE_DIMS` 与 `SAFE_AREA_BASE_DIMS` 同为 1920×1080（语义不同，已注释）；② `scaffold-smoke.sh` 的 SAFE_34 整串比较耦合 JSON 键序（当前稳定）；③ `audit()` 运行时键序与计划声明序不同（TS 无影响）；④ `CSSTransition`（无 animationName）落 `waapi:` 前缀（选择器仍可定位）；⑤ headless/render 下 `stoppedRef` 永不被消费（无可观测差异） |
 | K-68 | M3b T1（Ruling R2/R4/R6/R8/R9） | scanner-css 状态机的**已接受残余**（方向均已明写）：① 未加引号的**跨行** `url` 被换行拆开 → 误报（响方向，加引号即免）；② 未加引号 url 的**内容内**空白（spec 上是 bad-url）被当内容 → 只让后续更少误报；③ 未闭合 `url(` 的静默漏家族见 K-55；④ 分词器边界（`{`/`}` 无条件作边界）与转义跳过**比 brief 更严**（R2/R4：保住"声明起始行"归属；R6 的转义跳过两行**无判别向量**，注释已写明防御性理由）——代价是极少数非法 CSS 行为变化 |
 | K-69 | M3b T4（Ruling R10/R11） | #20 的几何边界：内容盒实测 (100,116)–(1820,934)，**底缘恰好 934.000（零余量）**——判据必须写成 `≤ 934 + 容差`（不得严格 `<` 或零容差）；**纯 padding 容器**（无直接可见文本）天然不入 #20 检查面。`?guides=1` 参考线与元素之间保留 4px（R11：showcase slide 自身装饰边框；真实章节 `border:0/padding:0`，dev-only 观感） |
+| K-76 | M5a T2/T7（计划取舍 ①） | **动画窗口是"声明面上界"，不是实测播放时长**：`animMs` 取自引擎注册表声明的最大时长（`audit().windowMs`）——`?render=1` 下动画"创建即冻结"，没有任何"实际播放了多少"可观测。后果：动画声明时长 > 真实播放时长时，成片该步的静置期偏长（画面提前冻住）；反向（声明 < 真实）会让动画被截断——**处置**：真实播放时长由 **M5b 的双渲对比全 deck 化**兜底（`plans/2026-09-12-M5b-subtitles-export-service.md` 任务 4）；收窄后回写本条与 §8 |
+| K-77 | M5a T7 | **无音频 deck 按估时出片（无声）**：`public/audio-durations.json` 不存在（未跑 TTS）时，每步时长 = `max(估时, 动画窗口) + 垫`，音轨用 `anullsrc` 段顶——**成片是哑的**。CLI 已明示（"未合成音频，按估时出片（无声）"+ 每步行标"无声（未合成）"），但产物本身与有声成片无法从文件名区分——**处置**：有意取舍（TTS 归 M6）；需要有声成片时先 `npm run render -- --mock-audio`（占位音轨，节奏与未合成预览同源） |
+| K-78 | M5a T7 | **`render/` 产物不入库**（`/render/` 已 gitignore，**前导斜杠锚定模板根**——裸 `render/` 会吞掉 `scripts/render/` 整棵源码树）：`render/<slug>.mp4` + 中间产物（帧目录 + concat 清单 + 两条中间轨）全在本地，**换机器/新 clone 后不存在**，也无法从 git 找回——**处置**：有意取舍（与 `dist/`、`storyboard/`、`public/audio/` 同类：整目录可重生成）；要留档就把 mp4 复制到仓库之外 |
+| K-79 | M5a T7（§8 step 4 / §8.1 ④） | **实时捕获降级未实现**：§8 选型把"B 实时捕获"定为降级逃生舱，但 M5a 只交付了确定性 seek 链——seek 断言失败时 `npm run render` 的失败模式是**报错退出**（不是降级出片）。"能出片"的兜底在交接中一度只活在计划的一句话里——**处置**：归 **M5b 任务 5**（占位计划已点名）；结清前把本条当"已知缺口"读，不要当成"应该有而没触发" |
+| K-80 | M5a T4/T7 | **`softwareGL` 默认 false，只有渲染 CLI 开**（`--use-gl=angle --use-angle=swiftshader`，§11.2 跨机像素稳定）：storyboard / 无头门禁两条管线仍走默认 GL——它们的产物只在本机消费（人眼看/门禁读数），跨机像素稳定性只对**成片**负责。另：软渲 flag 被 Chromium 拒绝时**退化重试并告警**（不拖死渲染链），退化后该次成片的跨机稳定性不再有保证——**处置**：有意取舍；**T7 真机取证（2026-09-12，Chromium 145.0.7632.6 / Playwright 1.58.2 / macOS 26）软渲确生效**：用模板自己的常量 `SOFTWARE_GL_ARGS`（`--use-gl=angle --use-angle=swiftshader`）启动 → `WEBGL_debug_renderer_info.UNMASKED_RENDERER_WEBGL = "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)"`；**对照**：默认（无 launch 参数）下该机 headless 连 WebGL 上下文都建不起来（`webglcontextcreationerror`：`BindToCurrentSequence failed`），且**同一张纯 CSS 页**两模式截图 **md5 不同**（默认 `2fa69097057bc9076e0b9c4c6ea91a2d` / 软渲 `b3c924f5217f9fb170595c2b552d3833`）⇒ flag 不是空转、确实改变了光栅化；真机 `npm run render --mock-audio` 全程**无**"softwareGL 启动失败"告警（未走退化臂） |
+| K-81 | M5a T1/T4 | **`holdMs = 0` 的步不发静置帧**：`frameCount` = 窗口帧数（不含静置帧），末帧在 concat 清单里用统一式 `max(0, stepMs/1000 − (frameCount−1)/fps)` 声明时长——这是 `dwell ≤ slack`（`stepMs` 短于窗口帧时长）时的**正确**产物：该步没有"窗口之后"可供静置。逐帧人审时会看到"最后一张不是静置帧"，那是数据如此，不是漏拍——**处置**：有意取舍（T1 的算例与 T5 的 F1 修复轮都覆盖）；读者别把它当 bug 报 |
 
 ---
 
@@ -102,6 +112,7 @@
 
 ## §4 关联
 
-- **M5 交接清单**（7 项：**音频自驱抢游标——已于 M3b Task 6 提前落地 `ed42c7e`（前提更正见设计文档 §12 该条）** / canvasAnim t=0 / dwell 运行时消费 / STORYBOARD_THEME 漂移 / ShotSpec 时间维 / verify 负对照自动化 / 人审纪律）→ 设计文档 `07-design-draft.md` §12，M5 收尾后并入本文件
+- **M5 交接清单**（7 项：**音频自驱抢游标——已于 M3b Task 6 提前落地 `ed42c7e`（前提更正见设计文档 §12 该条）** / canvasAnim t=0 / dwell 运行时消费 / STORYBOARD_THEME 漂移 / ShotSpec 时间维 / verify 负对照自动化 / 人审纪律）→ 设计文档 `07-design-draft.md` §12，M5 收尾后并入本文件。**进展（2026-09-12，M5a）**：#2/#3/#5 已落地（T3 `80e3268` / T1 `4e271ad` / T3+T4 `80e3268`+`1ea438b`），#1 由 M3b 提前落地；**#4/#6 归 M5b**（占位计划 `plans/2026-09-12-M5b-subtitles-export-service.md` 任务 6/7 已点名）
 - **M3b 全量落盘**（2026-09-12 终审修复波，commit `293f30d`）：T1~T9 的 deferred minor 与执行期 Ruling 残留项已逐条并入本文件——§0 K-58/K-59 为本波修复，§1 K-60~K-65 / §2 K-66~K-69 / §3 K-70~K-72 为落盘；M3b 工作区按 K-50 收尾删除后，其台账不再只活在 SDD ledger 里
+- **M5a 渲染核心落盘**（2026-09-12，七任务；短哈希见 `07-design-draft.md` §12 的 M5a 行）：T1~T7 的边界条目与已知取舍已并入本文件（K-76~K-83），渲染链的接口面与容差口径见各模块文件头；M5b 的任务清单见 `plans/2026-09-12-M5b-subtitles-export-service.md`
 - 每条 deferred 的上下文（评审原话、复现路径）在对应里程碑的 SDD ledger 或计划"执行记录"段；本文件只留判定与去向

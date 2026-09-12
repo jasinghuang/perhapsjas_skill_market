@@ -31,6 +31,7 @@ import {
   isRenderMode,
   leakWarnings,
   partition,
+  settleWithTimeout,
   type FrameSpec,
 } from "./frames";
 import type { Timeline, TimelineStep } from "./timeline";
@@ -397,5 +398,27 @@ describe("assertFrameCountOnDisk：落盘回读（'落盘张数 === frameCount' 
     );
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(empty, { recursive: true, force: true });
+  });
+});
+
+// T7 收口（T4 评审点名必做）：`paintAndSettle` 的 `page.evaluate` **不吃** Playwright 的
+// 默认超时——页面不产帧（合成器停摆 / 渲染被冻结）时帧流会**永久挂住**；vitest 全套有 300s
+// 兜底，渲染 CLI 没有。故落定那一拍包一层 `Promise.race` 上限 + 带步定位的错误。
+describe("settleWithTimeout（落定上限；超时不吞真因、不泄定时器）", () => {
+  it("落定即返回值（正常路径零影响）", async () => {
+    await expect(settleWithTimeout(Promise.resolve(7), 1000, "章节 example 第 0 步")).resolves.toBe(7);
+  });
+
+  it("不落定 → 超时 reject，错误带步定位与时限（CLI 没有 vitest 的 300s 兜底）", async () => {
+    const never = new Promise<void>(() => undefined);
+    await expect(settleWithTimeout(never, 20, "章节 example 第 0 步（example）")).rejects.toThrow(
+      /章节 example 第 0 步（example）.*20ms/s,
+    );
+  });
+
+  it("落定前的真错误原样透传（超时不替换真因）", async () => {
+    await expect(
+      settleWithTimeout(Promise.reject(new Error("页面炸了")), 1000, "章节 example 第 0 步"),
+    ).rejects.toThrow("页面炸了");
   });
 });

@@ -9,3 +9,7 @@ dist/
 # 同理前导斜杠锚定模板根（Ruling Q2）——裸 `public/audio/` 会连别处的同名目录一起忽略。
 /public/audio/
 /public/audio-durations.json
+# 渲染产出（M5a Task 7 `npm run render` 的生成物：render/<slug>.mp4 + 中间产物
+# render/<slug>/（帧目录 + concat 清单 + 两条中间轨））。与 dist/ 同类：整目录可重生成，不入库。
+# **前导斜杠是硬要求**：裸 `render/` 会连 `scripts/render/` 整棵源码树一起忽略。
+/render/
