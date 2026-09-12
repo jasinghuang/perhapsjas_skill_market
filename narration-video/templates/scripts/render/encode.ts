@@ -23,16 +23,23 @@
 //    （计划的"每步一条重复行"就是这么崩的）。所以"每步重复末行"被本实现排除，测试钉死；
 // 5. **末帧时长用 R3 的统一式** `max(0, stepMs/1000 − (frameCount−1)/fps)`——不是计划式的
 //    `holdMs/1000 − 1/fps`。原因：计划式假设每步末尾都有一条重复行来补那 1/fps，而结论 4 说
-//    那条路走不通；R3 式让**每步声明的总时长逐字等于 stepMs**（holdMs>0 时为 holdMs/1000，
-//    holdMs=0 时为 1/fps 的整帧），于是 step 起点累加恰好是 Σ stepMs（实测 3.400/5.750 命中网格）。
-//    计划式在单条收尾重复行的构造下每步少 1/fps（实测步 0 = 3.3667 而非 3.4），30 步累计 ~1s；
-// 6. 尾部那条重复行自带 1/framerate（25fps 网格下 0.04s）的**超发**。它是**安全方向**：
-//    `-shortest` 把成片切到音轨的末端（= Σ stepMs，实测 7.650000 逐字命中），超发部分被丢掉；
-//    反向（欠发）才会截掉音轨尾部，那才是要防的。故不引入 `option framerate`（见下）。
+//    那条路走不通；R3 式让**每步声明的总时长逐字等于 stepMs**，于是 step 起点累加恰好是 Σ stepMs
+//    （实测 3.400/5.750 命中网格）。计划式在单条收尾重复行的构造下每步少 1/fps（实测步 0 =
+//    3.3667 而非 3.4），30 步累计 ~1s。
+//    ⚠️ 式里的 `stepMs` **必须是真的 stepMs**（调用方逐字传入，见 `buildVideoConcatList` 的
+//    `stepMsByStep`）。从 `CapturedStep` 反推只能拿 `frameCount/fps`（窗口帧数向上取整的时长）
+//    顶替——`stepMs < 窗口帧时长`（`dwell ≤ slack`）时每步多 slack、**逐步累加**（修复轮 1 的 F1：
+//    `dwell:0` 三步声明 6600ms vs 时间轴 6540ms）。
+// 6. 尾部那条重复行的**超额超发**（实测成片尾部 9.500000 vs 理想 7.650000，+1.85s；不是
+//    1/framerate 的量级）。它是**安全方向**：`-shortest` 把成片切到音轨的末端（= Σ stepMs，
+//    实测 7.650000 逐字命中），超发部分被丢掉；反向（欠发）才会截掉音轨尾部，那才是要防的。
 //
 // **不用 `option framerate N` 改子 demuxer 时间基**（brief 要求试）：实测能改网格（1/30、1/1000
-// 都生效），但**尾行为失真**——opt30 下收尾重复行的起点塌到 6.367（应 7.65），opt1000 下直接
-// 重置到 0.191 ⇒ 尾部超发没了、音轨会被截。不采用。
+// 都生效）。**一致加在每一行**（含收尾重复行）可用且不坏——包层 0/3.400/5.733/7.633，成片与
+// 默认网格**同长**（dur=9.500000 / nb=285），内容边界也基本不变（0/3367/5700 vs 0/3367/5733）。
+// 塌陷（6.367 的尾重复起点、6.966667 的成片）只出现在**混用时间基**时——option 漏在收尾重复行上，
+// 那一条的时间基与其余条目不同。结论：一致性可保但**收益为零**（边界不改善），不引入这个额外
+// 约束；保留默认 25fps 网格 + §六 的容差口径。
 //
 // ## 音轨：单次 `filter_complex`（**不**分段编码后 concat）
 //
@@ -70,6 +77,11 @@ export interface EncodeOptions {
   /** 中间产物目录：concat 清单落在它的**根**（清单里的相对路径按清单文件所在目录解析） */
   outDir: string;
   captured: readonly CapturedStep[];
+  /**
+   * 与 `captured` **同序同长**的**真 stepMs**（ms）：视频轨每步的时长声明就取自它。
+   * T7 手里就是 `timeline.steps.map(s => s.stepMs)`——别用 `captured` 反推（见文件头结论 5）。
+   */
+  stepMsByStep: readonly number[];
   /** 与 `captured` **同序同长**（帧流第 k 步 ↔ 音轨第 k 段） */
   segments: readonly AudioSegment[];
   fps: number;
@@ -155,16 +167,15 @@ export function probeDurationMs(file: string, ffprobePath = "ffprobe"): number {
 
 // ── 视频清单（纯函数） ──
 
-/** 一步的末帧要盖住的时长（秒）——R3 的统一式：`max(0, stepMs/1000 − (frameCount−1)/fps)`。
+/** 一步的末帧时长（秒）——R3 的原式：`max(0, stepMs/1000 − (frameCount−1)/fps)`。
  *
- *  `CapturedStep` 没有 stepMs（T4 的接口冻结），但它携带等价的三个量：`frameCount`、`holdMs`
- *  与 `fps`（`stepMs = 窗口帧数/fps + holdMs`，窗口帧数 = `frameCount − (holdMs>0 ? 1 : 0)`）。
- *  代入 R3 式化简：`holdMs > 0` → `holdMs/1000`；`holdMs = 0` → `1/fps`。这里按**展开前**的
- *  式子写，好让"和 R3 是同一条"在代码里看得见。
+ *  `stepMs` 是**调用方逐字传入的真值**（`stepMsByStep`），不是从 `CapturedStep` 反推的：
+ *  T4 的接口没有 `stepMs`，反推只能拿 `frameCount/fps`（窗口帧数向上取整的时长）顶替——
+ *  `stepMs < 窗口帧时长`（`dwell ≤ slack`，`slack ∈ [0, 1/fps)`）时每步多出 slack 并**逐步累加**
+ *  （修复轮 1 的 F1：`dwell:0` 三步声明 6600ms vs 时间轴 6540ms）。修法就是把它变成必传参数，
+ *  让"真 stepMs 从哪来"在签名上无法回避。
  */
-function lastFrameDurationSec(step: CapturedStep, fps: number): number {
-  const windowFrames = step.frameCount - (step.holdMs > 0 ? 1 : 0);
-  const stepMs = (windowFrames * 1000) / fps + step.holdMs;
+function lastFrameDurationSec(step: CapturedStep, stepMs: number, fps: number): number {
   return Math.max(0, stepMs / 1000 - (step.frameCount - 1) / fps);
 }
 
@@ -182,11 +193,16 @@ function concatFileLine(relPath: string): string {
 /**
  * 帧清单（相对 `<outDir>` 根；T4 的 `CapturedStep.dir` 就是相对形）。
  *
- * 每步：`frameCount` 条 `file`，前 `frameCount−1` 条 `duration 1/fps`，末条用 R3 的统一式；
+ * 每步：`frameCount` 条 `file`，前 `frameCount−1` 条 `duration 1/fps`，末条用 R3 的统一式
+ * （`stepMs` 取 `stepMsByStep` 的第 index 个——**真 stepMs，不许反推**，见结论 5）；
  * **整份清单的最后一行**是无 duration 的末帧重复（结论 3：末条 `file` 的 duration 会被丢弃）。
- * 中段不放重复行（结论 4：会产出 NOPTS 包），`encode.test.ts` 两条用例把这两点钉死。
+ * 中段不放重复行（结论 4：会产出 NOPTS 包），`encode.test.ts` 各用例把这几条钉死。
  */
-export function buildVideoConcatList(captured: readonly CapturedStep[], fps: number): string {
+export function buildVideoConcatList(
+  captured: readonly CapturedStep[],
+  fps: number,
+  stepMsByStep: readonly number[],
+): string {
   if (captured.length === 0) {
     throw new Error(
       "buildVideoConcatList：captured 为空——空清单 = 成片没有一段来自本 deck（而 ffmpeg 会`成功`" +
@@ -196,10 +212,24 @@ export function buildVideoConcatList(captured: readonly CapturedStep[], fps: num
   if (!Number.isFinite(fps) || fps <= 0) {
     throw new Error(`buildVideoConcatList：fps ${fps} 非法（须为有限正数）——它决定每帧的 duration`);
   }
+  if (stepMsByStep.length !== captured.length) {
+    throw new Error(
+      `buildVideoConcatList：stepMsByStep 长度 ${stepMsByStep.length} ≠ captured ${captured.length}` +
+        `——两者**同序同长**（第 k 个时长就是第 k 步的）：长度不符时后半程每步都拿的是别的步的` +
+        `时长，而总时长、帧数、帧率三条自校验还都能对上`,
+    );
+  }
   const frameSec = 1 / fps;
   const lines: string[] = [];
   let lastPath = "";
-  captured.forEach((s) => {
+  captured.forEach((s, index) => {
+    const stepMs = stepMsByStep[index];
+    if (!Number.isFinite(stepMs) || stepMs <= 0) {
+      throw new Error(
+        `buildVideoConcatList：第 ${index} 步（${s.dir}）的 stepMs ${stepMs} 非法（须为有限正数，ms）` +
+          `——它决定这一步在成片里的长度（时间轴表的读数，一帧都排不下：${1000 / fps}ms）`,
+      );
+    }
     if (!Number.isInteger(s.frameCount) || s.frameCount <= 0) {
       throw new Error(
         `buildVideoConcatList：${s.dir} 的 frameCount ${s.frameCount} 非法（须为正整数）` +
@@ -215,7 +245,7 @@ export function buildVideoConcatList(captured: readonly CapturedStep[], fps: num
       const p = `${s.dir.replace(/[/\\]+$/, "")}/${String(i).padStart(4, "0")}.png`;
       const isLast = i === s.frameCount;
       lines.push(concatFileLine(p));
-      lines.push(`duration ${(isLast ? lastFrameDurationSec(s, fps) : frameSec).toFixed(6)}`);
+      lines.push(`duration ${(isLast ? lastFrameDurationSec(s, stepMs, fps) : frameSec).toFixed(6)}`);
       lastPath = p;
     }
   });
@@ -302,6 +332,14 @@ export function buildAudioFilterComplex(
       if (seg.mp3.trim() === "") {
         throw new Error(`buildAudioFilterComplex：第 ${i} 段的 mp3 是空串——要么给路径，要么给 null`);
       }
+      if (seg.mp3.includes("'")) {
+        // 与 concatFileLine 的单引号守卫对称：`-i '路径'` 里的撇号会把这条声明切裂，
+        // 而 ffmpeg 报出来的是难归因的 "No such file"（项目目录叫 `John's Deck` 是很正常的事）
+        throw new Error(
+          `buildAudioFilterComplex：第 ${i} 段的 mp3 路径含单引号：${seg.mp3}——输入声明用 '路径' ` +
+            `包裹，含引号的路径会被切成两个参数（ffmpeg 只报 "No such file"）；宁炸不静默`,
+        );
+      }
       inputs.push(`-i '${seg.mp3}'`);
       chains.push(
         `[${i}:a]${AUDIO_NORMALIZE},apad,atrim=0:${(seg.stepMs / 1000).toFixed(6)}[a${i}]`,
@@ -339,8 +377,15 @@ export async function encodeVideo(opts: EncodeOptions): Promise<EncodeResult> {
         `的时长还能对得上`,
     );
   }
+  if (opts.stepMsByStep.length !== opts.captured.length) {
+    throw new Error(
+      `encodeVideo：stepMsByStep ${opts.stepMsByStep.length} 个 ≠ 帧流 ${opts.captured.length} 步` +
+        `——每步的时长声明必须来自时间轴表（同序同长），反推 ` +
+        `frameCount/fps 会在 dwell≤slack 的步上逐步累加`,
+    );
+  }
   // 清单与音轨图先构造（纯函数）：坏数据在这里就炸，不落到磁盘上
-  const list = buildVideoConcatList(opts.captured, opts.fps);
+  const list = buildVideoConcatList(opts.captured, opts.fps, opts.stepMsByStep);
   const { inputs, filter } = buildAudioFilterComplex(opts.segments, opts.fps);
 
   fs.mkdirSync(opts.outDir, { recursive: true });

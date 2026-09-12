@@ -17,7 +17,11 @@
 //     · 语义：**末帧要盖住的"窗口之后"时长**（静置 + 垫）。音频长于窗口的步（最常见：
 //       静态步 + 一段口播）holdMs 远大于 dwellMs——静置帧要盖住整段口播尾巴，
 //       否则成片比音轨短，mux -shortest 会**截掉音频**、产物自校验（T6）时长对不上。
-//     · 编解码根据：concat 清单末帧条目 duration = holdMs/1000 − 1/fps ⇒ 每步总时长精确 stepMs。
+//     · 编解码根据（M5a T5 定稿）：concat 清单**末帧**条目 duration = max(0, stepMs/1000 −
+//       (frameCount−1)/fps)（= R3 统一式）⇒ 每步声明总时长精确 stepMs。计划式的
+//       `holdMs/1000 − 1/fps` 已废弃：它假设每步末尾再补一条重复行来还那 1/fps，而中段重复行实测
+//       会让后续包 AV_NOPTS_VALUE（T5 的 R2 矩阵）；且 stepMs<窗口帧时长（dwell≤slack）时它取 0。
+//       ⚠️ 式里的 stepMs 必须由调用方逐字传入——`CapturedStep` 反推（frameCount/fps）会逐步漂。
 //     · dwellMs 单列：解析出来的**数据**原值（300/400/600…），供报告/审计与 dwell 层对齐；
 //       二者相等仅当动画窗口恰好整除步长（例如整秒窗口 + 无音频溢出）。
 //   audioMs 只陈述**实测**事实（未合成 = null）；估时只在 stepMs 内部兜底，不冒充实测。
@@ -51,7 +55,8 @@ export interface TimelineStep {
   stepMs: number;
   /** 落盘 PNG 数：窗口帧 + 静置帧（holdMs=0 时无静置帧） */
   frameCount: number;
-  /** 末帧要盖住的"窗口之后"时长（ms）：concat 末帧 duration = holdMs/1000 − 1/fps */
+  /** 末帧要盖住的"窗口之后"时长（ms）：concat 末帧 duration 由 `stepMs` 与帧数算出（见文件头），
+   *  `holdMs` 只陈述"窗口之后还有多长"这个事实，不直接进编码参数 */
   holdMs: number;
 }
 

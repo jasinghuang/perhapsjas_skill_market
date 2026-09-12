@@ -83,7 +83,8 @@ describe("buildTimeline：步长 / 帧数 / 停留垫", () => {
     expect(tl.steps.map((s) => s.holdMs)).toEqual([400, 2150, 1900]);
     expect(tl.steps.map((s) => s.dwellMs)).toEqual([400, 400, 400]);
     // 不变式（编解码的根据）：窗口帧时长 + holdMs === stepMs
-    // → ffmpeg concat 清单末帧 duration = holdMs/1000 − 1/fps 时，每步总时长精确 stepMs
+    // → concat 清单末帧 duration 取 max(0, stepMs/1000 − (frameCount−1)/fps)（R3 统一式，
+    //   M5a T5 定稿；计划式的 holdMs/1000 − 1/fps 已废弃）时，每步声明的总时长精确 stepMs
     for (const s of tl.steps) {
       const windowMs = (Math.ceil((s.animMs * tl.fps) / 1000) * 1000) / tl.fps;
       expect(windowMs + s.holdMs).toBeCloseTo(s.stepMs, 6);

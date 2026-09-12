@@ -140,11 +140,20 @@ describe("出片真机臂", () => {
       output: path.join(outDir, "example.mp4"),
       captured,
       segments,
+      stepMsByStep: timeline.steps.map((s) => s.stepMs),
       fps: timeline.fps,
     });
     expect(fs.existsSync(result.output)).toBe(true);
     expect(fs.statSync(result.output).size).toBeGreaterThan(0);
     expect(result.listPath).toBe(path.join(outDir, "concat.txt"));
+
+    // 清单层：声明的总时长 === 时间轴总时长（真 stepMs 逐字传入；反推会在 dwell≤slack 的步上漂）
+    const declaredMs = fs
+      .readFileSync(result.listPath, "utf8")
+      .split("\n")
+      .filter((l) => l.startsWith("duration "))
+      .reduce((n, l) => n + Number.parseFloat(l.slice("duration ".length)) * 1000, 0);
+    expect(Math.abs(declaredMs - timeline.totalMs)).toBeLessThan(1); // 1ms：1/30 的 6 位截断（每帧 0.33µs）
 
     // 6) 独立读数（ffprobe）
     const p = probe(result.output);
