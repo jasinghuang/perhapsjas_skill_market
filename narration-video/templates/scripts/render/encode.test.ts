@@ -324,6 +324,26 @@ describe("encodeVideo：入参护栏（不开进程、不落盘就炸）", () =>
     ).rejects.toThrow(/空/);
   });
 
+  it("stepMs 双源不一致 → throw（视频声明 vs 音轨段长必须同源；长度护栏只挡长度不挡取值）", async () => {
+    const dir = tmpDir();
+    // 潜伏已久的第二类分叉：两个数组长度相同、取值不同 ⇒ 视频步长与音轨步长静默分叉
+    const drifted = segs.map((s, i) => (i === 1 ? { ...s, stepMs: s.stepMs + 40 } : s));
+    const err = await encodeVideo({
+      outDir: dir,
+      output: `${dir}/o.mp4`,
+      captured: REAL_DECK,
+      segments: drifted,
+      fps: 30,
+      stepMsByStep: REAL_STEP_MS,
+    }).then(
+      () => "(没炸——不该发生)",
+      (e: unknown) => (e instanceof Error ? e.message : String(e)),
+    );
+    expect(err).toMatch(/stepMs/);
+    expect(err).toMatch(/第 1 步|\[1\]/); // 定位到具体那一步
+    expect(fs.readdirSync(dir)).toEqual([]); // 护栏早于落盘（与其余入参护栏同批）
+  });
+
   it("ffmpeg 缺失 → 错误文案带 brew install ffmpeg 指引（用不存在的可执行名取证）", async () => {
     const dir = tmpDir();
     await expect(

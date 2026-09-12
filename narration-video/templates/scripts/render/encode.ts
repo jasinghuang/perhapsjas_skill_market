@@ -384,6 +384,19 @@ export async function encodeVideo(opts: EncodeOptions): Promise<EncodeResult> {
         `frameCount/fps 会在 dwell≤slack 的步上逐步累加`,
     );
   }
+  // 双源一致性（评审 G2）：视频侧的 stepMs 与音轨段的 stepMs **必须同源**（都是时间轴的读数）。
+  // 长度一致而取值不同 = 更隐蔽的一类分叉：视频步长与音轨步长各自成立、两轨的总时长也对不上账的
+  // 只有一步；成片表现为"某一步起音画错位"，而总时长/帧数/帧率三条自校验全绿。宁炸不静默。
+  opts.stepMsByStep.forEach((stepMs, i) => {
+    if (stepMs !== opts.segments[i].stepMs) {
+      throw new Error(
+        `encodeVideo：第 ${i} 步的步长有两个来源且不一致——视频侧 stepMsByStep[${i}] = ${stepMs}ms，` +
+          `音轨侧 segments[${i}].stepMs = ${opts.segments[i].stepMs}ms（差 ` +
+          `${(stepMs - opts.segments[i].stepMs).toFixed(3)}ms）——两轨的步边界从这一步起分叉，` +
+          `而各自的时长都"成立"；两处都取 timeline.steps[i].stepMs（同源）才是音画同步的前提`,
+      );
+    }
+  });
   // 清单与音轨图先构造（纯函数）：坏数据在这里就炸，不落到磁盘上
   const list = buildVideoConcatList(opts.captured, opts.fps, opts.stepMsByStep);
   const { inputs, filter } = buildAudioFilterComplex(opts.segments, opts.fps);
