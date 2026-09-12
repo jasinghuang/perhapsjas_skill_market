@@ -214,8 +214,15 @@ function assertChapterSync(c: StoryboardChapter, index: number): void {
   }
 }
 
-/** 非空 narration = 有音频的步（mp3 只对非空句合成；#13 / P4-9 同款口径）。 */
-function hasAudio(narration: string): boolean {
+/**
+ * 非空 narration = 有音频的步（mp3 只对非空句合成；#13 / P4-9 同款口径）。
+ *
+ * **导出（M5a Task 5）**：mock 音轨（`scripts/render/audio.ts`）要按**同一个**判空口径决定给
+ * 哪些步写 mp3——口径各写一套时，`" "` 这类空白串 narration 会让 mock 多写一支 mp3、
+ * durations.json 条目数也跟着多 1，而门禁 #13 与分镜页对位的却是 trim 口径（同一事实两处报红
+ * 且等级不一）。谓词只有这一份（与 `normalizeTiming` 同一轮由私有转导出）。
+ */
+export function hasAudio(narration: string): boolean {
   return narration.trim() !== "";
 }
 
