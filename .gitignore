@@ -11,3 +11,13 @@ __pycache__/
 .gstack/
 .superpowers/
 beautiful-html-templates/
+
+# 设计钩子本地状态（config.json 的 narrow ignore + hook 缓存——工具态，非模板内容；
+# scaffold 另有 rm -rf .impeccable 防止它随整目录拷贝进新项目）
+.impeccable/
+
+# 外部参考资料（上游 skill 副本，与上游逐字节一致，可随时重拉；研究记录见 research-notes/）
+web-video-presentation/
+
+# 输入素材（用户提供的原始素材，不入库）
+广发证券：2025年年度报告-H股.pdf

@@ -43,6 +43,8 @@ grep -q '"storyboard": "tsx scripts/storyboard.ts"' "$TMP/demo/package.json"
 grep -q 'npx playwright install chromium' "$TMP/demo/scripts/shot/session.ts"
 # 模板工作区的分镜产出不得随拷贝进新项目（与 dist/ 同类的生成物；新项目分镜页应为空）
 test ! -e "$TMP/demo/storyboard"
+# 设计钩子的本地状态（narrow ignore + hook 缓存）是工具态，不得随拷贝进新项目
+test ! -e "$TMP/demo/.impeccable"
 
 # 2. 3:4 场景
 bash "$SKILL_DIR/scripts/scaffold.sh" "$TMP/tall" --slug tall --stage 3:4 >/dev/null

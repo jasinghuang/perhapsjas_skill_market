@@ -41,9 +41,10 @@ esac
 
 # 1. 拷贝模板
 # 清掉模板工作区里的生成物（不入库、也不该进新项目）：node_modules / dist /
-# storyboard（M4 分镜产出——模板上跑过 npm run storyboard 后是脏的，新项目应为空）
+# storyboard（M4 分镜产出——模板上跑过 npm run storyboard 后是脏的，新项目应为空）/
+# .impeccable（设计钩子的本地状态：narrow ignore 与 hook 缓存，属工具态非模板内容）
 cp -R "$TEMPLATE_DIR" "$TARGET"
-rm -rf "$TARGET/node_modules" "$TARGET/dist" "$TARGET/storyboard"
+rm -rf "$TARGET/node_modules" "$TARGET/dist" "$TARGET/storyboard" "$TARGET/.impeccable"
 
 # 2. 写运行时配置（slug + 舞台尺寸 = 档案最小参数；安全框由尺寸折算，不手写绝对值）
 cat > "$TARGET/src/engine/runtime-config.ts" <<EOF
