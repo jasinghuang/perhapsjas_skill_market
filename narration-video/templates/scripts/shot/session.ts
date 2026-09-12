@@ -51,6 +51,15 @@ export const READY_TIMEOUT_MS = 10_000;
 /** 浏览器缺失时的安装命令（错误文案与测试共用同一常量——改文案不会单侧漂移） */
 export const CHROMIUM_INSTALL_HINT = "npx playwright install chromium";
 
+/**
+ * 软件渲染的 Chromium 启动参数（M5a Task 4 追加；§11.2「软件渲染保像素稳定」）。
+ *
+ * 为什么需要：GPU 光栅化的像素结果随机器/驱动而变（跨机像素稳定性只对成片负责——
+ * storyboard / 无头门禁不开这条，它们只在本机消费）。渲染 CLI（T7）传 `softwareGL: true`。
+ * 导出常量而不是内联字面量：让"到底开了什么 flag"有唯一答案（测试直接断言这一份）。
+ */
+export const SOFTWARE_GL_ARGS: readonly string[] = ["--use-gl=angle", "--use-angle=swiftshader"];
+
 // ── 纯函数（可单测面） ──
 
 /** 游标合法性：非负整数。非法 = 断言而非静默跳过（跳过的帧会被分镜门禁的帧数校验抓，但
@@ -161,15 +170,37 @@ export function chromiumMissingError(cause?: unknown): Error {
 
 // ── 浏览器侧驱动（薄封装） ──
 
-/** 延迟 import（取舍 2）：纯函数单测不拉起 playwright。 */
-async function launchChromium(): Promise<Browser> {
+/**
+ * 延迟 import（取舍 2）：纯函数单测不拉起 playwright。
+ *
+ * `softwareGL`（M5a Task 4 追加，默认 **false**）：false 走**无参** `chromium.launch()`
+ * ——与 M3b/M4 以来既有三条管线（capture / storyboard / verify）的启动**逐字节一致**（软件渲染
+ * 是渲染 CLI 专属的增量，不得改变既有行为；`session.test.ts` 有一条断言钉住"默认不传参数"）。
+ * true 时传 `SOFTWARE_GL_ARGS`。
+ *
+ * **软渲 flag 不被接受时不得把整条渲染链拖死**（退化而非抛错）：软件渲染是"像素稳定性"的加固项，
+ * 不是渲染能否成立的前提。故启动失败且非"浏览器缺失"时退化为默认 GL 重试一次，并**显式说出来**
+ * （静默退化 = 事后无从归因；跨机像素稳定性的残余在 T7 的 KNOWN-ISSUES 里登记）。
+ * "浏览器缺失"这条判据优先——否则重试会把安装指引吞掉，用户拿到一个没有指引的二次失败。
+ */
+async function launchChromium(softwareGL: boolean): Promise<Browser> {
   const { chromium } = await import("playwright");
   try {
-    return await chromium.launch();
+    return softwareGL ? await chromium.launch({ args: [...SOFTWARE_GL_ARGS] }) : await chromium.launch();
   } catch (e) {
     // 只有"浏览器缺失"转指引错误；其余（如沙箱/权限）原样抛，保留真因。
     if (isMissingBrowserError(e)) throw chromiumMissingError(e);
-    throw e;
+    if (!softwareGL) throw e;
+    console.warn(
+      `[session] softwareGL 启动失败（${e instanceof Error ? e.message : String(e)}）——` +
+        `退化为默认 GL 重试（跨机像素稳定性不再有保证；渲染产物仍会出，见 KNOWN-ISSUES）`,
+    );
+    try {
+      return await chromium.launch();
+    } catch (retry) {
+      if (isMissingBrowserError(retry)) throw chromiumMissingError(retry);
+      throw retry;
+    }
   }
 }
 
@@ -289,6 +320,11 @@ export interface SessionOptions {
    * 不传 = 行为逐字不变（capture.ts / verify-sequential.ts 均不传）。
    */
   beforeGoto?: (page: Page) => void;
+  /**
+   * 软件渲染（§11.2 跨机像素稳定；**M5a Task 4 追加**）：默认 **false** = 启动参数与既有管线
+   * 逐字节一致（不传任何 launch 参数）。渲染 CLI（T7）传 true——见 launchChromium 的取舍。
+   */
+  softwareGL?: boolean;
 }
 
 export interface Session {
@@ -308,7 +344,7 @@ export async function openSession(opts: SessionOptions): Promise<Session> {
   const viewport = opts.viewport ?? DEFAULT_VIEWPORT;
   const deviceScaleFactor = opts.deviceScaleFactor ?? 1;
   const url = withHeadless(opts.url);
-  const browser = await launchChromium();
+  const browser = await launchChromium(opts.softwareGL === true);
   try {
     const page = await browser.newPage({ viewport, deviceScaleFactor });
     // 导航前钩子（见 SessionOptions.beforeGoto）：必须早于 goto——装载期事件晚挂即丢。

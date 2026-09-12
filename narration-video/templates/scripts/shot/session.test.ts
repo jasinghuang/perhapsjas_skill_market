@@ -193,26 +193,41 @@ describe("seekTo：M5a Task 3 追加的定位入口（渲染器唯一入口；�
 // 本 describe 两条：① 调用顺序（playwright 替身，jsdom 内跑）；② 真机两臂（真浏览器 +
 // 本地 http 夹具页）。替身与真机**分处两个 describe**——vi.mock 是文件级，替身会截胡真机臂。
 
-const { pwCalls } = vi.hoisted(() => ({ pwCalls: [] as string[] }));
+const { pwCalls, pwLaunchArgs, pwLaunchFail } = vi.hoisted(() => ({
+  pwCalls: [] as string[],
+  /** launch 收到的参数（M5a Task 4：softwareGL 的启动参数面）——与 pwCalls 分开，不动 M3b 的定序断言 */
+  pwLaunchArgs: [] as unknown[],
+  /** 故障注入：none = 正常；flags = 带 args 的启动失败（模拟 Chromium 不认软渲 flag）；
+   *  missing = 浏览器缺失；other = 其它启动失败（沙箱/权限一类，应原样抛） */
+  pwLaunchFail: { mode: "none" as "none" | "flags" | "missing" | "other" },
+}));
 
 vi.mock("playwright", () => ({
   chromium: {
-    launch: async () => ({
-      newPage: async () => {
-        pwCalls.push("newPage");
-        return {
-          goto: async (url: string) => {
-            pwCalls.push("goto:" + url);
-          },
-          waitForFunction: async () => {
-            pwCalls.push("waitForFunction");
-          },
-          on: () => undefined,
-          evaluate: async () => undefined,
-        };
-      },
-      close: async () => undefined,
-    }),
+    launch: async (opts?: { args?: readonly string[] }) => {
+      pwLaunchArgs.push(opts);
+      if (pwLaunchFail.mode === "missing") throw new Error("Executable doesn't exist at /x/chromium");
+      if (pwLaunchFail.mode === "other") throw new Error("sandbox permission denied");
+      if (pwLaunchFail.mode === "flags" && opts?.args !== undefined) {
+        throw new Error("launch failed: unknown switch --use-gl=angle");
+      }
+      return {
+        newPage: async () => {
+          pwCalls.push("newPage");
+          return {
+            goto: async (url: string) => {
+              pwCalls.push("goto:" + url);
+            },
+            waitForFunction: async () => {
+              pwCalls.push("waitForFunction");
+            },
+            on: () => undefined,
+            evaluate: async () => undefined,
+          };
+        },
+        close: async () => undefined,
+      };
+    },
   },
 }));
 
@@ -240,5 +255,77 @@ describe("beforeGoto：调用顺序（替身）", () => {
     const session = await openSession({ url: "http://fixture.test/" });
     expect(pwCalls).toEqual(["newPage", "goto:http://fixture.test/?headless=1", "waitForFunction"]);
     await session.close();
+  });
+});
+
+// M5a Task 4（§11.2 软件渲染）：`softwareGL` 的启动参数面。
+// 两条判据：① **默认 false = 无参 launch**（既有 capture/storyboard/verify 三条管线逐字节不变
+// ——这是本字段唯一的回归面）；② 软渲 flag 不被接受时**退化为默认 GL**（不把渲染链拖死），
+// 但"浏览器缺失"这条判据优先于退化重试（否则安装指引会被重试吞掉）。
+describe("softwareGL：启动参数（M5a Task 4 追加；默认 false 逐字节不变）", () => {
+  const launchArgsSeen = (): unknown[] =>
+    pwLaunchArgs.map((o) => (o as { args?: unknown } | undefined)?.args);
+
+  it("默认（不传）→ `launch()` 无参：既有管线行为零变化", async () => {
+    pwLaunchArgs.length = 0;
+    const s = await openSession({ url: "http://fixture.test/" });
+    await s.close();
+    expect(pwLaunchArgs).toEqual([undefined]);
+  });
+
+  it("显式 false → 与不传等价（无参）", async () => {
+    pwLaunchArgs.length = 0;
+    const s = await openSession({ url: "http://fixture.test/", softwareGL: false });
+    await s.close();
+    expect(pwLaunchArgs).toEqual([undefined]);
+  });
+
+  it("true → 传 SOFTWARE_GL_ARGS（软渲两件套；常量本身也钉住）", async () => {
+    pwLaunchArgs.length = 0;
+    const s = await openSession({ url: "http://fixture.test/", softwareGL: true });
+    await s.close();
+    expect(launchArgsSeen()).toEqual([[...session.SOFTWARE_GL_ARGS]]);
+    expect([...session.SOFTWARE_GL_ARGS]).toEqual(["--use-gl=angle", "--use-angle=swiftshader"]);
+  });
+
+  it("软渲 flag 不被接受（launch 抛）→ 退化为默认 GL 重试，不抛错（渲染照出，且显式告警）", async () => {
+    pwLaunchArgs.length = 0;
+    pwLaunchFail.mode = "flags";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const s = await openSession({ url: "http://fixture.test/", softwareGL: true });
+      await s.close();
+      expect(launchArgsSeen()).toEqual([[...session.SOFTWARE_GL_ARGS], undefined]);
+      expect(warn.mock.calls.flat().join("\n")).toContain("softwareGL 启动失败");
+    } finally {
+      warn.mockRestore();
+      pwLaunchFail.mode = "none";
+    }
+  });
+
+  it("浏览器缺失优先于退化（重试会吞掉安装指引）→ 抛指引错误，且不重试", async () => {
+    pwLaunchArgs.length = 0;
+    pwLaunchFail.mode = "missing";
+    try {
+      await expect(
+        openSession({ url: "http://fixture.test/", softwareGL: true }),
+      ).rejects.toThrow(/npx playwright install chromium/);
+      expect(pwLaunchArgs).toHaveLength(1); // 只试了一次（没有第二次启动）
+    } finally {
+      pwLaunchFail.mode = "none";
+    }
+  });
+
+  it("其它启动失败（沙箱/权限一类，非软渲路径）→ 原样抛、不重试（不吞真因）", async () => {
+    pwLaunchArgs.length = 0;
+    pwLaunchFail.mode = "other";
+    try {
+      await expect(openSession({ url: "http://fixture.test/" })).rejects.toThrow(
+        /sandbox permission denied/,
+      );
+      expect(pwLaunchArgs).toHaveLength(1); // 没有第二次启动
+    } finally {
+      pwLaunchFail.mode = "none";
+    }
   });
 });
