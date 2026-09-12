@@ -204,6 +204,17 @@ export interface RenderDeps {
   /** 失败降级（M5b T4）：verify 未过 / seek 断言抛错 → 实时捕获出片（`--no-fallback` 关） */
   realtimeCapture?: (opts: RealtimeOptions) => Promise<RealtimeResult>;
   runDeterminism?: (opts: DeterminismOptions) => Promise<DeterminismReport>;
+  /**
+   * 进度上报（M5b T5，M4-3 款追加字段）：导出服务（页面按钮，§9）拿它做进度条。
+   *
+   * 粒度 = **帧流阶段落齐的步数**（`total` = 本张子时间轴的步数），顺序恒为
+   * `(0,total)` → 帧流期间每落齐一步报一次 → `(total,total)`。读数来自产物本身
+   * （`frameStepsDone`：mtime ≥ 捕捉起点的末帧才算"本次落齐"），**不是猜的**，也不参与任何判据。
+   *
+   * 两条边界：① 降级路径（T4）不补 `(total,total)`——帧流没走完就不谎报走完（产物由 done 态的
+   * 产物名说明）；② `RenderIo` 的文本行不够用（没有结构化读数面），故这里是**注入字段**。
+   */
+  onProgress?: (done: number, total: number) => void;
 }
 
 // ── 命令行解析 ──
@@ -742,6 +753,123 @@ export async function runDeterminism(opts: DeterminismOptions): Promise<Determin
   return { ok: failures.length === 0, lines, failures };
 }
 
+// ── 进度上报（M5b T5：`RenderDeps.onProgress` 的**真实生产者**） ──
+//
+// 为什么生产者长这样（不是"取最简者"的裁量）：帧流的步级并行在 `captureFrames` **内部**
+// （一次调用渲完所有步、按 worker 分片），编排层拿不到逐步回调；它能观测到的"某一步完成了"
+// 只有一个**事实**：该步的产物帧在盘上**落齐**（且是**本次**写的）。故进度直接来自产物：
+//
+//   · `frameStepsDone`：数"本次落齐"的步数；
+//   · `watchFrameProgress`：捕捉期间按拍上报增量（每落齐一步报一次）；
+//   · 编排在捕捉返回后**补报** `(total, total)`——轮询一拍都可能没赶上（注入式依赖 / 快渲染），
+//     "单调递增至 total"这条契约不得依赖轮询是否命中。
+//
+// 观测面**只读**产物、不出现在任何判据里：它坏了（读不到 / 目录不存在 / 帧数非法）只是少几次
+// 中间读数，**不得**因此让一次渲染失败。
+
+/** 帧流进度的轮询间隔（ms）：够密（1080p 一步数十秒量级）又不至于与帧流抢 I/O。 */
+export const FRAME_PROGRESS_POLL_MS = 200;
+
+/** 一步在进度面上的最小投影（只要"帧落哪、落几张"）。 */
+export interface ProgressStep {
+  chapterId: string;
+  step: number;
+  frameCount: number;
+}
+
+/**
+ * 已落齐的步数（"本次"判据：末帧 mtime **不早于** `startedAtMs`）。
+ *
+ * 只 stat **每步的末帧**：`captureFrames` 的帧循环是顺序 await 的（写前清目录 → `0001…` 末帧），
+ * 末帧在 = 该步帧流走完（"目录里就这几张"由帧流自己的 `assertFrameCountOnDisk` 保证，这里不必
+ * 重复数——只读面越薄越不会被拖慢）。
+ *
+ * 陈旧帧（上一轮残留，mtime 早于本次起点）/ 还没落盘 / 观测不了，一律按"没落齐"算。
+ */
+export function frameStepsDone(opts: {
+  /** 帧流输出根（= `captureFrames` 的 `outDir`；帧在 `<workDir>/frames/<chapterId>/<step>/`） */
+  workDir: string;
+  steps: readonly ProgressStep[];
+  /** 本次捕捉的起点（ms epoch） */
+  startedAtMs: number;
+}): number {
+  let done = 0;
+  for (const step of opts.steps) {
+    let last: string;
+    try {
+      const paths = framePaths(frameDir(step.chapterId, step.step), step.frameCount);
+      last = paths[paths.length - 1];
+    } catch {
+      continue; // 帧数非法（时间轴不会产出这种步）——观测面不为它炸
+    }
+    try {
+      if (fs.statSync(path.join(opts.workDir, last)).mtimeMs >= opts.startedAtMs) done += 1;
+    } catch {
+      // 还没落盘（正常情况下每一步都在落）/ 观测不了：不算
+    }
+  }
+  return done;
+}
+
+/**
+ * 捕捉期间按拍上报帧流进度；`stop()` 停下并**等循环退出**（stop 之后落齐的步不再产生读数）。
+ *
+ * 只在新落齐的步数**涨了**时报（同一读数不重复报——页面的进度条不该被同一个数反复刷新）。
+ */
+export function watchFrameProgress(opts: {
+  workDir: string;
+  steps: readonly ProgressStep[];
+  startedAtMs: number;
+  report(done: number, total: number): void;
+  /** 轮询间隔（ms；缺省 `FRAME_PROGRESS_POLL_MS`） */
+  pollMs?: number;
+}): { stop(): Promise<void> } {
+  const pollMs = opts.pollMs ?? FRAME_PROGRESS_POLL_MS;
+  const total = opts.steps.length;
+  let stopped = false;
+  let reported = 0;
+  /** 唤醒当前这一拍的等待（stop() 用它提前放行，免得收工还要等满一个间隔） */
+  let wake: (() => void) | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const loop = (async () => {
+    while (!stopped) {
+      await new Promise<void>((resolve) => {
+        wake = () => {
+          if (timer !== null) {
+            clearTimeout(timer);
+            timer = null;
+          }
+          resolve();
+        };
+        timer = setTimeout(() => {
+          timer = null;
+          resolve();
+        }, pollMs);
+      });
+      wake = null;
+      if (stopped) return;
+      const done = frameStepsDone({
+        workDir: opts.workDir,
+        steps: opts.steps,
+        startedAtMs: opts.startedAtMs,
+      });
+      if (done > reported) {
+        reported = done;
+        opts.report(done, total);
+      }
+    }
+  })();
+
+  return {
+    stop: async () => {
+      stopped = true;
+      wake?.();
+      await loop;
+    },
+  };
+}
+
 // ── 编排 ──
 
 const DEFAULT_IO: RenderIo = { log: console.log, error: console.error };
@@ -858,6 +986,25 @@ export async function runRender(
         `并发 ${args.concurrency} · 视口 ${viewport.width}×${viewport.height} · 软件渲染开 · ${url}`,
     );
 
+    // 进度（M5b T5，导出服务的进度条）：total = 本张（子）时间轴的步数；帧流期间由产物落盘
+    // 驱动逐步上报（`watchFrameProgress`），捕捉返回后**补报**终值（轮询没命中也要到 total）。
+    // `startedAtMs` 必须取在调 captureFrames **之前**：mtime 早于它的帧是上一轮的残留。
+    const onProgress = deps.onProgress;
+    const progressWatch =
+      onProgress === undefined
+        ? undefined
+        : watchFrameProgress({
+            workDir,
+            steps: sub.steps.map((s): ProgressStep => ({
+              chapterId: s.chapterId,
+              step: s.step,
+              frameCount: s.frameCount,
+            })),
+            startedAtMs: Date.now(),
+            report: onProgress,
+          });
+    onProgress?.(0, sub.steps.length);
+
     /**
      * 降级逃生舱（§8 step 4；M5b T4）：确定性链路失败 → 实时捕获出片。
      *
@@ -925,11 +1072,14 @@ export async function runRender(
         softwareGL: true,
       });
     } catch (e) {
+      await progressWatch?.stop(); // M5b T5：降级按墙钟录音、帧流不再落盘——观测先收工
       if (args.noFallback) throw e;
       // 真因逐字来自异常本身（`captureFrames` 的每条 throw 都自带"帧流捕捉：…"定位与步骤信息），
       // 本层**不再加前缀**——否则日志里出现"帧流捕捉失败：帧流捕捉失败：…"的叠字
       return await degrade(e instanceof Error ? e.message : String(e));
     }
+    await progressWatch?.stop(); // 收到结果即收工（stop 之后落齐的步不再产生读数）
+    onProgress?.(sub.steps.length, sub.steps.length);
     // R7 泄漏告警的出口：纯章节层泄漏动画的步会 windowMs=0（成片冻住）而自校验全绿——
     // 这条 warning 是唯一能看见它的地方，故整串打到 stderr（不截断）。
     for (const step of captured) {

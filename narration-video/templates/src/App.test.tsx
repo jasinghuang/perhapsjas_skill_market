@@ -259,6 +259,136 @@ describe("App 装配 · 无头/渲染不自驱（M3b Task 6）", () => {
   });
 });
 
+describe("App 装配 · 导出接线（M5b Task 5）", () => {
+  // 相对路径 `/__export/*` 是**同源**的载体：中间件随 dev server 启动，端口就是页面自己的
+  // ⇒ 无跨源、无预检、无端口发现。故这里对 fetch 的实参逐字断言（Stage 的 EXPORT_ROUTES
+  // 与 vite-plugins/export-service.ts 的挂载点由两侧测试各自钉死，任一侧改名即红）。
+  const okJson = (body: unknown, status = 200) =>
+    ({ ok: status >= 200 && status < 300, status, json: async () => body }) as unknown as Response;
+  const idleBody = { state: "idle", progress: { done: 0, total: 0 } };
+
+  /** 微任务推进（假计时器只管 setTimeout；promise 链要显式放行）。 */
+  const flush = async () => {
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  };
+
+  const stubFetch = () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  };
+
+  it("挂载即探活：GET /__export/status（相对路径）；服务可达且 idle → 按钮 idle", async () => {
+    const fetchMock = stubFetch();
+    fetchMock.mockResolvedValueOnce(okJson(idleBody));
+    render(<App />);
+    // 同步就有按钮（idle 态），不用等探活
+    expect(screen.getByTestId("btn-export")).toHaveTextContent("导出");
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/__export/status");
+    expect(screen.queryByTestId("export-hint")).not.toBeInTheDocument();
+  });
+
+  it("点导出 → POST /run → 轮询 /status → done 出下载口；进度取自服务端", async () => {
+    const fetchMock = stubFetch();
+    fetchMock
+      .mockResolvedValueOnce(okJson(idleBody)) // 挂载探活
+      .mockResolvedValueOnce(okJson({ state: "running", progress: { done: 0, total: 0 } })) // POST
+      .mockResolvedValueOnce(okJson({ state: "running", progress: { done: 1, total: 3 } })) // 轮询 #1
+      .mockResolvedValueOnce(okJson({ state: "done", progress: { done: 3, total: 3 }, message: "presentation.mp4" })); // 轮询 #2
+
+    render(<App />);
+    await flush();
+    fireEvent.click(screen.getByTestId("btn-export"));
+    await flush();
+
+    expect(fetchMock.mock.calls[1][0]).toBe("/__export/run");
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "POST" });
+    expect(screen.getByTestId("btn-export")).toBeDisabled(); // running 中不可再触发
+    expect(screen.getByTestId("export-progress")).toHaveTextContent("1/3");
+
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(screen.getByTestId("link-export-file")).toHaveAttribute("href", "/__export/file");
+    expect(screen.getByTestId("export-message")).toHaveTextContent("presentation.mp4");
+    expect(screen.getByTestId("btn-export")).not.toBeDisabled(); // done 后可再导一次
+  });
+
+  it("409（已有一次在跑）不是错误：按 running 继续轮询到 done", async () => {
+    const fetchMock = stubFetch();
+    fetchMock
+      .mockResolvedValueOnce(okJson(idleBody))
+      .mockResolvedValueOnce(okJson({ error: "已有一次导出在跑" }, 409))
+      .mockResolvedValueOnce(okJson({ state: "done", progress: { done: 3, total: 3 } }));
+    render(<App />);
+    await flush();
+    fireEvent.click(screen.getByTestId("btn-export"));
+    await flush();
+    expect(screen.queryByTestId("export-message")).not.toBeInTheDocument();
+    expect(screen.getByTestId("link-export-file")).toBeInTheDocument();
+  });
+
+  it("服务端 failed → 页面显示原因（按钮可重试）", async () => {
+    const fetchMock = stubFetch();
+    fetchMock
+      .mockResolvedValueOnce(okJson(idleBody))
+      .mockResolvedValueOnce(okJson({ state: "running", progress: { done: 0, total: 0 } }))
+      .mockResolvedValueOnce(okJson({ state: "failed", progress: { done: 1, total: 3 }, message: "渲染退出码 1" }));
+    render(<App />);
+    await flush();
+    fireEvent.click(screen.getByTestId("btn-export"));
+    await flush();
+    expect(screen.getByTestId("export-message")).toHaveTextContent("渲染退出码 1");
+    expect(screen.getByTestId("btn-export")).not.toBeDisabled();
+  });
+
+  it("探活失败（没有导出服务）→ 启动指引：命令行 + 复制命令", async () => {
+    const fetchMock = stubFetch();
+    fetchMock.mockRejectedValue(new TypeError("Failed to parse URL"));
+    render(<App />);
+    await flush();
+    expect(screen.getByTestId("export-hint")).toHaveTextContent("npm run render");
+    // 复制命令是可选能力（jsdom / 非安全上下文没有 clipboard）：没有也不能炸
+    fireEvent.click(screen.getByTestId("btn-export-copy"));
+  });
+
+  it("探活拿到非本服务的体（静态托管回 index.html / 别的东西）→ 同样按不可达处理", async () => {
+    const fetchMock = stubFetch();
+    fetchMock.mockResolvedValue(okJson({ hello: "world" }));
+    render(<App />);
+    await flush();
+    expect(screen.getByTestId("export-hint")).toBeInTheDocument();
+  });
+
+  it("点导出时服务已没了（dev server 关掉）→ 降级成启动指引", async () => {
+    const fetchMock = stubFetch();
+    fetchMock.mockResolvedValueOnce(okJson(idleBody)); // 挂载时还在
+    fetchMock.mockRejectedValueOnce(new TypeError("fetch failed")); // 点下去时已经没了
+    render(<App />);
+    await flush();
+    expect(screen.queryByTestId("export-hint")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("btn-export"));
+    await flush();
+    expect(screen.getByTestId("export-hint")).toHaveTextContent("npm run render");
+  });
+
+  it("渲染态（?render=1）不探活：控制条整体不在，导出按钮也不在", async () => {
+    window.history.replaceState({}, "", "/?render=1");
+    vi.resetModules();
+    const fetchMock = stubFetch();
+    const { default: RenderApp } = await import("./App");
+    render(<RenderApp />);
+    await flush();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("btn-export")).not.toBeInTheDocument();
+    window.history.replaceState({}, "", "/");
+    vi.resetModules();
+  });
+});
+
 describe("App 装配 · 停留垫解析（M5a Task 1）", () => {
   // 与"无头/渲染不自驱"同法：拦下 useAudioPlayer，直接读 playStep 的实参（hold 的唯一出口）
   const mockPlayer = () => {

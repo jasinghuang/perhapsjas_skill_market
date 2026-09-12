@@ -10,14 +10,16 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MOCK_AUDIO_DEFAULT, MOCK_AUDIO_REALISTIC, type MockAudioProfile } from "./render/audio";
 import type { EncodeOptions, EncodeResult } from "./render/encode";
+import { frameDir, framePaths } from "./render/frames";
 import type { CaptureFramesOptions, CapturedStep, FrameSpec } from "./render/frames";
 import type { Timeline, TimelineStep } from "./render/timeline";
 import { sampledFrames } from "./render/verify";
 import {
   DEFAULT_OUT_DIR,
+  FRAME_PROGRESS_POLL_MS,
   RENDER_USAGE,
   RenderUsageError,
   assertAudioDurationAlignment,
@@ -25,11 +27,13 @@ import {
   buildAudioSegments,
   determinismPairs,
   displayPath,
+  frameStepsDone,
   parseArgs,
   renderCli,
   runRender,
   selectTimeline,
   stepLine,
+  watchFrameProgress,
   type RenderArgs,
   type RenderChapter,
   type RenderDeps,
@@ -645,8 +649,7 @@ describe("renderCli（退出码约定与 check 入口一致）", () => {
   });
 });
 
-describe("displayPath（日志路径：库内相对、库外绝对）", () => {
-  const CWD = "/repo/narration-video/templates";
+describe("displayPath（日志路径：库内相对、库外绝对）", () => {  const CWD = "/repo/narration-video/templates";
 
   it("cwd 之内 → 相对路径（短、可点）", () => {
     expect(displayPath(path.join(CWD, "render/presentation.mp4"), CWD)).toBe("render/presentation.mp4");
@@ -660,4 +663,177 @@ describe("displayPath（日志路径：库内相对、库外绝对）", () => {
   it("就是 cwd 本身 → 绝对路径（空串会被 `||` 兜成别的，宁可直接给绝对）", () => {
     expect(displayPath(CWD, CWD)).toBe(CWD);
   });
+});
+
+// ── 进度上报（M5b T5：onProgress 的真实生产者） ──
+//
+// 为什么生产者要长这样：步级并行在 `captureFrames` **内部**（一次调用渲完所有步），编排层拿不到
+// 逐步回调；它能观测到的"某一步完成了"只有一个：该步的产物帧在盘上**落齐**（且是**本次**写的）。
+// 故进度来自产物本身（不是猜的）：`frameStepsDone` 数落齐的步数，`watchFrameProgress` 在捕捉
+// 期间按拍上报，捕捉返回后再由编排层补一次 `(total,total)` 把契约钉死。
+
+describe("frameStepsDone（帧流进度的唯一读数：数「本次落齐」的步）", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** 写真帧并摆 mtime（seconds 口径由 Date 兜）；mtimeMs 是"本次写的"判据。 */
+  function writeFrames(workDir: string, step: number, count: number, mtimeMs: number): void {
+    const dir = path.join(workDir, frameDir("example", step));
+    fs.mkdirSync(dir, { recursive: true });
+    const paths = framePaths(frameDir("example", step), count);
+    for (const rel of paths) {
+      const file = path.join(workDir, rel);
+      fs.writeFileSync(file, "png");
+      const when = new Date(mtimeMs);
+      fs.utimesSync(file, when, when);
+    }
+  }
+
+  it("落齐且是本次写的 → 数；陈旧帧（上一轮残留）/ 缺帧 / 空步都不算", () => {
+    const workDir = tmpRepo("frames-done");
+    const steps = [
+      { chapterId: "example", step: 0, frameCount: 2 },
+      { chapterId: "example", step: 1, frameCount: 1 },
+      { chapterId: "example", step: 2, frameCount: 2 },
+    ];
+    const startedAtMs = 1_000_000;
+
+    writeFrames(workDir, 0, 2, startedAtMs); // 本次落齐
+    writeFrames(workDir, 1, 1, startedAtMs - 5_000); // 上一轮的残留（陈旧）
+    writeFrames(workDir, 2, 1, startedAtMs); // 缺末帧（frameCount 2，只落了 1）
+
+    expect(frameStepsDone({ workDir, steps, startedAtMs })).toBe(1);
+
+    writeFrames(workDir, 1, 1, startedAtMs + 1); // 本轮补上
+    expect(frameStepsDone({ workDir, steps, startedAtMs })).toBe(2);
+
+    writeFrames(workDir, 2, 2, startedAtMs + 2); // 末帧补齐
+    expect(frameStepsDone({ workDir, steps, startedAtMs })).toBe(3);
+
+    expect(frameStepsDone({ workDir, steps: [], startedAtMs })).toBe(0);
+  });
+});
+
+describe("watchFrameProgress（捕捉期间按拍上报：每落齐一步报一次，同一读数不重复报）", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("逐步上报；无新落齐不报；stop 后不再报", async () => {
+    vi.useFakeTimers();
+    const workDir = tmpRepo("watch-progress");
+    const startedAtMs = 2_000_000;
+    const steps = [0, 1, 2, 3].map((step) => ({ chapterId: "example", step, frameCount: 1 }));
+    const reports: string[] = [];
+    const watch = watchFrameProgress({
+      workDir,
+      steps,
+      startedAtMs,
+      report: (done, total) => reports.push(`${done}/${total}`),
+    });
+
+    /** 一拍：放行计时器 + 让 async 循环跑到下一次等待。 */
+    const tick = async (): Promise<void> => {
+      await vi.advanceTimersByTimeAsync(FRAME_PROGRESS_POLL_MS);
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    };
+
+    const write = (step: number, mtimeMs: number): void => {
+      const rel = framePaths(frameDir("example", step), 1)[0];
+      const file = path.join(workDir, rel);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, "png");
+      const when = new Date(mtimeMs);
+      fs.utimesSync(file, when, when);
+    };
+
+    await tick(); // 一步都没落齐：不制造假读数
+    expect(reports).toEqual([]);
+
+    write(0, startedAtMs + 10);
+    await tick();
+    expect(reports).toEqual(["1/4"]);
+
+    await tick(); // 没有新落齐的步
+    expect(reports).toEqual(["1/4"]);
+
+    write(1, startedAtMs + 20);
+    write(2, startedAtMs + 30); // worker 乱序完成也照样数
+    await tick();
+    expect(reports).toEqual(["1/4", "3/4"]);
+
+    await watch.stop();
+    write(3, startedAtMs + 99); // stop 之后落齐的步不再产生读数（循环已退出）
+    await tick();
+    expect(reports).toEqual(["1/4", "3/4"]);
+  });
+});
+
+describe("runRender · 进度注入（onProgress 接的是帧流阶段的真实落盘）", () => {
+  it("首报 (0,total) → 帧流期间逐步递增 → 末报 (total,total)（单调、终值等于总步数）", async () => {
+    const repo = tmpRepo("progress");
+    seedRepo(repo);
+    const rec: Recorded = { calls: [] };
+    const { io } = makeIo();
+    const seen: Array<{ done: number; total: number }> = [];
+    const outDir = path.join(repo, "render");
+    const workDir = path.join(outDir, "presentation");
+
+    // 假帧流：**真落盘**（逐步、带间隔）——进度观测面读的就是产物本身，不是替身的私有信号
+    const fakeCapture = async (
+      specs: readonly FrameSpec[],
+      opts: CaptureFramesOptions,
+    ): Promise<CapturedStep[]> => {
+      for (const spec of specs) {
+        const step = opts.timeline.steps.find(
+          (s) => s.chapter === spec.chapter && s.step === spec.step,
+        )!;
+        const rel = framePaths(frameDir(spec.chapterId, spec.step), step.frameCount);
+        const dir = path.join(workDir, frameDir(spec.chapterId, spec.step));
+        fs.mkdirSync(dir, { recursive: true });
+        for (const frame of rel) fs.writeFileSync(path.join(workDir, frame), "png");
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      return specs.map((spec): CapturedStep => {
+        const step = opts.timeline.steps.find(
+          (s) => s.chapter === spec.chapter && s.step === spec.step,
+        )!;
+        return {
+          ...spec,
+          dir: frameDir(spec.chapterId, spec.step),
+          frameCount: step.frameCount,
+          animMs: step.animMs,
+          holdMs: step.holdMs,
+          warnings: [],
+        };
+      });
+    };
+
+    const code = await runRender(
+      {
+        outDir,
+        mockAudio: false,
+        realisticAudio: false,
+        concurrency: 2,
+        only: undefined,
+        verifyDeterminism: false,
+        help: false,
+      },
+      makeDeps(repo, rec, {
+        captureFrames: fakeCapture,
+        onProgress: (done, total) => seen.push({ done, total }),
+      }),
+      io,
+    );
+
+    expect(code).toBe(0);
+    expect(seen[0]).toEqual({ done: 0, total: 3 });
+    expect(seen[seen.length - 1]).toEqual({ done: 3, total: 3 });
+    // 单调不减（页面的进度条只许往前走），且 total 一直是同一条子时间轴的步数
+    expect(seen.every((s) => s.total === 3)).toBe(true);
+    expect(seen.every((s, i) => i === 0 || s.done >= seen[i - 1].done)).toBe(true);
+    // 帧流期间至少有一次中间读数（"0 → 3 一步跳完"会退化成假进度）
+    expect(seen.length).toBeGreaterThan(2);
+  }, 30_000);
 });

@@ -115,5 +115,126 @@ describe("Stage", () => {
       </Stage>,
     );
     expect(screen.queryByTestId("transport")).not.toBeInTheDocument();
+    // 导出按钮同属控制条（M5b Task 5）：渲染/录屏态下它不在 DOM，成片里不可能出现"导出"字样
+    expect(screen.queryByTestId("btn-export")).not.toBeInTheDocument();
+  });
+
+  // ── M5b Task 5：导出按钮（§9 的"导出"控制；新建——T3 之前仓库里没有这个按钮） ──
+
+  it("idle：按钮可点，点击回调一次（页面按钮 → 本地渲染服务）", () => {
+    const onExport = vi.fn();
+    render(
+      <Stage dims={{ width: 1920, height: 1080 }} caption="" onPlay={() => {}} onPause={() => {}} onStop={() => {}} onExport={onExport}>
+        <div />
+      </Stage>,
+    );
+    const btn = screen.getByTestId("btn-export");
+    expect(btn).toHaveTextContent("导出");
+    expect(btn).not.toBeDisabled();
+    fireEvent.click(btn);
+    expect(onExport).toHaveBeenCalledTimes(1);
+    // idle 下既没有进度读数，也没有下载口
+    expect(screen.queryByTestId("export-progress")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("link-export-file")).not.toBeInTheDocument();
+  });
+
+  it("running：按钮禁用 + 进度读数（done/total 来自服务端，页面不自己猜）", () => {
+    render(
+      <Stage
+        dims={{ width: 1920, height: 1080 }}
+        caption=""
+        onPlay={() => {}}
+        onPause={() => {}}
+        onStop={() => {}}
+        onExport={() => {}}
+        exportState="running"
+        exportProgress={{ done: 2, total: 3 }}
+      >
+        <div />
+      </Stage>,
+    );
+    expect(screen.getByTestId("btn-export")).toBeDisabled();
+    expect(screen.getByTestId("export-progress")).toHaveTextContent("2/3");
+  });
+
+  it("running 且总步数未知：读数不给假分数（显示占位）", () => {
+    render(
+      <Stage
+        dims={{ width: 1920, height: 1080 }}
+        caption=""
+        onPlay={() => {}}
+        onPause={() => {}}
+        onStop={() => {}}
+        onExport={() => {}}
+        exportState="running"
+        exportProgress={{ done: 0, total: 0 }}
+      >
+        <div />
+      </Stage>,
+    );
+    expect(screen.getByTestId("export-progress")).toHaveTextContent("…");
+  });
+
+  it("done：出现取件口（同源 /__export/file，附件下载）", () => {
+    render(
+      <Stage
+        dims={{ width: 1920, height: 1080 }}
+        caption=""
+        onPlay={() => {}}
+        onPause={() => {}}
+        onStop={() => {}}
+        onExport={() => {}}
+        exportState="done"
+      >
+        <div />
+      </Stage>,
+    );
+    const link = screen.getByTestId("link-export-file");
+    expect(link).toHaveAttribute("href", "/__export/file");
+    expect(link).toHaveAttribute("download");
+  });
+
+  it("unreachable：给启动指引（命令行）——§9「不可达时页面给出启动指引」", () => {
+    const onCopy = vi.fn();
+    render(
+      <Stage
+        dims={{ width: 1920, height: 1080 }}
+        caption=""
+        onPlay={() => {}}
+        onPause={() => {}}
+        onStop={() => {}}
+        onExport={() => {}}
+        exportState="unreachable"
+        onCopyExportCommand={onCopy}
+      >
+        <div />
+      </Stage>,
+    );
+    const hint = screen.getByTestId("export-hint");
+    expect(hint).toHaveTextContent("npm run render"); // 指引只用 CLI（I8：不得写别的入口）
+    expect(hint).toHaveTextContent("不可达");
+    fireEvent.click(screen.getByTestId("btn-export-copy"));
+    expect(onCopy).toHaveBeenCalledTimes(1);
+    // 不可达不是终态：按钮仍可点（再点一次即重新探活）
+    expect(screen.getByTestId("btn-export")).not.toBeDisabled();
+  });
+
+  it("failed：显示服务端给的原因，按钮可重试", () => {
+    render(
+      <Stage
+        dims={{ width: 1920, height: 1080 }}
+        caption=""
+        onPlay={() => {}}
+        onPause={() => {}}
+        onStop={() => {}}
+        onExport={() => {}}
+        exportState="failed"
+        exportMessage="渲染退出码 1"
+      >
+        <div />
+      </Stage>,
+    );
+    expect(screen.getByTestId("export-message")).toHaveTextContent("渲染退出码 1");
+    expect(screen.getByTestId("btn-export")).not.toBeDisabled();
   });
 });

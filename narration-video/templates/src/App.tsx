@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chapters } from "./chapters/manifest";
 import { setRenderMode } from "./engine/animationRuntime";
 import {
@@ -12,7 +12,7 @@ import {
 } from "./engine/cursorBridge";
 import { resolveHoldMs } from "./engine/hold";
 import { stageConfig } from "./engine/runtime-config";
-import { Stage } from "./engine/Stage";
+import { EXPORT_COMMAND, EXPORT_ROUTES, Stage, type ExportUiState } from "./engine/Stage";
 import { useAudioPlayer } from "./engine/useAudioPlayer";
 import { useStepper } from "./engine/useStepper";
 
@@ -24,6 +24,154 @@ const renderMode = params.has("render"); // ?render=1 创建即冻结
 const noSubs = params.has("no-subs");
 setRenderMode(renderMode); // Ruling 9：模块加载即设置（先于渲染与 effect），杜绝初始 commit 动画自主播放的时序洞
 
+// ── 导出客户端（M5b Task 5，§9「页面按钮 → 本地渲染服务」） ──
+//
+// 全部走相对路径（`EXPORT_ROUTES`）：服务是随 dev server 启动的 Vite 中间件，端口就是页面自己的
+// ⇒ 无跨源、无预检、无端口发现。页面**不猜**状态与进度——每一次读数都来自 `/status`。
+
+/** 轮询间隔（ms）：够密（一步数十秒）又不至于把 dev server 敲出噪音 */
+const EXPORT_POLL_MS = 1000;
+
+interface ExportStatusBody {
+  state: "idle" | "running" | "done" | "failed";
+  progress: { done: number; total: number };
+  message?: string;
+}
+
+/**
+ * 形状守卫：**不能**只看 HTTP 200——静态托管（生产构建 / `vite preview`）下 `/__export/status`
+ * 会回 index.html（SPA fallback，200 text/html），把那种 200 当"服务可达"会让按钮永远转圈。
+ */
+function isExportStatusBody(value: unknown): value is ExportStatusBody {
+  if (typeof value !== "object" || value === null) return false;
+  const body = value as { state?: unknown; progress?: unknown; message?: unknown };
+  const progress = body.progress as { done?: unknown; total?: unknown } | null | undefined;
+  if (body.state !== "idle" && body.state !== "running" && body.state !== "done" && body.state !== "failed") {
+    return false;
+  }
+  if (typeof progress !== "object" || progress === null) return false;
+  if (typeof progress.done !== "number" || typeof progress.total !== "number") return false;
+  return body.message === undefined || typeof body.message === "string";
+}
+
+/** 读一次状态：任何失败（网络不通 / 非 JSON / 形状不对）都归"不可达"——要么读到，要么 null。 */
+async function readExportStatus(): Promise<ExportStatusBody | null> {
+  try {
+    const res = await fetch(EXPORT_ROUTES.status, { headers: { accept: "application/json" } });
+    if (!res.ok) return null;
+    const body = (await res.json()) as unknown;
+    return isExportStatusBody(body) ? body : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 导出控制器：挂载探活（接上已在跑的导出）→ 触发 → 轮询到终态。所有界面态的**唯一来源**是
+ * 服务端读数（页面不自己算进度、不自己判成败）。
+ */
+function useExportController(enabled: boolean): {
+  state: ExportUiState;
+  progress: { done: number; total: number };
+  message?: string;
+  start(): void;
+  copyCommand(): void;
+} {
+  const [state, setState] = useState<ExportUiState>("idle");
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [message, setMessage] = useState<string | undefined>(undefined);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aliveRef = useRef(true); // 卸载后到达的读数一律丢弃（不 setState）
+
+  const stopPolling = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  /** 读一次并落到界面；返回读到的体（null = 不可达）。 */
+  const applyOnce = useCallback(async (): Promise<ExportStatusBody | null> => {
+    const body = await readExportStatus();
+    if (!aliveRef.current) return null;
+    if (body === null) {
+      stopPolling();
+      setState("unreachable"); // §9 的启动指引面
+      return null;
+    }
+    setProgress(body.progress);
+    setMessage(body.message);
+    setState(body.state);
+    return body;
+  }, [stopPolling]);
+
+  /** 跟到终态：每 EXPORT_POLL_MS 读一次，读到 done / failed / 不可达即收工。 */
+  const pollUntilSettled = useCallback(async (): Promise<void> => {
+    for (;;) {
+      await new Promise<void>((resolve) => {
+        // 卸载时 clearTimeout 会让这一拍永远不醒——循环就此停住，不再 setState
+        timerRef.current = setTimeout(() => {
+          timerRef.current = null;
+          resolve();
+        }, EXPORT_POLL_MS);
+      });
+      if (!aliveRef.current) return;
+      const body = await applyOnce();
+      if (body === null || body.state === "done" || body.state === "failed") return;
+    }
+  }, [applyOnce]);
+
+  // 挂载探活：服务可达 ⇒ 按钮可用（页面重载后还能接上正在跑的导出）；不可达 ⇒ 给启动指引
+  useEffect(() => {
+    if (!enabled) return;
+    aliveRef.current = true;
+    void (async () => {
+      const body = await applyOnce();
+      // 服务在跑（多半是上一次导出还没结束就刷了页）→ 继续跟；idle/done/failed 就停在这一态
+      if (body === null || body.state !== "running") return;
+      await pollUntilSettled();
+    })();
+    return () => {
+      aliveRef.current = false;
+      stopPolling();
+    };
+  }, [enabled, applyOnce, pollUntilSettled, stopPolling]);
+
+  const start = useCallback(() => {
+    void (async () => {
+      setState("running"); // 立刻给反馈（真状态仍以服务端为准：下面的第一次读会纠正它）
+      setMessage(undefined);
+      try {
+        const res = await fetch(EXPORT_ROUTES.run, { method: "POST" });
+        if (!aliveRef.current) return;
+        // 409 = 已有一次在跑（**不是错误**：双击 / 另一个标签页）——按 running 跟下去
+        if (!res.ok && res.status !== 409) {
+          setState("failed");
+          setMessage(`导出服务返回 ${res.status}`);
+          return;
+        }
+      } catch {
+        if (!aliveRef.current) return;
+        setState("unreachable"); // dev server 关掉了 ⇒ §9 的启动指引
+        return;
+      }
+      const body = await applyOnce();
+      if (body !== null && body.state === "running") await pollUntilSettled();
+    })();
+  }, [applyOnce, pollUntilSettled]);
+
+  const copyCommand = useCallback(() => {
+    // 剪贴板是可选能力（非安全上下文 / 老浏览器没有）：没有就只是没复制，命令文本仍在页面上
+    try {
+      void navigator.clipboard?.writeText(EXPORT_COMMAND).catch(() => undefined);
+    } catch {
+      // 忽略：复制失败不影响"指引已在页面上"这个事实
+    }
+  }, []);
+
+  return { state, progress, message, start, copyCommand };
+}
+
 export default function App() {
   const autoFromStart = params.has("auto"); // ?auto=1 从 step 0 起播
   const stoppedRef = useRef(false); // 停止后停在起点静止，不回零重播（spec §9）
@@ -31,6 +179,10 @@ export default function App() {
   const stepsPerChapter = useMemo(() => chapters.map((c) => c.steps), []);
   const stepper = useStepper(stageConfig.slug, stepsPerChapter, autoFromStart);
   const player = useAudioPlayer();
+  // 控制条可见才探活/接服务（渲染/录屏态没有按钮，也就不该往 dev server 上打请求——
+  // 那两个态是确定性与墙钟录制的现场，页面侧的额外流量只会是噪音）
+  const showUi = !renderMode && !autoFromStart;
+  const exportUi = useExportController(showUi);
 
   const chapter = chapters[stepper.chapter];
   const narration = chapter.narrations[stepper.step] ?? "";
@@ -105,7 +257,7 @@ export default function App() {
   return (
     <Stage
       dims={stageConfig.dims}
-      noUi={renderMode || autoFromStart}
+      noUi={!showUi}
       noSubs={noSubs}
       caption={narration}
       onPlay={() => {
@@ -118,6 +270,11 @@ export default function App() {
         player.stop();
         stepper.jumpTo(0, 0);
       }}
+      onExport={exportUi.start}
+      exportState={exportUi.state}
+      exportProgress={exportUi.progress}
+      exportMessage={exportUi.message}
+      onCopyExportCommand={exportUi.copyCommand}
     >
       <Scene step={stepper.step} />
     </Stage>
