@@ -21,9 +21,11 @@ import { buildTimeline, type Timeline, type TimelineStep } from "./timeline";
 import type { VerifyOptions } from "./verify";
 import {
   REALTIME_LAUNCH_ARGS,
+  REALTIME_MIN_JUDGE_MS,
   REALTIME_TAIL_MS,
   assertRealtimeUrl,
   buildRealtimeFfmpegArgs,
+  judgeTrace,
   realtimeDeclaredMs,
   realtimeOutputPath,
   realtimeRecordMs,
@@ -184,6 +186,58 @@ describe("实时捕获：ffmpeg 命令行形状（webm/VP8/25fps → mp4/30fps +
   });
 });
 
+describe("定格判据（judgeTrace）：有牙，但不误伤'窗口太短'", () => {
+  const THREE_STEP = makeTimeline([
+    { chapterId: "a", step: 0, stepMs: 3400 },
+    { chapterId: "a", step: 1, stepMs: 2350 },
+    { chapterId: "a", step: 2, stepMs: 1900 },
+  ]);
+  const moved = [
+    { chapter: 0, step: 0 },
+    { chapter: 0, step: 1 },
+    { chapter: 0, step: 2 },
+  ];
+
+  it("推进正常 → 不告警不拦（ok 是缺省态，不产噪音）", () => {
+    const v = judgeTrace(moved, realtimeRecordMs(THREE_STEP), THREE_STEP);
+    expect(v.fatal).toBeUndefined();
+    expect(v.warn).toBeUndefined();
+  });
+
+  it("多步 deck 上一步都没动（窗口够长）→ **fatal**（定格假绿的现场拦截）", () => {
+    const v = judgeTrace([{ chapter: 0, step: 0 }], realtimeRecordMs(THREE_STEP), THREE_STEP);
+    expect(v.fatal).toContain("一步都没动");
+    // 文案必须带现场读数，否则排查者只能猜（评审 M1：子表首步 / 观测窗口 / 观测次数）
+    expect(v.fatal).toContain("子表首步 章节 0 第 0 步（3400ms）");
+    expect(v.fatal).toContain(`观测窗口 ${realtimeRecordMs(THREE_STEP)}ms`);
+    expect(v.fatal).toContain("观测 1 次");
+  });
+
+  it("观测窗口短于判定下限 → 只告警不拦（'没动'与'还停在第 0 步'不可区分，别把健康页面判死）", () => {
+    const short = makeTimeline([
+      { chapterId: "a", step: 0, stepMs: 300 },
+      { chapterId: "a", step: 1, stepMs: 300 },
+    ]);
+    expect(realtimeRecordMs(short)).toBeLessThan(REALTIME_MIN_JUDGE_MS); // 夹具确实落在短窗口一侧
+    const v = judgeTrace([{ chapter: 0, step: 0 }], realtimeRecordMs(short), short);
+    expect(v.fatal).toBeUndefined();
+    expect(v.warn).toContain("短于定格判据的下限");
+  });
+
+  it("一次观测都没有（桥不可用）→ 只告警不拦（观测面缺失 ≠ 画面是死的）", () => {
+    const v = judgeTrace([], realtimeRecordMs(THREE_STEP), THREE_STEP);
+    expect(v.fatal).toBeUndefined();
+    expect(v.warn).toContain("没有任何游标观测");
+  });
+
+  it("单步 deck：没有第二步可观测，不做判据（也不为'没动'告警）", () => {
+    const one = makeTimeline([{ chapterId: "a", step: 0, stepMs: 3400 }]);
+    const v = judgeTrace([{ chapter: 0, step: 0 }], realtimeRecordMs(one), one);
+    expect(v.fatal).toBeUndefined();
+    expect(v.warn).toBeUndefined();
+  });
+});
+
 // ── 接线面（runRender 的失败路径；注入式 deps：不启浏览器、不起 Vite、不跑 ffmpeg） ──
 
 interface Recorded {
@@ -310,11 +364,37 @@ describe("runRender 失败路径接线：确定性链路失败 → 实时捕获�
     expect(rec.realtime?.url).toContain("auto=1");
     expect(rec.realtime?.url).not.toContain("headless");
     expect(rec.realtime?.url).not.toContain("render=1");
+    expect(rec.realtime?.url).not.toContain("no-subs"); // 没要无字幕版就别加
     // 响亮：日志明写降级与原因（不静默改口径）
     expect(lines.join("\n")).toContain("已降级为实时捕获（确定性链路失败：");
     expect(lines.join("\n")).toContain("成片时长不符");
     expect(lines.join("\n")).toContain(".realtime.mp4");
     expect(errors.join("\n")).toContain("成片时长不符");
+  });
+
+  it("`--no-subs` 在降级路径同样生效：URL 带 no-subs=1（但仍不含 headless/render）", async () => {
+    const repo = tmpRepo("no-subs");
+    seedRepo(repo);
+    const rec: Recorded = { calls: [] };
+    const { io } = makeIo();
+    const code = await runRender(
+      baseArgs(repo, { noSubs: true }),
+      makeDeps(repo, rec, {
+        verifyRender: async () => {
+          rec.calls.push("verify");
+          return { ok: false, lines: [], failures: ["[失败] 成片时长不符"] };
+        },
+      }),
+      io,
+    );
+
+    expect(code).toBe(0);
+    // 字幕是**像素**（Stage 的框架级闸门）：请求了无字幕版就得一路带到降级产物，
+    // 否则用户拿到的是"我要的就是无字幕版"之外的另一种片子，且没有任何一行日志说明
+    expect(rec.realtime?.url).toContain("no-subs=1");
+    expect(rec.realtime?.url).toContain("auto=1");
+    expect(rec.realtime?.url).not.toContain("headless");
+    expect(rec.realtime?.url).not.toContain("render=1");
   });
 
   it("seek 断言抛错（captureFrames throw）→ 降级；此时没有编码产物 ⇒ audioTrack=null 且日志明写无声", async () => {

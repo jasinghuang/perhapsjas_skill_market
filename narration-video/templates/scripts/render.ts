@@ -874,7 +874,11 @@ export async function runRender(
       let result: RealtimeResult;
       try {
         result = await (deps.realtimeCapture ?? captureRealtime)({
-          url: realtimeUrl(serve.url),
+          // 裸 `?auto=1`（`realtimeUrl` 清掉基址一切 query 后只加 auto）。**`--no-subs` 例外地带进来**
+          // （评审 I1）：它既不摘自驱推进链（`App.tsx` 的守卫只认 renderMode / headless），又改**像素**
+          // （`Stage` 的框架级字幕闸门）——降级产物是"用户要的那条片子"，请求了无字幕版就得一路带到
+          // 底，否则用户拿到的片子与请求不符、且没有任何一行日志说明。`withNoSubs` 幂等、保留既有 query。
+          url: args.noSubs ? withNoSubs(realtimeUrl(serve.url)) : realtimeUrl(serve.url),
           outDir: args.outDir,
           slug: stageConfig.slug,
           timeline: sub,
@@ -900,7 +904,7 @@ export async function runRender(
         // 自校验未过时 `<slug>.mp4` 已经在盘上（编码早于自校验）：它是**未通过自校验**的那一份，
         // 别让下游（导出服务/人）把它当交付物。不替用户删——删除是破坏性动作，只响亮地说清楚。
         io.error(
-          `[render] 未通过自校验的成片仍在 ${displayPath(encoded.output)}——**不是**交付物` +
+          `[render] 未通过（或未完成）自校验的成片仍在 ${displayPath(encoded.output)}——**不是**交付物` +
             `（交付物 = 上面的 .realtime.mp4）；本层不替用户删产物`,
         );
       }
@@ -934,6 +938,8 @@ export async function runRender(
 
     // ── 8) 编码（视频清单 + 单次 filter_complex 音轨 + mux） ──
     // 两个数组都从子时间轴取（T5 的护栏：两处 stepMs 不一致即在第一条 ffmpeg 命令前 throw）
+    // 失败分类（M5b T4）：编码失败**不进**降级——降级自己也要 ffmpeg 与音轨产物，编码坏了
+    // 降级同样出不了片（且降级的音轨正是这里产的）。失败照旧抛，由 CLI 报 1。
     encoded = await (deps.encodeVideo ?? encodeVideo)({
       output,
       outDir: workDir,

@@ -35,7 +35,14 @@ import { withRenderMode } from "../check/headless";
 import { startServe, type ServeHandle } from "../check/serve";
 import { synthesizeMockAudio } from "./audio";
 import { runFfmpeg } from "./encode";
-import { captureRealtime, realtimeOutputPath, realtimeUrl, type RealtimeResult } from "./realtime";
+import {
+  REALTIME_MIN_JUDGE_MS,
+  captureRealtime,
+  realtimeOutputPath,
+  realtimeRecordMs,
+  realtimeUrl,
+  type RealtimeResult,
+} from "./realtime";
 import { buildTimeline, type Timeline } from "./timeline";
 import { scanAnimationWindows } from "./window-scan";
 
@@ -172,11 +179,14 @@ describe("实时捕获真机臂", () => {
     });
     for (const l of lines) console.log(`  ${l}`);
 
-    // ① 游标**真的前进**（录制会话内的现场观测——定格画面上这条必然失败）
-    console.log(`[realtime 游标轨迹] ${JSON.stringify(res.cursorTrace)}`);
+    // ① 游标**真的前进**（录制会话内的现场观测——定格画面上这条必然失败）。
+    //    判据不是"至少动过一次"（评审 M3：那只覆盖到第一步，"走 ≥2 步后冻住"照样会绿）——
+    //    要求轨迹**覆盖到声明窗口内应到的全部步**（`startMs < 声明时长` 的步都在窗口里）。
+    const stepsInWindow = timeline.steps.filter((s) => s.startMs < timeline.totalMs).length;
+    console.log(`[realtime 游标轨迹] ${JSON.stringify(res.cursorTrace)}（声明窗口应覆盖 ${stepsInWindow} 步）`);
     expect(res.cursorTrace[0]).toEqual({ chapter: 0, step: 0 });
     expect(res.cursorTrace.some((s) => s.chapter === 0 && s.step === 1)).toBe(true);
-    expect(res.cursorTrace.length).toBeGreaterThan(1);
+    expect(res.cursorTrace.length).toBeGreaterThanOrEqual(stepsInWindow);
 
     // ② 首/中/末帧 md5 两两不同（防定格画面假绿的唯一判据：只判时长在恒帧上恒真）
     const first = frameMd5(res.file, 0, outDir, "first");
@@ -199,5 +209,42 @@ describe("实时捕获真机臂", () => {
     expect(Math.abs(res.durationMs - res.declaredMs)).toBeLessThan(300);
     expect(lines.join("\n")).toContain("含确定性音轨");
     expect(errors).toEqual([]);
+  }, 900_000);
+
+  it("短窗口不误伤（评审 M1 场景）：声明 600ms → 不 throw、产物照出、告警写明「不判定格」", async () => {
+    // 同一张健康页面：声明窗口（= 子表总长 + 尾部余量）短到"页面还没走到第 1 步"时，
+    // "一步未动"与"还停在第 0 步"不可区分——判据不得把健康页面判死（修复轮 1 的 I1/M1）
+    const shortChapters = [{ id: "short", folder: "short", steps: 2, narrations: ["短句", "短句"] }];
+    const short = buildTimeline({
+      chapters: shortChapters,
+      durations: { short: [300, 300] },
+      timings: {},
+      animMsByStep: [[0, 0]],
+      profileHoldMs: 0,
+    });
+    expect(realtimeRecordMs(short)).toBeLessThan(REALTIME_MIN_JUDGE_MS); // 夹具确实落在短窗口一侧
+
+    const lines: string[] = [];
+    const errors: string[] = [];
+    const res = await captureRealtime({
+      url: realtimeUrl(serve!.url),
+      outDir,
+      slug: "short",
+      timeline: short,
+      audioTrack: null, // 短窗口臂只取证判据形态，不重复 mux
+      viewport: stageConfig.dims,
+      io: { log: (l) => void lines.push(l), error: (l) => void errors.push(l) },
+      ffmpegPath: FFMPEG,
+      ffprobePath: FFPROBE,
+    });
+    console.log(`[realtime 短窗口] trace=${JSON.stringify(res.cursorTrace)} 声明=${res.declaredMs}ms 实测=${res.durationMs.toFixed(1)}ms`);
+    console.log(`[realtime 短窗口 告警] ${errors.join(" | ")}`);
+
+    // 判据的核心：**不误伤**——不 throw、产物照出（逃生舱不拒载）、且没有任何"定格"诬告
+    expect(res.file).toBe(realtimeOutputPath(outDir, "short"));
+    expect(res.cursorTrace.length).toBeLessThanOrEqual(1); // 窗口里本来就该没动
+    expect(errors.join("\n")).not.toContain("一步都没动");
+    // 告警是"不判定格"（页面已挂载）或"没有任何游标观测"（页面还没挂上）——两者都不拦产物
+    expect(errors.join("\n")).toMatch(/不判定格|没有任何游标观测/);
   }, 900_000);
 });

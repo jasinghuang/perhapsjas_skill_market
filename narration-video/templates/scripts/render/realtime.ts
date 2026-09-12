@@ -9,9 +9,12 @@
 //      直调 + `browser.newContext` 自开会话，URL 只允许**裸 `?auto=1`**（`assertRealtimeUrl` 挡两条）。
 //   ② **必须开 `--autoplay-policy=no-user-gesture-required`**：裸 `?auto=1` 下 Chromium 的自动
 //      播放策略会拒 `audio.play()`（`NotAllowedError: the user didn't interact with the document
-//      first`）——实测对照：加上这条 flag 游标 s0 →(≈3.5s) s1 →(≈6.1s) s2 正常走完，不加则
-//      30 秒都停在 (0,0)。（同一条死因的另一半在页面侧修复：`useAudioPlayer` 现在被拒时武装
-//      估时兜底，真人预览与录制都不会再有一帧死画面。）
+//      first`）。质检实测（**A 修复之前**）：不加这条 flag 时游标 30 秒都停在 (0,0)——`play()` 的
+//      rejection 被吞掉且不武装任何计时器，整条推进链没有事件源。
+//      ⚠️ **因果已随 A 更新（评审 M5④）**：`useAudioPlayer` 现在被拒时武装估时兜底 ⇒ 缺这条 flag
+//      **不再冻死**，而是退化为"按估时节奏推进"——画面照走，但节奏来自文本估时，与 mux 进来的
+//      **确定性音轨**（按真实音频时长合成）对不上 ⇒ 产物音画逐步漂移。故这条 flag 仍然必须开：
+//      它保的是"画面按**真实音频**节奏走"这个前提，不是"能不能出片"。
 //
 // ## 为什么 `recordVideo` 必须带 `size`
 //
@@ -62,7 +65,8 @@ import type { Timeline } from "./timeline";
  * 有唯一答案）。
  *
  * `--autoplay-policy=no-user-gesture-required` 是**死因②**的解药：无头/自动化会话里没有用户
- * 手势，Chromium 缺省拒绝 `audio.play()`；被拒后推进链没有任何事件源（见文件头）。
+ * 手势，Chromium 缺省拒绝 `audio.play()`。⚠️ 因果随 A（`useAudioPlayer` 的估时兜底）更新：
+ * 缺它**不再冻死**，而是让画面退化成**估时节奏**——与 mux 进来的确定性音轨对不上（见文件头 ②）。
  */
 export const REALTIME_LAUNCH_ARGS: readonly string[] = ["--autoplay-policy=no-user-gesture-required"];
 
@@ -74,6 +78,16 @@ export const REALTIME_FPS = 30;
 
 /** 游标采样间隔（ms）：够密（步长约 2s 量级）又不至于让 evaluate 抢走渲染时间 */
 export const REALTIME_SAMPLE_MS = 250;
+
+/**
+ * 定格判据所需的最小观测窗口（ms）：窗口短于它时"没动"**不能**判成"画面是死的"。
+ *
+ * 门槛的由来：deck 的首步是"一段口播 + 入场动画"量级（模板 deck 首步 3400ms），而 `--only`
+ * 的子表可以短到几百 ms（窗口 = 声明时长 + 尾部余量）——那种窗口里页面本来就还没走到第 1 步。
+ * 真 deck 的任何真实窗口（哪怕只渲一步的 3400+1200）都远在这条线之上，故它不削弱判据，
+ * 只挡掉"把健康页面判死"这一类假红（评审 M1）。
+ */
+export const REALTIME_MIN_JUDGE_MS = 3000;
 
 /** 降级产物后缀（`<slug>.realtime.mp4`）：降级**必须看得见**——名字是最先被看见的那行 */
 export const REALTIME_SUFFIX = ".realtime";
@@ -238,19 +252,62 @@ async function readCursor(page: Page): Promise<{ chapter: number; step: number }
 }
 
 /**
- * 录 `recordMs` 墙钟，其间按 `REALTIME_SAMPLE_MS` 采样游标（去重后的顺序轨迹）。
+ * 定格判据（纯函数，单测面）：**有牙，但不误伤"窗口太短"**。
  *
- * **定格假绿的最后一道拦截**（三分法，别把"没证据"与"证据说没动"混成一条）：
- *   · 有观测且**一步都没动**（多步 deck）⇒ **throw**。时长、产物名、日志三条在定格画面上
- *     **全部会绿**（两轮质检的实测结论），只有"游标轨迹"是画面真的在走的直接读数；
- *   · **一次观测都没有**（桥不可用：页面不是 dev server 供的 / 桥被生产构建摘掉）⇒ 响亮告警
- *     但**照常出片**：逃生舱的意义就是"还有一条片子"，而"观测面缺失"不等于"画面是死的"；
- *   · 单步 deck（`multiStep === false`）⇒ 本来就没有第二步可观测，不做判据。
+ * 时长、产物名、日志三条在定格画面上**全部会绿**（两轮质检的实测结论），只有"游标轨迹"是
+ * 画面真的在走的直接读数。但"没动"要判成"画面是死的"，前提是**窗口里本来就该动**：
+ *
+ *   · 单步 deck ⇒ 没有第二步可观测，不做判据（返回空）；
+ *   · **一次观测都没有** ⇒ 只告警（桥不可用 = 观测面缺失 ≠ 画面是死的；逃生舱仍要出片）；
+ *   · 观测窗口短于 `REALTIME_MIN_JUDGE_MS` ⇒ 只告警（`--only` 的子表可以短到几百 ms，"没动"
+ *     与"还停在第 0 步/页面还没走到第 1 步"不可区分——评审 M1 的探针就踩这条）；
+ *   · 以上都不成立、窗口够长却**一步未动** ⇒ fatal（拦截定格假绿）。
+ *
+ * 文案带现场读数（子表首步 / 观测窗口 / 观测次数）：判错时读者要能一眼看出是哪一类。
  */
+export function judgeTrace(
+  trace: readonly { chapter: number; step: number }[],
+  recordMs: number,
+  timeline: Timeline,
+): { warn?: string; fatal?: string } {
+  const first = timeline.steps[0];
+  const where =
+    `子表首步 章节 ${first?.chapter ?? "?"} 第 ${first?.step ?? "?"} 步（${first?.stepMs ?? 0}ms）· ` +
+    `观测窗口 ${recordMs}ms · 观测 ${trace.length} 次：` +
+    `${trace.map((s) => `章节 ${s.chapter} 第 ${s.step} 步`).join(" → ") || "（无）"}`;
+  if (trace.length === 0) {
+    return {
+      warn:
+        "[realtime] 录制期间**没有任何游标观测**（window.__presentation 桥不可用——页面不是 " +
+        "dev server 供的，或桥被生产构建摘掉）——无法证明画面在走；产物按「未验证」读" +
+        "（命名后缀与日志已标注降级）",
+    };
+  }
+  if (timeline.steps.length <= 1) return {}; // 单步 deck：没有第二步可观测
+  if (recordMs < REALTIME_MIN_JUDGE_MS) {
+    return {
+      warn:
+        `[realtime] 观测窗口短于定格判据的下限 ${REALTIME_MIN_JUDGE_MS}ms（${where}）——"没动"与` +
+        `"还停在第 0 步"不可区分，本次**不判定格**；产物按「未验证」读`,
+    };
+  }
+  if (trace.length <= 1) {
+    return {
+      fatal:
+        `实时捕获期间游标**一步都没动**（${where}）——产物多半是定格画面。两条实测死因：` +
+        `① URL 带了 headless / render（自驱推进链被摘掉）；② 缺 --autoplay-policy=` +
+        `no-user-gesture-required（play() 被策略拒——A 修复后它不再冻死，而是退化成**估时节奏**，` +
+        `与 mux 进来的确定性音轨对不上）。宁炸不交一帧死画面`,
+    };
+  }
+  return {};
+}
+
+/** 录 `recordMs` 墙钟，其间按 `REALTIME_SAMPLE_MS` 采样游标（去重后的顺序轨迹），末了交判据。 */
 async function recordWithCursorTrace(
   page: Page,
   recordMs: number,
-  multiStep: boolean,
+  timeline: Timeline,
   io: RealtimeIo,
 ): Promise<{ chapter: number; step: number }[]> {
   const trace: { chapter: number; step: number }[] = [];
@@ -263,23 +320,9 @@ async function recordWithCursorTrace(
     }
     await page.waitForTimeout(REALTIME_SAMPLE_MS);
   }
-  if (trace.length === 0) {
-    io.error(
-      "[realtime] 录制期间**没有任何游标观测**（window.__presentation 桥不可用——页面不是 " +
-        "dev server 供的，或桥被生产构建摘掉）——无法证明画面在走；产物按「未验证」读" +
-        "（命名后缀与日志已标注降级）",
-    );
-    return trace;
-  }
-  if (multiStep && trace.length <= 1) {
-    throw new Error(
-      `实时捕获期间游标**一步都没动**（观测 ${trace.length} 次：` +
-        `${trace.map((s) => `章节 ${s.chapter} 第 ${s.step} 步`).join(" → ")}）` +
-        `——产物多半是定格画面。两条实测死因：① URL 带了 headless / render（自驱推进链被摘掉）；` +
-        `② 启动参数缺 --autoplay-policy=no-user-gesture-required（play() 被自动播放策略拒）。` +
-        `宁炸不交一帧死画面`,
-    );
-  }
+  const verdict = judgeTrace(trace, recordMs, timeline);
+  if (verdict.warn !== undefined) io.error(verdict.warn);
+  if (verdict.fatal !== undefined) throw new Error(verdict.fatal);
   return trace;
 }
 
@@ -322,7 +365,6 @@ export async function captureRealtime(opts: RealtimeOptions): Promise<RealtimeRe
   }
 
   const videoDir = fs.mkdtempSync(path.join(os.tmpdir(), "realtime-video-"));
-  let webm: string;
   let trace: { chapter: number; step: number }[] = [];
   let context: BrowserContext | undefined;
   try {
@@ -345,19 +387,18 @@ export async function captureRealtime(opts: RealtimeOptions): Promise<RealtimeRe
         `args ${JSON.stringify([...REALTIME_LAUNCH_ARGS])}`,
     );
     await page.goto(opts.url);
-    trace = await recordWithCursorTrace(page, recordMs, opts.timeline.steps.length > 1, io);
+    trace = await recordWithCursorTrace(page, recordMs, opts.timeline, io);
     await context.close(); // 录像写完才拿得到路径
-    webm = await video.path();
-  } finally {
-    await context?.close().catch(() => undefined);
-    await browser.close().catch(() => undefined);
-  }
+    const webm = await video.path();
 
-  try {
     fs.mkdirSync(path.dirname(output), { recursive: true });
     runFfmpeg(buildRealtimeFfmpegArgs({ video: webm, audioTrack, output, durationMs: declaredMs }), ffmpegPath);
   } finally {
-    // 录像只在临时目录里过一趟（产物已 mp4 化）；失败也清，免得 /tmp 里堆半成品
+    // 收尾全在一个 finally 里：**定格判据 throw / video 句柄缺失 / ffmpeg 失败** 都覆盖——
+    // 录像只在临时目录里过一趟（产物已 mp4 化），半截 webm 不该留在 /tmp（评审 M2）。
+    // 顺序：先关（录像写完、句柄释放）再删——反过来的话浏览器还在往被删掉的目录里写。
+    await context?.close().catch(() => undefined);
+    await browser.close().catch(() => undefined);
     fs.rmSync(videoDir, { recursive: true, force: true });
   }
   const durationMs = probeDurationMs(output, ffprobePath);

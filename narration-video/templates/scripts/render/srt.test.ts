@@ -406,7 +406,7 @@ describe("runRender 编排：SRT 副产物（纯派生自同一张子时间轴�
 
   // M5b T4：缺省下"自校验红"改走实时捕获降级（退出码 0 + .realtime.mp4），故本条取严格模式
   // （`--no-fallback`）——它钉的是"SRT 的写法与自校验成败无关"，不是降级行为本身。
-  it("自校验红（退出码 1）也照写：字幕跟着**产物**走，不跟着门禁走（成片在，字幕就该在）", async () => {
+  it("自校验红（**--no-fallback 严格模式** → 退出码 1）也照写：字幕跟着**产物**走，不跟着门禁走（成片在，字幕就该在）", async () => {
     const repo = tmpRepo("verify-red");
     seedRenderedRepo(repo);
     const rec: Recorded = { calls: [] };
