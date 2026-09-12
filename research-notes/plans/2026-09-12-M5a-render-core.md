@@ -6,7 +6,9 @@
 
 **Architecture:** 五层：① **窗口预扫**（真机量每步动画窗口 → `animMsByStep`，全流程唯一源头）；② **时间轴表**（纯函数：manifest + durations + timing.json + 窗口表 → 每步 `[startMs, audioMs, animMs, dwellMs, stepMs, frameCount, holdMs]`）；③ **帧流**（`seek(t)` 逐帧 + 静置单帧复用 + 页级并行 + 捕捉期同源断言与泄漏告警）；④ **编码**（视频走 concat demuxer 图像清单；音频走**单次 `filter_complex` concat** 保证样本级对齐；`-shortest` mux）；⑤ **自校验**（落盘 PNG 数 + mp4 帧数/时长/帧率 + 跨会话同刻重采逐字节）。
 
-**Tech Stack:** TypeScript / tsx / Playwright 1.58.2（已锁）/ ffmpeg 8.0.1 + ffprobe（`/opt/homebrew/bin`，已核）/ vitest + jsdom / 真浏览器 fixture。
+**Tech Stack:** TypeScript / tsx / Playwright 1.58.2（已锁）/ ffmpeg + ffprobe（`/opt/homebrew/bin`）/ vitest + jsdom / 真浏览器 fixture。
+
+> **【终审修复波 2026-09-12（M3）】版本实况**：计划期核的是 **ffmpeg 8.0.1**；后因 T7 的 scaffold 反引号事故（见 `task-7-report.md` §二 B2）本机被升到 **9.0.1_1**——**实测 8→9 产物逐字节不变**（成片 7.650000s / `nb_frames=229` / `r_frame_rate=30/1` 与四个重采帧 md5 全同），故本计划的全部 ffmpeg 实测结论在 9.x 下同样成立。
 
 **Spec:** `../07-design-draft.md` §8（渲染管线）、§8.1（风险与结构性方案）、§3.1（三层时间模型）、§11.2（金样与截图环境）、§12 M5 遗留清单 #2/#3/#5；复用 M3b 的 `scripts/shot/session.ts`、`scripts/check/serve.ts`（`startServe`）、`script/check/headless.ts`（`withRenderMode`）。
 
@@ -18,7 +20,16 @@
 - **帧数两条口径，不得混用**（实测结论）：
   - **落盘 PNG 数** = Σ `frameCount`（`frameCount = ceil(animMs × fps / 1000) + 1`，**乘法式**，不用 `1000/fps` 除法——浮点分叉）
   - **mp4 `nb_frames`** = `Math.round(totalMs / 1000 × fps)`（±1）——CFR 会把静置帧复制成多帧，二者**从来不相等**
+
+  > **【执行期更正 2026-09-12】** 上面的 `+1` 是**静置帧**，它**只在 `holdMs > 0` 时存在** ⇒ 实况是
+  > `frameCount = ceil(animMs × fps / 1000) + (holdMs > 0 ? 1 : 0)`（`holdMs === 0` = 动画窗口自己盖住整步 → 没有"窗口之后"可静置，见 [KNOWN-ISSUES](../KNOWN-ISSUES.md) **K-81**）。
+  > 另：`TimelineStep.holdMs` 是**残差** = `max(0, stepMs − 窗口帧时长)`（Ruling **R1**），**不是编解码参数**（它只陈述"窗口之后还有多长"这个事实）。权威文本：`scripts/render/timeline.ts` 文件头模型段（`:12-27`）。
 - **concat 清单末帧规则**（实测结论，防每步错位 1 帧）：末帧条目 `duration = max(0, holdMs/1000 − 1/fps)`，且**保留"末行重复末帧"**（concat demuxer 需要它才认末帧 duration）⇒ 每步精确 `frameCount` 帧、时长精确 `stepMs/1000`。`holdMs === 0` 时不发静置帧（`frameCount` = 窗口帧数）
+
+  > **【执行期更正 2026-09-12（Ruling R3/R11；T5 实测推翻本条的公式与"每步重复末行"）】** 实况两条：
+  > ① 末帧时长用**统一式** `max(0, stepMs/1000 − (frameCount−1)/fps)`——式里的 `stepMs` **必须是真的 stepMs**（T5 的 `buildVideoConcatList` 用 `stepMsByStep` 逐字传入，不得从 `frameCount/fps` 反推：`stepMs < 窗口帧时长`〔`dwell ≤ slack`〕时反推每步多 slack、**逐步累加**）；
+  > ② **重复行只能有一条，且只能在清单最后一行**（中段重复行没有 duration ⇒ 后续包 `AV_NOPTS_VALUE`，实测步 2 起点漂到 5.68、成片 9.133333——计划的"每步重复末行"正是这么崩的）。计划式 `holdMs/1000 − 1/fps` **已废弃**（见 `timeline.ts:20-24`：它假设每步末尾都补一条重复行来还那 1/fps，而那条路走不通）。
+  > 权威文本：`scripts/render/encode.ts` 文件头结论 1~5（R2 矩阵实测读数见 `task-5-report.md`）；`holdMs === 0` 的步见 **K-81**。
 - **音频走单次 `filter_complex` concat**（不是分段编码后 concat——实测分段 `-c copy` concat 每步漂 ~7ms，30 步累计 ~210ms）：各步 `[i:a]apad,atrim=0:<stepMs/1000>` → `concat=n=N:v=0:a=1` → 一次 AAC 编码；无声步用 `anullsrc=r=48000:cl=stereo` 输入
 - **mux 必须 `-shortest`**（实测 `-t` 夹不住：`-c copy -t` 仍溢出到 3.413333）
 - **停留垫单一源头**：引擎默认 `DEFAULT_HOLD_MS` → 档案（`RuntimeConfig.holdMs?`）→ `timing.json` 每帧覆盖；解析器**只有一份**（`src/engine/hold.ts`，宽松不抛），分镜侧的 assert+throw 校验**另包一层**（storyboard 的 throw 契约不得丢）
@@ -240,6 +251,7 @@ it("真机确定性（强判据）：跨独立会话、同一 t 两拍逐字节�
 **Interfaces:** 见"接口约定 5"
 
 - [ ] **Step 1: 写失败测试（纯函数）**
+> **【终审修复波 2026-09-12】** 下面这段代码块是**执行前**的测试草稿（保留原样，不逐条回写）：其中的末帧公式与"每步重复末行"两条已被 T5 实测推翻（见上文 Global Constraints 的【执行期更正】）。实况测试在 `scripts/render/encode.test.ts`，判据口径以 `encode.ts` 文件头结论 1~5 为准。
 ```ts
 it("视频清单：每步 frameCount 条 + 末帧 duration = max(0, holdMs/1000 − 1/fps) + 保留末行重复（防每步多 1 帧）", () => {
   const list = buildVideoConcatList([{ dir: "frames/example/0", frameCount: 3, holdMs: 400, animMs: 3000, ... }], 30, [3400]);
@@ -316,6 +328,7 @@ it("checkProbe：时长差 / 帧数差 / 帧率错 → 逐条失败项（非空�
 
 - ffmpeg 8.0.1 / ffprobe 在 `/opt/homebrew/bin`（已核）；缺失时错误文案含 `brew install ffmpeg`
 - **帧体量按公式估**：`frameCount = ceil(animMs×30/1000)+1` —— example step 0（KenBurns fast×10 = 3000ms）是 **91 帧/步**；1080p PNG 每步约 30–80MB（x264 编码单步实测 ~1.1s，不是瓶颈）
+  - **【执行期更正 2026-09-12】** 该式同为**执行前**文本：`+1` 是静置帧，`holdMs === 0` 的步没有它（K-81）；本例 91 = 90 窗口帧 + 1 静置帧，恰好不触发那条边界。实况见 `timeline.ts` 文件头模型段。
 - `--concurrency` 默认 2；本机负载常高（load 14 常见），每 worker 是一个独立浏览器进程
 - **本计划不做**：字幕/SRT、导出服务、金样、实时捕获降级、真实 TTS（见"M5 拆分说明"）
 

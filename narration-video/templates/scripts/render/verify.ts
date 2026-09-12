@@ -232,6 +232,22 @@ export async function verifyRender(opts: VerifyOptions): Promise<RenderVerifyRep
         `而"每步都对得上"的读数照样能绿）；宁炸不静默`,
     );
   }
+  // 【终审修复波 2026-09-12（I2）】**数值**一致性：计划的接口约定 6（执行期更正块）承诺
+  // "长度/数值不符即 throw"，但此前只查了**长度**——`segments[i].stepMs` 全程未被读取
+  // （理想波形走 `timeline.steps[i].stepMs`），于是"数值必须相等"是**假承诺**。M5b 会直接消费本
+  // 接口（SRT 时间码 / 导出服务复用本编排），故在护栏层把承诺兑现（与 encode 的 G2 同款口径）。
+  // 位置刻意**早于** `existsSync(产物)`：形状与数值是纯数据契约，不该要求先有产物才能验。
+  timeline.steps.forEach((step, index) => {
+    const segment = opts.segments[index]!;
+    if (segment.stepMs !== step.stepMs) {
+      throw new Error(
+        `verifyRender：segments[${index}].stepMs ${segment.stepMs} ≠ 时间轴第 ${index} 步（章节 ` +
+          `${step.chapterId} 第 ${step.step} 步）的 stepMs ${step.stepMs}——两者同源同序（第 k 段就是` +
+          `第 k 步），数值不符时音轨边界/内容判据比的是另一条时间轴，而"每步都对得上"的读数照样能绿；` +
+          `宁炸不静默`,
+      );
+    }
+  });
   if (!fs.existsSync(opts.output)) {
     throw new Error(`verifyRender：产物不存在：${opts.output}——没有产物就没有"验证"可言`);
   }
@@ -305,6 +321,16 @@ export async function verifyRender(opts: VerifyOptions): Promise<RenderVerifyRep
     bad(
       `[失败] 视频内容边界：${vReadings.length} 条边界一条都没测到（成片里找不到任何显著的内容` +
         `跳变）——要么整条视频是同一张画面，要么帧流与时间轴不是同一份 deck；宁炸不静默`,
+    );
+  }
+  // 【终审修复波 2026-09-12（M1）】可判面为**空** ≠ 绿：边界是"步与步之间"的内容跳变，单步表
+  // （`--only 0` 这类子时间轴）压根没有边界可测——此前这一层**静默缺席**，读报告的人会把
+  // "没看见这条"读成"这条绿了"。明写一行，别让空集冒充通过。
+  if (vReadings.length === 0) {
+    add(
+      `[跳过] 视频内容边界：本表只有 ${timeline.steps.length} 步——边界是"步与步之间"的内容跳变，` +
+        `单步表没有可判面（**既不是绿也不是红**；--only 选单步时会走到这里）。` +
+        `要判偏移请至少渲两步`,
     );
   }
 

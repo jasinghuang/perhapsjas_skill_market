@@ -6,6 +6,7 @@
 // 本文件的用例就是那些口径的行程开关（改了容差数字，这里会红）。
 
 import { describe, expect, it } from "vitest";
+import type { AudioSegment } from "./encode";
 import { buildTimeline, type BuildTimelineInput, type Timeline } from "./timeline";
 import {
   AUDIO_BOUNDARY_TOLERANCE_MS,
@@ -23,6 +24,7 @@ import {
   parseProbeJson,
   sampledFrames,
   videoBoundaryReadings,
+  verifyRender,
   type FfprobeSummary,
 } from "./verify";
 
@@ -372,6 +374,42 @@ describe("跨会话采样点：min(3, 步数) 个步（必含首末步），每�
     expect(steps).toHaveLength(3);
     expect(steps[0]).toBe(0);
     expect(steps[steps.length - 1]).toBe(29);
+  });
+});
+
+// ── 终审修复波（I2）：`segments` 的**数值**一致性护栏 ──
+//
+// 计划（接口约定 6 的执行期更正块）承诺"长度/数值不符即 throw"，但此前只查了**长度**——
+// `segments[i].stepMs` 全程没被读过（理想波形走 `timeline.steps[i].stepMs`），是**假承诺**；
+// M5b 会直接消费这个接口（SRT 时间码 / 导出服务），故补上并钉死。
+// 两条用例都**不需要产物、不需要 ffmpeg、不需要浏览器**：护栏在 `existsSync(产物)` 之前。
+describe("verifyRender 护栏（I2）：segments[i].stepMs 必须 === timeline.steps[i].stepMs", () => {
+  const segs = (t: Timeline): AudioSegment[] => t.steps.map((s) => ({ mp3: null, stepMs: s.stepMs }));
+
+  it("数值逐条相等 → 数值护栏放行（先撞上的是「产物不存在」，证明它没被数值问题拦住）", async () => {
+    await expect(
+      verifyRender({
+        output: "/nonexistent/never-rendered.mp4",
+        outDir: "/tmp",
+        timeline: tl,
+        url: "http://localhost:5174/?render=1",
+        segments: segs(tl),
+      }),
+    ).rejects.toThrow(/产物不存在/);
+  });
+
+  it("改坏一个数值 → 抛（带下标 + 步定位 + 双方数值；与 encode 的 G2 同款「宁炸不静默」）", async () => {
+    const broken = segs(tl);
+    broken[1] = { mp3: null, stepMs: broken[1]!.stepMs + 100 }; // 2150 → 2250
+    await expect(
+      verifyRender({
+        output: "/nonexistent/never-rendered.mp4",
+        outDir: "/tmp",
+        timeline: tl,
+        url: "http://localhost:5174/?render=1",
+        segments: broken,
+      }),
+    ).rejects.toThrow(/segments\[1\]\.stepMs 2250 ≠ 时间轴第 1 步/);
   });
 });
 

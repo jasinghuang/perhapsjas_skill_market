@@ -61,7 +61,9 @@ export interface StoryboardFrame {
   narration: string;
   /** 音频实测时长（ms）；null = 无音频（未合成 / 无声过场） */
   audioMs: number | null;
-  /** 停留垫（timing.json 覆盖 或 DEFAULT_HOLD_MS） */
+  /** 停留垫（**三层**解析结果：timing.json 逐帧覆盖 > 档案 `RuntimeConfig.holdMs` > 引擎默认
+   *  `DEFAULT_HOLD_MS`——解析器唯一一份在 `src/engine/hold.ts` 的 `resolveHoldMs`）。
+   *  【终审修复波 2026-09-12（M4）】原文只写了首末两层、漏了**档案层**（T1 deferred ③）。 */
   dwellMs: number;
   /** 动画窗口（ms）——分镜阶段零动画，恒 null */
   animMs: number | null;
