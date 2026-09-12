@@ -77,6 +77,7 @@ import {
   type FrameSpec,
 } from "./render/frames";
 import { buildTimeline, type Timeline, type TimelineStep } from "./render/timeline";
+import { buildSrtCues, renderSrt } from "./render/srt";
 import { scanAnimationWindows, type WindowScanResult } from "./render/window-scan";
 import {
   sampledFrames,
@@ -130,6 +131,14 @@ export interface RenderArgs {
   only?: number[];
   /** 确定性终验：独立会话重采采样步 → 与产物帧逐字节比对 + "两个不同 t 必须不同"的负样本 */
   verifyDeterminism: boolean;
+  /**
+   * `--no-srt`：**不写**字幕副产物（缺省 = 写 `<outDir>/<slug>.srt`）。
+   *
+   * 与 `only?` 同款：缺省（undefined）= 默认行为，只有显式 `--no-srt` 才是 true——
+   * 这是个**否定式**开关（"没给" ≠ "给了 false"），与 `--no-subs` 一样是"关掉默认开的东西"。
+   * 口径：SRT 是**纯文本副产物**（narrations × 时间轴表），与画面无关——`--no-subs` 不影响它。
+   */
+  noSrt?: boolean;
   help: boolean;
 }
 
@@ -174,7 +183,7 @@ export interface RenderDeps {
 // ── 命令行解析 ──
 
 export const RENDER_USAGE = [
-  "用法：tsx scripts/render.ts [--mock-audio] [--realistic-audio] [--only <i,j,…>] [--concurrency <n>] [--out <dir>] [--verify-determinism] [--help]",
+  "用法：tsx scripts/render.ts [--mock-audio] [--realistic-audio] [--only <i,j,…>] [--concurrency <n>] [--out <dir>] [--no-srt] [--verify-determinism] [--help]",
   "  （npm run render 即本入口；自起 Vite + Chromium 逐帧 seek 出 mp4，前置 ffmpeg）",
   "  ⚠️ 经 npm 传 flag 必须加 --（npm 11 会把 --mock-audio 当成 npm 自己的配置项、不转发给脚本；",
   "     漏了它 = mock 分支根本不跑，只在 stderr 留一条 Unknown cli config）：",
@@ -184,12 +193,14 @@ export const RENDER_USAGE = [
   "  --only <i,j,…>        只渲这些步（specs 下标：章节序 → 章内步序；编码/自校验同步只处理这些步）",
   "  --concurrency <n>     帧流并发（默认 2；每 worker 一个浏览器进程——本机负载常高，别开大）",
   "  --out <dir>           输出根目录（默认 <模板根>/render）：出片 <dir>/<slug>.mp4，中间产物 <dir>/<slug>/",
+  "  --no-srt              不写字幕副产物（默认写 <dir>/<slug>.srt：narrations × 时间轴表纯派生；",
+  "                        与画面无关——--no-subs 不影响它），只影响 SRT 落盘",
   "  --verify-determinism  确定性终验：独立会话重采采样步 → 与产物帧逐字节比对 + 负样本（两个不同 t 必须不同）",
   "  --help                打印本用法",
 ].join("\n");
 
 const USAGE_FLAGS =
-  "--mock-audio / --realistic-audio / --only / --concurrency / --out / --verify-determinism / --help";
+  "--mock-audio / --realistic-audio / --only / --concurrency / --out / --no-srt / --verify-determinism / --help";
 
 /** 并发数：非负整数（`0` 归 1——0/负数会除零或空跑；归一发生在 CLI 层，见 frames.partition 的注释）。 */
 function parseConcurrency(value: string, flag: string): number {
@@ -255,6 +266,9 @@ export function parseArgs(argv: readonly string[], cwd: string): RenderArgs {
         break;
       case "--verify-determinism":
         out.verifyDeterminism = true;
+        break;
+      case "--no-srt":
+        out.noSrt = true;
         break;
       case "--help":
       case "-h":
@@ -828,6 +842,22 @@ export async function runRender(
       `[render] 编码完成：${displayPath(encoded.output)}` +
         `（清单 ${path.basename(encoded.listPath)}）`,
     );
+
+    // ── 8.5) SRT 副产物（M5b T2：narrations × **同一张子时间轴** 的纯派生；`--no-srt` 关） ──
+    // 位置：紧跟编码之后（"渲染后写"）——成片在，字幕才跟着在（编码 throw 时不落孤零零一份 SRT）；
+    // 与自校验的成败无关（字幕陈述的是**时间轴**，不是像素与采样）。
+    // `--only` 时喂的是 `sub`：子片的 `startMs` 是按被渲的步重算过的，用全表 = 字幕指另一条时间轴。
+    if (!args.noSrt) {
+      const cues = buildSrtCues(sub, chapters);
+      const srtFile = path.join(args.outDir, `${stageConfig.slug}.srt`);
+      fs.mkdirSync(args.outDir, { recursive: true }); // 假编码（单测）不建目录；真编码只建 <outDir>/<slug>/
+      fs.writeFileSync(srtFile, renderSrt(cues));
+      io.log(
+        `[render] 字幕副产物：${displayPath(srtFile)}（${cues.length} 条 · 与成片同一张时间轴）`,
+      );
+    } else {
+      io.log("[render] 未写字幕（--no-srt）");
+    }
 
     // ── 9) 产物自校验（总量层 + 帧目录 + 两类边界 + 跨会话同刻重采） ──
     const report = await (deps.verifyRender ?? verifyRender)({

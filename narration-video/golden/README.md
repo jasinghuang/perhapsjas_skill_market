@@ -8,7 +8,7 @@ scaffold 整棵拷进每个新项目，金样跟着走就会在每个项目里�
 
 | 文件 | 是什么 |
 |---|---|
-| `clip.mp4` | 一段**拟真档**（起手静音 120ms / 44100Hz / 单声道 mock 音轨）的成片，3 步 7.65s 上下 |
+| `clip.mp4` | 一段**拟真档**（起手静音 120ms / 44100Hz / 单声道 mock 音轨）的成片，3 步 **7.770s**（T1 minor ① 回正：7.65 → 7.77，T2 真机重跑逐字节复核） |
 | `clip.srt` | 与 `clip.mp4` **同源**的字幕（同一次渲染的 `buildSrtCues` 输入 → 主产物 `<slug>.srt` 的副本） |
 | `clip.probe.json` | 同一次渲染的 ffprobe 摘要（时长 / 帧数 / 帧率 / 音轨规格）——回归时对照"形状" |
 | `frames/first.png` `frames/mid.png` `frames/last.png` | 首 / 中 / 末三帧（人眼看的那一眼：构图 / 字体 / 字幕层） |
@@ -23,9 +23,15 @@ scaffold 整棵拷进每个新项目，金样跟着走就会在每个项目里�
 - **本目录不是生成物目录**：`templates/` 里的 `/render/`、`/public/audio/` 都 gitignore（可重生成）；
   这里**入库**（回归要靠它跨会话存在）。
 
-## 当前状态（2026-09-12, M5b T1）
+## 当前状态（2026-09-12, M5b T1 + T2）
 
 **金样待用户审片确认——`clip.mp4` / `clip.srt` / `clip.probe.json` / `frames/` 尚未写入。**
 T1 已在真机上出片并记录读数（见 `.superpowers/sdd/2026-09-12-M5b-subtitles-export-service/task-1-report.md`），
-按人工闸门的要求停在"交用户审"这一步：用户点头后再把成片与三帧落进本目录；`clip.srt` 由 T2
-（SRT 副产物）补写并断言与主产物同源。
+按人工闸门的要求停在"交用户审"这一步：用户点头后再把成片与三帧落进本目录。
+
+**T2（SRT 副产物）已交付**：渲染链现在**默认**写 `<outDir>/<slug>.srt`（`--no-srt` 关；与画面开关
+`--no-subs` 无关），`clip.srt` 的来源就绪——真机读数与本轮 SRT 全文见
+`.superpowers/sdd/2026-09-12-M5b-subtitles-export-service/task-2-report.md`。**但本目录仍不写入**：
+Ruling P2（金样缺席 = 跳过 + 明示，不得因缺文件而红）——闸门过后由落库那一步**一并** `cp`
+`templates/render/presentation.srt` → 本目录 `clip.srt`（同一次渲染的同一份 `buildSrtCues` 输入，
+"同源"由此保证；不许拿另一次渲染的 SRT 顶）。
