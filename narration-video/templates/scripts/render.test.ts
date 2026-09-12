@@ -15,6 +15,7 @@ import { MOCK_AUDIO_DEFAULT, MOCK_AUDIO_REALISTIC, type MockAudioProfile } from 
 import type { EncodeOptions, EncodeResult } from "./render/encode";
 import { frameDir, framePaths } from "./render/frames";
 import type { CaptureFramesOptions, CapturedStep, FrameSpec } from "./render/frames";
+import { REALTIME_SUFFIX } from "./render/realtime";
 import type { Timeline, TimelineStep } from "./render/timeline";
 import { sampledFrames } from "./render/verify";
 import {
@@ -29,6 +30,7 @@ import {
   displayPath,
   frameStepsDone,
   parseArgs,
+  pickDeliverable,
   renderCli,
   runRender,
   selectTimeline,
@@ -649,7 +651,8 @@ describe("renderCli（退出码约定与 check 入口一致）", () => {
   });
 });
 
-describe("displayPath（日志路径：库内相对、库外绝对）", () => {  const CWD = "/repo/narration-video/templates";
+describe("displayPath（日志路径：库内相对、库外绝对）", () => {
+  const CWD = "/repo/narration-video/templates";
 
   it("cwd 之内 → 相对路径（短、可点）", () => {
     expect(displayPath(path.join(CWD, "render/presentation.mp4"), CWD)).toBe("render/presentation.mp4");
@@ -767,6 +770,56 @@ describe("watchFrameProgress（捕捉期间按拍上报：每落齐一步报一�
     write(3, startedAtMs + 99); // stop 之后落齐的步不再产生读数（循环已退出）
     await tick();
     expect(reports).toEqual(["1/4", "3/4"]);
+  });
+});
+
+// ── 交付物挑选（T5 修复轮 1 · 评审 M-2：把 vite.config.ts 里的分支提成可测纯函数） ──
+//
+// 为什么需要这条规则：确定性成片与降级产物（T4）**可能同时在盘上**——降级时那份 `<slug>.mp4`
+// 是**未通过自校验**的（编码早于自校验），T4 明写"别让下游（导出服务/人）把它当交付物"。
+
+describe("pickDeliverable（本次跑的交付物：降级产物 vs 确定性成片）", () => {
+  function seed(outDir: string, slug: string, mtimes: { mp4?: number; realtime?: number }): void {
+    fs.mkdirSync(outDir, { recursive: true });
+    if (mtimes.mp4 !== undefined) {
+      const f = path.join(outDir, `${slug}.mp4`);
+      fs.writeFileSync(f, "deterministic");
+      const when = new Date(mtimes.mp4);
+      fs.utimesSync(f, when, when);
+    }
+    if (mtimes.realtime !== undefined) {
+      const f = path.join(outDir, `${slug}${REALTIME_SUFFIX}.mp4`);
+      fs.writeFileSync(f, "realtime");
+      const when = new Date(mtimes.realtime);
+      fs.utimesSync(f, when, when);
+    }
+  }
+
+  it("没有降级产物 → 确定性成片（`<outDir>/<slug>.mp4`）", () => {
+    const outDir = tmpRepo("pick-deterministic");
+    seed(outDir, "presentation", { mp4: 1_000_000 });
+    expect(pickDeliverable({ outDir, slug: "presentation", startedAtMs: 999_000 })).toBe(
+      path.join(outDir, "presentation.mp4"),
+    );
+  });
+
+  it("本次跑降级了（`.realtime.mp4` 是本次写的）→ 交付降级产物", () => {
+    const outDir = tmpRepo("pick-realtime");
+    const startedAtMs = 2_000_000;
+    // 两份都在盘上（编码早于自校验 ⇒ 那份 mp4 未通过校验，不是交付物）
+    seed(outDir, "presentation", { mp4: startedAtMs + 10, realtime: startedAtMs + 500 });
+    expect(pickDeliverable({ outDir, slug: "presentation", startedAtMs })).toBe(
+      path.join(outDir, `presentation${REALTIME_SUFFIX}.mp4`),
+    );
+  });
+
+  it("上一轮残留的降级产物（mtime < 本次起点）→ 仍交付本次的确定性成片", () => {
+    const outDir = tmpRepo("pick-stale-realtime");
+    const startedAtMs = 3_000_000;
+    seed(outDir, "presentation", { mp4: startedAtMs + 10, realtime: startedAtMs - 60_000 });
+    expect(pickDeliverable({ outDir, slug: "presentation", startedAtMs })).toBe(
+      path.join(outDir, "presentation.mp4"),
+    );
   });
 });
 

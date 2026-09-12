@@ -73,7 +73,10 @@ export interface ExportJob {
 
 export interface ExportServiceOptions {
   job: ExportJob;
-  /** 挂载点（缺省 `EXPORT_MOUNT`；测试用它避让真实路径没有意义——页面常量才是契约） */
+  /**
+   * 挂载点（缺省 `EXPORT_MOUNT`）。**契约测试不用它**：页面常量（`EXPORT_ROUTES`）才是契约，
+   * 让测试改挂载点等于把"契约"降级成"实现的自述"——页面改不改名都绿。
+   */
   mount?: string;
 }
 
@@ -146,6 +149,40 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(text);
 }
 
+/** ASCII 回退名：非 ASCII / 引号 / 反斜杠一律换成 `_`（header 值只许可见 ASCII）；空则兜通用名。 */
+function asciiFallbackName(name: string): string {
+  const safe = name.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+  return safe.trim() === "" ? "download.mp4" : safe;
+}
+
+/** RFC 5987 的 ext-value：`encodeURIComponent` 不够——它不转义 `'` `(` `)` `*`，而 attr-char 不含它们。 */
+function rfc5987Encode(value: string): string {
+  return encodeURIComponent(value).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+/**
+ * `Content-Disposition` 的附件头（RFC 6266）。
+ *
+ * **非 ASCII 名字必须走 `filename*`**（T5 修复轮 1，评审 I-1 的实测缺陷）：node 的 header 值是
+ * latin1 口径，`setHeader("content-disposition", 'attachment; filename="演示片.mp4"')` 直接抛
+ * `ERR_INVALID_CHAR` ⇒ `/file` 变成 **500 空体**；而 `/status` 照旧正常，故障只在取片那一下暴露。
+ * 中文 slug 是**正常用法**（`scripts/scaffold.sh` 的用法文案写的就是 `--slug 项目名`）。
+ *
+ * 形态：`attachment; filename="<ASCII 回退名>"; filename*=UTF-8''<percent-encoded 原名>`
+ * ——现代浏览器取 `filename*`（原文件名保住），不认识 `filename*` 的客户端退回 ASCII 回退名
+ * （扩展名保住，至少知道是什么文件）。名字本来就是 ASCII 安全时**只发 `filename=`**：
+ * 与修复前的字节形态一致，不制造无谓差异。
+ */
+function contentDisposition(file: string): string {
+  const name = path.basename(file);
+  const fallback = asciiFallbackName(name);
+  if (fallback === name) return `attachment; filename="${fallback}"`;
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${rfc5987Encode(name)}`;
+}
+
 // ── 服务 ──
 
 export function createExportService(opts: ExportServiceOptions): ExportService {
@@ -185,11 +222,7 @@ export function createExportService(opts: ExportServiceOptions): ExportService {
     }
   }
 
-  /** `Content-Disposition` 的文件名（RFC 6266 的 quoted-string；slug 里不会出现引号，仍是防线）。 */
-  function attachmentName(file: string): string {
-    return path.basename(file).replace(/["\\]/g, "_");
-  }
-
+  /** `Content-Disposition` 的附件头（RFC 6266；非 ASCII 名字的形态见 `contentDisposition`）。 */
   function serveFile(res: ServerResponse): void {
     if (state !== "done" || deliverable === undefined || !fs.existsSync(deliverable)) {
       sendJson(res, 404, { error: "没有可取的产物（未导出 / 最近一次导出失败）", ...status() });
@@ -199,7 +232,7 @@ export function createExportService(opts: ExportServiceOptions): ExportService {
     res.statusCode = 200;
     res.setHeader("content-type", "video/mp4");
     res.setHeader("content-length", String(fs.statSync(file).size));
-    res.setHeader("content-disposition", `attachment; filename="${attachmentName(file)}"`);
+    res.setHeader("content-disposition", contentDisposition(file));
     res.setHeader("cache-control", "no-store"); // 下一次导出是另一条片
     const stream = fs.createReadStream(file);
     stream.on("error", () => res.destroy()); // 读一半坏了：断连（不能让调用方以为拿到了完整的）

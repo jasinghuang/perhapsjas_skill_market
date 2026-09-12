@@ -1,5 +1,3 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { createExportService } from "./vite-plugins/export-service";
@@ -39,7 +37,7 @@ function loadRenderChain(): Promise<typeof import("./scripts/render")> {
 const exportService = createExportService({
   job: {
     async run() {
-      const { runRender, DEFAULT_OUT_DIR } = await loadRenderChain();
+      const { runRender, DEFAULT_OUT_DIR, pickDeliverable } = await loadRenderChain();
       const { stageConfig } = await import("./src/engine/runtime-config");
       const outDir = DEFAULT_OUT_DIR;
       const args: RenderArgs = {
@@ -56,13 +54,10 @@ const exportService = createExportService({
         onProgress: (done, total) => exportService.reportProgress(done, total),
       });
 
-      // 交付物挑选：确定性成片与降级产物（T4）**可能同时在盘上**——降级时那份 `<slug>.mp4` 是
-      // **未通过自校验**的（编码早于自校验），T4 明写"别让下游（导出服务/人）把它当交付物"。
-      // 判据 = 本次起点之后出现过 `.realtime.mp4`（出现即降级发生了，它才是交付物）。
-      const deterministic = path.join(outDir, `${stageConfig.slug}.mp4`);
-      const realtime = path.join(outDir, `${stageConfig.slug}.realtime.mp4`);
-      const fresh = fs.existsSync(realtime) && fs.statSync(realtime).mtimeMs >= startedAtMs;
-      return { file: fresh ? realtime : deterministic, code };
+      // 交付物挑选收在渲染链里（`pickDeliverable`：降级产物 vs 未通过自校验的 mp4 —— T4 明写
+      // 后者不是交付物）。T5 修复轮 1 起它是可测纯函数（原先长在这里、无测试，评审 M-2）。
+      const file = pickDeliverable({ outDir, slug: stageConfig.slug, startedAtMs });
+      return { file, code };
     },
   },
 });

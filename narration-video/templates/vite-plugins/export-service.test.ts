@@ -306,6 +306,35 @@ describe("导出服务 · GET /file", () => {
     await flush();
     expect((await fetch(`${harness!.base}/__export/file`)).status).toBe(404);
   });
+
+  // T5 修复轮 1（评审 I-1，真缺陷）：中文 slug（`scaffold.sh` 的用法文案就是 `--slug 项目名`）
+  // ⇒ 产物名 `演示片.mp4`。`path.basename(file)` 直拼进 `Content-Disposition` 会让
+  // **setHeader 抛 ERR_INVALID_CHAR**（node 的 header 值是 latin1 口径）⇒ `/file` 变成 **500 空体**，
+  // 而 `/status` 照旧正常（只在取片那一下暴露）。
+  it("非 ASCII 产物名：/file 200 + RFC 6266 双参数头（filename* 带原名）+ 真字节可取", async () => {
+    const out = tmpDir("nonascii");
+    const name = "演示片.mp4";
+    const file = path.join(out, name);
+    const payload = Buffer.from("non-ascii-name-payload");
+    fs.writeFileSync(file, payload);
+
+    await postRun(harness!);
+    harness!.job.finish({ file, code: 0 });
+    await flush();
+    const status = await getStatus(harness!);
+    expect(status.body.state).toBe("done");
+    expect(status.body.message).toBe(name); // /status 侧一直正常（对照：故障只在取片那一下）
+
+    const res = await fetch(`${harness!.base}/__export/file`);
+    expect(res.status).toBe(200);
+    const disposition = res.headers.get("content-disposition") ?? "";
+    // 形态：ASCII 回退名走 filename=，原名走 filename*=UTF-8''<percent-encoded>（RFC 5987）
+    const m = /^attachment; filename="([\x20-\x7E]+)"; filename\*=UTF-8''(.+)$/.exec(disposition);
+    expect(m, `Content-Disposition 形态不符：${disposition}`).not.toBeNull();
+    expect(m![1]).toMatch(/\.mp4$/); // 回退名保住扩展名（客户端至少知道是什么文件）
+    expect(decodeURIComponent(m![2])).toBe(name); // 现代浏览器取到的就是原名
+    expect(Buffer.from(await res.arrayBuffer()).equals(payload)).toBe(true);
+  });
 });
 
 describe("导出服务 · 形态", () => {

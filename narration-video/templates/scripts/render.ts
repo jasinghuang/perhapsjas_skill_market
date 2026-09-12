@@ -79,6 +79,7 @@ import {
 import { buildTimeline, type Timeline, type TimelineStep } from "./render/timeline";
 import { buildSrtCues, renderSrt } from "./render/srt";
 import {
+  REALTIME_SUFFIX,
   captureRealtime,
   realtimeUrl,
   type RealtimeOptions,
@@ -868,6 +869,39 @@ export function watchFrameProgress(opts: {
       await loop;
     },
   };
+}
+
+// ── 交付物（导出服务取片：哪一份是**这次跑的**成片） ──
+//
+// 由来（T5 修复轮 1 · 评审 M-2）：导出服务取片时，确定性成片与降级产物（T4）**可能同时在盘上**
+// ——编码早于自校验，故降级时那份 `<slug>.mp4` 是**未通过自校验**的（T4 明写"别让下游（导出服务/
+// 人）把它当交付物"）。这条规则原本长在 `vite.config.ts` 的作业体里（无测试、也没造出真降级），
+// 现收到渲染链里：两个产物家族的名字都是这条链的（`<slug>.mp4` / `<slug>${REALTIME_SUFFIX}.mp4`），
+// 谁是交付物也该由它回答。
+
+/**
+ * 本次跑的交付物：`.realtime.mp4` 存在且 mtime ≥ 本次起点 ⇒ **这次跑降级了** ⇒ 交付降级产物；
+ * 否则交付确定性成片 `<outDir>/<slug>.mp4`。
+ *
+ * 陈旧（上一轮残留）的 `.realtime.mp4` **不算**——它属于上一次失败的那趟；反过来，本次跑降级时
+ * 那条 `.realtime.mp4` 才是唯一"过了降级判据"的片子（另一份 mp4 未通过自校验）。
+ * 本函数只回答"取哪一个"，**不碰**产物是否存在之外的任何判据。
+ */
+export function pickDeliverable(opts: {
+  /** 输出根（与 `RenderArgs.outDir` 同一口径） */
+  outDir: string;
+  /** 档案 slug（产物名 `<slug>.mp4` / `<slug>${REALTIME_SUFFIX}.mp4`） */
+  slug: string;
+  /** 本次跑的起点（ms epoch） */
+  startedAtMs: number;
+}): string {
+  const realtime = path.join(opts.outDir, `${opts.slug}${REALTIME_SUFFIX}.mp4`);
+  try {
+    if (fs.statSync(realtime).mtimeMs >= opts.startedAtMs) return realtime;
+  } catch {
+    // 没有降级产物（这次跑的是确定性链路，或它是上一轮的残留但已被删）——交付确定性成片
+  }
+  return path.join(opts.outDir, `${opts.slug}.mp4`);
 }
 
 // ── 编排 ──
