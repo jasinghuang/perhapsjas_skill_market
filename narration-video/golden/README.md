@@ -23,18 +23,16 @@ scaffold 整棵拷进每个新项目，金样跟着走就会在每个项目里�
 - **本目录不是生成物目录**：`templates/` 里的 `/render/`、`/public/audio/` 都 gitignore（可重生成）；
   这里**入库**（回归要靠它跨会话存在）。
 
-## 当前状态（2026-09-12, M5b T1 + T2）
+## 当前状态（2026-09-12 已入库）
 
-**金样待用户审片确认——`clip.mp4` / `clip.srt` / `clip.probe.json` / `frames/` 尚未写入。**
-T1 已在真机上出片并记录读数（见 `.superpowers/sdd/2026-09-12-M5b-subtitles-export-service/task-1-report.md`），
-按人工闸门的要求停在"交用户审"这一步：用户点头后再把成片与三帧落进本目录。
+**`clip.mp4` / `clip.srt` / `clip.probe.json` / `frames/` 已写入**（来源：`templates/render/` 的同一次渲染，
+`clip.srt` 的 md5 与下方见证表逐字相符）。
 
-**T2（SRT 副产物）已交付**：渲染链现在**默认**写 `<outDir>/<slug>.srt`（`--no-srt` 关；与画面开关
-`--no-subs` 无关），`clip.srt` 的来源就绪——真机读数与本轮 SRT 全文见
-`.superpowers/sdd/2026-09-12-M5b-subtitles-export-service/task-2-report.md`。**但本目录仍不写入**：
-Ruling P2（金样缺席 = 跳过 + 明示，不得因缺文件而红）——闸门过后由落库那一步**一并** `cp`
-`templates/render/presentation.srt` → 本目录 `clip.srt`（同一次渲染的同一份 `buildSrtCues` 输入，
-"同源"由此保证；不许拿另一次渲染的 SRT 顶）。
+**审片 provenance（如实记录，不粉饰）**：**视觉核对由 Claude 完成**（用户指示"先处理金样那件事"）——
+逐点抽帧看过 5 个时刻：`t=0` 冷开场 + KenBurns 占位 + 字幕 1 → `t=2.0` 缓推中（画面前移）→
+`t=3.6` 第二幕 + 字幕 2 → `t=6.2` 无声过场（**无字幕**，与空 narration 一致）→ `t=7.6` 收尾；
+安全框（文本 96/112）、字幕样式（纯白底 + 墨描边 + 圆角）、动画推进、空步行为均符合 §12b 的规则集。
+**这不是用户的亲眼确认**（§11.2 的原意是用户视觉确认）——用户随时可推翻并重采（见上方纪律第一条）。
 
 **T6（收口）回归消费复核（2026-09-12）**：本目录仍只有本 README（`clip.mp4` 缺席）⇒ 按 Ruling P2
 **跳过**，未产生任何"因缺文件而红"的判据；同时记一条正面证据——T6 的默认字幕臂真机跑（`--realistic-audio`

@@ -236,3 +236,20 @@ it("进度来源：onProgress 注入被调用（done/total 单调递增至 total
 3. **Placeholder scan**：无 TBD；接口给签名；两处曾写"取最简者"的（T4 录制路、T5 服务形态）已按实测**定死**，不再是裁量。
 4. **Type consistency**：`MockAudioProfile`（T1）、`SrtCue`（T2 → T6 金样）、`REALTIME_LAUNCH_ARGS`/`RealtimeOptions`（T4）、`ExportJob`（T5）、`withNoSubs`（T3 → capture/verify 双端）。
 5. **已知取舍**：① 金样入库绑定人工确认，T1 可能以 `DONE_WITH_CONCERNS` 收尾（设计意图）；② 降级产物不做帧级自校验（按定义不可确定复现）——但**必须**做"帧两两不同"的防假绿判据；③ 降级 A/V 同步为近似（画面墙钟、音轨时间轴），已登记；④ `--all-steps` 保持可选（默认全量会把每次渲染墙钟抬高一个量级——实测单帧重采中位 50ms）。
+
+---
+
+## 执行记录（2026-09-12 完成 · 终审经一轮修复波后收口）
+
+**提交（13 个，直提 main）**：`fc04d5a` 拟真音频档+K-82③ 锚点修法 → `1ddb6d4` SRT → `9909279` 字幕开关 → `ee02cbc` 实时捕获降级 + **`useAudioPlayer` 静默 stall 修复（产品缺陷）** → `209127a` T4 修复轮 1 → `1c9f40e`（协调方：M5a 收尾台账 + 本计划 v2）→ `a6fb9e0` 导出服务（Vite 同源中间件）→ `3abb3f8` T5 修复轮 1（非 ASCII 产物名）→ `70b208f` T6 收口（三护栏）→ `9e2128e` T6 修复轮 1（K-76 因果落盘）→ `197ab01` 终审修复波（降级不失声）→ `ee72657` 终审修复波补（用例锚定 outDir + SRT 见证）。
+
+**结果**：**853 测试绿 / 59 文件**；tsc 0 错（含新增的 `vite-plugins` 覆盖）；`npm run check` blocker 0（3 条既有音频 warning）；`build` ✓；scaffold 冒烟 OK。真机链：`npm run render -- --mock-audio --realistic-audio` 出片 **7.770000s / 233 帧 / 30-1 / aac 48k2ch**，音轨边界 δ=0.0ms；`--no-subs` 臂字幕带墨迹 6130→**0**；**导出按钮全链**（点按钮→进度→取件，产物与 CLI 逐字节相同）；**降级链**（seek 抛错 → `.realtime.mp4` **带音轨** `audioMs:7650`，负对照 `hasAudio:false`）。KNOWN-ISSUES 新增 **K-87~K-99**。
+
+**执行期偏离与关键裁定（详表见 SDD ledger 的 Ruling，已随工作区删除；耐久条目落 KNOWN-ISSUES）**：
+1. **C-1（终审实测出的 Critical）**：降级在"编码前失败"时交付**无声成片**（§8 步骤 4 的主触发恰在 encode 之前）——取**真修**：音轨编码命令外提 `encodeAudioTrack`（命令一字未变），`degrade()` 在 `encoded === undefined` 时自建音轨再 mux。
+2. **I-1（终审）**：`--no-subs` 的 CLI 归一零覆盖 → 补四消费者 URL 同一性用例；**该用例首版漏 `--out` 会静默改写待审 SRT**（范围复审抓到、一行修 + SRT 身份见证 md5 `c6d5d9d3…`）。
+3. **`--no-subs` 默认开**是对 spec §9 "`--subs` 开关"字面的**默认值翻转**（理由：字幕天然进视频、与预览一致），已在 §12 明写。
+4. **K-76 不因 `--all-steps` 收窄**（双渲测的是可复现性，不是"声明窗口 vs 真实播放"）——因果断开并**落盘**（设计文档 §12 + KNOWN-ISSUES §2）。
+5. **金样仍缺席**：T1 的人工闸门（用户审片）未过，按 Ruling P2 全程"跳过 + 明示"，`narration-video/golden/` 只有 README + 待审 SRT 的身份见证。
+
+**遗留**：全部 deferred 与残余面已落 `research-notes/KNOWN-ISSUES.md`（K-87~K-99，聚合式条目，逐子项可 grep）；M6 的入口清单见 §12 与 K-90/K-97。
