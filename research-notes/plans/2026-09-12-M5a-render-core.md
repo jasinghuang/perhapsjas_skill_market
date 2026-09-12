@@ -339,3 +339,21 @@ it("checkProbe：时长差 / 帧数差 / 帧率错 → 逐条失败项（非空�
 3. **Placeholder scan**：无 TBD；接口全部给签名；命令行给确切 flags；无"类似 Task N"。
 4. **Type consistency**：`TimelineStep`/`Timeline`（T1 → T4/T5/T6）、`WindowScanResult`（T2 → T7）、`seek`/`seekTo`（T3 → T4）、`CapturedStep`（T4 → T5/T6）、`AudioSegment`（T5 内）、`expectedPngTotal`/`expectedMp4Frames`（T6 → T7）、`RENDER_FPS`（T1 定义，T4/T5/T6 共用）。
 5. **已知取舍**：① 动画窗口取**声明面**（注册表上界）而非实测播放时长——真实播放时长由 M5b 的双渲对比兜底（约束与 KNOWN-ISSUES 双向登记）；② 合成音轨用 lavfi（长度精确、零依赖），真实 TTS 归 M6；③ 抽帧比对取 `min(3, 步数)` 个采样步（**必须含首末步**）；④ 每 worker 一个浏览器进程（`openSession` 无法共享 launch）——资源换简单，`concurrency` 默认压到 2。
+
+---
+
+## 执行记录（2026-09-12 完成 · 终审 Ready to merge: Yes）
+
+**提交（11 个，直提 main）**：
+`4e271ad` 时间轴表+停留垫单一源头 → `d9dc798` 窗口预扫 → `80e3268` 桥 seek 面 → `1ea438b` 帧流捕捉 → `9e1b2b4` 音轨+编码 → `e03bd09` 编码修复轮 1（`holdMs=0` 的 stepMs 来源）→ `ddaf023` 编码修复轮 2（双源护栏+边界线性性实测）→ `bf22927` 产物自校验 → `98d4f50` CLI 全链打通+收口 → `c7db78e` T7 修复轮 1（台账取证口径+npm flag 陷阱+清理面硬化）→ `ff1b405` 终审修复波（计划冻结面回写+verify 数值护栏）。
+
+**结果**：`npm run render` 全链可用（预扫→时间轴→帧流→编码→自校验）；**743 测试绿**；tsc 0 错；`npm run check` blocker 0；`npm run build` ✓；scaffold 冒烟 exit 0。真机出片 `7.650000s`（与时间轴表差 **0.0ms**）/ `nb_frames 229`（预测 230，容差 ±3）/ `r_frame_rate 30/1` / `93 PNG = ΣframeCount`；`--verify-determinism` 跨会话重采逐字节相符 + 负样本非空转。KNOWN-ISSUES 新增 K-76~K-86。
+
+**执行期偏离与关键裁定（详表见 SDD ledger 的 Ruling R1~R17，已随工作区删除；耐久条目落 KNOWN-ISSUES）**：
+1. **`holdMs` 语义（R1）**：定成**残差** `max(0, stepMs − 窗口帧时长)`，不是计划字面的 `stepMs − animMs`——后者在 animMs 非 1/fps 整数倍时每步多出 ceil 残差（实测 3.433 vs 3.400），30 步累计近 1 秒。
+2. **两处会累积的漂移被实测排除**：concat 子 demuxer 的 25fps 网格（**有界震荡**，N=30 斜率 ≈0）；`holdMs=0` 的反推式（**真累积**，已由 R11 的必传 `stepMsByStep` 根治）。
+3. **首派 T7 实现者被 API 错误（402）掐断**：成果全在工作区未提交 → 派接手者审计+补完+验证+提交；接手者另**修了两个真炸的 scaffold bug**（生成物缺 `holdMs?` 导致新项目 tsc TS2339；未引号 heredoc 里的反引号让 `brew install ffmpeg` 被真执行、把本机 ffmpeg 从 8.0.1 升到 9.0.1_1）。
+4. **`softwareGL` 取证口径更正**：原以"renderer 串 = SwiftShader"为证——**该证据平凡**（本机 headless 默认臂就是 SwiftShader）；真差异在 `featureStatus`（`disabled_software` → `enabled`）与纯 CSS 页像素 md5。跨机像素一致性**仍未证**（需第二台机器）。
+5. **`npm run render --mock-audio` 必须带 `--`**（npm 11 否则当配置项、不转发）——已写进 scaffold 指引与 CLI 用法。
+
+**遗留**：全部 deferred 与残余面已落 `research-notes/KNOWN-ISSUES.md`（K-76~K-86）；M5b 的任务清单见 `2026-09-12-M5b-subtitles-export-service.md`（占位计划，含实时捕获降级 / STORYBOARD_THEME 护栏 / `--verify-sequential` 负对照）。
