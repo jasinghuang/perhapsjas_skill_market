@@ -86,7 +86,7 @@ import {
   type SampledFrame,
   type VerifyOptions,
 } from "./render/verify";
-import { jumpToStep, openSession, readyWithTimeout, seekTo, withHeadless } from "./shot/session";
+import { jumpToStep, openSession, readyWithTimeout, seekTo, withHeadless, withNoSubs } from "./shot/session";
 import {
   hasAudio,
   normalizeDurations,
@@ -139,6 +139,16 @@ export interface RenderArgs {
    * 口径：SRT 是**纯文本副产物**（narrations × 时间轴表），与画面无关——`--no-subs` 不影响它。
    */
   noSrt?: boolean;
+  /**
+   * `--no-subs`：出**无字幕版**（缺省 = 字幕进片，`Stage` 的框架级闸门）。
+   *
+   * 与 `noSrt?` 同款否定式开关（缺省 undefined = 默认行为），但**两者是两件事**，不得互相复用：
+   *   · `noSubs` = **画面**里不挂字幕层（`?no-subs=1` → `Stage` 不渲染 `CaptionLayer`）——
+   *     它改的是像素，故帧流/自校验重采/确定性终验都吃同一份归一 URL；
+   *   · `noSrt` = 不写**文本副产物** `<outDir>/<slug>.srt`（纯派生，与画面无关）。
+   * 交叉组合合法：`--no-subs` 仍然写 SRT（字幕文本不因画面免了就不给），`--no-srt` 也照常有字幕画面。
+   */
+  noSubs?: boolean;
   help: boolean;
 }
 
@@ -183,7 +193,7 @@ export interface RenderDeps {
 // ── 命令行解析 ──
 
 export const RENDER_USAGE = [
-  "用法：tsx scripts/render.ts [--mock-audio] [--realistic-audio] [--only <i,j,…>] [--concurrency <n>] [--out <dir>] [--no-srt] [--verify-determinism] [--help]",
+  "用法：tsx scripts/render.ts [--mock-audio] [--realistic-audio] [--only <i,j,…>] [--concurrency <n>] [--out <dir>] [--no-subs] [--no-srt] [--verify-determinism] [--help]",
   "  （npm run render 即本入口；自起 Vite + Chromium 逐帧 seek 出 mp4，前置 ffmpeg）",
   "  ⚠️ 经 npm 传 flag 必须加 --（npm 11 会把 --mock-audio 当成 npm 自己的配置项、不转发给脚本；",
   "     漏了它 = mock 分支根本不跑，只在 stderr 留一条 Unknown cli config）：",
@@ -193,6 +203,9 @@ export const RENDER_USAGE = [
   "  --only <i,j,…>        只渲这些步（specs 下标：章节序 → 章内步序；编码/自校验同步只处理这些步）",
   "  --concurrency <n>     帧流并发（默认 2；每 worker 一个浏览器进程——本机负载常高，别开大）",
   "  --out <dir>           输出根目录（默认 <模板根>/render）：出片 <dir>/<slug>.mp4，中间产物 <dir>/<slug>/",
+  "  --no-subs             出无字幕版（默认**字幕进片**：框架字幕层在 .stage-frame 内，整视口截图天然带它）；",
+  "                        归一成 ?no-subs=1 喂**帧流/自校验重采/确定性终验同一份 URL**（漏一处即假红）；",
+  "                        只关画面字幕层——SRT 是文本副产物，--no-subs 不影响它",
   "  --no-srt              不写字幕副产物（默认写 <dir>/<slug>.srt：narrations × 时间轴表纯派生；",
   "                        与画面无关——--no-subs 不影响它），只影响 SRT 落盘",
   "  --verify-determinism  确定性终验：独立会话重采采样步 → 与产物帧逐字节比对 + 负样本（两个不同 t 必须不同）",
@@ -200,7 +213,7 @@ export const RENDER_USAGE = [
 ].join("\n");
 
 const USAGE_FLAGS =
-  "--mock-audio / --realistic-audio / --only / --concurrency / --out / --no-srt / --verify-determinism / --help";
+  "--mock-audio / --realistic-audio / --only / --concurrency / --out / --no-subs / --no-srt / --verify-determinism / --help";
 
 /** 并发数：非负整数（`0` 归 1——0/负数会除零或空跑；归一发生在 CLI 层，见 frames.partition 的注释）。 */
 function parseConcurrency(value: string, flag: string): number {
@@ -266,6 +279,9 @@ export function parseArgs(argv: readonly string[], cwd: string): RenderArgs {
         break;
       case "--verify-determinism":
         out.verifyDeterminism = true;
+        break;
+      case "--no-subs":
+        out.noSubs = true;
         break;
       case "--no-srt":
         out.noSrt = true;
@@ -773,7 +789,13 @@ export async function runRender(
     // 只打 `?render=1` 而页面实际吃 `?render=1&headless=1`，排查时会把"带没带 headless"读错。
     // 同一组合在 `scripts/check/headless.ts:593`（无头 pass）也是这么写的；两个函数都幂等。
     // （注：`withHeadless` 的**定义与导出**在 `scripts/shot/session.ts`，headless.ts 只 import 它。）
-    const url = withHeadless(withRenderMode(serve.url));
+    const baseUrl = withHeadless(withRenderMode(serve.url));
+    // 字幕开关（M5b T3）的归一**只在这一处**：下面三个消费者吃同一个 `url`——帧流捕捉、自校验的
+    // 跨会话重采（`recaptureCompare` 用 `opts.url`）、确定性终验（`runDeterminism`）。`withHeadless` /
+    // `withRenderMode` / `withNoSubs` 都幂等且保留既有 query，故三段可叠、顺序无关。
+    // 漏归一任何一处 = 重采那侧带着字幕层重拍 ⇒ 与"无字幕"的产物帧 md5 不符 ⇒ 对**正确产物**报假红
+    //（成片无字幕、重采有字幕）；`--no-subs` 的成片能过自校验，正是这条归一在重采路径上生效的证据。
+    const url = args.noSubs ? withNoSubs(baseUrl) : baseUrl;
 
     // ── 4) 窗口预扫（animMsByStep 的唯一生产者） ──
     const scan = await (deps.scanAnimationWindows ?? scanAnimationWindows)({ url, chapters });

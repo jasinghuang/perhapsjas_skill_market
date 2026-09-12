@@ -18,6 +18,10 @@ import { useStepper } from "./engine/useStepper";
 
 const params = new URLSearchParams(window.location.search);
 const renderMode = params.has("render"); // ?render=1 创建即冻结
+// M5b Task 3 字幕开关：?no-subs=1 出**无字幕版**（值不重要，与 ?render/?auto 同款 `params.has` 口径）。
+// 归类在模块级：与 renderMode 同一份"页面启动即定"的参数面（渲染链的归一发生在 CLI 侧
+// `withNoSubs`，这里只读结果——页面不认识 CLI flag）。
+const noSubs = params.has("no-subs");
 setRenderMode(renderMode); // Ruling 9：模块加载即设置（先于渲染与 effect），杜绝初始 commit 动画自主播放的时序洞
 
 export default function App() {
@@ -102,6 +106,7 @@ export default function App() {
     <Stage
       dims={stageConfig.dims}
       noUi={renderMode || autoFromStart}
+      noSubs={noSubs}
       caption={narration}
       onPlay={() => {
         stoppedRef.current = false;

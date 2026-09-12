@@ -151,6 +151,26 @@ export function withHeadless(url: string): string {
   return u.toString();
 }
 
+/**
+ * 归一 URL 到**无字幕版**（M5b Task 3）：URL 含 no-subs 参数——`params.has` 语义，值不重要
+ * （与 `withHeadless` / `withRenderMode` 逐字同款；`?no-subs=0` 也算，页面侧 App 只读"在不在"）。
+ *
+ * 为什么必须有一层归一（而不是各调用点各自手拼）：字幕层归引擎框架（§9）——页面渲的就是字幕
+ * 有没有进片的唯一真相。渲染链里**三个**消费者吃同一份 URL：帧流捕捉（`captureFrames`）、
+ * 自校验的跨会话重采（`verifyRender` 的 `recaptureCompare` 用 `opts.url`）、确定性终验
+ * （`runDeterminism`）。任何一处漏归一，重采那侧就**带着字幕层**重拍 ⇒ 与无字幕的产物帧
+ * md5 不符 ⇒ 对**正确产物**报红（"成片无字幕、重采有字幕"的假红）。归一只写一次、三处同源。
+ *
+ * 两个性质与 withHeadless 一致：**幂等**（已含则原样，不翻倍）、**保留既有 query**（不吞
+ * `?render` / `headless`）。`--no-subs` 只是这个参数的开与不开（见 `scripts/render.ts`）：
+ * 本函数**只负责打开**——缺省出片带字幕，是"不调用"而非调 `withNoSubs(url, false)`。
+ */
+export function withNoSubs(url: string): string {
+  const u = new URL(url);
+  if (!u.searchParams.has("no-subs")) u.searchParams.set("no-subs", "1");
+  return u.toString();
+}
+
 /** Playwright 的"浏览器没装"错误判定（其余错误原样透传，不吞真因）。 */
 export function isMissingBrowserError(e: unknown): boolean {
   if (!(e instanceof Error)) return false;

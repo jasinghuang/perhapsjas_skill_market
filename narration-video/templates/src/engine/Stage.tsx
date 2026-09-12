@@ -6,13 +6,20 @@ export interface StageProps extends PropsWithChildren {
   dims: StageDims;
   /** 录屏/渲染模式隐藏 chrome */
   noUi?: boolean;
+  /**
+   * 字幕开关（M5b Task 3，§9 字幕层归框架）：缺省 undefined = 字幕照常进片（现状）；
+   * `noSubs` 时**不渲染字幕层**（`--no-subs` 出无字幕版）。判据是"层不在 DOM"——
+   * 成片是整视口截图，只有不挂载才等于"字幕不进片"（CSS 隐藏会留下占位与样式面）。
+   * 否定式开关：没传 / 传 false 都不改变行为（章节无权干预）。
+   */
+  noSubs?: boolean;
   caption: string;
   onPlay(): void;
   onPause(): void;
   onStop(): void;
 }
 
-export function Stage({ dims, noUi, caption, onPlay, onPause, onStop, children }: StageProps) {
+export function Stage({ dims, noUi, noSubs, caption, onPlay, onPause, onStop, children }: StageProps) {
   const { shellRef, scale } = useStageScale(dims);
   return (
     <div className="app-shell" ref={shellRef}>
@@ -31,7 +38,7 @@ export function Stage({ dims, noUi, caption, onPlay, onPause, onStop, children }
           }}
         >
           {children}
-          {caption ? <CaptionLayer text={caption} /> : null}
+          {caption && !noSubs ? <CaptionLayer text={caption} /> : null}
         </div>
       </div>
       {!noUi && (

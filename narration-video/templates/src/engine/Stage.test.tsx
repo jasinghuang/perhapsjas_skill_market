@@ -64,6 +64,33 @@ describe("Stage", () => {
     expect(screen.getByTestId("caption-layer")).toHaveTextContent("当前口播");
   });
 
+  // M5b Task 3：字幕开关（框架级闸门，章节无权干预）。判据是 caption-layer **在不在 DOM**——
+  // 成片是整视口截图，层不在 DOM 才等于"字幕不进片"（隐藏 visibility/CSS 会残留占位与样式面）。
+  it("noSubs 时字幕不进 DOM（caption 非空也不渲染）", () => {
+    render(
+      <Stage noSubs dims={{ width: 1920, height: 1080 }} caption="当前口播" onPlay={() => {}} onPause={() => {}} onStop={() => {}}>
+        <div />
+      </Stage>,
+    );
+    expect(screen.queryByTestId("caption-layer")).not.toBeInTheDocument();
+  });
+
+  it("缺省 / 显式 noSubs={false} 字幕都照常进 DOM（否定式开关：没打开就不关）", () => {
+    render(
+      <Stage dims={{ width: 1920, height: 1080 }} caption="当前口播" onPlay={() => {}} onPause={() => {}} onStop={() => {}}>
+        <div />
+      </Stage>,
+    );
+    expect(screen.getByTestId("caption-layer")).toHaveTextContent("当前口播");
+    cleanup();
+    render(
+      <Stage noSubs={false} dims={{ width: 1920, height: 1080 }} caption="当前口播" onPlay={() => {}} onPause={() => {}} onStop={() => {}}>
+        <div />
+      </Stage>,
+    );
+    expect(screen.getByTestId("caption-layer")).toHaveTextContent("当前口播");
+  });
+
   it("三个控制按钮回调", () => {
     const onPlay = vi.fn();
     const onPause = vi.fn();
