@@ -6,6 +6,7 @@ import {
   audit,
   installBridge,
   ready,
+  seek,
   shouldInstallBridge,
   uninstallBridge,
 } from "./engine/cursorBridge";
@@ -55,6 +56,8 @@ export default function App() {
       animations,
       // M3b Task 5 追加成员：动画审计面（四方法契约不动）
       audit,
+      // M5a Task 3 追加成员：定位面（渲染器唯一入口；截图前 seek(0) 补画"未 draw 初始态"）
+      seek,
     });
     return uninstallBridge;
   }, []);

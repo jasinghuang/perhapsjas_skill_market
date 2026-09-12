@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import type { Page } from "playwright";
 import { describe, expect, it, vi } from "vitest";
 import * as session from "./session";
-import { jumpToStep, openSession, readAnimations, readCursor, withHeadless } from "./session";
+import { jumpToStep, openSession, readAnimations, readCursor, seekTo, withHeadless } from "./session";
 
 describe("withHeadless：URL 归一（幂等 + 保留既有 query）", () => {
   it("无 query → 追加 ?headless=1", () => {
@@ -41,6 +41,7 @@ describe("session 冻结面（接口约定 1：M5 与无头门禁的消费契约
       "jumpToStep",
       "readCursor",
       "readAnimations",
+      "seekTo",
       "expandSpecs",
       "shotPath",
       "assertCursorMatch",
@@ -159,6 +160,27 @@ describe("jumpToStep / readCursor / readAnimations：内联 evaluate 外提（�
     const { page, calls } = stubPage(0);
     await expect(readAnimations(page)).resolves.toBe(0);
     expect((calls[0].fn as () => unknown)()).toBe(7);
+  });
+});
+
+describe("seekTo：M5a Task 3 追加的定位入口（渲染器唯一入口；截图前 seekTo(0) 归位）", () => {
+  it("seekTo：页面侧回调调 window.__presentation.seek(tMs)，参数原样透传（clamp 归桥）", async () => {
+    const seen: number[] = [];
+    installStubBridge({ seek: (t: number) => seen.push(t) });
+    const { page, calls } = stubPage();
+
+    await seekTo(page, 1500);
+    expect(calls).toHaveLength(1);
+
+    // 0（每帧截图的归位值）与负数都原样送达：**唯一 clamp 点在桥**（seekAll(clamp)），
+    // session 这层不做第二份限幅——两处各自 clamp 会让"谁改了参数"无从归因。
+    await seekTo(page, 0);
+    await seekTo(page, -5);
+    expect(calls.map((c) => c.arg)).toEqual([1500, 0, -5]);
+
+    // 回放三条页面侧回调（替身只记录不执行）→ 桥收到的就是这三个数，逐条不倒序不错位
+    for (const c of calls) (c.fn as (arg: unknown) => void)(c.arg);
+    expect(seen).toEqual([1500, 0, -5]);
   });
 });
 

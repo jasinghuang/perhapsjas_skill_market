@@ -6,6 +6,8 @@
 // M3b Task 5 追加：audit()（动画审计面）。**追加而不破坏**——上述四方法契约逐字不动，
 // 只是桥多挂一个成员（与 M4-3 同款追加策略）。
 //
+// M5a Task 3 追加：seek()（定位面，M5 遗留 #2/#5）。同款追加——六成员集合 ⊇ 原五者。
+//
 // ready() 无内建超时（契约不含）——消费方（截图模块 / M5 / M3b）需自行包 timeout：
 // 停滞的 load（没等到 load 也没等到 error）会一直挂起，这是"等页面定下来"的本意。
 
@@ -13,6 +15,7 @@ import {
   animationWindowMs,
   describeUnownedAnimations,
   registrySize,
+  seekAll,
   type WaapiAudit,
 } from "./animationRuntime";
 
@@ -46,6 +49,15 @@ export interface PresentationBridge {
    *  running 统计），并补注册表容量与窗口时长。门禁据此区分引擎动画与章节层泄漏的动画。
    *  jsdom 无 WAAPI 查询面 → WAAPI 面全 0（不抛）。 */
   audit(): AnimationAudit;
+  /** 定位面（**M5a Task 3 追加成员**，M5 遗留 #2/#5）——**渲染器的唯一定位入口**：
+   *  把注册表里全部动画 seek 到 t（ms，相对各自动画起点），负数归零（`seekAll(Math.max(0, tMs))`）。
+   *  与 jumpTo 的分工：jumpTo 定"第几步"，seek 定"步内的时刻"。
+   *
+   *  为什么必须有：`?render=1` 创建即冻结，canvasAnim **从未 draw**——DOM 停在"未 draw 初始态"
+   *  （实测 `.cdp-kenburns-inner` 的 transform 是 `none`，而 t=0 组合态是 `scale(1) translate(-2%,0)`，
+   *  分镜帧因此差 2% 横移）。帧流逐帧截图**前**调 `seek(0)` 归位，此后每帧 seek(k·1000/fps)。
+   *  canvasAnim.seek 每次必调 draw（见 animationRuntime），故归位无需重新挂载组件。 */
+  seek(tMs: number): void;
 }
 
 declare global {
@@ -167,4 +179,17 @@ export function animations(): number {
  */
 export function audit(): AnimationAudit {
   return { ...describeUnownedAnimations(), registry: registrySize(), windowMs: animationWindowMs() };
+}
+
+/**
+ * 定位面（M5a Task 3 追加；五方法契约不动）：把注册表里全部动画 seek 到 t（负数归零）。
+ * **与 ready() 同一时点的关系**：seek 是同步的定位动作，画的是 DOM 样式/画布像素；
+ * 要读到落定后的结果仍须 `await ready()`（帧先行那条链），消费顺序 = jumpTo → ready → seek
+ * →（截图）——见 M5a T4 的帧流。
+ *
+ * clamp 收在这一层（而不是只靠下游）：seekAll 与各 handle.seek 也各有 clamp，但桥是契约面，
+ * "负数不得进渲染器"是接口语义，不该只在实现深处成立。
+ */
+export function seek(tMs: number): void {
+  seekAll(Math.max(0, tMs));
 }

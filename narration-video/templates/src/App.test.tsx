@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
 import { DEFAULT_HOLD_MS } from "./engine/constants";
+// 桥的模块函数（M5a Task 3）：App 的安装对象直接引用它们——引用相等即"接线未走样"的判据。
+import { animations, audit, ready, seek } from "./engine/cursorBridge";
 
 class FakeAudio {
   static instances: FakeAudio[] = [];
@@ -160,6 +162,20 @@ describe("App 装配 · 游标桥（M4）", () => {
     expect(window.__presentation).toBeUndefined();
   });
 
+  it("M5a Task 3：桥成员集合 ⊇ 六方法，seek 直连模块实现（前五者引用未变）", () => {
+    render(<App />);
+    const bridge = window.__presentation!;
+    for (const k of ["jumpTo", "getState", "ready", "animations", "audit", "seek"] as const) {
+      expect(typeof bridge[k], `桥缺成员：${k}`).toBe("function");
+    }
+    // 追加而不破坏：ready/animations/audit/seek 仍是模块函数的**同一引用**（App 直接引用，
+    // 不包一层壳）；jumpTo/getState 是安装期闭包，其行为由上方两条既有用例钉住。
+    expect(bridge.ready).toBe(ready);
+    expect(bridge.animations).toBe(animations);
+    expect(bridge.audit).toBe(audit);
+    expect(bridge.seek).toBe(seek);
+  });
+
   it("守卫为假时不安装（生产构建不暴露）：installBridge 不被调用", async () => {
     // vitest 里 import.meta.env.DEV 恒为 true（vite 静态替换），App 层无法真跑"非 dev 分支"，
     // 故用 mock 把 shouldInstallBridge 压成 false 来验证接线面确实受守卫控制。
@@ -173,6 +189,8 @@ describe("App 装配 · 游标桥（M4）", () => {
       animations: () => 0,
       // 桥面语义的替身（App 只把它们装进 installBridge 参数）：成员名与 PresentationBridge 对齐
       audit: () => ({ waapi: 0, owned: 0, unowned: 0, unownedRunning: 0, unownedHints: [], registry: 0, windowMs: 0, running: 0 }),
+      // M5a Task 3 追加的必填成员（替身必须同步：与 makeBridge() 同一份成员集合）
+      seek: vi.fn(),
     }));
 
     const { default: GuardedApp } = await import("./App");

@@ -252,6 +252,22 @@ export async function auditAnimations(page: Page): Promise<AnimationAudit> {
   return page.evaluate(() => window.__presentation!.audit());
 }
 
+/**
+ * 定位全部引擎动画到 t（ms 相对各自动画起点）——M5a Task 3 追加：**渲染器的唯一定位入口**。
+ *
+ * 消费顺序：`jumpToStep` → `readyWithTimeout` →（回读）→ **`seekTo(page, 0)`** → 逐帧
+ * `seekTo(k·1000/fps)` → 截图。为什么 0 那一拍不能省（M5 遗留 #2）：`?render=1` 下
+ * canvasAnim 创建即冻结、**从未 draw**，DOM 停在"未 draw 初始态"（实测 `.cdp-kenburns-inner`
+ * 的 transform 为 `none`，而 t=0 组合态是 `scale(1) translate(-2%, 0)`——分镜帧差 2% 横移）。
+ * canvasAnim.seek 每次必调 draw，故归位只是一次 seek，无需重挂载组件。
+ *
+ * 负数不在此层 clamp（**唯一 clamp 点在桥**，见 cursorBridge.seek 契约）：本函数只做透传，
+ * 免得两处各自限幅后"谁改了参数"无从归因。
+ */
+export async function seekTo(page: Page, tMs: number): Promise<void> {
+  await page.evaluate((t) => window.__presentation!.seek(t), tMs);
+}
+
 // ── 会话（接口约定 1：M5 与无头门禁共用的启停面） ──
 
 export interface SessionOptions {

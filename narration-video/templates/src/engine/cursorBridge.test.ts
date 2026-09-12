@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { canvasAnim } from "./animationRuntime";
+// 命名空间导入（M5a Task 3）：spy 只能挂在模块命名空间上（`seek` 是否真的把 clamp 后的值
+// 交给 seekAll，只有替换 seekAll 本身才可观测——seekAll / handle.seek / canvasAnim 三层
+// 各自都 clamp，读下游读不出"是谁 clamp 的"）。
+import * as animationRuntime from "./animationRuntime";
 import {
   animations,
   audit,
   installBridge,
   ready,
+  seek,
   shouldInstallBridge,
   uninstallBridge,
   type AnimationAudit,
@@ -57,6 +62,8 @@ function makeBridge(overrides: Partial<PresentationBridge> = {}): PresentationBr
     ready: async () => {},
     animations: () => 0,
     audit: emptyAudit,
+    // M5a Task 3 追加的必填成员（替身必须同步：漏了则类型面与运行面双双缺位）
+    seek: vi.fn(),
     ...overrides,
   };
 }
@@ -371,5 +378,49 @@ describe("cursorBridge · audit()（M3b Task 5 追加面）", () => {
     expect(typeof bridge!.getState).toBe("function");
     expect(typeof bridge!.ready).toBe("function");
     expect(typeof bridge!.animations).toBe("function");
+  });
+});
+
+describe("cursorBridge · seek()（M5a Task 3 追加面：渲染器的唯一定位入口）", () => {
+  it("seek 透传 seekAll，负数归零（-5 → 以 0 调用 seekAll）", () => {
+    const spy = vi.spyOn(animationRuntime, "seekAll");
+    seek(-5);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(0); // 不是 -5：clamp 发生在桥上，不在下游靠运气
+    seek(1500);
+    expect(spy).toHaveBeenLastCalledWith(1500);
+    spy.mockRestore();
+  });
+
+  it("归位机制（M5 遗留 #2）：未 seek 时 canvasAnim 从未 draw；seek(0) 必定补画 t=0", () => {
+    // 非执行 rAF 桩（覆盖本文件 beforeEach 的同步执行桩：canvasAnim 创建即播会自递归）
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    const drew: number[] = [];
+    const h = canvasAnim((t) => drew.push(t), 3000);
+
+    // 前提（就是 ?render=1 分镜帧的病相）：创建即冻结 / 帧桩不执行 → 从未 draw，
+    // DOM 停在"未 draw 初始态"（.cdp-kenburns-inner 的 transform 为 none）。
+    expect(drew).toEqual([]);
+
+    seek(0);
+    expect(drew).toEqual([0]); // canvasAnim.seek 每次必调 draw → t=0 组合态归位
+    seek(3000);
+    expect(drew).toEqual([0, 3000]);
+    h.dispose();
+  });
+
+  it("追加而不破坏：成员集合 ⊇ 六方法，前五者引用未变（安装面透传同一对象）", () => {
+    const base = makeBridge();
+    installBridge(base);
+    const bridge = window.__presentation!;
+    for (const k of ["jumpTo", "getState", "ready", "animations", "audit", "seek"] as const) {
+      expect(typeof bridge[k], `桥缺成员：${k}`).toBe("function");
+    }
+    // "前五者引用未变"：追加 seek 不得顺手重绑既有成员（安装面逐字透传，不复制不改写）
+    expect(bridge.jumpTo).toBe(base.jumpTo);
+    expect(bridge.getState).toBe(base.getState);
+    expect(bridge.ready).toBe(base.ready);
+    expect(bridge.animations).toBe(base.animations);
+    expect(bridge.audit).toBe(base.audit);
   });
 });
