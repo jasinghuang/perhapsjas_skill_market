@@ -107,7 +107,7 @@ import {
 import { FindingBag, type Finding } from "./findings";
 import { startServe, type ServeHandle } from "./serve";
 import {
-  MIN_SEGMENT_MS,
+  MAX_SEGMENT_MS,
   audioTempoStats,
   checkAnimationWindow,
   checkAudioTempo,
@@ -556,14 +556,14 @@ export async function runHeadlessPass(opts: HeadlessOptions): Promise<FindingBag
     alignWarnings,
   );
   for (const w of alignWarnings) bag.addNote(`#17/#19 音频对位读数：${w}`, "readout");
-  bag.addAll(checkAudioTempo(opts.chapters, audioByChapter, { minSegmentMs: MIN_SEGMENT_MS }));
+  bag.addAll(checkAudioTempo(opts.chapters, audioByChapter, { maxSegmentMs: MAX_SEGMENT_MS }));
   const tempoStats = audioTempoStats(audioByChapter);
   bag.addNote(
     tempoStats === null
       ? `#19 音频节奏读数：扫描 0 段（public/audio-durations.json 缺失或全未合成——合法态，不报；` +
-          `下限 ${MIN_SEGMENT_MS}ms）`
+          `上限 ${MAX_SEGMENT_MS}ms）`
       : `#19 音频节奏读数：扫描 ${tempoStats.segments} 段（min ${tempoStats.minMs}ms / ` +
-          `max ${tempoStats.maxMs}ms，下限 ${MIN_SEGMENT_MS}ms）`,
+          `max ${tempoStats.maxMs}ms，上限 ${MAX_SEGMENT_MS}ms）`,
     "readout",
   );
 

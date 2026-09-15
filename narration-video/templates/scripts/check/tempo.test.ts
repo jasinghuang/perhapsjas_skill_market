@@ -13,7 +13,7 @@ import { normalizeDurations, resolveAudioMs, type StoryboardChapter } from "../s
 import {
   ANIMATION_WINDOW_RULE,
   AUDIO_TEMPO_RULE,
-  MIN_SEGMENT_MS,
+  MAX_SEGMENT_MS,
   audioTempoStats,
   checkAnimationWindow,
   checkAudioTempo,
@@ -105,25 +105,27 @@ describe("#17 动画窗口 vs 音频时长（warning；声明面比较）", () =
 // ── #19 音频段 ≥15s ──
 
 describe("#19 音频段 ≥15s（warning）", () => {
-  it("音频段 < 15000ms → warning 含实际值；≥15000 不报", () => {
+  it("音频段 ≥ 15000ms → warning 含实际值；<15000 不报", () => {
     const findings = checkAudioTempo(CHAPTERS, [[12000, 20000, null], [15000, 9000]], {
-      minSegmentMs: MIN_SEGMENT_MS,
+      maxSegmentMs: MAX_SEGMENT_MS,
     });
     expect(findings.map((f) => f.location)).toEqual([
-      "章节 0 第 0 步（example） · #19",
-      "章节 1 第 1 步（demo） · #19",
+      "章节 0 第 1 步（example） · #19",
+      "章节 1 第 0 步（demo） · #19",
     ]);
     expect(findings[0].rule).toBe(AUDIO_TEMPO_RULE);
     expect(findings[0].severity).toBe("warning");
-    expect(findings[0].message).toContain("12000ms");
-    expect(findings[1].message).toContain("9000ms");
-    // 达标段（20000 / 15000——后者是边界含等号的那一侧）不进报告
-    expect(findings.every((f) => !f.message.includes("20000ms"))).toBe(true);
+    expect(findings[0].message).toContain("20000ms");
+    expect(findings[0].message).toContain("≥ 上限");
+    expect(findings[1].message).toContain("15000ms");
+    // 短段（12000 / 9000）不进报告
+    expect(findings.every((f) => !f.message.includes("12000ms"))).toBe(true);
+    expect(findings.every((f) => !f.message.includes("9000ms"))).toBe(true);
   });
 
   it("null（未合成 / 无声过场）不报；对位表缺章不抛", () => {
-    expect(checkAudioTempo(CHAPTERS, [[null, null, null], [null, null]], { minSegmentMs: MIN_SEGMENT_MS })).toEqual([]);
-    expect(checkAudioTempo(CHAPTERS, [], { minSegmentMs: MIN_SEGMENT_MS })).toEqual([]);
+    expect(checkAudioTempo(CHAPTERS, [[null, null, null], [null, null]], { maxSegmentMs: MAX_SEGMENT_MS })).toEqual([]);
+    expect(checkAudioTempo(CHAPTERS, [], { maxSegmentMs: MAX_SEGMENT_MS })).toEqual([]);
   });
 
   it("#19 读数：扫描段数 + 极值（无段可扫 → null）", () => {
@@ -178,7 +180,7 @@ describe("resolveAudioMs 外提（scripts/storyboard/data.ts 导出）", () => {
 
 describe("非空护栏（收集器级不可用面：空输入不抛、空结果）", () => {
   it("chapters 空数组 → 空结果不抛（两条判据 + 读数）", () => {
-    expect(checkAudioTempo([], [], { minSegmentMs: MIN_SEGMENT_MS })).toEqual([]);
+    expect(checkAudioTempo([], [], { maxSegmentMs: MAX_SEGMENT_MS })).toEqual([]);
     expect(checkAnimationWindow([], new Map(), [])).toEqual([]);
     expect(audioTempoStats([])).toBeNull();
   });

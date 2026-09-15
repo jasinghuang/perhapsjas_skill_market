@@ -16,7 +16,7 @@
  *
  * ## #19 的口径
  *
- * 逐段判（不合并、不取均值）：非空音频段 < `MIN_SEGMENT_MS`（15s）→ warning，**输出实际值**
+ * 逐段判（不合并、不取均值）：非空音频段 ≥ `MAX_SEGMENT_MS`（15s）→ warning，**输出实际值**
  * （消息带 `12000ms` 这类实测数字）+ 与下限的对照。缺 durations / 全未合成 → 无可扫面，不报
  * （未合成是合法态，不是缺陷；读数由 `audioTempoStats` 供报告单列）。
  *
@@ -40,7 +40,7 @@ export const ANIMATION_WINDOW_RULE = "动画窗口";
 export const AUDIO_TEMPO_RULE = "音频节奏";
 
 /** #19 的段长下限（ms）：§11.1 #19「音频段 ≥15s 节奏警告」（原版人工校准机器化）。 */
-export const MIN_SEGMENT_MS = 15_000;
+export const MAX_SEGMENT_MS = 15_000;
 
 /** 帧键（`<chapter>:<step>`）：把逐 step 采集到的 windowMs 与音频对位表连起来。 */
 export function frameKey(chapter: number, step: number): string {
@@ -87,27 +87,29 @@ export function checkAnimationWindow(
 // ── #19 音频段 ≥15s ──
 
 /**
- * 逐段扫描音频时长：非空音频段 < `opts.minSegmentMs` → warning（消息带实际值）。
+ * 逐段扫描音频时长：非空音频段 ≥ `opts.maxSegmentMs` → warning（消息带实际值）。
+ * 方向修正（2026-09-15）：§11.1 #19 原文是"音频段 ≥15s 节奏警告（口播过密 / step 没拆够）"，
+ * 初版实现误写成"< 下限（段偏碎）"方向——与规格相反且修法误导（照文档拆 step 会红得更多）。
  * `audioByChapter` 缺章 / 缺步（越界读）→ 视为无音频（不报不抛——它是"未合成"的同一语义）。
  */
 export function checkAudioTempo(
   chapters: readonly StoryboardChapter[],
   audioByChapter: readonly (readonly (number | null)[])[],
-  opts: { minSegmentMs: number },
+  opts: { maxSegmentMs: number },
 ): Finding[] {
   const findings: Finding[] = [];
   chapters.forEach((c, ci) => {
     const audio = audioByChapter[ci] ?? [];
     c.narrations.forEach((_, step) => {
       const audioMs = audio[step] ?? null;
-      if (audioMs === null || audioMs >= opts.minSegmentMs) return;
+      if (audioMs === null || audioMs < opts.maxSegmentMs) return;
       findings.push({
         rule: AUDIO_TEMPO_RULE,
         severity: "warning",
         location: `${frameLocation({ chapter: ci, step, chapterId: c.id })} · #19`,
         message:
-          `音频段 ${audioMs}ms < 下限 ${opts.minSegmentMs}ms——口播段偏碎，步进节奏会过密` +
-          `（#19：durations 扫描；原版人工校准的机器化，只判下限不判上限）`,
+          `音频段 ${audioMs}ms ≥ 上限 ${opts.maxSegmentMs}ms——口播段过密，step 没拆够` +
+          `（#19：durations 扫描；原版人工校准的机器化，只判上限不判下限）`,
       });
     });
   });
