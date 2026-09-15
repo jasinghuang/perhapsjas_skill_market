@@ -1,0 +1,8 @@
+{
+  "name": "narration-video",
+  "version": "0.1.0",
+  "category": "视频生成 / 财报解读",
+  "description": "Turn financial reports and articles into narrated explainer videos: article → voiceover script (≥85% information retention) + outline → machine-generated source of truth → TTS → static storyboard checkpoint → chapter animation → deterministic A′ rendering to mp4 with subtitles and SRT. Two canvas profiles (Bilibili 16:9 / Xiaohongshu 3:4), 20+ machine gates and a 44-component controlled library.",
+  "homepage": "（M7 发布时填仓库地址）",
+  "compat": ["claude-code", "claude-ai", "cursor", "codex-cli", "gemini-cli", "opencode"]
+}
