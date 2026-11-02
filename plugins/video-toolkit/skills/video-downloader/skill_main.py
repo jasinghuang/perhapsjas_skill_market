@@ -243,9 +243,7 @@ def build_format_string(quality: str, resolution: Optional[int], codec: str,
 def build_opts(output_dir: Path, quality: str, resolution: Optional[int],
                codec: str, custom_format: Optional[str], audio_only: bool,
                cookie_file: Optional[Path], cookies_from_browser: Optional[str],
-               playlist: bool, use_aria2: bool, runtimes: dict,
-               download_subs: bool = False, sub_langs: Optional[List[str]] = None,
-               sub_format: str = 'srt/best') -> dict:
+               playlist: bool, use_aria2: bool, runtimes: dict) -> dict:
     opts = {
         'outtmpl': str(output_dir / '%(title)s [%(id)s].%(ext)s'),
         'no_warnings': True,
@@ -272,12 +270,6 @@ def build_opts(output_dir: Path, quality: str, resolution: Optional[int],
     elif cookie_file and cookie_file.exists():
         opts['cookiefile'] = str(cookie_file)
 
-    if download_subs and sub_langs:
-        opts['writesubtitles'] = True
-        opts['writeautomaticsub'] = True
-        opts['subtitleslangs'] = sub_langs
-        opts['subtitlesformat'] = sub_format
-
     if use_aria2:
         opts['external_downloader'] = 'aria2c'
         opts['external_downloader_args'] = {'aria2c': ['-x', '16', '-s', '16', '-k', '1M']}
@@ -286,6 +278,24 @@ def build_opts(output_dir: Path, quality: str, resolution: Optional[int],
         opts['js_runtimes'] = runtimes
 
     return opts
+
+
+def build_subtitle_opts(opts: dict, sub_langs: List[str],
+                        sub_format: str) -> dict:
+    """字幕单独一趟：不下载媒体，失败不影响已下载的视频。"""
+    sub_opts = dict(opts)
+    for key in ('postprocessors', 'merge_output_format',
+                'external_downloader', 'external_downloader_args'):
+        sub_opts.pop(key, None)
+    sub_opts.update({
+        'skip_download': True,
+        'writesubtitles': True,
+        'writeautomaticsub': True,
+        'subtitleslangs': sub_langs,
+        'subtitlesformat': sub_format,
+        'socket_timeout': 20,
+    })
+    return sub_opts
 
 
 def _fmt_duration(seconds) -> str:
@@ -742,6 +752,27 @@ def download_videos(urls: List[str], opts: dict) -> int:
         return 1
 
 
+def download_subtitles(urls: List[str], opts: dict) -> int:
+    """单独下载字幕；单个失败只记录，不影响其他视频。"""
+    from yt_dlp import YoutubeDL
+    from yt_dlp.utils import DownloadError
+
+    failures = 0
+    for url in urls:
+        try:
+            with YoutubeDL(opts) as ydl:
+                ret = ydl.download([url])
+            if ret:
+                failures += 1
+        except DownloadError as e:
+            failures += 1
+            _log(f"⚠ 字幕下载失败（{url}）: {e}")
+        except Exception as e:
+            failures += 1
+            _log(f"⚠ 字幕下载失败（{url}）: {e}")
+    return 1 if failures else 0
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Video Downloader',
@@ -866,9 +897,6 @@ def main():
         playlist=args.playlist,
         use_aria2=args.aria2,
         runtimes=runtimes,
-        download_subs=download_subs,
-        sub_langs=sub_langs,
-        sub_format=args.sub_format,
     )
 
     result = probe_urls(urls, opts, args.playlist)
@@ -925,8 +953,16 @@ def main():
 
     ret = download_videos(urls, opts)
 
+    if download_subs:
+        sub_opts = build_subtitle_opts(opts, sub_langs, args.sub_format)
+        sub_ret = download_subtitles(urls, sub_opts)
+        if sub_ret == 0:
+            _log(f"💬 字幕下载完成: {', '.join(sub_langs)}")
+        else:
+            _log("⚠ 字幕下载失败；视频已保留。可稍后重试，或使用 Cookie。")
+
     if ret == 0:
-        _log(f"\n✅ 全部下载完成")
+        _log(f"\n✅ {'视频下载完成' if download_subs else '全部下载完成'}")
         _log(f"📁 输出目录: {output_dir}")
     else:
         _log(f"\n❌ 部分视频下载失败 (错误码: {ret})")

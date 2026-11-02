@@ -61,6 +61,7 @@ description: >
 
    - 基础命令：`--yes --format "<choice.format>" "URL"`；用户选 default 项时可省略 `--format`
    - 如果用户选了字幕：追加 `--subs --sub-langs "en,zh-Hans"`（语言代码来自所选字幕项）
+   - **先下载视频，再单独下载字幕**；字幕失败只警告，不会影响已下载的视频
    - 字幕会作为独立文件下载在视频旁边（通常是 `.srt` 或 `.vtt`），不需要合并
    - 所有视频都选默认格式且字幕相同：可以合并成一条命令 `--yes [--subs --sub-langs ...] URL1 URL2 ...`
    - 多个视频格式/字幕不同：按视频分别执行
@@ -176,7 +177,7 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 | `--format` | 直接传 yt-dlp format string（可用 `choices[].format`，如 `"137+140"`） | 无 |
 | `--inspect` | 仅检测元数据（标题/时长/预计大小/格式/字幕），输出 JSON，不下载 | false |
 | `--yes, -y` | 跳过确认直接下载（用户确认元数据后使用） | false |
-| `--subs` | 下载字幕（人工 + 自动），需配合 `--sub-langs` | false |
+| `--subs` | 下载字幕（人工 + 自动），需配合 `--sub-langs`；字幕失败只警告，不影响视频 | false |
 | `--sub-langs` | 字幕语言代码，逗号分隔，如 `en,zh-Hans` | 无 |
 | `--sub-format` | 字幕格式偏好 | srt/best |
 | `--playlist` | 下载完整播放列表（默认忽略 URL 中的 `list=`） | false |
@@ -192,7 +193,7 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 - **YouTube 合并流的实际画质**：目前多数视频只提供 360p 合并流（format 18），少数有 720p（format 22）。`b` 会取该视频可用的最高合并流。
 - **需要 1080p/4K**：合并流通常不提供，`--inspect` 的 `choices` 会列出可用的分离流（不同分辨率和编码），选择后脚本自动合并；也可以手动用 `--format "bv*[height<=2160]+ba"`。
 - **格式选择**：默认取 `choices` 中 `default: true` 的合并流；分离流会分别下载视频和音频，再由 ffmpeg 自动合并成 mp4。
-- **字幕**：`--inspect` 会列出人工/自动字幕；用户可多选语言，下载时加 `--subs --sub-langs "en,zh-Hans"`。字幕作为独立文件保存在视频旁边（通常是 `.srt`/`.vtt`），不需要合并。B 站字幕通常需要 Cookie；播放列表的 flat 探测不含字幕，需逐个视频检测。
+- **字幕**：`--inspect` 会列出人工/自动字幕；用户可多选语言，下载时加 `--subs --sub-langs "en,zh-Hans"`。字幕作为独立文件保存在视频旁边（通常是 `.srt`/`.vtt`），不需要合并；脚本先下载视频、再单独下载字幕，字幕失败只警告，不丢视频。B 站字幕通常需要 Cookie；播放列表的 flat 探测不含字幕，需逐个视频检测。
 - **限制分辨率**：`--resolution 1080`。在合并流中取上限内的最高画质；`--codec` 只在同分辨率下优先。
 - **编码兼容性**：YouTube 的 H.264 通常最高 1080p；4K 只能走 VP9/AV1。若播放器不支持 AV1/VP9，接受 1080p H.264，或用 `--format` 自定义。
 - **B 站高画质 / 大会员**：`--cookies-from-browser chrome`（先在浏览器登录）。
