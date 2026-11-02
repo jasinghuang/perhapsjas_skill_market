@@ -1,14 +1,17 @@
 """Mac backend — MLX-Whisper (Apple Silicon native acceleration)."""
 
 import subprocess
+from pathlib import Path
 from typing import Dict, Optional
 
 from . import TranscriptionBackend
 
 MODEL_REPOS = {
+    "tiny": "mlx-community/whisper-tiny-mlx",
     "small": "mlx-community/whisper-small-mlx",
-    "large-v3-turbo": "mlx-community/whisper-large-v3-turbo",
+    "medium": "mlx-community/whisper-medium-mlx",
     "large-v3": "mlx-community/whisper-large-v3-mlx",
+    "large-v3-turbo": "mlx-community/whisper-large-v3-turbo",
 }
 
 
@@ -21,7 +24,12 @@ class MLXBackend(TranscriptionBackend):
         try:
             import mlx_whisper  # noqa: F401
         except ImportError:
-            print("mlx-whisper not installed. Install: pip3 install --break-system-packages mlx-whisper")
+            print(
+                "mlx-whisper not installed in this interpreter.\n"
+                "Run the skill through run.py — it finds an interpreter that has mlx-whisper "
+                "(or installs it once). Manual install: "
+                "python3 -m pip install --break-system-packages mlx-whisper zhconv"
+            )
             ok = False
         try:
             subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
@@ -31,9 +39,17 @@ class MLXBackend(TranscriptionBackend):
         return ok
 
     def load_model(self, model_name: str) -> None:
-        self._repo = MODEL_REPOS.get(model_name, MODEL_REPOS["large-v3-turbo"])
+        if model_name not in MODEL_REPOS:
+            raise ValueError(
+                f"Unknown MLX model '{model_name}'. Available: {', '.join(MODEL_REPOS)}"
+            )
+        self._repo = MODEL_REPOS[model_name]
         print(f"Loading MLX-Whisper model ({model_name})...")
         print(f"  Repo: {self._repo}")
+
+        hub = Path.home() / ".cache" / "huggingface" / "hub"
+        cached = hub / f"models--{self._repo.replace('/', '--')}"
+        print(f"  Cached: {'yes' if cached.exists() else 'no (first run will download)'}")
 
     def transcribe(self, audio_path: str, language: Optional[str] = None) -> Dict:
         import mlx_whisper

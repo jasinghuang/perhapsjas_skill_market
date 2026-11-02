@@ -123,6 +123,7 @@ def segments_to_md(
 
 def transcribe(
     video_path: Path,
+    output_path: Optional[Path] = None,
     output_dir: Optional[Path] = None,
     model_size: str = None,
     language: str = "auto",
@@ -136,11 +137,15 @@ def transcribe(
     if not video_path.exists():
         raise FileNotFoundError(f"File not found: {video_path}")
 
-    if output_dir is None:
-        output_dir = video_path.parent
+    if output_path is not None:
+        output_path = Path(output_path).expanduser()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
     else:
-        output_dir = Path(output_dir).expanduser()
-    output_dir.mkdir(parents=True, exist_ok=True)
+        if output_dir is None:
+            output_dir = video_path.parent
+        else:
+            output_dir = Path(output_dir).expanduser()
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     backend = get_backend()
     backend.load_model(model_size)
@@ -159,18 +164,21 @@ def transcribe(
     base_name = video_path.stem
     backend_name = type(backend).__name__
 
+    if output_path is None:
+        suffix = {"srt": ".srt", "md": ".md", "json": ".json"}.get(output_format)
+        if suffix is None:
+            raise ValueError(f"Unknown format: {output_format}")
+        output_path = output_dir / f"{base_name}{suffix}"
+
     if output_format == "srt":
-        output_path = output_dir / f"{base_name}.srt"
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(segments_to_srt(segments))
     elif output_format == "md":
-        output_path = output_dir / f"{base_name}.md"
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(
-                segments_to_md(segments, base_name, model_size, language, keep_timestamps, backend_name)
+                segments_to_md(segments, base_name, model_size, detected_lang, keep_timestamps, backend_name)
             )
     elif output_format == "json":
-        output_path = output_dir / f"{base_name}.json"
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
     else:
@@ -191,14 +199,20 @@ if __name__ == "__main__":
         epilog="""
 Examples:
   python skill_main.py video.mp4
-  python skill_main.py audio.mp3 --output result.srt
+  python skill_main.py video.mp4 --output result.srt
+  python skill_main.py a.mp4 b.mp4 --format srt --output ~/subtitles
   python skill_main.py video.mp4 --model large-v3 --language zh
-  python skill_main.py video.mp4 --format srt
         """,
     )
 
-    parser.add_argument("input", type=str, help="Video or audio file path")
-    parser.add_argument("--output", "-o", type=str, help="Output file path")
+    parser.add_argument("input", nargs="+", type=str, help="One or more video/audio file paths")
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        help="Output file (single input) or directory (multiple inputs). "
+        "A .srt/.md/.json suffix also selects the format.",
+    )
     parser.add_argument(
         "--model",
         "-m",
@@ -216,8 +230,8 @@ Examples:
         "--format",
         "-f",
         choices=["srt", "md", "json"],
-        default=config.get("output_format", "md"),
-        help="Output format (default: md)",
+        default=None,
+        help="Output format (default: md, or inferred from --output suffix)",
     )
     parser.add_argument(
         "--keep-timestamps",
@@ -229,35 +243,78 @@ Examples:
 
     args = parser.parse_args()
 
+    # Format precedence: explicit flag > config file > --output suffix > md
+    output_format = args.format
+    if output_format is None and CONFIG_FILE.exists():
+        output_format = config.get("output_format")
+    if output_format is None and args.output and len(args.input) == 1:
+        output_format = {".srt": "srt", ".md": "md", ".json": "json"}.get(
+            Path(args.output).suffix.lower()
+        )
+    output_format = output_format or "md"
+
     # Check dependencies via backend
     backend = get_backend()
     if not backend.check_dependencies():
+        print("\nRun this skill through run.py so it can find or install the right interpreter:")
+        print(f"  python3 {Path(__file__).parent / 'run.py'} <input> ...")
         sys.exit(1)
 
-    output_dir = Path(args.output).parent if args.output else Path(args.input).expanduser().parent
+    # --output is a file for one input and a directory for several inputs
+    # (or whenever it already points at an existing directory).
+    out_arg = Path(args.output).expanduser() if args.output else None
+    single_output_path = None
+    output_dir = None
+
+    if out_arg is not None and len(args.input) > 1:
+        if out_arg.suffix.lower() in (".srt", ".md", ".json") and not out_arg.is_dir():
+            print(f"Error: --output looks like a file, but {len(args.input)} inputs were given.")
+            print("Use a directory: --output ~/subtitles")
+            sys.exit(1)
+        output_dir = out_arg
+        output_dir.mkdir(parents=True, exist_ok=True)
+    elif out_arg is not None:
+        if out_arg.is_dir():
+            output_dir = out_arg
+        else:
+            single_output_path = out_arg
 
     print(f"\n{'=' * 60}")
     print(f"Audio Transcriber ({'Mac / MLX-Whisper' if platform.system() == 'Darwin' else 'Win / Faster-Whisper'})")
     print(f"{'=' * 60}")
-    print(f"  Input: {args.input}")
+    print(f"  Inputs: {len(args.input)}")
+    for item in args.input:
+        print(f"    - {item}")
     print(f"  Model: {args.model}")
     print(f"  Language: {args.language}")
-    print(f"  Format: {args.format}")
+    print(f"  Format: {output_format}")
     print(f"  Timestamps: {'Yes' if args.keep_timestamps else 'No'}")
     print(f"{'=' * 60}\n")
 
-    try:
-        output_path = transcribe(
-            video_path=args.input,
-            output_dir=output_dir,
-            model_size=args.model,
-            language=args.language,
-            output_format=args.format,
-            keep_timestamps=args.keep_timestamps,
-        )
-        print(f"\n{'=' * 60}")
-        print(f"Done! Output: {output_path}")
-        print(f"{'=' * 60}\n")
-    except Exception as e:
-        print(f"\nError: {e}")
+    failures = []
+    for index, item in enumerate(args.input, 1):
+        if len(args.input) > 1:
+            print(f"[{index}/{len(args.input)}] {item}")
+        try:
+            result_path = transcribe(
+                video_path=item,
+                output_path=single_output_path,
+                output_dir=output_dir,
+                model_size=args.model,
+                language=args.language,
+                output_format=output_format,
+                keep_timestamps=args.keep_timestamps,
+            )
+            print(f"  Done: {result_path}")
+        except Exception as e:
+            failures.append((item, str(e)))
+            print(f"  Error: {e}")
+
+    print(f"\n{'=' * 60}")
+    if failures:
+        print(f"Finished with {len(failures)} failure(s):")
+        for item, message in failures:
+            print(f"  - {item}: {message}")
         sys.exit(1)
+    print(f"All done! {len(args.input)} file(s) transcribed.")
+    print(f"{'=' * 60}\n")

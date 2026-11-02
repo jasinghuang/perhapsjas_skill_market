@@ -5,177 +5,174 @@ description: >
   Mac 使用 MLX-Whisper（Apple Silicon 原生加速），Windows 使用 Faster-Whisper（CUDA GPU 加速 / CPU 回退）。
   当用户要转录、转文字、提取字幕、语音识别、whisper转录、音频转文字、视频转字幕、
   录音转文字、语音转文字、转写、听写、把视频变成文字稿、transcribe、speech to text 时触发。
-  输出 SRT 或 Markdown 格式。每次使用会询问模型和输出格式。
+  支持单个或批量转录多个文件，输出 SRT / Markdown / JSON。每次使用会询问模型和输出格式。
   接受 mp4、mp3、wav、m4a 等常见音视频格式。
 
 ---
 
 # Audio Transcribe
 
-音频/视频转录工具，自动检测平台选择最优后端：
-- **Mac**：MLX-Whisper（Apple Silicon 原生加速）
-- **Windows**：Faster-Whisper（CUDA GPU 加速 / CPU int8 回退）
+音频/视频转录：Mac 走 MLX-Whisper（Apple Silicon 原生加速），Windows 走 Faster-Whisper（CUDA / CPU）。
 
-## 步骤 0：检测平台
-
-运行以下命令检测当前平台：
+## 入口：始终通过 run.py 调用
 
 ```bash
-python -c "import platform; print(platform.system())"
+# Mac
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/run.py <输入...> [参数...]
+
+# Windows
+python ${CLAUDE_PLUGIN_ROOT}\skills\audio-transcribe\run.py <输入...> [参数...]
 ```
 
-- 结果为 `Darwin` → Mac（使用 MLX-Whisper 后端）
-- 结果为 `Windows` → Windows（使用 Faster-Whisper 后端）
+`run.py` 负责选解释器，然后执行 `skill_main.py`。它解决的核心问题：
 
-记住检测结果，后续步骤根据平台分支。
+> Homebrew / pyenv 升级 Python 后，`python3` 会指向新版本（例如 3.15），
+> 而 `mlx-whisper` 仍装在旧版本（例如 3.14）的 site-packages 里。
+> 这时直接跑 `skill_main.py` 会误判“依赖缺失”，触发一次几 GB 的重复安装。
 
-## 首次依赖检查
+查找顺序：上次成功使用的解释器 → 当前解释器 → PATH 上的 python3 → Homebrew 版本化 Python（3.16→3.9）→ pyenv → `/usr/bin/python3`。逐个用 `import mlx_whisper`（Windows 为 `faster_whisper`）验证，**有就复用，全都找不到才安装**。
 
-根据平台检查依赖，缺少则自动安装（不需要用户干预）：
+运行时会打印实际使用的解释器：
 
-### Mac (Darwin)
-
-检查方法：
-- `python3 -c "import mlx_whisper"` — 失败则执行安装
-- `ffmpeg -version` — 失败则执行安装
-
-安装命令：
-
-```bash
-pip3 install --break-system-packages mlx-whisper zhconv
-brew install ffmpeg
+```text
+[audio-transcribe] Using /opt/homebrew/bin/python3.14 (transcription backend already installed)
 ```
 
-> macOS Homebrew Python 有 PEP 668 保护，需要加 `--break-system-packages`。
+看到这行说明命中了已有环境，没有重新安装任何东西。把它转述给用户，让用户知道用的是哪个 Python。
 
-### Windows
+安装只在所有候选都没有依赖时发生，且会跳过 `/usr/bin/python3`（系统 Python 需要 sudo）。
 
-检查方法：
-- `python -c "from faster_whisper import WhisperModel"` — 失败则执行安装
+## 平台与后端
 
-安装命令：
+| 平台 | 后端 | 加速 |
+| --- | --- | --- |
+| macOS (Apple Silicon) | MLX-Whisper | Metal / MLX |
+| Windows + NVIDIA | Faster-Whisper | CUDA float16 |
+| Windows 无 GPU | Faster-Whisper | CPU int8 |
 
-```bash
-pip install faster-whisper zhconv
-```
-
-- 不需要外部 ffmpeg（Faster-Whisper 内置 PyAV 解码）
-- CUDA 自动检测：有 NVIDIA GPU → GPU 加速（float16）；无 GPU → CPU（int8 量化）
+Mac 需要外部 ffmpeg；Windows 不需要（Faster-Whisper 内置 PyAV 解码）。
 
 ## 每次使用前的选择
 
-**每次转录前，使用 AskUserQuestion 工具询问以下两个问题。不要静默使用默认值或读取 config.json 跳过询问。**
+**每次转录前用 AskUserQuestion 询问模型和输出格式**，不要静默使用默认值。若用户已明确指定（如“用 large-v3 转成 SRT”），可跳过询问。
 
-如果用户在指令中已明确指定了模型和输出格式（如"用 large-v3 转录成 SRT"），可以跳过询问直接使用用户指定的参数。
+注意 AskUserQuestion 的真实 schema：每个选项是 `{label, description}`（不是 `value`），必须提供 `multiSelect`，`header` 控制在 12 字符以内。
 
-每个 question 必须包含 `header` 字段，`options` 中每个选项必须是 `{label, value}` 对象，不能是字符串。
+### Mac 选项
 
-### 调用示例（Mac）
-
-```
+```text
 AskUserQuestion({
   questions: [
     {
-      header: "模型选择",
       question: "选择转录模型：",
+      header: "模型",
+      multiSelect: false,
       options: [
-        {"label": "small (~459MB, 快速预览)", "value": "small"},
-        {"label": "large-v3-turbo (~1.5GB, 推荐)", "value": "large-v3-turbo"},
-        {"label": "large-v3 (~2.9GB, 最高准确率)", "value": "large-v3"}
+        {"label": "large-v3-turbo (推荐)", "description": "~1.5GB，准确率接近 large-v3，速度快 3-4 倍"},
+        {"label": "large-v3 (最高准确率)", "description": "~2.9GB，最慢但最准，适合术语密集内容"},
+        {"label": "small (快速预览)", "description": "~459MB，最快，错误率明显更高"}
       ]
     },
     {
-      header: "输出格式",
       question: "选择输出格式：",
+      header: "输出格式",
+      multiSelect: false,
       options: [
-        {"label": "Markdown (纯文本段落)", "value": "md"},
-        {"label": "SRT (标准字幕)", "value": "srt"},
-        {"label": "Markdown + 时间码", "value": "md-timestamps"}
+        {"label": "SRT (标准字幕)", "description": "带时间轴，播放器 / 视频平台可直接加载"},
+        {"label": "Markdown (纯文本段落)", "description": "合并成自然段落，适合阅读和二次编辑"},
+        {"label": "Markdown + 时间码", "description": "段落形式但保留时间码，兼顾可读性与定位"}
       ]
     }
   ]
 })
 ```
 
-### 调用示例（Windows）
+### Windows 选项
 
-```
-AskUserQuestion({
-  questions: [
-    {
-      header: "模型选择",
-      question: "选择转录模型：",
-      options: [
-        {"label": "small (~461MB, 快速预览)", "value": "small"},
-        {"label": "medium (~1.5GB, 推荐)", "value": "medium"},
-        {"label": "large-v3 (~2.9GB, 最高准确率)", "value": "large-v3"}
-      ]
-    },
-    {
-      header: "输出格式",
-      question: "选择输出格式：",
-      options: [
-        {"label": "Markdown (纯文本段落)", "value": "md"},
-        {"label": "SRT (标准字幕)", "value": "srt"},
-        {"label": "Markdown + 时间码", "value": "md-timestamps"}
-      ]
-    }
-  ]
-})
-```
+模型选项把 large-v3-turbo 换成 `medium`（约 1.5GB，兼顾速度和准确率），其余相同。
 
-- 用户选择模型后通过 `--model` 参数传给脚本
-- 输出格式 `srt` → `--format srt`；`md` → `--format md`；`md-timestamps` → `--format md --keep-timestamps`
-- Markdown 格式必须将 Whisper 逐句输出合并为自然段落，不要一行一句
+参数映射：
+
+- `srt` → `--format srt`
+- `md` → `--format md`
+- `md-timestamps` → `--format md --keep-timestamps`
 
 ## 使用方法
 
 ```bash
-# 转录视频（默认 Markdown 格式）
-python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4
+# 单个文件，输出同名 .md
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/run.py video.mp4
 
-# 指定输出文件
-python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4 --output result.srt
+# 指定输出文件（后缀同时决定格式）
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/run.py video.mp4 -o result.srt
 
-# 指定模型
-python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4 --model large-v3
+# 批量：多个输入 + 输出目录
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/run.py a.mp4 b.mp4 c.mp4 --format srt --output ~/subtitles
 
-# 指定语言
-python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4 --language zh
+# 指定模型 / 语言
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/run.py video.mp4 --model large-v3 --language zh
 
-# 输出 SRT 格式
-python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4 --format srt
-
-# 保留时间码
-python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/skill_main.py video.mp4 --keep-timestamps
+# Markdown 保留时间码
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/run.py video.mp4 --format md --keep-timestamps
 ```
 
-## 命令行参数
+批量任务顺序执行，单个文件失败不会中断其余文件；结束时汇总失败项，并以非零退出码退出。
 
-| 参数                      | 说明                                | 默认值                      |
-| ----------------------- | --------------------------------- | ------------------------ |
-| `input`                 | 视频/音频文件路径                         | 必需                       |
-| `--output, -o`          | 输出文件路径                            | 同目录，同文件名换后缀              |
-| `--model, -m`           | 模型名称                              | large-v3-turbo (Mac) / medium (Win) |
-| `--language, -l`        | 语言代码（auto/zh/en/ko/ja 等）          | auto                     |
-| `--format, -f`          | 输出格式（srt/md/json）                 | md                       |
-| `--keep-timestamps, -t` | Markdown 保留时间码                    | false                    |
+## 参数
 
-## 输出格式
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `input` | 一个或多个音视频文件路径 | 必需 |
+| `--output, -o` | 单个输入时为文件路径；多个输入时为目录。`.srt/.md/.json` 后缀会自动决定格式 | 同目录、同文件名 |
+| `--model, -m` | 模型名（Mac：tiny / small / medium / large-v3 / large-v3-turbo） | large-v3-turbo (Mac) / medium (Win) |
+| `--language, -l` | 语言代码（auto/zh/en/ko/ja 等） | auto |
+| `--format, -f` | 输出格式（srt/md/json） | md，或由 `-o` 后缀推断 |
+| `--keep-timestamps, -t` | Markdown 保留时间码 | false |
 
-### Markdown（默认）
+模型名写错时 Mac 后端会直接报错并列出可用模型，不会静默回退到别的模型。
 
-带元信息头部，段落按时间顺序排列。不带时间码时为纯文本段落，适合阅读和后续校准。
+## 输出
 
-### SRT
+- 每个输入生成一个文件，默认与输入同目录、同名
+- **SRT**：标准字幕，带时间轴
+- **Markdown**：带 Meta 头部（后端、模型、检测到的语言、时间、段数）
+- **JSON**：`{"segments": [{"start": 0.0, "end": 1.0, "text": "..."}], "language": "en"}`
 
-标准字幕格式，带时间轴，适合播放器加载。
+Whisper 的 SRT 分段可能较长（单条约 10-16 秒）。如果下游要用 `add-subtitle` 叠字幕（要求每行 ≤12 个中文字符），先跑 `text-refine` 做断句和校准。
+
+## 依赖与故障排查
+
+### Mac
+
+- `mlx-whisper` + `zhconv`：`python3 -m pip install --break-system-packages mlx-whisper zhconv`
+- `ffmpeg`：`brew install ffmpeg`
+
+Homebrew Python 有 PEP 668 保护，安装时必须加 `--break-system-packages`。
+
+### Windows
+
+- `faster-whisper` + `zhconv`：`python -m pip install faster-whisper zhconv`
+- 不需要外部 ffmpeg
+
+### 常见问题
+
+**“明明装过却提示缺失”**：通常是 Homebrew / pyenv 切换了 `python3` 版本，包还留在旧版本里。用 `run.py` 会自动复用旧环境；如果它选中的解释器不是预期的，再手动确认一次。
+
+**模型会重复下载吗**：不会。模型缓存在 `~/.cache/huggingface/hub/models--mlx-community--whisper-*`，脚本会打印 `Cached: yes/no`。缓存跨 Python 版本共享，只要解释器选对就不会重下。
+
+**确认当前用的是哪个 Python**：`run.py` 第一行会打印解释器路径；也可以手动 `python3.14 -c "import mlx_whisper"` 验证。
+
+## 与其它 skill 串联
+
+```text
+video-downloader → audio-transcribe → text-refine → add-subtitle
+```
 
 ## 示例
 
-```
+```text
 用户: 转录这个视频 video.mp4
-用户: 把这个音频转成字幕
+用户: 把这三个视频都转成字幕
 用户: whisper 转录 audio.mp3，用 SRT 格式
-用户: 用 large-v3 模型转录这个文件
+用户: 用 large-v3 模型转录这个文件，输出到 ~/subtitles
 ```

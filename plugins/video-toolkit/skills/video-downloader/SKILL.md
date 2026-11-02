@@ -34,8 +34,9 @@ description: >
    - `title` / `duration` / `size` / `resolution`：默认格式的标题、时长、预计大小、画质
    - `choices`：可选格式列表，每项含 `label`、`description`、`format`、`kind`（`muxed` / `separate`）、`needs_merge`、`size`、`default`
    - `formats.muxed` / `formats.video_only` / `formats.audio_only`：完整的合并流、纯视频流、纯音频流列表
+   - `subtitles`：`manual`（人工字幕，含 `formats`）、`automatic`（自动字幕，紧凑列表）、`choices`（菜单用，含 `lang`、`label`、`kind`）、`count`、`has_subtitles`
    - `ffmpeg_available` / `merge_note`：当前机器能否合并，以及分离流的处理说明
-   - 播放列表：`playlist_count`、`duration`、`entries_preview`；播放列表用 flat 探测，`choices` 为空
+   - 播放列表：`playlist_count`、`duration`、`entries_preview`；播放列表用 flat 探测，`choices` 和 `subtitles` 为空
 
 2. **所有需要用户做选择的交互一律使用 AskUserQuestion**（不要用纯文本让用户回复编号，也不要把元数据单独发一条文字再问）。把标题、时长、预计大小直接写进 question 里：
 
@@ -44,6 +45,9 @@ description: >
    - 一次调用最多 4 个 question；超过 4 个视频时分批提问
    - 默认选项取 `choices` 中 `default: true`；分离流取 `kind: "separate"`；每项的 `description` 已包含大小和是否需合并
    - 如果某个视频的可选格式超过 4 个：先展示 default + 1~2 个重点分离流 + 取消/跳过；用户想看更多时，再用一次 AskUserQuestion 展示剩余格式（仍然不要用纯文本菜单）
+   - **字幕**：如果 `subtitles.has_subtitles` 为 true，追加一个字幕问题，`multiSelect: true`，选项取 `subtitles.choices`（最多 3 个）+「不需要字幕」；语言更多时分多个 tab/问题，或让用户在 Other 里填语言代码
+   - 单视频：格式问题 + 字幕问题放在同一个 AskUserQuestion 调用（两个 tab）
+   - 多视频：先问格式（每视频一个 tab），再用第二次 AskUserQuestion 问字幕（有字幕的视频各一个 tab，`multiSelect: true`）
    - 分离流默认配 `formats.audio_only` 中最佳音频（优先 m4a）；若用户要指定音频，用 `--format "<video_format>+<audio_format>"` 自行拼接
    - **播放列表**：用一个 tab 展示 `playlist_count`、总时长、预计大小，选项为「下载整个播放列表」/「取消」
 
@@ -55,11 +59,12 @@ description: >
 
 4. 根据每个 tab 的选择执行下载：
 
-   - 所有视频都选默认格式：一条命令 `--yes URL1 URL2 ...`
-   - 某个视频选了特定格式：对该视频单独执行 `--yes --format "<choice.format>" "URL"`
-   - 多个视频格式不同：按视频分别执行；格式相同的可以合并成一条命令
+   - 基础命令：`--yes --format "<choice.format>" "URL"`；用户选 default 项时可省略 `--format`
+   - 如果用户选了字幕：追加 `--subs --sub-langs "en,zh-Hans"`（语言代码来自所选字幕项）
+   - 字幕会作为独立文件下载在视频旁边（通常是 `.srt` 或 `.vtt`），不需要合并
+   - 所有视频都选默认格式且字幕相同：可以合并成一条命令 `--yes [--subs --sub-langs ...] URL1 URL2 ...`
+   - 多个视频格式/字幕不同：按视频分别执行
    - 用户选「跳过此视频」的不下载
-   - 如果用户选的就是 default 项，也可以直接用 `--yes "URL"`
 
 5. 用户取消则停止，不要下载。
 
@@ -127,6 +132,9 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --format "bv*
 # 选择 inspect 给出的具体分离流（choice.format 例如 "137+140"）
 python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --yes --format "137+140" "URL"
 
+# 下载视频 + 字幕（语言代码来自 inspect，可多选）
+python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --yes --subs --sub-langs "en,zh-Hans" "URL"
+
 # 使用 Cookie 下载会员视频
 python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --cookies ~/video-cookies.txt "URL"
 
@@ -166,8 +174,11 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 | `--codec` | 视频编码偏好（h264/h265/vp9/av1），仅在同分辨率下优先，需配合 `--resolution` | h264 |
 | `--audio-only` | 只下载音频 | false |
 | `--format` | 直接传 yt-dlp format string（可用 `choices[].format`，如 `"137+140"`） | 无 |
-| `--inspect` | 仅检测元数据（标题/时长/预计大小），输出 JSON，不下载 | false |
+| `--inspect` | 仅检测元数据（标题/时长/预计大小/格式/字幕），输出 JSON，不下载 | false |
 | `--yes, -y` | 跳过确认直接下载（用户确认元数据后使用） | false |
+| `--subs` | 下载字幕（人工 + 自动），需配合 `--sub-langs` | false |
+| `--sub-langs` | 字幕语言代码，逗号分隔，如 `en,zh-Hans` | 无 |
+| `--sub-format` | 字幕格式偏好 | srt/best |
 | `--playlist` | 下载完整播放列表（默认忽略 URL 中的 `list=`） | false |
 | `--aria2` | 使用 aria2 加速下载 | false |
 
@@ -181,6 +192,7 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --aria2 "URL"
 - **YouTube 合并流的实际画质**：目前多数视频只提供 360p 合并流（format 18），少数有 720p（format 22）。`b` 会取该视频可用的最高合并流。
 - **需要 1080p/4K**：合并流通常不提供，`--inspect` 的 `choices` 会列出可用的分离流（不同分辨率和编码），选择后脚本自动合并；也可以手动用 `--format "bv*[height<=2160]+ba"`。
 - **格式选择**：默认取 `choices` 中 `default: true` 的合并流；分离流会分别下载视频和音频，再由 ffmpeg 自动合并成 mp4。
+- **字幕**：`--inspect` 会列出人工/自动字幕；用户可多选语言，下载时加 `--subs --sub-langs "en,zh-Hans"`。字幕作为独立文件保存在视频旁边（通常是 `.srt`/`.vtt`），不需要合并。B 站字幕通常需要 Cookie；播放列表的 flat 探测不含字幕，需逐个视频检测。
 - **限制分辨率**：`--resolution 1080`。在合并流中取上限内的最高画质；`--codec` 只在同分辨率下优先。
 - **编码兼容性**：YouTube 的 H.264 通常最高 1080p；4K 只能走 VP9/AV1。若播放器不支持 AV1/VP9，接受 1080p H.264，或用 `--format` 自定义。
 - **B 站高画质 / 大会员**：`--cookies-from-browser chrome`（先在浏览器登录）。
@@ -211,16 +223,19 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --cookies-fro
 下载视频后，配合其他 skills 使用：
 
 ```
-1. video-downloader → 检测元数据 → 用户确认 → 下载视频
-2. audio-transcribe → 转录为字幕 (SRT/MD)
+1. video-downloader → 检测元数据/字幕 → 用户确认 → 下载视频（可选字幕）
+2. audio-transcribe → 视频没有可用字幕时，转录为字幕 (SRT/MD)
 3. text-refine      → 校准/翻译字幕
 ```
+
+如果视频自带所需字幕，直接下载字幕即可，跳过转录。B 站字幕/大会员内容同样需要 Cookie。
 
 ## 示例
 
 ```
 用户: 下载这个视频 https://www.bilibili.com/video/BV1xx411c7mD
 用户: 下载 YouTube 视频 https://youtube.com/watch?v=xxx
+用户: 这个视频有哪些字幕？顺便下载中英文字幕
 用户: 批量下载这些视频: [URL1, URL2, URL3]
 用户: 下载这个视频，只要音频
 用户: 下载视频 720p 的就行

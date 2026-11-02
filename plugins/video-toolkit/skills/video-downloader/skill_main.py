@@ -243,7 +243,9 @@ def build_format_string(quality: str, resolution: Optional[int], codec: str,
 def build_opts(output_dir: Path, quality: str, resolution: Optional[int],
                codec: str, custom_format: Optional[str], audio_only: bool,
                cookie_file: Optional[Path], cookies_from_browser: Optional[str],
-               playlist: bool, use_aria2: bool, runtimes: dict) -> dict:
+               playlist: bool, use_aria2: bool, runtimes: dict,
+               download_subs: bool = False, sub_langs: Optional[List[str]] = None,
+               sub_format: str = 'srt/best') -> dict:
     opts = {
         'outtmpl': str(output_dir / '%(title)s [%(id)s].%(ext)s'),
         'no_warnings': True,
@@ -269,6 +271,12 @@ def build_opts(output_dir: Path, quality: str, resolution: Optional[int],
         opts['cookiesfrombrowser'] = (cookies_from_browser, None, None, None)
     elif cookie_file and cookie_file.exists():
         opts['cookiefile'] = str(cookie_file)
+
+    if download_subs and sub_langs:
+        opts['writesubtitles'] = True
+        opts['writeautomaticsub'] = True
+        opts['subtitleslangs'] = sub_langs
+        opts['subtitlesformat'] = sub_format
 
     if use_aria2:
         opts['external_downloader'] = 'aria2c'
@@ -420,6 +428,76 @@ def _extract_formats(info: dict) -> dict:
     }
 
 
+SUBTITLE_PRIORITY = [
+    'zh-Hans', 'zh-Hant', 'zh', 'zh-CN', 'zh-TW', 'en', 'ja', 'ko',
+    'es', 'fr', 'de', 'ru', 'pt', 'it', 'ar', 'hi',
+]
+
+
+def _subtitle_lang_rank(lang: str, video_lang=None) -> int:
+    if video_lang and lang == video_lang:
+        return -1
+    for i, p in enumerate(SUBTITLE_PRIORITY):
+        if lang == p or lang.startswith(p + '-'):
+            return i
+    return len(SUBTITLE_PRIORITY)
+
+
+def _subs_formats(fmts) -> tuple:
+    exts = []
+    name = None
+    for f in (fmts or []):
+        ext = f.get('ext')
+        if ext and ext not in exts:
+            exts.append(ext)
+        if not name and f.get('name'):
+            name = f.get('name')
+    return exts[:6], name
+
+
+def _extract_subtitles(info: dict) -> dict:
+    manual_data = info.get('subtitles') or {}
+    auto_data = info.get('automatic_captions') or {}
+    video_lang = info.get('language')
+
+    def entries(data: dict, kind: str, with_formats: bool) -> list:
+        out = []
+        for lang, fmts in data.items():
+            exts, name = _subs_formats(fmts)
+            entry = {'lang': lang, 'name': name or lang}
+            if with_formats:
+                entry.update({'kind': kind, 'formats': exts})
+            out.append(entry)
+        out.sort(key=lambda e: (_subtitle_lang_rank(e['lang'], video_lang), e['lang']))
+        return out
+
+    manual = entries(manual_data, 'manual', True)
+    automatic = entries(auto_data, 'automatic', False)
+    manual_langs = {e['lang'] for e in manual}
+    auto_only = [e for e in automatic if e['lang'] not in manual_langs]
+    auto_formats = {lang: _subs_formats(fmts)[0]
+                    for lang, fmts in auto_data.items()}
+
+    choices = [
+        {'lang': e['lang'], 'label': f"{e['name']}（人工）",
+         'kind': 'manual', 'formats': e['formats']}
+        for e in manual
+    ] + [
+        {'lang': e['lang'], 'label': f"{e['name']}（自动）",
+         'kind': 'automatic', 'formats': auto_formats.get(e['lang'], [])}
+        for e in auto_only
+    ]
+    choices.sort(key=lambda c: (_subtitle_lang_rank(c['lang'], video_lang), c['kind']))
+
+    return {
+        'manual': manual[:100],
+        'automatic': automatic[:200],
+        'choices': choices[:16],
+        'count': len(manual) + len(auto_only),
+        'has_subtitles': bool(manual or automatic),
+    }
+
+
 def _choice_for_muxed(fmt: dict, duration=None) -> dict:
     height = fmt.get('height')
     codec = _codec_family(fmt.get('vcodec'))
@@ -519,6 +597,8 @@ def _probe_item(url: str, info: dict) -> dict:
             'is_live': False,
             'formats': {'muxed': [], 'video_only': [], 'audio_only': []},
             'choices': [],
+            'subtitles': {'manual': [], 'automatic': [], 'choices': [],
+                          'count': 0, 'has_subtitles': False},
         }
 
     size = info.get('filesize') or info.get('filesize_approx')
@@ -551,6 +631,7 @@ def _probe_item(url: str, info: dict) -> dict:
             'audio_only': fmt_data['audio_only'],
         },
         'choices': choices,
+        'subtitles': _extract_subtitles(info),
     }
 
 
@@ -631,12 +712,21 @@ def print_probe_result(result: dict) -> None:
                          f"{choice['description']}{mark}")
                 if len(choices) > 5:
                     _log(f"     ... 还有 {len(choices) - 5} 个格式，详见 --inspect JSON")
+            subs = item.get('subtitles') or {}
+            if subs.get('has_subtitles'):
+                labels = [c['label'] for c in (subs.get('choices') or [])[:6]]
+                more = (f" 等 {subs['count']} 种"
+                        if subs.get('count', 0) > len(labels) else "")
+                _log(f"   字幕: {', '.join(labels)}{more}")
     if len(result['items']) > 1:
         _log(f"📦 合计 {len(result['items'])} 个链接 | 总时长: "
              f"{result['total_duration']} | 预计总大小: {result['total_size']}")
     if any(c.get('needs_merge') for item in result['items']
            for c in (item.get('choices') or [])):
         _log(f"ℹ {result.get('merge_note', '')}")
+    if any((item.get('subtitles') or {}).get('has_subtitles')
+           for item in result['items']):
+        _log("ℹ 下载字幕请用 --subs --sub-langs en,zh-Hans（可多选语言）")
 
 
 def download_videos(urls: List[str], opts: dict) -> int:
@@ -666,6 +756,7 @@ def parse_args():
   %(prog)s --resolution 720 "URL"
   %(prog)s --inspect "URL"
   %(prog)s --yes "URL"
+  %(prog)s --yes --subs --sub-langs en,zh-Hans "URL"
   %(prog)s --cookies-from-browser chrome "URL"
   %(prog)s --playlist "https://youtube.com/playlist?list=xxx"
   %(prog)s --aria2 "URL"
@@ -702,6 +793,12 @@ def parse_args():
                         help='仅检测元数据（标题/时长/预计大小），输出 JSON，不下载')
     parser.add_argument('--yes', '-y', action='store_true',
                         help='跳过确认直接下载（用户确认元数据后使用）')
+    parser.add_argument('--subs', action='store_true',
+                        help='下载字幕（人工 + 自动；需配合 --sub-langs）')
+    parser.add_argument('--sub-langs',
+                        help='字幕语言代码，逗号分隔，如 en,zh-Hans')
+    parser.add_argument('--sub-format', default='srt/best',
+                        help='字幕格式偏好（默认: srt/best）')
     parser.add_argument('--playlist', action='store_true',
                         help='下载整个播放列表（默认忽略 URL 中的 list=，只下载单个视频）')
     parser.add_argument('--aria2', action='store_true',
@@ -750,6 +847,13 @@ def main():
 
     audio_only = args.audio_only or args.quality == 'audio-only'
 
+    sub_langs = [s.strip() for s in (args.sub_langs or '').split(',')
+                 if s.strip()]
+    download_subs = args.subs or bool(sub_langs)
+    if download_subs and not sub_langs:
+        _log("❌ 下载字幕需要 --sub-langs（如 en,zh-Hans）")
+        sys.exit(2)
+
     opts = build_opts(
         output_dir=output_dir,
         quality=args.quality,
@@ -762,6 +866,9 @@ def main():
         playlist=args.playlist,
         use_aria2=args.aria2,
         runtimes=runtimes,
+        download_subs=download_subs,
+        sub_langs=sub_langs,
+        sub_format=args.sub_format,
     )
 
     result = probe_urls(urls, opts, args.playlist)
@@ -805,6 +912,8 @@ def main():
         _log(f"📃 播放列表: 已启用")
     if audio_only:
         _log(f"🔊 仅音频")
+    if download_subs:
+        _log(f"💬 字幕: {', '.join(sub_langs)}")
     if args.aria2:
         _log(f"⚡ 加速: aria2")
     if args.cookies_from_browser:
