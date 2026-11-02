@@ -12,6 +12,9 @@ __pycache__/
 .superpowers/
 beautiful-html-templates/
 
+# 本地 git worktrees（工具态，不跟踪）
+.claude/worktrees/
+
 # 设计钩子本地状态（config.json 的 narrow ignore + hook 缓存——工具态，非模板内容；
 # scaffold 另有 rm -rf .impeccable 防止它随整目录拷贝进新项目）
 .impeccable/
