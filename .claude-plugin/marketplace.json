@@ -11,16 +11,14 @@
   "plugins": [
     {
       "name": "Video_Toolkit",
-      "description": "视频内容一站工具：video-downloader (Bilibili/YouTube下载) + audio-transcribe (跨平台转录) + text-refine (Claude校准翻译) + add-subtitle (字幕叠加) + screenwriter (电影/剧集编剧，好莱坞格式.docx) + shotlist-builder (剧本转AI视频镜头表HTML，含Seedance 2.0中文prompt)",
+      "description": "视频内容一站工具：video-downloader (Bilibili/YouTube下载) + audio-transcribe (跨平台转录) + text-refine (Claude校准翻译) + add-subtitle (字幕叠加)",
       "source": "./plugins/video-toolkit",
       "strict": false,
       "skills": [
         "./skills/video-downloader",
         "./skills/audio-transcribe",
         "./skills/text-refine",
-        "./skills/add-subtitle",
-        "./skills/screenwriter",
-        "./skills/shotlist-builder"
+        "./skills/add-subtitle"
       ]
     },
     {
