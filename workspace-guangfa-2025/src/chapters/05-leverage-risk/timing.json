@@ -1,0 +1,10 @@
+{
+  "dwell": { "0": 900, "1": 900, "2": 500, "3": 700 },
+  "animation": {
+    "0": "SplitCompare（中线滑过）",
+    "1": "StaggerRow（三指标错峰）",
+    "2": "JisCheck（逐项勾选）",
+    "3": "PostIt（贴入）"
+  },
+  "ambient": {}
+}

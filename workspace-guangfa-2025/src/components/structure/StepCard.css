@@ -1,0 +1,45 @@
+/* 流程步骤卡（S06 收编）：Card 卡体 + 大 mono 序号 + 标题 + 描述。
+   cream 走卡体原色；accent-2 / accent-4 覆写背景（墨字）；accent-1 走 Card accent 变体（cream 字）。 */
+.cdp-card.cdp-step-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 28px;
+}
+
+.cdp-card.cdp-step-card-accent-2 {
+  background: var(--accent-2);
+}
+
+.cdp-card.cdp-step-card-accent-4 {
+  background: var(--accent-4);
+}
+
+.cdp-step-card-index {
+  font-family: var(--font-mono);
+  font-size: var(--t-display-2);
+  line-height: 0.85;
+  color: var(--text);
+}
+
+.cdp-card.cdp-step-card-accent-1 .cdp-step-card-index {
+  color: var(--surface);
+}
+
+.cdp-step-card-title {
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.cdp-step-card-desc {
+  font-size: 24px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.cdp-card.cdp-step-card-accent-1 .cdp-step-card-desc {
+  color: var(--surface);
+}

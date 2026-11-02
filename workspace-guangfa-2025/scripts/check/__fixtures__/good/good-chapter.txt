@@ -1,0 +1,24 @@
+// good-chapter.txt：false-positive 夹具（.txt 扩展名规避 tsc 编译——内容为 TSX 源码，
+// 测试以 fs 读字符串喂 scanChapterTsx，断言零 finding）。
+//
+// 已知豁免场景：
+//   - list-reveal 派生写法：const activeIdx = step - 1——纯算术派生，非黑名单 API，
+//     不误报确定性黑名单；
+//   - inline style 走 var(--*) token（模板串拼接 var 引用）——不误报裸色；
+//   - SVG fill="none" / fill="var(--surface)" / stroke="var(--rule)"——none 与
+//     token 化色值豁免，不误报 SVG 属性色值。
+export default function GoodChapter({ step }: { step: number }) {
+  const activeIdx = step - 1;
+  const items = ["第一项", "第二项", "第三项"];
+  return (
+    <div style={{ marginLeft: `calc(${activeIdx} * var(--space-4))` }}>
+      {items.map((it, i) => (
+        <svg key={i} viewBox="0 0 100 100">
+          <circle cx="10" cy="10" r="4" fill="none" stroke="var(--rule)" />
+          <rect x="0" y="0" width="100" height="100" fill="var(--surface)" />
+        </svg>
+      ))}
+      <p style="color: var(--text);">{items[activeIdx]}</p>
+    </div>
+  );
+}

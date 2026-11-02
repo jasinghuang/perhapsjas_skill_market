@@ -1,0 +1,65 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+.app-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  overflow: hidden;
+}
+
+.stage-fitter {
+  position: relative;
+}
+
+.stage-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* M6 修复：底色 = 主题 --surface（原 #fff 白底——"底色不能漏"的根因，主题奶油底从未铺到章节层）；
+     需要墨底/反色的帧由章节根元素自己铺 --surface-3 覆盖 */
+  background: var(--surface, #fff);
+  overflow: hidden;
+}
+
+.caption-layer {
+  position: absolute;
+  left: 50%;
+  bottom: 48px;
+  transform: translateX(-50%);
+  max-width: 80%;
+}
+
+.caption-text {
+  /* 九轮 F1：恢复纯白底（--caption-bg token）；八轮 F1 的 4px 主题签名粗描边 + 墨字保留 */
+  background: var(--caption-bg);
+  border: var(--border-w) solid var(--caption-stroke);
+  color: var(--caption-text);
+  padding: var(--space-1) var(--space-3); /* M1 遗留硬编码 8/16 → token 化（七轮 F2：左右留空 24px） */
+  border-radius: var(--caption-radius); /* M1 遗留硬编码 6px → token 化（六轮 F2 pill → 七轮 F1 圆角矩形 16px） */
+  font-size: var(--caption-size); /* M1 遗留硬编码 28px → token 化（五轮 F1：字幕最大 40px） */
+  line-height: 1.5;
+  text-align: center; /* 字幕层居中（engine 修正：字幕样例文字居中，非仅展示页） */
+}
+
+.transport {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+}
+
+.transport button {
+  font-size: var(--t-label); /* 五轮 F1：全局最小字号 24px——16px 字面量升档 token 化 */
+  padding: 8px 20px;
+  cursor: pointer;
+}

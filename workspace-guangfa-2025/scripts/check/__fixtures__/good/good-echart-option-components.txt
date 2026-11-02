@@ -1,0 +1,21 @@
+// good-echart-option-components.txt：false-positive 夹具（.txt 扩展名规避 tsc 编译——
+// 内容为 TSX 源码，测试以 fs 读字符串喂 scanChapterTsx，断言零 finding）。
+// 本夹具判别力全在**注入路径**：测试注入 src/components/charts/option.tsx（组件库本体）。
+//
+// 已知豁免场景（K-11 旗标拆分后仍成立）：
+//   - EChart option 内裸色（color 字面量 + 嵌套 itemStyle.color）与 textStyle.fontFamily
+//     裸字体——「ECharts option 裸色/裸字体」豁免面 = 仅 components/，不误报；
+//   - EASE 常量内的裸缓动字面量——「禁裸缓动」同样豁免 components/，不误报。
+// 反向自证（测试内断言）：同内容注入章节层路径必须报——零 finding 是豁免生效，
+// 不是内容本就干净。
+export const EASE = "cubic-bezier(0.16,1,0.3,1)";
+
+export const A = () => (
+  <EChart
+    option={{
+      color: "#ff0000",
+      textStyle: { fontFamily: "Arial" },
+      series: [{ type: "bar", itemStyle: { color: "rgb(1,2,3)" } }],
+    }}
+  />
+);

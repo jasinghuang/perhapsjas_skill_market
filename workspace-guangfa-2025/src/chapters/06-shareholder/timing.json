@@ -1,0 +1,10 @@
+{
+  "dwell": { "0": 800, "1": 900, "2": 600, "3": 800 },
+  "animation": {
+    "0": "StaggerRow（三期分红卡错峰）",
+    "1": "DonutMeter（28.6% 填满）＋ SplitCompare",
+    "2": "RevealList（逐项）",
+    "3": "墨底压出 + HeroTitle 进场（S18 型）"
+  },
+  "ambient": {}
+}

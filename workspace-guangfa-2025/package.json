@@ -1,0 +1,44 @@
+{
+  "name": "presentation-template",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.15"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "check": "tsx scripts/check/check.ts",
+    "check:fast": "tsx scripts/check/check-fast.ts",
+    "capture": "echo \"capture: 截图模块由 M4 Task 3 storyboard 生成器与 M5/M3b 直接 import scripts/shot/capture.ts，当前无独立 CLI\" && exit 0",
+    "storyboard": "tsx scripts/storyboard.ts",
+    "render": "tsx scripts/render.ts"
+  },
+  "dependencies": {
+    "@fontsource/archivo-black": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/noto-sans-sc": "^5.3.0",
+    "@fontsource/noto-serif-sc": "^5.2.8",
+    "@fontsource/space-grotesk": "^5.3.0",
+    "echarts": "^5.6.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.4.6",
+    "@testing-library/react": "^16.0.0",
+    "@types/node": "^26.4.1",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "jsdom": "^24.1.0",
+    "playwright": "1.58.2",
+    "tsx": "^4.23.13",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.3",
+    "vitest": "^2.0.2"
+  }
+}

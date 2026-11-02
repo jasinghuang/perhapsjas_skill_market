@@ -1,0 +1,7 @@
+# bad-text.txt：门禁负样本——坏 narrations（测试以 ChapterDef 形式喂 scanNarrations；
+# steps 故意错配以命中 #1 blocker）。解析约定：# 开头为注释行，其余非空行逐行 = 一条 narration。
+#
+# 违反 #11 文案反AI味：命中五类句式「说白了」「本质上」（warning）。
+说白了，这个指标本质上就是营收增速
+# 违反 V3 字幕结尾标点：末字符为句号「。」（？！ 疑问感叹结尾才豁免；warning）。
+这条口播结尾有个句号。

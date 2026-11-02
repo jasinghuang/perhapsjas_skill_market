@@ -22,38 +22,45 @@ description: 把财报（年报/季报/招股书）或财经文章，做成**能
 - 门禁命令见 `references/GATES.md`（20 项逐条手册：查什么 / 报错原文 / 怎么修）。
 - 门禁不过不许说"做完了"；warning 必须在汇报里**逐条说明**理由或修复计划。
 
-**检查点怎么定（为什么只设这几个）**：一个检查点，只在**三个条件同时成立**时才设——
+**检查点怎么定（M6 按用户拍板重构为五个，顺序即流程）**：一个检查点，只在**三个条件同时成立**时才设——
 
 1. **是创造性决策的锁定点**（机器验不了的东西才需要人拍板）；
 2. **重做成本高**（改稿=全链重做，改构图=重截所有帧）；
 3. **机器验不了**（narratives 长度/色值/时长/越界由 20 项门禁**连续**把关——它们是底线，
    不是检查点；把门禁能拦的事放进检查点 = 浪费用户时间）。
 
-按此验证：Checkpoint 1/2 三条全中 → 正式检查点；第 1 章验收（动画观感=全片风格锚，
-锚错=全片重做）→ 硬节点；音频清单确认（不是新决策，但**烧真钱**）→ 软停；成片终审
-（创造性，但渲染重跑分钟级、返工便宜）→ 轻检查点。**检查点不是越多越好，是每个都
-挡在"错一次就贵 + 机器救不了"的地方。**
+按此验证出的五个检查点（顺序固定，缺一不可跳过）：
+
+| # | 检查点 | 确认什么 | 为什么设在这 |
+|---|---|---|---|
+| A | **选题** | agent 自主分析素材后给 **3 个选题角度**（或重构选题），用户选 1 | 方向错 = 全片重做，最贵的一步 |
+| B | **口播稿** | 润色后的稿子全文（信息保留度 ≥85%、语气唯一） | 稿子是全链源头；outline/分镜/配音全部由它派生——**outline 不再单独设检查点**（它的好坏在分镜确认时一并被看见） |
+| C | **分镜** | 全部画面的静态构图 + 停留节奏 + 动画方向（分镜页逐帧） | 画面返工 = 重截所有帧；动画方向定错 = 全片重做 |
+| D | **第一章配音** | 第一章的配音试听（音色/节奏） | 烧钱前先听一遍；第一章 = 全片声音的风格锚 |
+| E | **成片** | 渲染出的 mp4 终审 | 交付前的最后一道人眼 |
+
+其余节点（音频清单、逐章门禁）都是**机器连续把关**，不是检查点——机器能拦的事不占用用户时间。
 
 ---
 
 ## 1. 工作流总览
 
 ```
-Phase 0 · 意图对齐      选平台（16:9 / 3:4，可双选）＋ 素材对齐（用户提供 / agent 挑选 / placeholder）
-                        ＋ 主题（v1 单主题，退化为展示确认）
-Phase 1 · 内容生产      article.md ＋ script.md（口播稿）＋ outline.md（章节节奏＋信息池，禁写动画）
-                        ── Checkpoint 1：稿子 / 大纲 / 主题 / 素材，一次对齐 ──
-Phase 1.5 · 脚手架+真相源  scaffold 出项目 → 由已确认的 script/outline **机器生成 narrations**
-                        （章节 agent 不得手改；改稿走"重生成"）
-Phase 2 · 音频合成      TTS（三函数契约）→ ffprobe 实测 → public/audio-durations.json
-                        （合成前：**音频清单软停**——省钱门禁，让用户扫一眼切分再烧 token）
-Phase 3 · 静态分镜      ★ 章节"静态终态版"先行（禁一切动画）→ 逐帧截图 → storyboard/index.html
-                        每帧 = 静态终态图 ＋ 口播文本 ＋ 音频实测时长 ＋ 停留垫（可调）＋ **主导动画词汇**
-                        ── Checkpoint 2：静态构图 ＋ 每帧停留节奏 ＋ 动画方向，一次确认 ──
-Phase 4 · 章节开发      在静态版上叠动画（组件＋档位）；**第 1 章强制主线程＋验收**（含动画观感）
-                        ── 每章完工：npm run check:fast ──
-Phase 5 · 渲染导出      npm run check（全量）→ npm run render → render/<slug>.mp4 ＋ .srt
-                        ── 交付前：**成片轻检查点**——交用户看，确认即交付 ──
+Phase 0 · 选题对齐      素材分析 → 提炼 3 个选题角度（或重构选题）→ 用户选 1
+                        ── Checkpoint A：选题 ──
+Phase 1 · 口播稿        润色稿子（信息保留度 ≥85%、语气唯一、数字可溯）
+                        ── Checkpoint B：稿子 ──
+Phase 1.5 · 大纲        由已确认稿子生成 outline（章节切分 + 信息池 + 步粒度）
+                        （不再单独设检查点——它的好坏在分镜确认时一并被看见）
+Phase 2 · 静态分镜      ★ 每章"静态终态版"先行（按 LIBRARY 构图模板册选屏型，禁一切动画）
+                        → 逐帧截图 → storyboard/index.html
+                        ── Checkpoint C：分镜（构图 + 停留节奏 + 动画方向，一次确认）──
+Phase 2.5 · 第一章配音   合成第一章（风格锚）→ 试听
+                        ── Checkpoint D：配音（音色/节奏确认后，其余章批量合成）──
+Phase 3 · 章节开发      在静态版上叠动画（组件＋档位）；第 1 章强制主线程＋验收
+                        ── 每章完工：npm run check:fast（0.9s 级，别攒到 Phase 4）──
+Phase 4 · 渲染导出      npm run check（全量）→ npm run render → render/<slug>.mp4 ＋ .srt
+                        ── Checkpoint E：成片终审，确认即交付 ──
 ```
 
 **项目目录约定**（scaffold 生成后长这样）：
@@ -61,8 +68,8 @@ Phase 5 · 渲染导出      npm run check（全量）→ npm run render → ren
 ```
 <project>/
   article.md              # 原始素材（双源原则的细节源，不删）
-  script.md               # 口播稿（Checkpoint 1 确认）
-  outline.md              # 章节节奏 + 信息池（Checkpoint 1 确认）
+  script.md               # 口播稿（Checkpoint B 确认）
+  outline.md              # 章节节奏 + 信息池（随 Checkpoint B 后生成，不单独确认）
   public/
     audio/<folder>/<step>.mp3     # 每步一个 mp3（step 从 0 计）
     audio-durations.json          # ffprobe 实测时长（合成后生成）
@@ -93,12 +100,13 @@ Phase 5 · 渲染导出      npm run check（全量）→ npm run render → ren
 
 ---
 
-## 3. Phase 0 · 意图对齐
+## 3. Phase 0 · 选题对齐
 
 1. **识别输入三态**：给的是文章/链接/PDF（→ 走完整流程）｜给的是口播稿（→ 跳过 Phase 1 的转写，直接 outline）｜只有选题（→ 先产出素材大纲再回第一种）。
-2. **选平台**：B站（16:9）/ 小红书（3:4）。可双选——**双平台各走各的完整流程，稿子各自定制**（画幅不同、时长节奏不同；**语气不随平台变**——财报解读语气基线唯一，见 SCRIPT-STYLE）。
-3. **素材三选一**：用户提供 / agent 挑选（列出候选让用户点头）/ placeholder（`<Figure>` 的诚实占位——**禁假 logo、假数据、假截图**）。
-4. **主题**：v1 单主题（creative-mode）。展示 `?showcase=1` 画廊让用户确认气质。
+2. **自主分析 → 3 个选题角度**：汇总素材后提炼 **3 个选题角度**（或重新构思选题）——每个角度 = 一句话主张 + 数据钩子 + 目标时长 + 结构骨架。**不许直接开工**：选题方向错 = 全片重做，这是最贵的一步。用户选 1（或说"都不行"→ 重新提炼）。
+3. **选平台**：B站（16:9）/ 小红书（3:4）。可双选——**双平台各走各的完整流程，稿子各自定制**（画幅不同、时长节奏不同；**语气不随平台变**——财报解读语气基线唯一，见 SCRIPT-STYLE）。
+4. **素材三选一**：用户提供 / agent 挑选（列出候选让用户点头）/ placeholder（`<Figure>` 的诚实占位——**禁假 logo、假数据、假截图**）。
+5. **主题**：v1 单主题（creative-mode）。展示 `?showcase=1` 画廊让用户确认气质。
 
 ---
 
@@ -109,7 +117,7 @@ bash <skill>/scripts/scaffold.sh <目标目录> --slug <项目名> --stage 16:9 
 ```
 
 - 脚手架 = 整拷模板 + 按档案写 `runtime-config.ts`（slug / 舞台尺寸 / 安全框折算）+ `npm install` + `tsc` 冒烟。**首次截图/渲染前**需 `npx playwright install chromium`（跨项目缓存复用）与 `ffmpeg`（仅渲染需要）。
-- **真相源机器生成**：由 Checkpoint 1 确认过的 `script.md` 切分生成每章的 `narrations` 数组并注册进 `src/chapters/manifest.ts`。**章节 agent 不得手改 narrations**——改稿 = 回 Phase 1 改稿 → 重生成 → 增量重合成（只重合成受影响段）。
+- **真相源机器生成**：由 Checkpoint B 确认过的 `script.md` 切分生成每章的 `narrations` 数组并注册进 `src/chapters/manifest.ts`。**章节 agent 不得手改 narrations**——改稿 = 回 Phase 1 改稿 → 重生成 → 增量重合成（只重合成受影响段）。
 - `narrations.length` 即该章 step 数。门禁 #1 与无头 pass 共同钉死"声明 = 使用"。
 
 ---
@@ -124,9 +132,14 @@ bash <skill>/scripts/scaffold.sh <目标目录> --slug <项目名> --stage 16:9 
 - 单段 **≥ 15s 会报警**（口播过密 / step 没拆够）；这是门禁 #19。
 - 音频缺失时全链**退化到估时**（`max(1500ms, 字数×250ms)`）——合法但不理想：分镜与成片的停留节奏会失真，CLI 会明示。
 
+> **── Checkpoint D：第一章配音先合成，试听确认后其余章批量合成 ──**
+> 第一章 = 全片声音的风格锚（音色/语速/断句）。合成**第一章** → 交给用户试听
+> （音色对不对、节奏舒不舒服）→ 确认后再合成其余章。mock 音轨没有"声音"可听——
+> 若本片走 mock，Checkpoint D 退化为"第一章 mock 节奏试听"并明示。
+
 ---
 
-## 6. Phase 3 · 静态分镜（Checkpoint 2 的作业面）
+## 6. Phase 3 · 静态分镜（Checkpoint C 的作业面）
 
 **这一步的产物是拿给用户确认的**，所以它必须"像成片"，而不是"像代码"。见 `references/STORYBOARD-CRAFT.md`。
 
@@ -135,14 +148,14 @@ bash <skill>/scripts/scaffold.sh <目标目录> --slug <项目名> --stage 16:9 
 3. 在 `timing.json` 里标注每帧：`dwell`（停留垫覆盖）/ `animation`（主导动画词汇）/ `ambient`（氛围声明）。
 4. `npm run storyboard -- --verify-sequential`：顺序推进 vs 独立 mount 逐字节一致（渲染模型的前置门禁）。
 
-> **── Checkpoint 2（本 skill 最重要的确认窗口）──**
+> **── Checkpoint C（本 skill 最重要的确认窗口）──**
 > 一次确认三件事：**静态构图、每帧停留节奏、动画方向**。
 > 反馈分级（作业细则见 STORYBOARD-CRAFT）：
 > - 改构图/停留垫 → 改静态版 + `timing.json`，重截受影响帧
 > - 改文本/切分 → 回 Phase 1 局部重生成 + 增量重合成 + 重截受影响帧
 > - 改动画方向 → 只改 `timing.json` 的 `animation` 词汇，重新确认（**不用重截**）
 
-**为什么动画在这里"定方向"而不"定实现"**：写死实现 = 章节 agent 退化为翻译机。Checkpoint 2 确认的是**词汇**（"这一帧 Counter + BarGrow"），参数留给 Phase 4。
+**为什么动画在这里"定方向"而不"定实现"**：写死实现 = 章节 agent 退化为翻译机。Checkpoint C 确认的是**词汇**（"这一帧 Counter + BarGrow"），参数留给 Phase 4。
 
 ---
 
@@ -194,7 +207,7 @@ npm run render                     # 自起 Vite → 逐帧 seek → ffmpeg → 
 |---|---|---|
 | `references/SCRIPT-STYLE.md` | Phase 1 | 文章→口播稿：信息保留度 ≥85%、去 AI 味、数字三件套、四层自检 |
 | `references/OUTLINE-FORMAT.md` | Phase 1 | outline 字段 spec、命名速查、切章法则、信息池（必带来源标注） |
-| `references/STORYBOARD-CRAFT.md` | Phase 3 | 静态分镜作业手册、Checkpoint 2 的确认话术、停留垫与动画词汇标注 |
+| `references/STORYBOARD-CRAFT.md` | Phase 3 | 静态分镜作业手册、Checkpoint C 的确认话术、停留垫与动画词汇标注 |
 | `references/CHAPTER-CRAFT.md` | Phase 4（每章） | **单章唯一入口**：视觉底线、逐步揭示、双源、动画决策树、完工自检 |
 | `references/LIBRARY.md` | Phase 3/4 | 44 组件目录 + token 契约 + 动画原语词表 |
 | `references/GATES.md` | 任何门禁报红时 | 20 项门禁逐条：查什么 / 报错原文 / 修法 |

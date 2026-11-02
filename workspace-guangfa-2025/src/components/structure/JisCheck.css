@@ -1,0 +1,25 @@
+/* JIS 勾选框（S15 收编）：24×24 墨框方块；checked 墨底 + cream 对勾（CSS 几何 L 形）。 */
+.cdp-jis-check {
+  box-sizing: border-box;
+  width: var(--space-3);
+  height: var(--space-3);
+  flex-shrink: 0;
+  border: 2px solid var(--text);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cdp-jis-check-checked {
+  background: var(--text);
+}
+
+.cdp-jis-check-mark {
+  width: 12px;
+  height: 7px;
+  box-sizing: border-box;
+  border-left: 3px solid var(--surface);
+  border-bottom: 3px solid var(--surface);
+  transform: rotate(-45deg) translateY(-1px);
+}

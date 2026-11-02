@@ -1,0 +1,29 @@
+.cdp-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  display: inline-block;
+}
+
+/* plain：透明底无衬垫，颜色继承（十三轮一致性：showcase 不再用 inline 覆写伪造无底标签） */
+.cdp-kicker-plain {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.cdp-kicker-block {
+  background: var(--surface-3);
+  color: var(--surface);
+  padding: var(--space-1) var(--space-2);
+}
+
+/* pill：2px 墨框药丸（三十轮 F2：1px → 2px——与 chrome topbar pill 同粗细；
+   24px 字阶药丸取 2px 框，KEY METRICS desc 药丸 4px 系 28px 加粗字语境）+ 999 圆角 + 8/16 衬垫 */
+.cdp-kicker-pill {
+  border: 2px solid var(--text);
+  color: var(--text);
+  border-radius: var(--r-pill);
+  padding: var(--space-1) var(--space-2);
+}

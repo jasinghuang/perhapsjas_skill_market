@@ -1,0 +1,20 @@
+/* good-chapter.css：false-positive 夹具——已知豁免场景（scanChapterCss 零 finding）。
+ * pink 注释不误报：本行注释含裸色词 pink（注释剥离状态机应豁免）。 */
+
+.good-card {
+  /* token 化颜色与渐变：var(--*) 引用剥离后无色值、手写渐变内无色相裸色 */
+  color: var(--text);
+  background: linear-gradient(135deg, var(--accent-2), var(--accent-1));
+  /* token 化字体：var(--font-*) 引用豁免 */
+  font-family: var(--font-body);
+  /* token 化动画时长：var(--dur-*) 引用豁免 */
+  animation-duration: var(--dur-mid);
+  transition-duration: var(--dur-fast);
+  /* 合法字阶：28px ∈ tokens.css 字阶集合（24/28/40/56/84/96/130） */
+  font-size: 28px;
+  /* 合法间距：24px ∈ --space 集合（8/16/24/32/48/64） */
+  margin: 24px;
+}
+
+/* 单行规则：color 走 token（声明区切片取最后一个 { 之后，不漏检也不误报） */
+.good-label { color: var(--text); }

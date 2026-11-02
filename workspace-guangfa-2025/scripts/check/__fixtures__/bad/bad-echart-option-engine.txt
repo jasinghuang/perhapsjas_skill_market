@@ -1,0 +1,15 @@
+// bad-echart-option-engine.txt：K-11 负样本（.txt 扩展名规避 tsc 编译——内容为 TSX 源码，
+// 测试以 fs 读字符串喂 scanChapterTsx）。本夹具判别力全在**注入路径**：测试把同一段源码
+// 注入 src/engine/charts/option.tsx（对照 good-echart-option-components.txt 注入
+// src/components/ 路径零 finding）——锚定「EChart option 规则不再沾 engine 豁免」。
+//
+// 违反「ECharts option 裸色/裸字体」（blocker）：option 内嵌套 itemStyle.color 裸 hex
+// 色值——engine 的 EChart option 同样受查（K-11 前被共享旗标静默豁免，spec 未要求）。
+//
+// 同文件反证：EASE 常量内的裸缓动字面量——「禁裸缓动」规则的 engine 豁免面逐字不动，
+// 这条必须零 finding（两条规则各自的豁免集合独立，不得再共用一个旗标）。
+export const EASE = "cubic-bezier(0.16,1,0.3,1)";
+
+export const A = () => (
+  <EChart option={{ series: [{ type: "bar", itemStyle: { color: "#ff0000" } }] }} />
+);

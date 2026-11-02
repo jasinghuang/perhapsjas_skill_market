@@ -1,0 +1,1304 @@
+// 样式词典页（M2b 验收工具；dev-only，不入章节层）。
+// ?styleguide=1 渲染：creative-mode 主题全部设计 token 的视觉表达 + 全部组件全变体目录
+// （组件数/组序/组计数一律由 components/manifest.ts 派生，不写死）。
+// 页面壳：深色 shell 底（var(--shell)）、1920 居中；每区段 mono 区段头（cream，编号 + 标题）
+// + 全幅 cream 内容面板（4px 墨框、水平内衬 96px——与安全框规格一致）。
+// 布局纪律：区段内容水平 ≥96px 内；无横向溢出；组件格容器只允许 inline 布局属性，
+// 颜色零裸色（一律 token 化）；组件格内 --shadow-card 覆写 none（目录密度优先，
+// 硬阴影语义见 05 区段 Card 行）；网格单元零阴影（展示页铁律同款）。
+// 组件格网格（M2b 三轮定稿——按内容自适应，去统一尺寸）：3 列等宽 560（容器 1728 = 1920 − 2×96，
+// gap 24）、无统一行高——每格高度 = 内容自然高 + 上下 24 内衬，align-items: start 上缘对齐；
+// 每组件一行 SIZE_HINTS 尺寸提示（内容区 minW/minH + 密集组件 grid-column: span 2 跨列给足空间）；
+// 标注口径：短标注 ≤40 字、最多 2 行截断（CLAMP_2）、用户可读（无实现者黑话/考据）；
+// 内容必须完全落格内（包含性断言：四边留白 ≥16px）；密度压缩经 extraScope / CELL_TWEAKS（组件本体不动）。
+// token 标注一律运行时读 :root 计算值（getComputedStyle(documentElement)），与 tokens.css 同源。
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { waapi } from "./engine/animationRuntime";
+import {
+  BarGrow,
+  BodyCopy,
+  Breathe,
+  Card,
+  Counter,
+  DataItemRow,
+  DecorBar,
+  DecorDot,
+  DecorRing,
+  DeltaText,
+  DonutMeter,
+  EChart,
+  Figure,
+  Grid,
+  HeroNumber,
+  HeroTitle,
+  JisCheck,
+  KenBurns,
+  Kicker,
+  MarkerBlock,
+  MotionCell,
+  NumberPill,
+  PathDraw,
+  PostIt,
+  ProgressDots,
+  QuoteBlock,
+  RevealList,
+  RevealText,
+  Rule,
+  SeededParticles,
+  SplitCompare,
+  StackedBlocks,
+  StaggerRow,
+  StagePad,
+  StatCard,
+  StatCell,
+  StatInline,
+  StepCard,
+  StepSequence,
+  StepStairs,
+  Table,
+  TimelineTrack,
+  TypedTerminal,
+  YearBarGroup,
+} from "./components";
+// 单一注册表：组件数/组序/组标题计数一律派生（新增组件只改 manifest.ts）
+import { COMPONENTS, GROUPS } from "./components/manifest";
+import type { GroupId } from "./components/manifest";
+
+/** 局部 token 覆写：向子树注入 CSS 自定义属性（dev 页合法手段，不改组件本体） */
+const scope = (vars: Record<string, string>): CSSProperties => vars as unknown as CSSProperties;
+
+/** 含中文的 mono 文案字体栈：拉丁走 JetBrains Mono，CJK 落 Noto Sans SC（避免 generic monospace 抢先命中） */
+const MONO_CN = '"JetBrains Mono", "Noto Sans SC", "SF Mono", monospace';
+
+/** 组件格内 token 覆写：字阶压缩到目录尺寸 + 硬阴影关（变体对照只读形态，不读投影） */
+const CELL_SCOPE: Record<string, string> = {
+  "--shadow-card": "none",
+  "--shadow-card-sm": "none",
+  "--t-display-1": "56px",
+  "--t-display-2": "40px",
+  "--t-h1": "32px",
+  "--t-h2": "28px",
+  "--t-h3": "24px",
+  "--t-body": "20px",
+  "--t-label": "18px",
+  "--space-4": "24px",
+  "--space-5": "32px",
+};
+
+/* ── 基础家具 ── */
+
+/** 运行时读取 :root token 计算值（与 tokens.css 同源，页面自证） */
+function TokenValue({ token }: { token: string }) {
+  const [value, setValue] = useState("…");
+  useEffect(() => {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+    setValue(v || "—");
+  }, [token]);
+  return <>{value}</>;
+}
+
+/** 区段壳：mono 区段头（cream，编号 + 标题）+ 全幅 cream 内容面板（4px 墨框、96px 水平内衬） */
+function Section({ index, title, children }: { index: string; title: string; children: ReactNode }) {
+  return (
+    <section data-testid={`section-${index}`} style={{ width: 1920, flexShrink: 0 }}>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 28,
+          lineHeight: 1,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "var(--surface)",
+          padding: "0 96px var(--space-3)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {index} · {title}
+      </div>
+      <div
+        style={{
+          background: "var(--surface)",
+          border: "4px solid var(--text)",
+          boxSizing: "border-box",
+          // 水平内衬 92px + 4px 墨框 = 96px 内容边距（与区段头 96 对齐）；
+          // 内容盒 = 1920 − 2×96 = 1728（组件格容器精确宽度依据——网格规范化）
+          padding: "var(--space-5) 92px",
+          color: "var(--text)", // 颜色链给继承型变体（Kicker plain 等）——十三轮一致性
+        }}
+      >
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** mono 小标注（token 名 / 组件名 / 变体名） */
+function MonoLabel({ children, color = "var(--text-mute)", size = 14, style }: {
+  children: ReactNode;
+  color?: string;
+  size?: number;
+  style?: CSSProperties;
+}) {
+  return (
+    <span
+      style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: size,
+        lineHeight: 1.3,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        color,
+        whiteSpace: "nowrap",
+        ...style,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** 变体块：mono 小字标变体名 + 变体渲染。
+    标注口径（M2b 复核）：短标注 ≤40 字、最多 2 行（-webkit-line-clamp 截断省略）——考据信息不入展示页 */
+const CLAMP_2: CSSProperties = {
+  whiteSpace: "normal",
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+};
+function Variant({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", maxWidth: "100%" }}>
+      <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>{label}</MonoLabel>
+      {children}
+    </div>
+  );
+}
+
+/* ── 01 · 色板 PALETTE ── */
+
+interface SwatchDef {
+  token: string;
+  /** true = 墨字（亮底），false = cream 字（墨底）——对比度纪律的展示 */
+  ink: boolean;
+}
+
+const SWATCH_GROUPS: { label: string; tokens: SwatchDef[] }[] = [
+  {
+    label: "表面色 SURFACE",
+    tokens: [
+      { token: "--surface", ink: true },
+      { token: "--surface-2", ink: true },
+      { token: "--surface-3", ink: false },
+    ],
+  },
+  {
+    label: "文字色 TEXT",
+    tokens: [
+      { token: "--text", ink: false },
+      { token: "--text-2", ink: false },
+      { token: "--text-mute", ink: false },
+      { token: "--text-faint", ink: true },
+    ],
+  },
+  {
+    label: "强调色 ACCENT · 四色 + dark",
+    tokens: [
+      { token: "--accent-1", ink: false },
+      { token: "--accent-1-dark", ink: false },
+      { token: "--accent-2", ink: true },
+      { token: "--accent-2-dark", ink: false },
+      { token: "--accent-3", ink: false },
+      { token: "--accent-4", ink: true },
+    ],
+  },
+  {
+    label: "其他 OTHERS",
+    tokens: [
+      { token: "--rule", ink: false },
+      { token: "--shell", ink: false },
+      { token: "--caption-bg", ink: true },
+      { token: "--caption-stroke", ink: false },
+    ],
+  },
+];
+
+function Swatch({ token, ink }: SwatchDef) {
+  return (
+    <div
+      data-testid={`swatch-${token}`}
+      style={{
+        width: 160,
+        height: 96,
+        boxSizing: "border-box",
+        background: `var(${token})`,
+        border: "4px solid var(--text)",
+        padding: "10px 12px",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        color: ink ? "var(--text)" : "var(--surface)",
+      }}
+    >
+      <MonoLabel color={ink ? "var(--text)" : "var(--surface)"} size={14} style={{ whiteSpace: "normal" }}>
+        {token}
+      </MonoLabel>
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          lineHeight: 1.3,
+          letterSpacing: 0,
+          wordBreak: "break-all",
+        }}
+      >
+        <TokenValue token={token} />
+      </span>
+    </div>
+  );
+}
+
+function PaletteSection() {
+  return (
+    <Section index="01" title="色板 PALETTE">
+      {SWATCH_GROUPS.map((group, gi) => (
+        <div key={group.label} style={{ marginBottom: gi === SWATCH_GROUPS.length - 1 ? 0 : "var(--space-5)" }}>
+          <MonoLabel style={{ display: "block", marginBottom: "var(--space-2)" }}>{group.label}</MonoLabel>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
+            {group.tokens.map((t) => (
+              <Swatch key={t.token} token={t.token} ink={t.ink} />
+            ))}
+          </div>
+        </div>
+      ))}
+      <MonoLabel style={{ display: "block", marginTop: "var(--space-3)" }}>
+        对比度纪律：yellow / cream 底配墨字 · 墨底配 cream 字
+      </MonoLabel>
+    </Section>
+  );
+}
+
+/* ── 02 · 字阶 TYPOGRAPHY ── */
+
+/** display 档 = Noto Sans SC 900（display-1/2 行高 0.92 紧凑感）；body 档 = Space Grotesk/Noto Sans SC */
+const TYPE_TIERS: { token: string; family: "display" | "body"; lh: number }[] = [
+  { token: "--t-display-1", family: "display", lh: 0.92 },
+  { token: "--t-display-2", family: "display", lh: 0.92 },
+  { token: "--t-h1", family: "display", lh: 1 },
+  { token: "--t-h2", family: "display", lh: 1 },
+  { token: "--t-h3", family: "display", lh: 1 },
+  { token: "--t-body", family: "body", lh: 1.5 },
+  { token: "--t-label", family: "body", lh: 1.3 }, // 全局最小字号（五轮 F1：micro 档已删除）
+];
+
+function TypographySection() {
+  return (
+    <Section index="02" title="字阶 TYPOGRAPHY">
+      {TYPE_TIERS.map((tier) => (
+        <div
+          key={tier.token}
+          data-testid={`type-row-${tier.token}`}
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: "var(--space-5)",
+            marginBottom: "var(--space-3)",
+          }}
+        >
+          <span style={{ width: 340, display: "flex", flexDirection: "column", gap: 4 }}>
+            <MonoLabel color="var(--text-mute)" style={{ whiteSpace: "normal" }}>
+              {tier.token}
+            </MonoLabel>
+            <MonoLabel color="var(--text-faint)" size={12}>
+              <TokenValue token={tier.token} /> · lh {tier.lh}
+              {tier.family === "display" ? " · Noto Sans SC 900" : " · Space Grotesk / Noto Sans SC"}
+            </MonoLabel>
+          </span>
+          <span
+            style={{
+              fontFamily: tier.family === "display" ? "var(--font-display-cn)" : "var(--font-body)",
+              fontWeight: tier.family === "display" ? 900 : 400,
+              fontSize: `var(${tier.token})`,
+              lineHeight: tier.lh,
+              color: "var(--text)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            口播视频
+          </span>
+        </div>
+      ))}
+    </Section>
+  );
+}
+
+/* ── 03 · 间距阶 SPACING ── */
+
+const SPACE_BARS: { token: string; note?: string }[] = [
+  { token: "--space-1" },
+  { token: "--space-2" },
+  { token: "--space-3" },
+  { token: "--space-4" },
+  { token: "--space-5" },
+  { token: "--space-6" },
+  { token: "--stage-pad-x", note: "水平留白" },
+  { token: "--stage-pad-y", note: "垂直留白" },
+];
+
+function SpacingSection() {
+  return (
+    <Section index="03" title="间距阶 SPACING">
+      {SPACE_BARS.map((bar) => (
+        <div
+          key={bar.token}
+          data-testid={`space-row-${bar.token}`}
+          style={{ display: "flex", alignItems: "center", gap: "var(--space-5)", marginBottom: "var(--space-3)" }}
+        >
+          <span style={{ width: 340, display: "flex", flexDirection: "column", gap: 4 }}>
+            <MonoLabel>{bar.token}</MonoLabel>
+            <MonoLabel color="var(--text-faint)" size={12}>
+              <TokenValue token={bar.token} />
+              {bar.note ? ` · ${bar.note}` : ""}
+            </MonoLabel>
+          </span>
+          <div
+            style={{ height: 24, width: `var(${bar.token})`, background: "var(--surface-3)", flexShrink: 0 }}
+          />
+        </div>
+      ))}
+      {/* grid-gutter：两个色块间隙示意（间隙宽 = --grid-gutter） */}
+      <div
+        data-testid="space-row---grid-gutter"
+        style={{ display: "flex", alignItems: "center", gap: "var(--space-5)" }}
+      >
+        <span style={{ width: 340, display: "flex", flexDirection: "column", gap: 4 }}>
+          <MonoLabel>--grid-gutter</MonoLabel>
+          <MonoLabel color="var(--text-faint)" size={12}>
+            <TokenValue token="--grid-gutter" /> · 两色块间隙
+          </MonoLabel>
+        </span>
+        <div style={{ display: "flex", gap: "var(--grid-gutter)" }}>
+          <div style={{ width: 96, height: 48, background: "var(--accent-2)", border: "4px solid var(--text)", boxSizing: "border-box" }} />
+          <div style={{ width: 96, height: 48, background: "var(--accent-1)", border: "4px solid var(--text)", boxSizing: "border-box" }} />
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/* ── 04 · 动效 MOTION ── */
+
+const DUR_TIERS = [
+  { tier: "FAST", token: "--dur-fast", duration: "fast" as const },
+  { tier: "MID", token: "--dur-mid", duration: "mid" as const },
+  { tier: "SLOW", token: "--dur-slow", duration: "slow" as const },
+];
+
+/** 缓动对比小球：waapi 引擎注册表（铁律 1），easing 运行时读 :root 动效 token；iterations 有限（2 轮） */
+function EaseBall({ token, name, color }: { token: string; name: string; color: string }) {
+  const dotRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const dot = dotRef.current;
+    if (!dot) return;
+    const easing =
+      getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "linear";
+    const h = waapi(
+      dot,
+      [{ transform: "translateX(0px)" }, { transform: "translateX(336px)" }],
+      { duration: 1400, iterations: 2, easing, fill: "both" },
+    );
+    return () => h.dispose();
+  }, [token]);
+  return (
+    <div
+      data-testid={`motion-ease-${name}`}
+      style={{ display: "flex", alignItems: "center", gap: "var(--space-5)" }}
+    >
+      <span style={{ width: 340, display: "flex", flexDirection: "column", gap: 4 }}>
+        <MonoLabel>{token}</MonoLabel>
+        <MonoLabel color="var(--text-faint)" size={12} style={{ whiteSpace: "normal" }}>
+          <TokenValue token={token} />
+        </MonoLabel>
+      </span>
+      <div style={{ width: 360, height: 32, position: "relative", flexShrink: 0 }}>
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 24,
+            top: "50%",
+            height: 4,
+            marginTop: -2,
+            background: "var(--surface-3)",
+          }}
+        />
+        <div
+          ref={dotRef}
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 4,
+            width: 24,
+            height: 24,
+            borderRadius: "50%",
+            background: color,
+            border: "4px solid var(--text)",
+            boxSizing: "border-box",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MotionSection() {
+  return (
+    <Section index="04" title="动效 MOTION">
+      {/* ① 时长三档 */}
+      <MonoLabel style={{ display: "block", marginBottom: "var(--space-3)" }}>① DURATION · 时长三档</MonoLabel>
+      {DUR_TIERS.map((d) => (
+        <div
+          key={d.tier}
+          data-testid={`motion-dur-${d.tier.toLowerCase()}`}
+          style={{ display: "flex", alignItems: "center", gap: "var(--space-5)", marginBottom: "var(--space-3)" }}
+        >
+          <span style={{ width: 340, display: "flex", flexDirection: "column", gap: 4 }}>
+            <MonoLabel>{d.tier} · {d.token}</MonoLabel>
+            <MonoLabel color="var(--text-faint)" size={12}>
+              <TokenValue token={d.token} /> · BarGrow value 0.7
+            </MonoLabel>
+          </span>
+          <div style={{ flex: 1 }}>
+            <BarGrow value={0.7} duration={d.duration} data-testid={`motion-dur-${d.tier.toLowerCase()}-bar`} />
+          </div>
+        </div>
+      ))}
+      {/* ② 缓动三档 */}
+      <MonoLabel style={{ display: "block", margin: "var(--space-5) 0 var(--space-3)" }}>② EASING · 缓动三档</MonoLabel>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+        <EaseBall token="--ease-in" name="in" color="var(--accent-1)" />
+        <EaseBall token="--ease-out" name="out" color="var(--accent-2)" />
+        <EaseBall token="--ease-emph" name="emph" color="var(--accent-3)" />
+      </div>
+      {/* ③ stagger 演示 */}
+      <div data-testid="motion-stagger" style={{ marginTop: "var(--space-5)" }}>
+        <MonoLabel style={{ display: "block", marginBottom: "var(--space-3)" }}>
+          ③ STAGGER · 逐条错峰（--stagger <TokenValue token="--stagger" />，RevealList activeCount 全量）
+        </MonoLabel>
+        <RevealList
+          items={["第一条 · 错峰 0ms", "第二条 · 错峰 +120ms", "第三条 · 错峰 +240ms"]}
+          activeCount={3}
+          data-testid="motion-stagger-list"
+        />
+      </div>
+      {/* ④ 氛围微动组 */}
+      <div data-testid="motion-ambient" style={{ marginTop: "var(--space-5)" }}>
+        <MonoLabel style={{ display: "block", marginBottom: "var(--space-3)" }}>
+          ④ AMBIENT · 氛围微动组 · 有限周期确定性（可 seek）
+        </MonoLabel>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", flexWrap: "wrap" }}>
+          <Variant label="BREATHE · cycles 3">
+            <Breathe cycles={3} data-testid="motion-ambient-breathe" />
+          </Variant>
+          <Variant label="SEEDED PARTICLES · seed 7">
+            <SeededParticles seed={7} count={30} data-testid="motion-ambient-particles" />
+          </Variant>
+          <Variant label="KENBURNS · slow">
+            <div style={{ width: 320, height: 180 }}>
+              <KenBurns duration="slow" data-testid="motion-ambient-kenburns" />
+            </div>
+          </Variant>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/* ── 05 · 语义组件 SEMANTIC ── */
+
+/** 语义区条目：mono 组件名标注 + 内容 */
+function SemItem({ label, children, testid, style }: {
+  label: string;
+  children: ReactNode;
+  testid?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <div data-testid={testid} style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", ...style }}>
+      <MonoLabel color="var(--text-faint)" size={12}>{label}</MonoLabel>
+      {children}
+    </div>
+  );
+}
+
+/** 反色卡内容 token 覆写：BodyCopy 文字落 surface-2（showcase 同款手法） */
+const INVERT_TEXT = scope({ "--text": "var(--surface)", "--text-2": "var(--surface-2)" });
+
+function SemanticSection() {
+  const cardRowStyle: CSSProperties = { width: 300, display: "flex", flexDirection: "column", gap: "var(--space-2)" };
+  return (
+    <Section index="05" title="语义组件 SEMANTIC">
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+        <SemItem label="CARD · 三变体（plain 保留 12px 硬阴影语义；featured 24px 档归 marker/数据主角；展示页网格内零阴影/配色覆写属构图级例外）" testid="semantic-card">
+          <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap" }}>
+            <Card variant="plain" style={cardRowStyle}>
+              <MonoLabel size={12}>PLAIN</MonoLabel>
+              <BodyCopy>奶油底 · 墨框 · 12px 硬阴影</BodyCopy>
+            </Card>
+            <div style={INVERT_TEXT}>
+              <Card variant="invert" style={cardRowStyle}>
+                <MonoLabel size={12} color="var(--surface)">INVERT</MonoLabel>
+                <BodyCopy>墨底 · 奶油字</BodyCopy>
+              </Card>
+            </div>
+            <div style={INVERT_TEXT}>
+              <Card variant="accent" style={cardRowStyle}>
+                <MonoLabel size={12} color="var(--surface)">ACCENT</MonoLabel>
+                <BodyCopy>绿底 · 奶油字</BodyCopy>
+              </Card>
+            </div>
+          </div>
+        </SemItem>
+        <SemItem label="TABLE · 三变体（同数据 3 行；columns = 彩色列：pink 墨字 / green cream 字 / orange cream 字；展示页 S4 的表头高 96px/首列 30%/标签列 cream 底为参考 slide 7 构图级例外；单元格衬垫 8/24 紧凑行高 = 安全边距规格语义豁免——三十二轮 F2 用户定稿）" testid="semantic-table">
+          <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap", alignItems: "flex-start" }}>
+            <div style={{ width: 420 }}>
+              <Table
+                variant="bordered"
+                header={["组件", "变体", "状态"]}
+                rows={[["Card", "plain", "✓"], ["Table", "bordered", "✓"], ["Rule", "dashed", "✓"]]}
+                data-testid="semantic-table-bordered"
+              />
+            </div>
+            <div style={{ width: 420 }}>
+              <Table
+                variant="zebra"
+                header={["组件", "变体", "状态"]}
+                rows={[["Card", "plain", "✓"], ["Table", "zebra", "✓"], ["Rule", "dashed", "✓"]]}
+                data-testid="semantic-table-zebra"
+              />
+            </div>
+            <div style={{ width: 760 }}>
+              <Table
+                variant="columns"
+                header={["属性", "方案 A", "方案 B", "方案 C"]}
+                rows={[["速度", "快", "更快", "最快"], ["足迹", "轻", "中", "重"], ["投入", "低", "中", "高"]]}
+                data-testid="semantic-table-columns"
+              />
+            </div>
+          </div>
+        </SemItem>
+        <SemItem label="RULE · 两变体" testid="semantic-rule">
+          <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ width: 320 }}>
+              <Rule variant="solid" data-testid="semantic-rule-solid" />
+            </div>
+            <div style={{ width: 320 }}>
+              <Rule variant="dashed" data-testid="semantic-rule-dashed" />
+            </div>
+          </div>
+        </SemItem>
+        <SemItem label="KICKER · 两变体" testid="semantic-kicker">
+          <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", alignItems: "center" }}>
+            <Kicker variant="block" data-testid="semantic-kicker-block">CHAPTER 01 · 主题</Kicker>
+            <Kicker variant="pill" data-testid="semantic-kicker-pill">CHAPTER 01 · 主题</Kicker>
+          </div>
+        </SemItem>
+        <SemItem label="HERO NUMBER · 两变体（countUp=false）" testid="semantic-hero-number">
+          <div style={{ display: "flex", gap: "var(--space-6)", flexWrap: "wrap", alignItems: "center" }}>
+            <HeroNumber value="+47%" variant="plain" data-testid="semantic-hero-number-plain" />
+            <HeroNumber value="+47%" variant="accent" data-testid="semantic-hero-number-accent" />
+          </div>
+        </SemItem>
+        <SemItem label="STAT CARD · 三变体" testid="semantic-stat-card">
+          <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap", ...scope({ "--shadow-card": "none" }) }}>
+            <StatCard number="+47%" label="打开率" variant="plain" data-testid="semantic-stat-card-plain" />
+            <StatCard number="+47%" label="打开率" variant="invert" data-testid="semantic-stat-card-invert" />
+            <StatCard number="+47%" label="打开率" variant="accent" data-testid="semantic-stat-card-accent" />
+          </div>
+        </SemItem>
+        <SemItem label="DECOR DOT / BAR / RING · 各变体" testid="semantic-decor">
+          <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center" }}>
+              <DecorDot variant="plain" data-testid="semantic-decor-dot-plain" />
+              <DecorDot variant="glow" data-testid="semantic-decor-dot-glow" />
+            </div>
+            <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center" }}>
+              <DecorBar variant="solid" data-testid="semantic-decor-bar-solid" />
+              <DecorBar variant="accent" data-testid="semantic-decor-bar-accent" />
+            </div>
+            <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center" }}>
+              <DecorRing variant="outline" data-testid="semantic-decor-ring-outline" />
+              <DecorRing variant="filled" data-testid="semantic-decor-ring-filled" />
+            </div>
+          </div>
+        </SemItem>
+        <SemItem label="FIGURE · frame / bare / plain（placeholder；frame 保留 24px 硬阴影自然态——展示页 S8 同款；06 格内为目录密度压缩）" testid="semantic-figure">
+          <div style={{ display: "flex", gap: "var(--space-6)", flexWrap: "wrap", alignItems: "flex-start" }}>
+            <div style={{ width: 240 }}>
+              <Figure variant="frame" data-testid="semantic-figure-frame" />
+            </div>
+            <div style={{ width: 240 }}>
+              <Figure variant="bare" data-testid="semantic-figure-bare" />
+            </div>
+            <div style={{ width: 240 }}>
+              <Figure variant="plain" data-testid="semantic-figure-plain" />
+            </div>
+          </div>
+        </SemItem>
+        <SemItem label="字幕样式 · 字幕 token：--caption-bg / --caption-stroke / --caption-text / --caption-radius / --caption-size（白底 + 4px 粗描边）" testid="semantic-caption">
+          <div
+            style={{
+              display: "inline-block",
+              background: "var(--caption-bg)",
+              border: "var(--border-w) solid var(--caption-stroke)",
+              color: "var(--caption-text)",
+              borderRadius: "var(--caption-radius)",
+              fontSize: "var(--caption-size)",
+              fontFamily: "var(--font-body)",
+              padding: "var(--space-2) var(--space-3)",
+              lineHeight: 1.3,
+              textAlign: "center",
+            }}
+          >
+            字幕样式 · caption tokens
+          </div>
+        </SemItem>
+      </div>
+    </Section>
+  );
+}
+
+/* ── 06 · 组件全览 COMPONENTS（全组件 × 全变体；组序 = GROUPS，组件数与组计数派生） ── */
+
+/** 组件格尺寸提示（M2b 三轮定稿：按内容自适应——每组件按其内容需要设计尺寸）。
+    每组件一行：内容区建议 minW / minH（内容自然尺寸的舒适下限，不设上限——格高 = 内容自然高
+    + 上下 24 内衬），密集组件 span: 2 跨列给足展示空间。
+    取值原则：圆环/条形/徽标类 → 小格（minH 64-96）；数字+标注 → 中格（160-200）；
+    多卡片/图表 → 大格（300-420）；scale 缩放档预留——本轮全部组件自然尺寸落格，无需缩放。 */
+const SIZE_HINTS: Record<string, { minW?: number; minH?: number; span?: number; scale?: number }> = {
+  // TEXT · 文字
+  "hero-title": { minH: 96 }, // 三变体竖排（双语双行）→ 中格
+  "kicker": { minH: 56 },     // 三变体单行 → 矮格
+  "body-copy": { minH: 56 },
+  "quote-block": { minH: 88 }, // 两变体竖排
+  "number-pill": { minH: 56 }, // 三药丸单行 → 矮格
+  "delta-text": { minH: 88 },  // 涨/跌两行示例 → 中格
+  // DATA · 数据
+  "hero-number": { minH: 72 },   // 数字 + 标注 → 中格（~170）
+  "counter": { minH: 64 },       // 数字 + 标注 → 中格（~160）
+  "bar-grow": { minH: 80 },      // 条形 → 矮格（~120 内容）
+  "donut-meter": { minH: 168 },  // 圆环 144 + 标注 → 小格（~260）
+  "stat-card": { minH: 128 },    // 三变体并排
+  "stat-cell": { span: 2, minW: 1080, minH: 560 }, // 定版四卡 block 2×2（S20 同构，自然字号）→ 大格 ~690
+  "stat-inline": { minH: 300 },  // 两变体竖排全宽 → 大格（300-420）
+  "year-bar-group": { minH: 200 }, // 双柱 220 高展示台 → 中格
+  "data-item-row": { minH: 96 },   // 单行条目（药丸 + 标题 + 描述）→ 矮格
+  // STRUCTURE · 结构
+  "card": { minH: 96 },
+  "rule": { minH: 64 },          // 条形 → 矮格
+  "grid": { minH: 96 },
+  "stage-pad": { minH: 144 },
+  "table": { span: 2, minW: 1080, minH: 160 },       // 两变体并排（跨列）
+  "split-compare": { span: 2, minW: 1080, minH: 216 }, // 两变体并排（跨列）
+  "jis-check": { minH: 64 },    // 两态勾选框 → 矮格
+  "step-card": { minH: 300 },   // 两卡并排 248×300 → 大格
+  "motion-cell": { minH: 220 }, // 标签 + 展示区 → 中格
+  // REVEAL · 揭示
+  "reveal-text": { minH: 80 },
+  "reveal-list": { span: 2, minW: 1080, minH: 144 }, // 两变体并排（跨列）
+  "step-sequence": { span: 2, minW: 1080, minH: 280 }, // plain + cards 并排（跨列）
+  "stagger-row": { minH: 96 }, // 错峰入场行包装（四点行）→ 矮格
+  // DECOR · 装饰
+  "decor-dot": { minH: 56 },
+  "decor-bar": { minH: 56 },
+  "decor-ring": { minH: 72 },
+  "stacked-blocks": { minH: 280 }, // 280×280 自然态
+  "step-stairs": { span: 2, minW: 1080, minH: 280 }, // 三卡阶梯 200/240/280（跨列）
+  "marker-block": { minH: 96 },
+  "post-it": { minH: 220 }, // 两便签并排 248×200（微旋转）→ 中格
+  // MEDIA · 素材
+  "figure": { span: 2, minW: 1080, minH: 160 }, // 四变体单行 220/140（跨列）
+  "typed-terminal": { minH: 96 },
+  "path-draw": { minH: 96 },
+  // AMBIENT · 氛围
+  "seeded-particles": { minH: 176 }, // canvas 240×180 密度档（既有 CELL_TWEAKS）
+  "breathe": { minH: 96 },
+  "ken-burns": { minH: 136 }, // 两卡 240×135 并排
+  // FUNCTION · 功能
+  "timeline-track": { minH: 104 },
+  "progress-dots": { minH: 64 },
+  // CHART · 图表
+  "echart-bar": { minH: 280 }, // 480×260 真渲染 → 大格
+  "echart-line": { minH: 280 },
+  "echart-pie": { minH: 280 },
+};
+
+/** 组件格：cream 底 + 4px 墨框 + 字阶压缩 scope；容器仅 inline 布局属性（零裸色）。
+    按内容自适应（M2b 三轮）：无统一行高——格高 = 内容自然高 + 上下 24 内衬（padding ≥24），
+    上缘对齐（align-items: start）；内容区按 SIZE_HINTS 设 minW/minH 舒适下限、跨列格
+    grid-column: span 2；内容区水平居中，内容超限 overflow hidden 兜底（不主动截断）。 */
+function CompCell({ name, extraScope, children }: {
+  name: string;
+  extraScope?: Record<string, string>;
+  children: ReactNode;
+}) {
+  const hint = SIZE_HINTS[name] ?? {};
+  return (
+    <div
+      data-testid={`comp-cell-${name}`}
+      className={`sg-cell sg-cell-${name}`}
+      style={{
+        ...scope(CELL_SCOPE),
+        ...scope(extraScope ?? {}),
+        background: "var(--surface)",
+        border: "4px solid var(--text)",
+        boxSizing: "border-box",
+        minWidth: 0, // 网格轨道防撑破（长标注 min-content 不再顶宽列——右侧裁切根因）
+        overflow: "hidden",
+        padding: "var(--space-3)", // 24 上下内衬（自适应规格下限）
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-2)",
+        gridColumn: hint.span ? `span ${hint.span}` : undefined,
+      }}
+    >
+      <div
+        style={{
+          flexShrink: 0,
+          fontFamily: "var(--font-mono)",
+          fontSize: 18,
+          lineHeight: 1,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "var(--text)",
+          paddingBottom: "12px",
+          borderBottom: "2px solid var(--surface-2)",
+        }}
+      >
+        {name}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "var(--space-2)",
+            alignItems: "center",
+            alignContent: "center",
+            justifyContent: "center",
+            maxWidth: "100%",
+            minWidth: hint.minW,
+            minHeight: hint.minH,
+            ...(hint.scale ? { transform: `scale(${hint.scale})`, transformOrigin: "center center" } : {}),
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div style={{ marginBottom: "var(--space-5)" }}>
+      <MonoLabel color="var(--text-mute)" style={{ display: "block", marginBottom: "var(--space-3)" }}>
+        {label}
+      </MonoLabel>
+      {/* 按内容自适应网格：容器 = 1920 − 2×96 内容边距 = 1728（面板 4px 墨框计入 96 内）；
+          3 列 = (1728 − 2×24) / 3 = 560，minmax(0,1fr) 防内容 min-width 撑破列宽（右侧裁切根因）；
+          align-items: start 上缘对齐 + 自然高度（去统一行高）；gap 24 同列相邻格间隙一致 */}
+      <div
+        style={{
+          width: 1728,
+          boxSizing: "border-box",
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gap: "var(--space-3)",
+          alignItems: "start",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** 组标题：标签由 GROUPS 派生 + 计数由 manifest 派生——"TEXT · 文字（6）"。 */
+function groupLabel(id: GroupId): string {
+  const g = GROUPS.find((x) => x.id === id);
+  const count = COMPONENTS.filter((c) => c.group === id).length;
+  return `${g?.labelEn} · ${g?.labelZh}（${count}）`;
+}
+
+function ComponentsSection() {
+  const tableData = { header: ["组件", "变体"], rows: [["Card", "plain"], ["Table", "zebra"]] };
+  const stepData = [{ title: "进场" }, { title: "节奏" }, { title: "收束" }];
+  /** 组 → 组件格（组顺序与标题由 GROUPS + manifest 派生；格内为手写变体目录）。 */
+  const groupCells: Record<GroupId, ReactNode> = {
+    text: (
+      <>
+        <CompCell name="hero-title">
+          <Variant label="plain"><HeroTitle data-testid="variant-hero-title-plain" style={{ fontSize: 56, lineHeight: 0.92 }}>口播视频</HeroTitle></Variant>
+          <Variant label="stamp"><HeroTitle variant="stamp" data-testid="variant-hero-title-stamp" style={{ fontSize: 28, lineHeight: 1, padding: "8px 14px" }}>口播视频</HeroTitle></Variant>
+          <Variant label="latin + cn · 双语双行">
+            <HeroTitle latin="CREATIVE" cn="创意模式" data-testid="variant-hero-title-bilingual" style={{ fontSize: 40 }} />
+          </Variant>
+          <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>stamp 阴影色随主题强调色</MonoLabel>
+        </CompCell>
+        <CompCell name="kicker">
+          <Variant label="plain"><Kicker variant="plain" data-testid="variant-kicker-plain">CHAPTER 01</Kicker></Variant>
+          <Variant label="block"><Kicker variant="block" data-testid="variant-kicker-block">CHAPTER 01</Kicker></Variant>
+          <Variant label="pill · 2px 墨框 999 圆角"><Kicker variant="pill" data-testid="variant-kicker-pill">CHAPTER 01</Kicker></Variant>
+        </CompCell>
+        <CompCell name="body-copy">
+          <Variant label="plain"><BodyCopy data-testid="variant-body-copy-plain">口播视频的节奏，由稿子决定。</BodyCopy></Variant>
+          <Variant label="lede"><BodyCopy variant="lede" data-testid="variant-body-copy-lede">口播视频的节奏，由稿子决定。</BodyCopy></Variant>
+        </CompCell>
+        <CompCell name="quote-block">
+          <Variant label="rule"><QuoteBlock variant="rule" data-testid="variant-quote-block-rule">把口播稿做成会动的网页</QuoteBlock></Variant>
+          <Variant label="block"><QuoteBlock variant="block" data-testid="variant-quote-block-block">把口播稿做成会动的网页</QuoteBlock></Variant>
+        </CompCell>
+        <CompCell name="number-pill">
+          <Variant label="plain"><NumberPill number="01" data-testid="variant-number-pill-plain" /></Variant>
+          <Variant label="accent"><NumberPill number="02" variant="accent" data-testid="variant-number-pill-accent" /></Variant>
+          <Variant label="invert"><NumberPill number="03" variant="invert" data-testid="variant-number-pill-invert" /></Variant>
+        </CompCell>
+        <CompCell name="delta-text" extraScope={{ "--t-body": "28px" }}>
+          <Variant label="up · 涨橙"><BodyCopy><DeltaText text="营业收入 +9.52%" /></BodyCopy></Variant>
+          <Variant label="down · 跌绿"><BodyCopy><DeltaText text="归母净利 -3.20%" /></BodyCopy></Variant>
+        </CompCell>
+      </>
+    ),
+    data: (
+      <>
+        <CompCell name="hero-number">
+          <Variant label="plain"><HeroNumber value="+47%" variant="plain" data-testid="variant-hero-number-plain" /></Variant>
+          <Variant label="accent"><HeroNumber value="+47%" variant="accent" data-testid="variant-hero-number-accent" /></Variant>
+        </CompCell>
+        <CompCell name="counter">
+          <Variant label="default · 挂载滚动 0→47"><Counter to={47} data-testid="variant-counter-default" /></Variant>
+        </CompCell>
+        <CompCell name="bar-grow">
+          <Variant label="solid"><div style={{ width: 240 }}><BarGrow value={0.7} variant="solid" data-testid="variant-bar-grow-solid" /></div></Variant>
+          <Variant label="accent"><div style={{ width: 240 }}><BarGrow value={0.7} variant="accent" data-testid="variant-bar-grow-accent" /></div></Variant>
+        </CompCell>
+        <CompCell name="donut-meter">
+          <Variant label="default · value 0.42"><DonutMeter value={0.42} label="转化率" data-testid="variant-donut-meter-default" /></Variant>
+        </CompCell>
+        <CompCell name="stat-card" extraScope={{ "--t-display-2": "32px" }}>
+          <Variant label="plain"><StatCard number="+47%" label="打开率" variant="plain" data-testid="variant-stat-card-plain" /></Variant>
+          <Variant label="invert"><StatCard number="+47%" label="打开率" variant="invert" data-testid="variant-stat-card-invert" /></Variant>
+          <Variant label="accent"><StatCard number="+47%" label="打开率" variant="accent" data-testid="variant-stat-card-accent" /></Variant>
+        </CompCell>
+        <CompCell name="stat-inline" extraScope={{ "--space-4": "16px" }}>
+          {/* 两变体竖排全宽（BY THE NUMBERS 卡片自然宽度）；标注与展示上下分区：短标注在上、
+              展示卡在下，8px 间距互不重叠；卡衬 24→16 收紧卡高（大格 ~440 落 300-420+ 档） */}
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            <Variant label="default · 大数字 + 药丸标签 + 描述块">
+              <StatInline value="42%" label="参与度提升" desc="参与度相对基线提升 42 个百分点。" data-testid="variant-stat-inline-default" />
+            </Variant>
+            <Variant label="filled · 对角绿填充">
+              <StatInline filled value="9.4M" label="样本总值" desc="样本数据总值 940 万美元。" data-testid="variant-stat-inline-filled" />
+            </Variant>
+          </div>
+        </CompCell>
+        {/* 置组尾：跨列格不占行导致前一行留洞（auto-placement 不回填），组尾跨列只留尾行洞 */}
+        <CompCell name="stat-cell" extraScope={{ "--t-display-2": "96px", "--t-body": "28px", "--t-label": "24px", "--space-4": "32px" }}>
+          {/* 定版样式（与 S20 KEY METRICS 完全同构）：四卡统一 descStyle block（默认档，绿底 cream 字）
+              + 每卡 delta 涨橙；自然字号覆盖 CELL_SCOPE（value 96 / desc 28 / label 24——全部 ≥24 全局
+              最小字号）；2×2 布局（自然字号下一行放不下四卡） */}
+          <div style={{ width: "100%", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "var(--space-2)" }}>
+            <StatCell index="/01" label="营业收入 · 百万元" value="27,930" delta="▲ +9.52%" deltaTone="up" desc="收入规模稳步抬升，再上台阶。" descStyle="block" data-testid="variant-stat-cell-block" />
+            <StatCell index="/02" label="归母净利 · 百万元" value="13,702" delta="▲ +42.18%" deltaTone="up" desc="利润增速领跑，成色十足。" descStyle="block" data-testid="variant-stat-cell-block-2" />
+            <StatCell index="/03" label="总资产 · 百万元" value="975,484" delta="▲ +28.57%" deltaTone="up" desc="资产盘子继续扩张，逼近万亿。" descStyle="block" data-testid="variant-stat-cell-block-3" />
+            <StatCell index="/04" label="归母权益 · 百万元" value="156,111" delta="▲ +27.93%" deltaTone="up" desc="股东权益同步增厚，家底更实。" descStyle="block" data-testid="variant-stat-cell-block-4" />
+          </div>
+          <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>默认档 · block 绿底 cream 字（与 KEY METRICS 定版一致）；pill / pillFilled / plain 为组件能力（展示页未使用）</MonoLabel>
+        </CompCell>
+        <CompCell name="year-bar-group">
+          <Variant label="muted / accent · 柱高 = value / max">
+            <div style={{ height: 200, display: "flex", alignItems: "flex-end" }}>
+              <YearBarGroup max={100} bars={[{ value: 62, tone: "muted" }, { value: 88, tone: "accent" }]} />
+            </div>
+          </Variant>
+        </CompCell>
+        <CompCell name="data-item-row" extraScope={{ "--t-body": "28px" }}>
+          <Variant label="序号药丸 + 标题 + 描述（涨跌自动着色）">
+            <DataItemRow index="01" title="营收 27,930 百万 +9.52%" desc="主营业务收入稳步抬升。" />
+          </Variant>
+        </CompCell>
+      </>
+    ),
+    structure: (
+      <>
+        <CompCell name="card">
+          <Variant label="plain"><Card variant="plain" data-testid="variant-card-plain" style={{ width: 150, padding: 16 }}><BodyCopy>奶油底</BodyCopy></Card></Variant>
+          <Variant label="invert"><div style={INVERT_TEXT}><Card variant="invert" data-testid="variant-card-invert" style={{ width: 150, padding: 16 }}><BodyCopy>墨底</BodyCopy></Card></div></Variant>
+          <Variant label="accent"><div style={INVERT_TEXT}><Card variant="accent" data-testid="variant-card-accent" style={{ width: 150, padding: 16 }}><BodyCopy>绿底</BodyCopy></Card></div></Variant>
+        </CompCell>
+        <CompCell name="rule">
+          <Variant label="solid"><div style={{ width: 240 }}><Rule variant="solid" data-testid="variant-rule-solid" /></div></Variant>
+          <Variant label="dashed"><div style={{ width: 240 }}><Rule variant="dashed" data-testid="variant-rule-dashed" /></div></Variant>
+        </CompCell>
+        <CompCell name="grid">
+          <Variant label="even · columns 3">
+            <Grid variant="even" columns={3} data-testid="variant-grid-even" style={{ width: 280 }}>
+              <div style={{ height: 40, background: "var(--accent-2)" }} />
+              <div style={{ height: 40, background: "var(--accent-4)" }} />
+              <div style={{ height: 40, background: "var(--accent-1)" }} />
+            </Grid>
+          </Variant>
+          <Variant label="half">
+            <Grid variant="half" data-testid="variant-grid-half" style={{ width: 280 }}>
+              <div style={{ height: 40, background: "var(--accent-4)" }} />
+              <div style={{ height: 40, background: "var(--accent-1)" }} />
+            </Grid>
+          </Variant>
+        </CompCell>
+        <CompCell name="stage-pad">
+          <Variant label="default · 96/64 消费端">
+            <div
+              style={{
+                position: "relative",
+                width: 240,
+                height: 120,
+                border: "2px dashed var(--surface-3)",
+                boxSizing: "border-box",
+                ...scope({ "--stage-pad-x": "16px", "--stage-pad-y": "16px" }),
+              }}
+            >
+              <StagePad data-testid="variant-stage-pad-default">
+                <DecorBar variant="accent" />
+              </StagePad>
+            </div>
+          </Variant>
+        </CompCell>
+        <CompCell name="table">
+          {/* 两变体并排（跨列 1128 宽 → 各 540）：表格自然列宽，无缩放 */}
+          <div style={{ display: "flex", gap: "var(--space-2)", width: "100%" }}>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <Variant label="bordered"><Table variant="bordered" {...tableData} data-testid="variant-table-bordered" /></Variant>
+            </div>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <Variant label="zebra"><Table variant="zebra" {...tableData} data-testid="variant-table-zebra" /></Variant>
+            </div>
+          </div>
+        </CompCell>
+        <CompCell name="split-compare" extraScope={{ "--split-min-w": "0px", "--split-seam-pad": "88px" }}>
+          {/* 面板阴影 --shadow-card（二十一轮 F1 双层签名）——格内密度 scope 自动压 none，自然态见 showcase S17；
+              组件级 min-width 1200 以 scope 压回 0（跨列 1088 宽内按内容自适应——两变体并排单行），
+              中缝净空 96→88（仍 ≥ 圆章 44 半跨 + 13 阴影 = 57，零文字压章纪律保持），
+              VS 圆章不压缩：--seal-size 保持默认 88（字号 40 / 阴影 13 由组件比例公式驱动——
+              三十五轮 F1 由 120 收 27%）；其余（BEFORE/AFTER 标题）自然态，组件默认档不变 */}
+          <Variant label="default · split 左右分对齐">
+            <SplitCompare
+              before={["散落的文档", "模糊的归属"]}
+              after={["一份稿子驱动", "角色清晰"]}
+              data-testid="variant-split-compare-default"
+            />
+          </Variant>
+          <Variant label="align=center · 两半居中">
+            <SplitCompare
+              before={["散落的文档", "模糊的归属"]}
+              after={["一份稿子驱动", "角色清晰"]}
+              align="center"
+              data-testid="variant-split-compare-center"
+            />
+          </Variant>
+        </CompCell>
+        <CompCell name="jis-check">
+          <Variant label="checked · 墨底白勾"><JisCheck checked /></Variant>
+          <Variant label="unchecked · 空格"><JisCheck checked={false} /></Variant>
+        </CompCell>
+        <CompCell name="step-card">
+          <Variant label="cream"><StepCard index="01" title="写稿" desc="口播稿定节奏。" tone="cream" style={{ width: 246, height: 280 }} /></Variant>
+          <Variant label="green · accent 色"><StepCard index="02" title="构图" desc="为每一步选组件。" tone="green" style={{ width: 246, height: 280 }} /></Variant>
+        </CompCell>
+        <CompCell name="motion-cell" extraScope={{ "--t-label": "24px" }}>
+          <MotionCell label="COUNTER · 滚动计数" style={{ width: 300, height: 200 }}>
+            <Counter to={47} />
+          </MotionCell>
+        </CompCell>
+      </>
+    ),
+    reveal: (
+      <>
+        <CompCell name="reveal-text">
+          <Variant label="words"><RevealText text="逐词 揭示 测试" variant="words" data-testid="variant-reveal-text-words" /></Variant>
+          <Variant label="mask"><RevealText text="逐词 揭示 测试" variant="mask" data-testid="variant-reveal-text-mask" /></Variant>
+        </CompCell>
+        {/* 跨列（SIZE_HINTS）：两变体并排单行，条目 --t-h3 自然档 24 不缩 */}
+        <CompCell name="reveal-list">
+          <Variant label="plain">
+            <RevealList items={["口播稿 → 步进节奏", "组件构图 → 主题 token", "动画 → 引擎驱动"]} activeCount={3} variant="plain" data-testid="variant-reveal-list-plain" />
+          </Variant>
+          <Variant label="numbered">
+            <RevealList items={["口播稿 → 步进节奏", "组件构图 → 主题 token", "动画 → 引擎驱动"]} activeCount={3} variant="numbered" data-testid="variant-reveal-list-numbered" />
+          </Variant>
+        </CompCell>
+        {/* 跨列（SIZE_HINTS）：plain 与 cards 并排单行，卡内衬/间距自然档（cards 321 高不压缩） */}
+        <CompCell name="step-sequence">
+          <Variant label="plain"><StepSequence steps={stepData} currentStep={1} variant="plain" data-testid="variant-step-sequence-plain" /></Variant>
+          <Variant label="cards"><StepSequence steps={stepData} currentStep={1} variant="cards" data-testid="variant-step-sequence-cards" /></Variant>
+        </CompCell>
+        <CompCell name="stagger-row">
+          <Variant label="stagger · 逐条错峰入场">
+            <StaggerRow stagger reveal="rise" duration="mid" style={{ display: "flex", gap: "var(--space-3)" }}>
+              <DecorDot /><DecorDot /><DecorDot /><DecorDot />
+            </StaggerRow>
+          </Variant>
+        </CompCell>
+      </>
+    ),
+    decor: (
+      <>
+        <CompCell name="decor-dot">
+          <Variant label="plain"><DecorDot variant="plain" data-testid="variant-decor-dot-plain" /></Variant>
+          <Variant label="glow"><DecorDot variant="glow" data-testid="variant-decor-dot-glow" /></Variant>
+        </CompCell>
+        <CompCell name="decor-bar">
+          <Variant label="solid"><DecorBar variant="solid" data-testid="variant-decor-bar-solid" /></Variant>
+          <Variant label="accent"><DecorBar variant="accent" data-testid="variant-decor-bar-accent" /></Variant>
+        </CompCell>
+        <CompCell name="decor-ring">
+          <Variant label="outline"><DecorRing variant="outline" data-testid="variant-decor-ring-outline" /></Variant>
+          <Variant label="filled"><DecorRing variant="filled" data-testid="variant-decor-ring-filled" /></Variant>
+        </CompCell>
+        <CompCell name="stacked-blocks">
+          <Variant label="default · 4×160 错位叠放"><StackedBlocks data-testid="variant-stacked-blocks-default" /></Variant>
+        </CompCell>
+        <CompCell name="step-stairs">
+          {/* 全宽包装：StepStairs 根 width:100% 需解析到格内容宽（1088）——否则落在
+              shrink-to-fit 的 Variant 上，三卡各 ~137px、注文压宽（M2b 复核实测） */}
+          <div style={{ width: "100%" }}>
+            <Variant label="default · 卡高递增 200/240/280 · 顶部橙条">
+              <StepStairs
+                data-testid="variant-step-stairs-default"
+                items={[
+                  { value: "42%", note: "参与度提升" },
+                  { value: "2.7×", note: "吞吐倍数" },
+                  { value: "25", note: "屏数" },
+                ]}
+              />
+            </Variant>
+          </div>
+        </CompCell>
+        <CompCell name="marker-block">
+          <Variant label="plain"><MarkerBlock data-testid="variant-marker-block-plain"><BodyCopy>奶油底 · 墨字</BodyCopy></MarkerBlock></Variant>
+          <Variant label="accent"><div style={INVERT_TEXT}><MarkerBlock variant="accent" data-testid="variant-marker-block-accent"><BodyCopy>pink 底 · cream 字</BodyCopy></MarkerBlock></div></Variant>
+          <Variant label="invert · 封面主角块"><div style={INVERT_TEXT}><MarkerBlock variant="invert" data-testid="variant-marker-block-invert"><BodyCopy>墨底 · cream 字</BodyCopy></MarkerBlock></div></Variant>
+        </CompCell>
+        <CompCell name="post-it" extraScope={{ "--t-label": "24px" }}>
+          <Variant label="tone 五色 · 图钉便签（微旋转）">
+            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+              <PostIt label="NOTE 01" text="先把想法贴墙" tone="pink" rotate={-2} style={{ position: "relative", width: 248, height: 180 }} />
+              <PostIt label="BIG IDEA" text="别让想法溜走" tone="yellow" rotate={2} style={{ position: "relative", width: 248, height: 180 }} />
+            </div>
+          </Variant>
+        </CompCell>
+      </>
+    ),
+    media: (
+      <>
+        <CompCell name="figure">
+          {/* 跨列（SIZE_HINTS）：四变体单行自然宽度 220/140（3×220+140+3×16 = 872 ≤ 1128），
+              占位 min-height 140（既有 sg-figure-short 密度档，320 自然态见 05 区段） */}
+          <Variant label="frame"><div style={{ width: 220 }}><Figure variant="frame" className="sg-figure-short" data-testid="variant-figure-frame" /></div></Variant>
+          <Variant label="bare"><div style={{ width: 220 }}><Figure variant="bare" className="sg-figure-short" data-testid="variant-figure-bare" /></div></Variant>
+          <Variant label="plain"><div style={{ width: 220 }}><Figure variant="plain" className="sg-figure-short" data-testid="variant-figure-plain" /></div></Variant>
+          <Variant label="ratio 3:4 · 竖版"><div style={{ width: 140 }}><Figure variant="frame" ratio="3 / 4" className="sg-figure-short" data-testid="variant-figure-ratio" /></div></Variant>
+        </CompCell>
+        <CompCell name="typed-terminal">
+          <Variant label="default · 打字挂载即播">
+            <TypedTerminal lines={["styleguide --mode creative", "36 components · variants"]} data-testid="variant-typed-terminal-default" />
+          </Variant>
+        </CompCell>
+        <CompCell name="path-draw">
+          <Variant label="stroke"><div style={{ width: 180 }}><PathDraw d="M 8 88 L 30 20 L 55 60 L 92 12" variant="stroke" data-testid="variant-path-draw-stroke" /></div></Variant>
+          <Variant label="filled"><div style={{ width: 180 }}><PathDraw d="M 8 88 L 30 20 L 55 60 L 92 12" variant="filled" data-testid="variant-path-draw-filled" /></div></Variant>
+        </CompCell>
+      </>
+    ),
+    ambient: (
+      <>
+        <CompCell name="seeded-particles">
+          <Variant label="drift"><SeededParticles seed={7} count={30} variant="drift" className="sg-particles-scaled" data-testid="variant-seeded-particles-drift" /></Variant>
+          <Variant label="static"><SeededParticles seed={7} count={30} variant="static" className="sg-particles-scaled" data-testid="variant-seeded-particles-static" /></Variant>
+        </CompCell>
+        <CompCell name="breathe">
+          <Variant label="pulse"><Breathe cycles={3} variant="pulse" data-testid="variant-breathe-pulse" /></Variant>
+          <Variant label="glow"><Breathe cycles={3} variant="glow" data-testid="variant-breathe-glow" /></Variant>
+        </CompCell>
+        <CompCell name="ken-burns">
+          <Variant label="default · 缓推">
+            <div style={{ width: 240, height: 135 }}>
+              <KenBurns duration="mid" data-testid="variant-ken-burns-default" />
+            </div>
+          </Variant>
+          <Variant label="framed · 4px 墨框无阴影">
+            <div style={{ width: 240, height: 135 }}>
+              <KenBurns duration="mid" variant="framed" data-testid="variant-ken-burns-framed" />
+            </div>
+          </Variant>
+        </CompCell>
+      </>
+    ),
+    chrome: (
+      <>
+        <CompCell name="timeline-track">
+          <Variant label="line"><TimelineTrack points={["稿", "镜", "画", "声", "片"]} activeIndex={2} variant="line" data-testid="variant-timeline-track-line" /></Variant>
+          <Variant label="nodes"><TimelineTrack points={["稿", "镜", "画", "声", "片"]} activeIndex={2} variant="nodes" data-testid="variant-timeline-track-nodes" /></Variant>
+        </CompCell>
+        <CompCell name="progress-dots">
+          <Variant label="dots"><ProgressDots total={5} current={2} variant="dots" data-testid="variant-progress-dots-dots" /></Variant>
+          <Variant label="bars"><ProgressDots total={5} current={2} variant="bars" data-testid="variant-progress-dots-bars" /></Variant>
+        </CompCell>
+      </>
+    ),
+    chart: (
+      <>
+        {/* EChart 真渲染（dev 页同 showcase）：SVGRenderer 在真实浏览器可用；主题 "cm" 由
+            模块级 registerTheme 注入——三格 option 零 color / 零 textStyle：系列色 = 主题色板
+            [accent-1, accent-2, accent-3, accent-4] 自动分配（bar 色板序 / line 第一色 / pie 扇区序）。 */}
+        <CompCell name="echart-bar">
+          <Variant label="bar · 柱状图">
+            {/* 图表真渲染大格：480×260 按内容（大格 ~410） */}
+            <div style={{ width: 480, height: 260 }}>
+              <EChart
+                data-testid="variant-echart-bar"
+                option={{
+                  xAxis: { type: "category", data: ["2024", "2025"] },
+                  yAxis: { type: "value" },
+                  series: [
+                    { name: "营业收入 2024", type: "bar", data: [25502, null] },
+                    { name: "营业收入 2025", type: "bar", data: [null, 27930] },
+                    { name: "归母净利", type: "line", data: [9637, 13702] },
+                  ],
+                }}
+              />
+            </div>
+          </Variant>
+          <MonoLabel color="var(--text-faint)" size={12} style={CLAMP_2}>图表动画由页面引擎统一驱动</MonoLabel>
+        </CompCell>
+        <CompCell name="echart-line">
+          <Variant label="line · 折线图">
+            <div style={{ width: 480, height: 260 }}>
+              <EChart
+                data-testid="variant-echart-line"
+                option={{
+                  xAxis: { type: "category" },
+                  yAxis: { type: "value" },
+                  series: [{ type: "line", data: [3, 5, 4, 6, 7] }],
+                }}
+              />
+            </div>
+          </Variant>
+        </CompCell>
+        <CompCell name="echart-pie">
+          <Variant label="pie · 饼图 · 中文标签">
+            <div style={{ width: 480, height: 260 }}>
+              <EChart
+                data-testid="variant-echart-pie"
+                option={{
+                  series: [
+                    {
+                      type: "pie",
+                      data: [
+                        { name: "甲", value: 40 },
+                        { name: "乙", value: 35 },
+                        { name: "丙", value: 25 },
+                      ],
+                    },
+                  ],
+                }}
+              />
+            </div>
+          </Variant>
+        </CompCell>
+      </>
+    ),
+  };
+  return (
+    <Section index="06" title="组件全览 COMPONENTS">
+      {GROUPS.map((g) => (
+        <CompGroup key={g.id} label={groupLabel(g.id)}>
+          {groupCells[g.id]}
+        </CompGroup>
+      ))}
+    </Section>
+  );
+}
+
+/** 组件格结构性微调（零颜色，仅尺寸/裁切）；dev 页自含 <style>，不入组件 CSS。
+    按内容自适应后仅保留两处既有密度档：figure 占位 320→140（05 区段保留 320 自然态）、
+    seeded-particles canvas 400×300→240×180（容器随 canvas——两变体并排单行） */
+const CELL_TWEAKS = `
+.sg-figure-short .cdp-figure-placeholder { min-height: 140px; }
+.sg-particles-scaled { width: 240px; height: 180px; }
+.sg-particles-scaled canvas { width: 240px; height: 180px; }
+`;
+
+/** 样式词典页（?styleguide=1 dev-only 验收工具，与 ThemeShowcase / FontPreview 同级） */
+export function StyleGuide() {
+  return (
+    <div
+      style={{
+        ...scope({ "--font-mono": MONO_CN }),
+        minHeight: "100vh",
+        background: "var(--shell)",
+        padding: "64px 0 120px",
+      }}
+    >
+      <style>{CELL_TWEAKS}</style>
+      <header
+        style={{
+          width: 1920,
+          margin: "0 auto 72px",
+          padding: "0 96px",
+          boxSizing: "border-box",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 18,
+            lineHeight: 1,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "var(--surface)",
+          }}
+        >
+          {`creative-mode · 样式词典 · 全部 token 视觉表达 + ${COMPONENTS.length} 组件目录`}
+        </span>
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 18,
+            lineHeight: 1,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--surface)",
+            border: "2px solid var(--surface)",
+            borderRadius: 999,
+            padding: "6px 14px",
+          }}
+        >
+          DEV-ONLY · ?styleguide=1
+        </span>
+      </header>
+      <main style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-6)" }}>
+        <PaletteSection />
+        <TypographySection />
+        <SpacingSection />
+        <MotionSection />
+        <SemanticSection />
+        <ComponentsSection />
+      </main>
+    </div>
+  );
+}

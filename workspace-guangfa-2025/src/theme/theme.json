@@ -1,0 +1,15 @@
+{
+  "name": "creative-mode",
+  "nameZh": "创意模式",
+  "mood": "graphic / confident / playful——Bauhaus 网格 + 朋克杂志 + 瑞士编辑",
+  "bestFor": "设计导向的口播：科技 talk、创意解说、产品发布（四色强调 + 硬阴影的宣言感）",
+  "fonts": {
+    "declared": [
+      { "family": "Archivo Black", "source": "@fontsource/archivo-black" },
+      { "family": "Space Grotesk", "source": "@fontsource/space-grotesk", "weights": [400, 600] },
+      { "family": "JetBrains Mono", "source": "@fontsource/jetbrains-mono" },
+      { "family": "Noto Sans SC", "source": "@fontsource/noto-sans-sc", "weights": [400, 900] },
+      { "family": "Noto Serif SC", "source": "@fontsource/noto-serif-sc", "weights": [900] }
+    ]
+  }
+}

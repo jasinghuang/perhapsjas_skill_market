@@ -1,0 +1,31 @@
+.cdp-kenburns {
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+/* framed：4px 墨框无阴影（与 Figure bare 同款卡片处理——十五轮 F1，token 消费 --card-border） */
+.cdp-kenburns-framed {
+  box-sizing: border-box;
+  border: var(--card-border);
+  box-shadow: none;
+}
+
+.cdp-kenburns-inner {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+}
+
+.cdp-kenburns-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  color: var(--text-mute);
+}
