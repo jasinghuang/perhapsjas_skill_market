@@ -25,6 +25,9 @@ import soundfile as sf
 
 _SENTENCE_END = "。！？!?；;"
 _FADE_SECONDS = 0.010
+# 中文 TTS 常见语速约 4 字/秒。spec §8.5 要求「超过 300 字或按字数估算超过
+# 60 秒」时切块；把 max_seconds 按该速率换算成字符预算。
+_CHARS_PER_SECOND = 4.0
 
 
 class FitAction(str, Enum):
@@ -57,10 +60,11 @@ def plan_fit(
     """决定合成音频如何放进字幕窗口。
 
     `slot` 是字幕自身时长，`available` 是从字幕起点到下一句开始的时间
-    （含字幕后的空档）。分支顺序固定：无窗口 → 直接放入 → 轻微压缩 →
+    （含字幕后的空档）。`slot <= 0`（字幕窗口已退化）与 `available <= 0`
+    都返回 `NO_WINDOW`。分支顺序固定：无窗口 → 直接放入 → 轻微压缩 →
     以警告上限溢入空档 → 压到上限 → 截断。
     """
-    if available <= 0:
+    if available <= 0 or slot <= 0:
         return FitPlan(1.0, FitAction.NO_WINDOW, None)
     if synth_duration <= slot:
         return FitPlan(1.0, FitAction.FIT, None)
@@ -146,7 +150,8 @@ def apply_atempo(
     """用 ffmpeg 的 `atempo` 改变语速并读回 float32 波形。
 
     `speed == 1.0` 时直接返回原数组（不做任何重采样）。中间文件用
-    `soundfile` 写入临时目录，避免污染输出目录。
+    `soundfile` 写入临时目录，避免污染输出目录。ffmpeg 失败时把 stderr
+    一并带进异常消息，便于定位滤镜参数问题。
     """
     samples = np.asarray(pcm, dtype=np.float32)
     if speed == 1.0 or samples.size == 0:
@@ -157,21 +162,28 @@ def apply_atempo(
         source = Path(tmp) / "in.wav"
         target = Path(tmp) / "out.wav"
         sf.write(source, samples, sample_rate, subtype="FLOAT")
-        subprocess.run(
-            [
-                ffmpeg,
-                "-y",
-                "-loglevel",
-                "error",
-                "-i",
-                str(source),
-                "-filter:a",
-                chain,
-                str(target),
-            ],
-            check=True,
-            capture_output=True,
-        )
+        try:
+            subprocess.run(
+                [
+                    ffmpeg,
+                    "-y",
+                    "-loglevel",
+                    "error",
+                    "-i",
+                    str(source),
+                    "-filter:a",
+                    chain,
+                    str(target),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or "").strip()
+            raise RuntimeError(
+                f"ffmpeg atempo failed (exit {exc.returncode}): {detail or exc}"
+            ) from exc
         stretched, _ = sf.read(target, dtype="float32")
     return stretched
 
@@ -199,28 +211,33 @@ def split_long_text(
 ) -> list[str]:
     """把长文本切成适合单次 TTS 请求的片段。
 
-    先按句末标点切句，再把短句贪心累积到 `max_chars`；单句本身超长时按
-    `max_chars` 硬切。`max_seconds` 预留给按预估语速做时长约束，当前只按
-    字符数切分。空文本返回空列表，绝不返回空片段。
+    先按句末标点切句，再把短句贪心累积到预算；单句本身超长时按预算硬切。
+    预算 = `min(max_chars, max_seconds * _CHARS_PER_SECOND)`，同时满足
+    spec §8.5 的「300 字」与「估算 60 秒」两条上限；时长按中文 TTS 常见的
+    `_CHARS_PER_SECOND`（4 字/秒）由字数估算。空文本返回空列表，绝不返回
+    空片段。
     """
     cleaned = (text or "").strip()
     if not cleaned:
         return []
     if max_chars <= 0:
         raise ValueError("max_chars must be positive")
+    if max_seconds <= 0:
+        raise ValueError("max_seconds must be positive")
+    budget = min(max_chars, max(1, int(max_seconds * _CHARS_PER_SECOND)))
 
     chunks: list[str] = []
     current = ""
     for sentence in _split_sentences(cleaned):
-        while len(sentence) > max_chars:
-            head, sentence = sentence[:max_chars], sentence[max_chars:]
+        while len(sentence) > budget:
+            head, sentence = sentence[:budget], sentence[budget:]
             if current:
                 chunks.append(current)
                 current = ""
             chunks.append(head)
         if not sentence:
             continue
-        if len(current) + len(sentence) <= max_chars:
+        if len(current) + len(sentence) <= budget:
             current += sentence
         else:
             if current:
