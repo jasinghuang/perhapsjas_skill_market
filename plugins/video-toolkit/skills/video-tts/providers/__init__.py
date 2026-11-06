@@ -5,8 +5,8 @@
 - `LOCAL_VOICES`：本地 MLX Qwen3-TTS CustomVoice 的 9 个音色（spec §5.1）；
 - `ONLINE_FLAGSHIP_VOICES`：百炼 `qwen-audio-3.1-tts-plus` 的 4 个 v3.1
   旗舰音色，支持 `instruction`（spec §5.2.1）；
-- `ONLINE_QWEN_TTS_VOICES`：百炼 `qwen3-tts-flash` 的 10 个精选普通话
-  人格音色，5 女 / 5 男，不接受 `instruction`（spec §5.2.2）。
+- `ONLINE_QWEN_TTS_VOICES`：百炼 `qwen3-tts-flash` 的 12 个精选音色，
+  6 女 / 6 男（含粤语阿强 / 阿清），不接受 `instruction`（spec §5.2.2）。
 
 `find_voice` 在对应 provider 的目录里做 `voice_id` 精确匹配；`get_provider`
 按名字实例化 provider，实现模块在函数内懒导入，因此 import 本包不会加载
@@ -69,7 +69,19 @@ ONLINE_QWEN_TTS_VOICES: tuple[Voice, ...] = (
         "平直的基线语调，字正腔圆的咬字发音，最专业的新闻主持人",
         QWEN_TTS_MODEL, "online",
     ),
+    Voice(
+        "粤语-阿强", "Rocky", "男",
+        "幽默风趣的粤语男声，在线陪聊",
+        QWEN_TTS_MODEL, "online",
+    ),
+    Voice(
+        "粤语-阿清", "Kiki", "女",
+        "甜美的港妹闺蜜，粤语女声",
+        QWEN_TTS_MODEL, "online",
+    ),
 )
+
+CANTONESE_VOICE_IDS = frozenset({"Rocky", "Kiki"})
 
 _CATALOGS: dict[str, tuple[tuple[Voice, ...], ...]] = {
     "local": (LOCAL_VOICES,),

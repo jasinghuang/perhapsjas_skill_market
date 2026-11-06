@@ -52,7 +52,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py --srt <字幕> --provider 
 - 每个选项是 `{label, description}`（不是 `value`）。
 - `header` ≤ 12 字符。
 - `multiSelect` 必填；本 skill 全部单选，固定 `multiSelect: false`。
-- 超过 4 个选项必须拆成多次调用（Qwen-TTS 的 5 个音色拆成 3 + 2 两页）。
+- 超过 4 个选项必须拆成多次调用（Qwen-TTS 的 6 个音色拆成 3 + 3 两页）。
 
 例外：需要用户补充**路径**（视频 / SRT / 输出目录）时可以用纯文本提问——这是补充信息，不是多选决策。
 
@@ -63,10 +63,10 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py --srt <字幕> --provider 
 | 时机 | 问题（header） | 选项 | 何时跳过 |
 | --- | --- | --- | --- |
 | 启动 | 配音方案 | 本地（推荐）/ 在线 | 传了 `--provider` |
-| 在线 | 音色组 | 3.1 Plus 旗舰（推荐）/ Qwen-TTS 10 音色 | |
+| 在线 | 音色组 | 3.1 Plus 旗舰（推荐）/ Qwen-TTS 12 音色 | |
 | 在线·旗舰 | 具体音色 | 4 个旗舰音色 | 传了 `--voice` |
-| 在线·Qwen-TTS | 性别 | 女声（5）/ 男声（5） | |
-| 在线·Qwen-TTS | 具体音色 | 每组 5 个，拆 3 + 2 两页 | 传了 `--voice` |
+| 在线·Qwen-TTS | 性别 | 女声（6，含粤语）/ 男声（6，含粤语） | |
+| 在线·Qwen-TTS | 具体音色 | 每组 6 个，拆 3 + 3 两页 | 传了 `--voice` |
 | 本地 | 音色方向 | 普通话 / 方言 / 英语 / 日语·韩语 | 传了 `--voice` |
 | 本地 | 具体音色 | 该方向 2–3 个 | 传了 `--voice` |
 | 选完音色 | 语气 | 默认 / 平稳解说 / 活泼；自定义走 Other | 传了 `--instruct` |
@@ -199,13 +199,13 @@ AskUserQuestion({
     multiSelect: false,
     options: [
       {"label": "3.1 Plus 旗舰（推荐）", "description": "qwen-audio-3.1-tts-plus，4 个 v3.1 音色，支持语气指令"},
-      {"label": "Qwen-TTS 10 音色", "description": "qwen3-tts-flash，5 女 / 5 男普通话人格音色，不支持语气指令"}
+      {"label": "Qwen-TTS 12 音色", "description": "qwen3-tts-flash，6 女 / 6 男（含粤语阿强/阿清），不支持语气指令"}
     ]
   }]
 })
 ```
 
-两组音色**不能混用**，`--voice` 决定模型：`*_v3.1` → `qwen-audio-3.1-tts-plus`，其余 10 个 → `qwen3-tts-flash`。
+两组音色**不能混用**，`--voice` 决定模型：`*_v3.1` → `qwen-audio-3.1-tts-plus`，其余 12 个 → `qwen3-tts-flash`。
 
 ### 在线·旗舰 4 音色（header：具体音色）
 
@@ -234,7 +234,7 @@ AskUserQuestion({
 
 这 4 个音色支持 `--instruct` 自然语言语气控制；本 skill 只透传 instruction，不生成 SSML。
 
-### 在线·Qwen-TTS 10 音色（5 女 / 5 男）
+### 在线·Qwen-TTS 12 音色（6 女 / 6 男，含粤语）
 
 | 性别 | 显示名 | `--voice` | 描述 |
 | --- | --- | --- | --- |
@@ -243,11 +243,13 @@ AskUserQuestion({
 | 女 | 四月 | `Maia` | 知性与温柔的碰撞 |
 | 女 | 十三 | `Vivian` | 拽拽的、可爱的小暴躁 |
 | 女 | 茉兔 | `Momo` | 撒娇搞怪，逗你开心 |
+| 女 | 粤语-阿清 | `Kiki` | 甜美的港妹闺蜜，粤语女声 |
 | 男 | 晨煦 | `Ethan` | 标准普通话（带部分北方口音）；阳光、温暖、活力 |
 | 男 | 甜茶 | `Ryan` | 节奏拉满，戏感炸裂 |
 | 男 | 月白 | `Moon` | 率性帅气 |
 | 男 | 安德雷 | `Andre` | 声音磁性，自然舒服、沉稳 |
 | 男 | 阿闻 | `Neil` | 字正腔圆，专业新闻主持人 |
+| 男 | 粤语-阿强 | `Rocky` | 幽默风趣的粤语男声，在线陪聊 |
 
 先问性别（header：性别）：
 
@@ -258,14 +260,14 @@ AskUserQuestion({
     header: "性别",
     multiSelect: false,
     options: [
-      {"label": "女声（5 个）", "description": "Cherry / Serena / Maia / Vivian / Momo"},
-      {"label": "男声（5 个）", "description": "Ethan / Ryan / Moon / Andre / Neil"}
+      {"label": "女声（6 个）", "description": "Cherry / Serena / Maia / Vivian / Momo / Kiki（粤语）"},
+      {"label": "男声（6 个）", "description": "Ethan / Ryan / Moon / Andre / Neil / Rocky（粤语）"}
     ]
   }]
 })
 ```
 
-5 个选项超过 4 个上限，拆成 3 + 2 两页；第一页留一个「下一页」选项，第二页留「返回上一页」：
+6 个选项超过 4 个上限，拆成 3 + 3 两页；第一页留一个「下一页」选项，第二页留「返回上一页」：
 
 ```text
 # 女声 · 第 1 页（3 个音色 + 下一页）
@@ -275,7 +277,7 @@ AskUserQuestion({ questions: [{
     {"label": "芊悦 Cherry", "description": "阳光积极、亲切自然；--voice Cherry"},
     {"label": "苏瑶 Serena", "description": "温柔小姐姐；--voice Serena"},
     {"label": "四月 Maia", "description": "知性与温柔的碰撞；--voice Maia"},
-    {"label": "下一页（2 个）", "description": "查看十三 Vivian、茉兔 Momo"}
+    {"label": "下一页（3 个）", "description": "查看十三 Vivian、茉兔 Momo、粤语-阿清 Kiki"}
   ]
 }]})
 ```
@@ -287,6 +289,7 @@ AskUserQuestion({ questions: [{
   options: [
     {"label": "十三 Vivian", "description": "拽拽的、可爱的小暴躁；--voice Vivian"},
     {"label": "茉兔 Momo", "description": "撒娇搞怪，逗你开心；--voice Momo"},
+    {"label": "粤语-阿清 Kiki", "description": "甜美的港妹闺蜜，粤语女声；--voice Kiki"},
     {"label": "返回上一页", "description": "回到 Cherry / Serena / Maia"}
   ]
 }]})
@@ -300,7 +303,7 @@ AskUserQuestion({ questions: [{
     {"label": "晨煦 Ethan", "description": "标准普通话、阳光温暖；--voice Ethan"},
     {"label": "甜茶 Ryan", "description": "节奏拉满，戏感炸裂；--voice Ryan"},
     {"label": "月白 Moon", "description": "率性帅气；--voice Moon"},
-    {"label": "下一页（2 个）", "description": "查看安德雷 Andre、阿闻 Neil"}
+    {"label": "下一页（3 个）", "description": "查看安德雷 Andre、阿闻 Neil、粤语-阿强 Rocky"}
   ]
 }]})
 ```
@@ -312,6 +315,7 @@ AskUserQuestion({ questions: [{
   options: [
     {"label": "安德雷 Andre", "description": "声音磁性、沉稳；--voice Andre"},
     {"label": "阿闻 Neil", "description": "字正腔圆、专业新闻主持人；--voice Neil"},
+    {"label": "粤语-阿强 Rocky", "description": "幽默风趣的粤语男声；--voice Rocky"},
     {"label": "返回上一页", "description": "回到 Ethan / Ryan / Moon"}
   ]
 }]})
@@ -463,8 +467,13 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | `--video` | 视频路径；提供则混流输出 mp4 | 无 |
 | `--provider` | `local` / `online` | 必需（由 AskUserQuestion 决定） |
 | `--out` | 输出前缀或 `.mp4` 路径（非 `.mp4` 后缀按前缀处理） | 视频 / SRT stem |
-| `--voice` | 音色 ID（本地 9 / 在线 14，区分大小写） | 交互选择；local 与 `--design` 二选一，online 必需 |
-| `--instruct` | 语气 / 风格指令 | 空 |
+| `--voice` | 音色 ID（本地 9 / 在线 16，区分大小写） | 交互选择；local 与 `--design` 二选一，online 必需 |
+| `--instruct` | 语气 / 风格指令（仅 3.1 Plus） | 空 |
+| `--rate` | 在线语速 0.5-2.0 | 模型默认 |
+| `--pitch` | 在线音调 0.5-2.0 | 模型默认 |
+| `--volume` | 在线音量 0-100 | 模型默认 |
+| `--seed` | 在线随机种子 0-65535 | 模型默认 |
+| `--enable-ssml` | 在线 SSML 模式（仅 3.1 Plus 旗舰音色） | false |
 | `--design` | 本地 VoiceDesign 音色描述；与 `--voice` / `--instruct` 互斥，自动加载 VoiceDesign 模型 | 无 |
 | `--lang` | 语言代码（在线映射 `chinese` 等 → `zh` / `en` / …） | `chinese` |
 | `--model` | 覆盖 provider 模型 id；在线必须与音色同组，本地 VoiceDesign 只能配 `--design` | 各 provider 默认 |
@@ -480,6 +489,17 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | `--yes` | 确认在线合成费用（online 真实运行必需；`--dry-run` 免确认） | false |
 | `--dry-run` | 只解析并打印计划，不合成 | false |
 
+## 配音优化（百炼文档要点）
+
+- **语速 / 音调 / 音量**：`--rate` / `--pitch` / `--volume`，只对在线生效；本地用 atempo 做时间对齐，不做音色级调速。
+- **随机种子**：`--seed` 固定在线采样，帮助跨段音色更稳定；同一 seed + 文本 + 音色更容易复现。
+- **指令控制**：`--instruct` 仅 3.1 Plus 生效，可同时说语种、语速、情绪、角色。例：`"请用粤语说，语速稍慢，语气温柔"`。
+- **情感 / 拟声标签**：3.1 Plus 支持把 `[excited]`、`[sad]`、`[laughing]` 等直接写进 SRT 文本；Qwen-TTS 备选组不支持。
+- **SSML**：`--enable-ssml` 后可在 SRT 文本里用 `<break time="300ms"/>` 等控制停顿/读音，仅 3.1 Plus；普通文本不要默认开启。
+- **语言提示**：`--lang` 在 3.1 Plus 走 `language_hints`，在 Qwen-TTS 走 `language_type`；粤语音色由 voice 本身决定语种，不发送语言字段。
+- **hot_fix（专名发音/替换）**：`bl` CLI 未暴露该参数，v1 不提供。需要纠正专名时，先在上游 `text-refine` 改成同音字/拼音，或改用支持 `hot_fix` 的 HTTP 接口。
+- 在线风格参数会进入缓存键：改 `--rate/--pitch/--volume/--seed/--enable-ssml` 会触发重新合成。
+
 ## 错误处理
 
 | 现象 | 处理 |
@@ -494,7 +514,7 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | 在线 429 / 5xx | provider 自动指数退避重试 2 次（1s / 2s）；仍失败则询问切本地或终止 |
 | 在线额度不足 / Throttling | provider 立即报错并给出[百炼控制台](https://bailian.console.aliyun.com/)链接；可切本地 |
 | 在线音色与模型不匹配 | `--voice` 自动决定模型；显式 `--model` 必须与音色同组，跨组在本地参数校验阶段退出 2，不发请求 |
-| 在线音色名非法 | 参数校验阶段报错并列出 14 个合法音色后退出（码 2） |
+| 在线音色名非法 | 参数校验阶段报错并列出 16 个合法音色后退出（码 2） |
 | `bl --list-voices` 返回空 | 正常现象（这两个模型返回 `null`）；以本文音色表为准，不报错 |
 | SRT 为空 / 时间非法 / 零时长 | 列出条目号并退出 |
 | 单条合成失败 / 空音频 / 全静音 | 重试一次；仍失败终止（除非 `--continue-on-error`），不写缓存 |

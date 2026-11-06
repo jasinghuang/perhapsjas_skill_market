@@ -60,6 +60,12 @@ class EngineOptions:
     segments_dir: Path | None = None
     no_cache: bool = False
     continue_on_error: bool = False
+    # 在线 provider 的配音优化参数；本地 provider 会拒绝非空 style。
+    rate: float | None = None
+    pitch: float | None = None
+    volume: int | None = None
+    seed: int | None = None
+    enable_ssml: bool = False
 
 
 @dataclass
@@ -106,6 +112,7 @@ def _cache_key(
     chunk: str,
     chunk_index: int,
     chunk_count: int,
+    style: dict | None = None,
 ) -> str:
     """块级缓存 key；长文本切块时把块序号一并纳入 key。
 
@@ -115,6 +122,9 @@ def _cache_key(
     """
     voice_id, model_id = _voice_ids(voice)
     text = chunk if chunk_count == 1 else f"{chunk_index}\n{chunk}"
+    if style:
+        # 语速 / 音调 / 音量 / seed / SSML 都影响音频，必须进入缓存键。
+        text += "\nstyle=" + repr(sorted(style.items()))
     return segment_cache_key(
         provider_name, model_id, voice_id, instruct, lang, text
     )
@@ -132,10 +142,18 @@ def _synthesize_chunk(
     cache: SegmentCache,
     use_cache: bool,
     provider_name: str,
+    style: dict | None = None,
 ) -> np.ndarray:
     """取回或合成一个文本块，返回已裁剪并校验过的 float32 PCM。"""
     key = _cache_key(
-        provider_name, voice, instruct, lang, chunk, chunk_index, chunk_count
+        provider_name,
+        voice,
+        instruct,
+        lang,
+        chunk,
+        chunk_index,
+        chunk_count,
+        style=style,
     )
     if use_cache:
         cached = cache.get(key, sample_rate)
@@ -151,7 +169,9 @@ def _synthesize_chunk(
     # 第二次仍失败才把异常抛给调用方（或由 continue_on_error 记为失败）。
     for attempt in range(2):
         try:
-            raw = provider.synthesize(chunk, voice, instruct=instruct, lang=lang)
+            raw = provider.synthesize(
+                chunk, voice, instruct=instruct, lang=lang, **(style or {})
+            )
             pcm = trim_silence(raw, sample_rate)
             validate_pcm(pcm, sample_rate)
         except Exception:
@@ -232,6 +252,13 @@ def run_engine(
     sample_rate = options.sample_rate
     provider_name = _provider_name(provider)
     use_cache = not options.no_cache
+    style: dict = {}
+    for key in ("rate", "pitch", "volume", "seed"):
+        value = getattr(options, key)
+        if value is not None:
+            style[key] = value
+    if options.enable_ssml:
+        style["enable_ssml"] = True
 
     segments_dir: Path | None = None
     if options.keep_segments:
@@ -289,6 +316,7 @@ def run_engine(
                     cache,
                     use_cache,
                     provider_name,
+                    style=style,
                 )
                 for chunk_index, chunk in enumerate(chunks)
             ]

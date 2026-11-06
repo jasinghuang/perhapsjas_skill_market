@@ -418,3 +418,47 @@ def test_print_report_includes_total_chars(capsys):
     warnings, failures = _print_report([result], 0)
     assert (warnings, failures) == (0, 0)
     assert "4 字" in capsys.readouterr().out
+
+
+def test_online_style_flags_validate_for_flagship(tmp_path):
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "online",
+        "--voice", "longanlingxin_v3.1", "--yes",
+        "--rate", "1.1", "--pitch", "0.95", "--volume", "80",
+        "--seed", "42", "--enable-ssml",
+    ])
+    validate_args(args)
+    assert (args.rate, args.pitch, args.volume, args.seed) == (1.1, 0.95, 80, 42)
+    assert args.enable_ssml is True
+
+
+def test_local_rejects_online_style_flags(tmp_path, capsys):
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "local",
+        "--voice", "Serena", "--rate", "1.1",
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "only supported by the online provider" in capsys.readouterr().err
+
+
+def test_style_flag_ranges_are_enforced(tmp_path, capsys):
+    for flag, value in (("--rate", "0.4"), ("--pitch", "2.1"),
+                        ("--volume", "101"), ("--seed", "-1")):
+        args = build_parser().parse_args([
+            "--srt", str(_write_srt(tmp_path)), "--provider", "online",
+            "--voice", "Cherry", "--yes", flag, value,
+        ])
+        with pytest.raises(SystemExit):
+            validate_args(args)
+        assert flag in capsys.readouterr().err
+
+
+def test_enable_ssml_is_flagship_only(tmp_path, capsys):
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "online",
+        "--voice", "Cherry", "--yes", "--enable-ssml",
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "--enable-ssml" in capsys.readouterr().err

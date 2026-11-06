@@ -37,6 +37,7 @@ from engine import EngineOptions, SegmentResult, run_engine
 from mux import mux_video, probe_video, verify_output
 from providers import (
     FLAGSHIP_MODEL,
+    FLAGSHIP_MODEL,
     LOCAL_DESIGN_MODEL,
     find_voice,
     get_provider,
@@ -65,8 +66,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="local = 本地 MLX Qwen3-TTS；online = 百炼 qwen3-tts",
     )
     parser.add_argument("--out", help="输出前缀或 .mp4 路径（默认取视频 / SRT 的 stem）")
-    parser.add_argument("--voice", help="音色 ID（本地 9 个 / 在线 14 个）")
+    parser.add_argument("--voice", help="音色 ID（本地 9 个 / 在线 16 个）")
     parser.add_argument("--instruct", default="", help="语气 / 风格指令")
+    parser.add_argument(
+        "--rate", type=float, help="在线语速 0.5-2.0（默认由模型决定）"
+    )
+    parser.add_argument(
+        "--pitch", type=float, help="在线音调 0.5-2.0（默认由模型决定）"
+    )
+    parser.add_argument(
+        "--volume", type=int, help="在线音量 0-100（默认由模型决定）"
+    )
+    parser.add_argument(
+        "--seed", type=int, help="在线随机种子 0-65535（用于复现音色）"
+    )
+    parser.add_argument(
+        "--enable-ssml",
+        action="store_true",
+        help="在线 SSML 模式（仅 3.1 Plus 旗舰音色支持）",
+    )
     parser.add_argument(
         "--design", help="本地 VoiceDesign 音色描述；与 --voice 互斥"
     )
@@ -167,6 +185,33 @@ def validate_args(args: argparse.Namespace) -> None:
                 f"(which uses {voice.model!r}); online --model can only "
                 "restate the model of the selected voice group"
             )
+
+    style_values = (args.rate, args.pitch, args.volume, args.seed)
+    if args.provider == "local" and any(value is not None for value in style_values):
+        _fail(
+            "--rate/--pitch/--volume/--seed are only supported by the online "
+            "provider"
+        )
+    if args.provider == "local" and args.enable_ssml:
+        _fail("--enable-ssml is only supported by the online provider")
+    if args.rate is not None and not (0.5 <= args.rate <= 2.0):
+        _fail(f"--rate must be in [0.5, 2.0] (got {args.rate})")
+    if args.pitch is not None and not (0.5 <= args.pitch <= 2.0):
+        _fail(f"--pitch must be in [0.5, 2.0] (got {args.pitch})")
+    if args.volume is not None and not (0 <= args.volume <= 100):
+        _fail(f"--volume must be in [0, 100] (got {args.volume})")
+    if args.seed is not None and not (0 <= args.seed <= 65535):
+        _fail(f"--seed must be in [0, 65535] (got {args.seed})")
+    if (
+        args.enable_ssml
+        and args.provider == "online"
+        and voice is not None
+        and voice.model != FLAGSHIP_MODEL
+    ):
+        _fail(
+            "--enable-ssml is only supported by qwen-audio-3.1-tts-plus "
+            "flagship voices"
+        )
 
     if args.provider == "online" and not args.yes and not args.dry_run:
         _fail(
@@ -474,6 +519,11 @@ def _run(args: argparse.Namespace) -> int:
         segments_dir=out_prefix.parent / "segments" if args.keep_segments else None,
         no_cache=args.no_cache,
         continue_on_error=args.continue_on_error,
+        rate=args.rate,
+        pitch=args.pitch,
+        volume=args.volume,
+        seed=args.seed,
+        enable_ssml=args.enable_ssml,
     )
     cache = SegmentCache(enabled=not args.no_cache)
 

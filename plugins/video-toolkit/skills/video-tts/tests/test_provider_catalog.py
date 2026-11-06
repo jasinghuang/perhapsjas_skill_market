@@ -26,11 +26,12 @@ def test_online_flagship_catalog():
     }
 
 
-def test_qwen_tts_catalog_is_five_and_five():
-    assert len(ONLINE_QWEN_TTS_VOICES) == 10
-    assert sum(v.gender == "女" for v in ONLINE_QWEN_TTS_VOICES) == 5
-    assert sum(v.gender == "男" for v in ONLINE_QWEN_TTS_VOICES) == 5
+def test_qwen_tts_catalog_is_six_and_six_with_cantonese():
+    assert len(ONLINE_QWEN_TTS_VOICES) == 12
+    assert sum(v.gender == "女" for v in ONLINE_QWEN_TTS_VOICES) == 6
+    assert sum(v.gender == "男" for v in ONLINE_QWEN_TTS_VOICES) == 6
     assert all(v.model == "qwen3-tts-flash" for v in ONLINE_QWEN_TTS_VOICES)
+    assert {"Rocky", "Kiki"} <= {v.voice_id for v in ONLINE_QWEN_TTS_VOICES}
 
 
 def test_find_voice_rejects_unknown_with_list():

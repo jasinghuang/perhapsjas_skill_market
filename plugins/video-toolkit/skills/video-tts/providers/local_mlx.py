@@ -75,8 +75,14 @@ class LocalMLXProvider:
         voice: Voice | None,
         instruct: str = "",
         lang: str = "chinese",
+        **style,
     ) -> np.ndarray:
         """合成一段文本，返回 24 kHz 单声道 float32 PCM。"""
+        if style:
+            raise ProviderError(
+                "rate/pitch/volume/seed/enable_ssml are only supported by the "
+                "online provider"
+            )
         if self._model is None:
             raise ProviderError("prepare() must be called before synthesize()")
 

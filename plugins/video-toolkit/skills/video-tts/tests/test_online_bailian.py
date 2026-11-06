@@ -19,6 +19,7 @@ from providers.online_bailian import (
 
 FLAG = find_voice("online", "longanlingxin_v3.1")
 QTTS = find_voice("online", "Cherry")
+CANTONESE = find_voice("online", "Rocky")
 
 
 def test_build_bl_command_for_flagship_with_instruction():
@@ -73,6 +74,54 @@ def test_http_payload_maps_language_type(tmp_path):
          patch("requests.get", return_value=download):
         p._synthesize_http("hello", QTTS, "", "english", tmp_path / "a.wav")
     assert post.call_args.kwargs["json"]["input"]["language_type"] == "English"
+
+
+def test_http_payload_uses_language_hints_for_flagship(tmp_path):
+    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    response = MagicMock(
+        raise_for_status=MagicMock(),
+        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
+    )
+    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
+    with patch("requests.post", return_value=response) as post, \
+         patch("requests.get", return_value=download):
+        p._synthesize_http("你好", FLAG, "", "chinese", tmp_path / "a.wav")
+    payload = post.call_args.kwargs["json"]["input"]
+    assert payload["language_hints"] == ["zh"]
+    assert "language_type" not in payload
+
+
+def test_cantonese_voice_omits_language_and_carries_style():
+    p = OnlineBailianProvider()
+    cmd = p.build_bl_command(
+        "你好", CANTONESE, Path("/tmp/a.wav"),
+        rate=1.1, pitch=1.0, volume=80, seed=42, enable_ssml=False,
+    )
+    assert "--language" not in cmd
+    assert cmd[cmd.index("--rate") + 1] == "1.1"
+    assert cmd[cmd.index("--volume") + 1] == "80"
+    assert cmd[cmd.index("--seed") + 1] == "42"
+
+
+def test_http_payload_cantonese_omits_language_and_carries_style(tmp_path):
+    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    response = MagicMock(
+        raise_for_status=MagicMock(),
+        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
+    )
+    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
+    with patch("requests.post", return_value=response) as post, \
+         patch("requests.get", return_value=download):
+        p._synthesize_http(
+            "你好", CANTONESE, "", "chinese", tmp_path / "a.wav",
+            rate=1.1, pitch=1.0, volume=80, seed=42,
+        )
+    payload = post.call_args.kwargs["json"]["input"]
+    assert "language_type" not in payload and "language_hints" not in payload
+    assert payload["rate"] == 1.1
+    assert payload["pitch"] == 1.0
+    assert payload["volume"] == 80
+    assert payload["seed"] == 42
 
 
 def test_describe_reports_online_and_shared_flagship_constant():

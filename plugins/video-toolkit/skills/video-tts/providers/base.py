@@ -37,8 +37,12 @@ class TTSProvider(Protocol):
         voice: Voice,
         instruct: str = "",
         lang: str = "chinese",
+        **style: object,
     ) -> np.ndarray:
-        """合成一段文本，返回 24 kHz 单声道 float32 PCM。"""
+        """合成一段文本，返回 24 kHz 单声道 float32 PCM。
+
+        可选 style：rate / pitch / volume / seed / enable_ssml（在线）。
+        """
 
     def describe(self) -> dict:
         """返回 provider 的自描述信息（名称、模型、能力等）。"""

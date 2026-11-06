@@ -17,7 +17,7 @@
 提供两种配音方案，用户每次调用开始时自己选：
 
 - **本地**：开源 Qwen3-TTS-12Hz-1.7B（MLX），免费、离线、9 个固定音色。
-- **在线**：阿里云百炼，首选 `qwen-audio-3.1-tts-plus` 的 4 个 v3.1 旗舰音色；备选 `qwen3-tts-flash` 的 10 个精选中青年音色。按 token 计费、需联网，但有 SSML / 指令控制 / 时间戳 / 声音复刻等更完整的能力。**通过 `bl` CLI 调用，复用其登录态，不需要把 API key 交给 skill。**
+- **在线**：阿里云百炼，首选 `qwen-audio-3.1-tts-plus` 的 4 个 v3.1 旗舰音色；备选 `qwen3-tts-flash` 的 12 个精选音色（6 女 / 6 男，含粤语）。按 token 计费、需联网，但有 SSML / 指令控制 / 时间戳 / 声音复刻等更完整的能力。**通过 `bl` CLI 调用，复用其登录态，不需要把 API key 交给 skill。**
 
 ## 2. 目标 / 非目标 / 反目标
 
@@ -78,7 +78,7 @@
 | 音色枚举 | 不要依赖 `bl speech synthesize --list-voices`：对 `qwen-audio-3.1-tts-plus` 与 `qwen3-tts-flash` 返回 `voices: null`；以附录 A 内置目录为准 |
 | 旗舰音色（首选） | 列表页 3.1 Plus 只列 4 个 v3.1 旗舰：`longanlingxin_v3.1`、`xunanchuan_v3.1`、`longanhuan_v3.1`、`longanfengyue_v3.1` |
 | 备选模型 | `qwen3-tts-flash`（非实时） |
-| 备选音色 | Qwen-TTS 音色列表精选 **10 个中青年音色（5 女 / 5 男，普通话）**，完整清单见附录 A |
+| 备选音色 | Qwen-TTS 音色列表精选 **12 个音色（6 女 / 6 男，含粤语阿强/阿清）**，完整清单见附录 A |
 | 能力 | `instruction` 自然语言控制、SSML、情感/拟声标签、字级时间戳（流式）、声音复刻 |
 | 计费 | 按 token 计费；3.1 Plus 与 qwen3-tts-flash 单价以控制台为准 |
 | 限流 | 参考 qwen3-tts-flash 为 RPS 3；plus 以控制台为准，串行合成并对 429 退避 |
@@ -127,7 +127,7 @@ skill 放 `plugins/<plugin>/skills/<skill>/`；`SKILL.md` + `run.py` + `skill_ma
 
 ### 5.2 在线音色
 
-在线 provider 内置两组音色。**首选 3.1 Plus 旗舰音色；Qwen-TTS 10 音色作为备选。**
+在线 provider 内置两组音色。**首选 3.1 Plus 旗舰音色；Qwen-TTS 12 音色作为备选。**
 
 #### 5.2.1 首选：qwen-audio-3.1-tts-plus 旗舰音色（4 个）
 
@@ -140,9 +140,9 @@ skill 放 `plugins/<plugin>/skills/<skill>/`；`SKILL.md` + `run.py` + `skill_ma
 
 这组支持 `instruction` 自然语言控制（如「用平稳的解说语气，语速稍慢」）以及 SSML / 情感标签；本 skill 只透传 `instruction`，不生成 SSML。
 
-#### 5.2.2 备选：Qwen-TTS 精选 10 音色（qwen3-tts-flash）
+#### 5.2.2 备选：Qwen-TTS 精选 12 音色（qwen3-tts-flash）
 
-来源：[Qwen-TTS 音色列表](https://help.aliyun.com/zh/model-studio/qwen-tts-voice-list)。**只保留 10 个中青年音色，男女 1:1**；排除童声（Bella / Mia / Mochi / Bunny / Pip / Nini / Stella）、老年（Eldric Sage / Arthur）、方言（Jada / Dylan / Li / Marcus / Roy / Peter / Sunny / Eric / Rocky / Kiki）以及外语人格角色。
+来源：[Qwen-TTS 音色列表](https://help.aliyun.com/zh/model-studio/qwen-tts-voice-list)。**保留 12 个中青年音色，男女 1:1**；包含粤语阿强 / 阿清，排除童声（Bella / Mia / Mochi / Bunny / Pip / Nini / Stella）、老年（Eldric Sage / Arthur）、其余方言（Jada / Dylan / Li / Marcus / Roy / Peter / Sunny / Eric）以及外语人格角色。
 
 | 性别 | 名称 | voice 参数 | 描述 |
 | --- | --- | --- | --- |
@@ -151,19 +151,21 @@ skill 放 `plugins/<plugin>/skills/<skill>/`；`SKILL.md` + `run.py` + `skill_ma
 | 女 | 四月 | `Maia` | 知性与温柔的碰撞 |
 | 女 | 十三 | `Vivian` | 拽拽的、可爱的小暴躁 |
 | 女 | 茉兔 | `Momo` | 撒娇搞怪，逗你开心 |
+| 女 | 粤语-阿清 | `Kiki` | 甜美的港妹闺蜜，粤语女声 |
 | 男 | 晨煦 | `Ethan` | 标准普通话，带部分北方口音；阳光、温暖、活力、朝气 |
 | 男 | 甜茶 | `Ryan` | 节奏拉满，戏感炸裂，真实与张力共舞 |
 | 男 | 月白 | `Moon` | 率性帅气的月白 |
 | 男 | 安德雷 | `Andre` | 声音磁性，自然舒服、沉稳男生 |
 | 男 | 阿闻 | `Neil` | 平直的基线语调，字正腔圆的咬字发音，最专业的新闻主持人 |
+| 男 | 粤语-阿强 | `Rocky` | 幽默风趣的粤语男声，在线陪聊 |
 
-注意：这 10 个音色属于 `qwen3-tts-flash`，**不能与 3.1 Plus 的 4 个旗舰音色混用**（百炼会返回 `InvalidParameter`）。在线 provider 必须按「音色 → 模型」映射选模型；`instruction` 只对 3.1 Plus 组生效，Qwen-TTS 备选组不传 `instruction`，需要指令控制时提示用户改用旗舰组。
+注意：这 12 个音色属于 `qwen3-tts-flash`，**不能与 3.1 Plus 的 4 个旗舰音色混用**（百炼会返回 `InvalidParameter`）。在线 provider 必须按「音色 → 模型」映射选模型；`instruction` 只对 3.1 Plus 组生效，Qwen-TTS 备选组不传 `instruction`，需要指令控制时提示用户改用旗舰组。
 
 ### 5.3 选择建议（写进 SKILL.md 与菜单描述）
 
 - 想免费、离线、隐私优先、音色够用 → **本地**。首次需下载约 3.4 GB 模型。
 - 想要更细分的普通话人格音色、SSML / 情感标签、更强表现力，且接受按 token 付费 → **在线**。
-- 在线首选 **3.1 Plus 4 个旗舰音色**；想要更多中青年普通话人格（阳光 / 温柔 / 知性 / 拽 / 撒娇 / 新闻男等），再选 **Qwen-TTS 精选 10 音色**备选。
+- 在线首选 **3.1 Plus 4 个旗舰音色**；想要更多中青年普通话人格（阳光 / 温柔 / 知性 / 拽 / 撒娇 / 新闻男等），再选 **Qwen-TTS 精选 12 音色**备选（含粤语）。
 - 音色不一一对应：本地没有「知心灵心 / 磁性南川 / 活泼安欢」的精确对应，只能近似（Serena ≈ 温柔女声，Uncle_Fu ≈ 低沉男声）。
 
 ### 5.4 模型覆盖与映射
@@ -172,7 +174,7 @@ skill 放 `plugins/<plugin>/skills/<skill>/`；`SKILL.md` + `run.py` + `skill_ma
 - 本地 `--design "<音色描述>"` 切 VoiceDesign；未显式给 `--model` 时默认加载 `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16`，且与 `--voice` / `--instruct` 互斥。明确提示跨段漂移风险，仅建议短视频。
 - 在线按音色自动选模型：
   - 4 个 `*_v3.1` 旗舰音色 → `qwen-audio-3.1-tts-plus`
-  - 10 个精选 Qwen-TTS 音色 → `qwen3-tts-flash`
+  - 12 个精选 Qwen-TTS 音色 → `qwen3-tts-flash`
 - 在线 `--model` 只能覆盖为同一音色组对应的模型；音色与模型不匹配时在本地预检阶段直接报错，不发请求。
 - `--lang` 默认 `chinese`；在线对应 `language_type` / `language_hints` 由 provider 映射。
 
@@ -263,7 +265,7 @@ class TTSProvider:
 
 - 音色目录：内置两组映射（附录 A）。`voice -> model` 查表决定 `--model`：
   - `longanlingxin_v3.1` / `xunanchuan_v3.1` / `longanhuan_v3.1` / `longanfengyue_v3.1` → `qwen-audio-3.1-tts-plus`
-  - 10 个精选 Qwen-TTS 音色（Cherry / Serena / Maia / Vivian / Momo / Ethan / Ryan / Moon / Andre / Neil）→ `qwen3-tts-flash`
+  - 12 个精选 Qwen-TTS 音色（Cherry / Serena / Maia / Vivian / Momo / Kiki / Ethan / Ryan / Moon / Andre / Neil / Rocky）→ `qwen3-tts-flash`
 - 预检：`bl` 是否在 PATH；`bl auth status --output json` 的 `authenticated` 是否为 true。
 - 未登录时的登录链接流程：
   1. 后台启动 `bl auth login --console --no-browser`（不要让它阻塞主进程）。
@@ -295,6 +297,16 @@ bl speech synthesize \
 - 响应取 `output.audio.url` 下载 wav；下载失败重试一次。
 
 **费用提示**：开始批量合成前打印总字数与「按 token 计费」提示，需用户确认（`--yes` 可跳过）。
+
+#### 8.3.1 配音优化参数（百炼文档）
+
+- `--rate` / `--pitch` / `--volume` / `--seed`：透传给 `bl` 的 `--rate/--pitch/--volume/--seed`，HTTP 兜底写入同名 `input` 字段；只允许在线。
+- `--enable-ssml`：仅 3.1 Plus 旗舰音色；透传 `bl --enable-ssml` / `input.enable_ssml=true`，SRT 文本可含 `<break>` 等 SSML。
+- `--instruct`：仅 3.1 Plus；可用于语速、情绪、角色、方言（如「请用粤语说」）。Qwen-TTS 备选组忽略。
+- 情感/拟声标签（`[excited]`、`[laughing]` 等）直接写在 SRT 文本里，仅 3.1 Plus。
+- 语言：3.1 Plus 的 HTTP 请求使用 `language_hints: [code]`；Qwen-TTS 使用 `language_type`；粤语系统音色由 voice 决定语种，不发送语言字段。
+- `hot_fix`：`bl` CLI 未暴露，v1 不提供；需要专名发音纠正时在上游 `text-refine` 处理，或改用支持 `hot_fix` 的 HTTP 接口。
+- 以上风格参数都进入缓存键，改参数会重新合成。
 
 ### 8.4 合成结果校验与缓存
 
@@ -376,8 +388,13 @@ ffprobe -v error -show_entries \
 | `--video` | 视频路径；提供则输出 mp4 | 无 |
 | `--provider` | `local` / `online` | 交互选择 |
 | `--out` | 输出前缀或 `.mp4` 路径（非 `.mp4` 后缀按前缀处理） | `<video stem>` 或 `<srt stem>` |
-| `--voice` | 音色名/参数（本地 9 个或在线 14 个） | 交互选择 |
+| `--voice` | 音色名/参数（本地 9 个或在线 16 个） | 交互选择 |
 | `--instruct` | 语气/风格指令 | 空 |
+| `--rate` | 在线语速 0.5-2.0 | 模型默认 |
+| `--pitch` | 在线音调 0.5-2.0 | 模型默认 |
+| `--volume` | 在线音量 0-100 | 模型默认 |
+| `--seed` | 在线随机种子 0-65535 | 模型默认 |
+| `--enable-ssml` | 在线 SSML（仅 3.1 Plus 旗舰） | false |
 | `--design` | 本地 VoiceDesign 音色描述；与 `--voice` / `--instruct` 互斥，自动加载 VoiceDesign 模型 | 无 |
 | `--lang` | 语言代码；在线映射为 `zh` / `en` / `ja` / `ko` / `de` / `fr` / `ru` / `pt` / `es` / `it` | `chinese` |
 | `--model` | 覆盖 provider 的模型 id；在线必须与音色同组， VoiceDesign 模型只能配 `--design` | 各 provider 默认 |
@@ -403,10 +420,10 @@ ffprobe -v error -show_entries \
 | 时机 | 问题（header） | 选项 | 何时跳过 |
 | --- | --- | --- | --- |
 | 启动 | 配音方案 | 本地（推荐）/ 在线 | 传了 `--provider` |
-| 在线 | 音色组 | 3.1 Plus 旗舰（推荐）/ Qwen-TTS 10 音色 | |
+| 在线 | 音色组 | 3.1 Plus 旗舰（推荐）/ Qwen-TTS 12 音色 | |
 | 在线·旗舰 | 具体音色 | 4 个旗舰音色 | 传了 `--voice` |
-| 在线·Qwen-TTS | 性别 | 女声（5）/ 男声（5） | |
-| 在线·Qwen-TTS | 具体音色 | 每组 5 个，拆 3 + 2 两页 | 传了 `--voice` |
+| 在线·Qwen-TTS | 性别 | 女声（6，含粤语）/ 男声（6，含粤语） | |
+| 在线·Qwen-TTS | 具体音色 | 每组 6 个，拆 3 + 3 两页 | 传了 `--voice` |
 | 本地 | 音色方向 | 普通话 / 方言 / 英语 / 日语·韩语 | 传了 `--voice` |
 | 本地 | 具体音色 | 该方向 2–3 个 | 传了 `--voice` |
 | 选完音色 | 语气 | 默认 / 平稳解说 / 活泼；自定义走 Other | 传了 `--instruct` |
@@ -513,7 +530,7 @@ plugins/video-toolkit/skills/video-tts/
 | 龙安欢_v3.1 | `longanhuan_v3.1` | 女 | 活泼、爱笑 |
 | 龙安风悦_v3.1 | `longanfengyue_v3.1` | 女 | 自然亲切、播报感 |
 
-### A.2 Qwen-TTS 精选 10 音色（qwen3-tts-flash，5 女 / 5 男）
+### A.2 Qwen-TTS 精选 12 音色（qwen3-tts-flash，6 女 / 6 男，含粤语）
 
 | 性别 | 名称 | voice 参数 | 描述 |
 | --- | --- | --- | --- |
@@ -522,10 +539,11 @@ plugins/video-toolkit/skills/video-tts/
 | 女 | 四月 | `Maia` | 知性与温柔的碰撞 |
 | 女 | 十三 | `Vivian` | 拽拽的、可爱的小暴躁 |
 | 女 | 茉兔 | `Momo` | 撒娇搞怪，逗你开心 |
+| 女 | 粤语-阿清 | `Kiki` | 甜美的港妹闺蜜，粤语女声 |
 | 男 | 晨煦 | `Ethan` | 标准普通话，带部分北方口音；阳光、温暖、活力、朝气 |
 | 男 | 甜茶 | `Ryan` | 节奏拉满，戏感炸裂，真实与张力共舞 |
 | 男 | 月白 | `Moon` | 率性帅气的月白 |
 | 男 | 安德雷 | `Andre` | 声音磁性，自然舒服、沉稳男生 |
 | 男 | 阿闻 | `Neil` | 平直的基线语调，字正腔圆的咬字发音，最专业的新闻主持人 |
 
-> 已排除：童声（Bella/Mia/Mochi/Bunny/Pip/Nini/Stella）、老年（Eldric Sage/Arthur）、方言（Jada/Dylan/Li/Marcus/Roy/Peter/Sunny/Eric/Rocky/Kiki）、外语人格角色（Jennifer/Katerina/Bodega/Sonrisa/Alek/Dolce/Sohee/Ono Anna/Lenn/Emilien 等）。如需这些音色，后续再扩目录。
+> 已排除：童声（Bella/Mia/Mochi/Bunny/Pip/Nini/Stella）、老年（Eldric Sage/Arthur）、其余方言（Jada/Dylan/Li/Marcus/Roy/Peter/Sunny/Eric）、外语人格角色（Jennifer/Katerina/Bodega/Sonrisa/Alek/Dolce/Sohee/Ono Anna/Lenn/Emilien 等）。**粤语阿强/阿清已纳入**；其余音色后续再扩目录。

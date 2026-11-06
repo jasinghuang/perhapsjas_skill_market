@@ -30,7 +30,7 @@ from typing import Callable
 import numpy as np
 import soundfile as sf
 
-from . import FLAGSHIP_MODEL
+from . import CANTONESE_VOICE_IDS, FLAGSHIP_MODEL
 from .base import Voice
 
 SAMPLE_RATE = 24000
@@ -279,6 +279,11 @@ class OnlineBailianProvider:
         out_path: Path,
         instruct: str = "",
         lang: str = DEFAULT_LANG,
+        rate: float | None = None,
+        pitch: float | None = None,
+        volume: int | None = None,
+        seed: int | None = None,
+        enable_ssml: bool = False,
     ) -> list[str]:
         """构造 `bl speech synthesize` 命令行。"""
         cmd = [
@@ -293,15 +298,23 @@ class OnlineBailianProvider:
             voice.voice_id,
             "--format",
             "wav",
-            "--language",
-            _language_code(lang),
-            "--sample-rate",
-            str(SAMPLE_RATE),
-            "--out",
-            str(out_path),
         ]
+        # 粤语音色由 voice 本身决定语种；再传 --language zh 可能被误判为普通话。
+        if voice.voice_id not in CANTONESE_VOICE_IDS:
+            cmd.extend(["--language", _language_code(lang)])
+        cmd.extend(["--sample-rate", str(SAMPLE_RATE), "--out", str(out_path)])
         if voice.model == FLAGSHIP_MODEL and instruct:
             cmd.extend(["--instruction", instruct])
+        if rate is not None:
+            cmd.extend(["--rate", str(rate)])
+        if pitch is not None:
+            cmd.extend(["--pitch", str(pitch)])
+        if volume is not None:
+            cmd.extend(["--volume", str(volume)])
+        if seed is not None:
+            cmd.extend(["--seed", str(seed)])
+        if enable_ssml:
+            cmd.append("--enable-ssml")
         return cmd
 
     def _synthesize_bl(
@@ -311,13 +324,29 @@ class OnlineBailianProvider:
         instruct: str,
         lang: str,
         out_path: Path,
+        rate: float | None = None,
+        pitch: float | None = None,
+        volume: int | None = None,
+        seed: int | None = None,
+        enable_ssml: bool = False,
     ) -> Path:
         """用 `bl speech synthesize` 合成到 out_path。
 
         429 / 5xx 有界指数退避重试 2 次（1s / 2s）；401/403 与额度问题
         立即给出可操作错误，不重试。
         """
-        cmd = self.build_bl_command(text, voice, out_path, instruct, lang)
+        cmd = self.build_bl_command(
+            text,
+            voice,
+            out_path,
+            instruct,
+            lang,
+            rate=rate,
+            pitch=pitch,
+            volume=volume,
+            seed=seed,
+            enable_ssml=enable_ssml,
+        )
         for attempt in range(len(RETRY_DELAYS) + 1):
             try:
                 subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -351,11 +380,17 @@ class OnlineBailianProvider:
         instruct: str,
         lang: str,
         out_path: Path,
+        rate: float | None = None,
+        pitch: float | None = None,
+        volume: int | None = None,
+        seed: int | None = None,
+        enable_ssml: bool = False,
     ) -> Path:
         """通过 DashScope HTTP API 合成并把音频下载到 out_path。
 
         只负责请求与下载，不解码 WAV；解码统一交给 `synthesize`。
-        `lang` 映射成 DashScope 的 `language_type`（首字母大写）。
+        3.1 Plus 使用 `language_hints` 数组；Qwen3-TTS 使用 `language_type`。
+        粤语系统音色由 voice 本身决定语种，不发送语言字段。
         """
         if not self.endpoint:
             raise ProviderError("--tts-endpoint is required for HTTP fallback")
@@ -374,11 +409,25 @@ class OnlineBailianProvider:
                 "voice": voice.voice_id,
                 "format": "wav",
                 "sample_rate": SAMPLE_RATE,
-                "language_type": _language_type(lang),
             },
         }
+        if voice.voice_id not in CANTONESE_VOICE_IDS:
+            if voice.model == FLAGSHIP_MODEL:
+                payload["input"]["language_hints"] = [_language_code(lang)]
+            else:
+                payload["input"]["language_type"] = _language_type(lang)
         if voice.model == FLAGSHIP_MODEL and instruct:
             payload["input"]["instruction"] = instruct
+        if rate is not None:
+            payload["input"]["rate"] = rate
+        if pitch is not None:
+            payload["input"]["pitch"] = pitch
+        if volume is not None:
+            payload["input"]["volume"] = volume
+        if seed is not None:
+            payload["input"]["seed"] = seed
+        if enable_ssml:
+            payload["input"]["enable_ssml"] = True
 
         headers = {"Authorization": f"Bearer {self.api_key}"}
         try:
@@ -409,12 +458,43 @@ class OnlineBailianProvider:
         voice: Voice,
         instruct: str = "",
         lang: str = "chinese",
+        **style,
     ) -> np.ndarray:
-        """合成一段文本，返回 24 kHz 单声道 float32 PCM。"""
+        """合成一段文本，返回 24 kHz 单声道 float32 PCM。
+
+        可选 style：rate / pitch / volume / seed / enable_ssml。
+        """
+        rate = style.get("rate")
+        pitch = style.get("pitch")
+        volume = style.get("volume")
+        seed = style.get("seed")
+        enable_ssml = bool(style.get("enable_ssml", False))
         with tempfile.TemporaryDirectory(prefix="video-tts-online-") as tmp:
             out_path = Path(tmp) / "segment.wav"
             if self._use_http:
-                self._synthesize_http(text, voice, instruct, lang, out_path)
+                self._synthesize_http(
+                    text,
+                    voice,
+                    instruct,
+                    lang,
+                    out_path,
+                    rate=rate,
+                    pitch=pitch,
+                    volume=volume,
+                    seed=seed,
+                    enable_ssml=enable_ssml,
+                )
             else:
-                self._synthesize_bl(text, voice, instruct, lang, out_path)
+                self._synthesize_bl(
+                    text,
+                    voice,
+                    instruct,
+                    lang,
+                    out_path,
+                    rate=rate,
+                    pitch=pitch,
+                    volume=volume,
+                    seed=seed,
+                    enable_ssml=enable_ssml,
+                )
             return _read_wav(out_path)

@@ -357,3 +357,34 @@ def test_chunk_cache_key_does_not_alias_single_chunk_text(tmp_path):
     run_engine([sneaky], p, None, "", "chinese", 20.0,
                EngineOptions(), cache, progress=lambda _line: None)
     assert p.calls == calls_after_long + 1
+
+
+class StyleProvider:
+    def __init__(self):
+        self.calls = []
+        self.seconds = 1.0
+
+    def synthesize(self, text, voice, instruct="", lang="chinese", **style):
+        self.calls.append(style)
+        return np.full(24000, 0.2, dtype=np.float32)
+
+
+def test_style_options_reach_provider_and_cache_key(tmp_path):
+    p = StyleProvider()
+    cache = SegmentCache(root=tmp_path)
+    c = cue(1, 0.0, 2.0, 3.0)
+    run_engine([c], p, None, "", "chinese", 3.0,
+               EngineOptions(rate=1.1, volume=80), cache,
+               progress=lambda _line: None)
+    assert p.calls == [{"rate": 1.1, "volume": 80}]
+
+    # Same style → cache hit; different style → new synthesis.
+    run_engine([c], p, None, "", "chinese", 3.0,
+               EngineOptions(rate=1.1, volume=80), cache,
+               progress=lambda _line: None)
+    assert len(p.calls) == 1
+    run_engine([c], p, None, "", "chinese", 3.0,
+               EngineOptions(rate=1.2, volume=80), cache,
+               progress=lambda _line: None)
+    assert len(p.calls) == 2
+    assert p.calls[1]["rate"] == 1.2
