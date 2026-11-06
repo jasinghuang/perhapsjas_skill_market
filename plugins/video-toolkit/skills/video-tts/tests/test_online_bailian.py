@@ -128,3 +128,89 @@ def test_synthesize_rejects_non_24k_audio():
          patch("providers.online_bailian.sf.read", return_value=(mono, 48000)):
         with pytest.raises(ProviderError, match="24000"):
             p.synthesize("你好", QTTS)
+
+
+def test_http_fallback_downloads_audio_url(tmp_path):
+    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    with patch("requests.post") as post, patch("requests.get") as get, \
+         patch("soundfile.write") as write:
+        post.return_value = MagicMock(raise_for_status=MagicMock(), json=lambda: {
+            "output": {"audio": {"url": "https://example.test/a.wav"}}
+        })
+        get.return_value = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
+        p._synthesize_http("你好", QTTS, "", "chinese", tmp_path / "a.wav")
+    body = post.call_args.kwargs["json"]
+    assert body["model"] == "qwen3-tts-flash"
+    assert body["input"]["voice"] == "Cherry"
+    assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer sk-test"
+    get.assert_called_once()
+
+
+def test_http_fallback_requires_endpoint(tmp_path):
+    p = OnlineBailianProvider(api_key="sk-test")
+    with patch("requests.post") as post:
+        with pytest.raises(ProviderError, match="--tts-endpoint"):
+            p._synthesize_http("你好", QTTS, "", "chinese", tmp_path / "a.wav")
+    post.assert_not_called()
+
+
+def test_http_payload_includes_instruction_only_for_flagship(tmp_path):
+    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    response = MagicMock(
+        raise_for_status=MagicMock(),
+        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
+    )
+    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
+    with patch("requests.post", return_value=response) as post, \
+         patch("requests.get", return_value=download):
+        p._synthesize_http("你好", FLAG, "平稳解说", "chinese", tmp_path / "a.wav")
+        flag_body = post.call_args.kwargs["json"]
+        p._synthesize_http("你好", QTTS, "平稳解说", "chinese", tmp_path / "b.wav")
+        qwen_body = post.call_args.kwargs["json"]
+    assert flag_body["input"]["instruction"] == "平稳解说"
+    assert "instruction" not in qwen_body["input"]
+
+
+def test_prepare_switches_to_http_when_bl_missing():
+    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    with patch("shutil.which", return_value=None), \
+         patch.object(p, "ensure_authenticated") as ensure:
+        p.prepare()
+    ensure.assert_not_called()
+    assert p._use_http is True
+
+
+def test_prepare_http_mode_requires_endpoint():
+    p = OnlineBailianProvider(api_key="sk-test")
+    with patch("shutil.which", return_value=None):
+        with pytest.raises(ProviderError, match="--tts-endpoint"):
+            p.prepare()
+
+
+def test_synthesize_uses_http_after_prepare_without_bl():
+    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    with patch("shutil.which", return_value=None), \
+         patch.object(p, "_synthesize_http", side_effect=ProviderError("stop")) as http, \
+         patch("subprocess.run") as run:
+        p.prepare()
+        with pytest.raises(ProviderError, match="stop"):
+            p.synthesize("你好", QTTS)
+    args = http.call_args.args
+    assert args[0] == "你好" and args[1] is QTTS
+    run.assert_not_called()
+
+
+def test_synthesize_http_returns_mono_float32_at_24k():
+    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    stereo = np.ones((100, 2), dtype=np.float32)
+    with patch("shutil.which", return_value=None), \
+         patch("requests.post") as post, patch("requests.get") as get, \
+         patch("providers.online_bailian.sf.read", return_value=(stereo, 24000)):
+        post.return_value = MagicMock(raise_for_status=MagicMock(), json=lambda: {
+            "output": {"audio": {"url": "https://example.test/a.wav"}}
+        })
+        get.return_value = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
+        p.prepare()
+        out = p.synthesize("你好", QTTS)
+    assert out.dtype == np.float32
+    assert out.shape == (100,)
