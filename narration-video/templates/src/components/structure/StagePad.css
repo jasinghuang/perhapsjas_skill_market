@@ -1,6 +1,0 @@
-.cdp-stage-pad {
-  position: absolute;
-  inset: 0;
-  padding: var(--stage-pad-y) var(--stage-pad-x);
-  box-sizing: border-box;
-}

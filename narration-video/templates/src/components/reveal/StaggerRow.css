@@ -1,5 +1,0 @@
-/* 错峰入场行包装（S08 收编）：布局（display/gap 等行构图）由消费端 style 提供；
-   动效走引擎 stagger（逐子元素错峰 reveal）。此处仅钉盒模型，不与消费端 inline 布局冲突。 */
-.cdp-stagger-row {
-  box-sizing: border-box;
-}

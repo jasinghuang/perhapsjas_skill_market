@@ -1,8 +1,0 @@
-/* bad-gradient.css：门禁负样本——违反 §11.1 #6 禁裸紫粉渐变（warning，档位钉死）
- * 与 #2 禁硬编码色（blocker——渐变内的裸 hex 同为裸色，同文件必中 blocker 的构造）。
- * #f06ca8 hue ≈ 333（粉）、#7c3aed hue ≈ 262（紫）——均在色相窗口 [250°, 350°) 内；
- * 手写 gradient() 的裸色须色相检测，token 化渐变（var(--gradient-*)）才豁免。 */
-
-.bad-hero {
-  background: linear-gradient(135deg, #f06ca8, #7c3aed);
-}
