@@ -103,6 +103,41 @@ def test_cantonese_voice_omits_language_and_carries_style():
     assert cmd[cmd.index("--seed") + 1] == "42"
 
 
+def test_ssml_text_is_wrapped_once():
+    p = OnlineBailianProvider()
+    cmd = p.build_bl_command(
+        "你好<break time=\"300ms\"/>世界", FLAG, Path("/tmp/a.wav"),
+        enable_ssml=True,
+    )
+    assert cmd[cmd.index("--text") + 1] == (
+        "<speak>你好<break time=\"300ms\"/>世界</speak>"
+    )
+    assert "--enable-ssml" in cmd
+
+    wrapped = p.build_bl_command(
+        "<speak>你好</speak>", FLAG, Path("/tmp/a.wav"), enable_ssml=True
+    )
+    assert wrapped[wrapped.index("--text") + 1] == "<speak>你好</speak>"
+
+
+def test_http_payload_wraps_ssml_once(tmp_path):
+    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    response = MagicMock(
+        raise_for_status=MagicMock(),
+        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
+    )
+    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
+    with patch("requests.post", return_value=response) as post, \
+         patch("requests.get", return_value=download):
+        p._synthesize_http(
+            "你好<break time=\"300ms\"/>", FLAG, "", "chinese",
+            tmp_path / "a.wav", enable_ssml=True,
+        )
+    payload = post.call_args.kwargs["json"]["input"]
+    assert payload["text"] == "<speak>你好<break time=\"300ms\"/></speak>"
+    assert payload["enable_ssml"] is True
+
+
 def test_http_payload_cantonese_omits_language_and_carries_style(tmp_path):
     p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
     response = MagicMock(

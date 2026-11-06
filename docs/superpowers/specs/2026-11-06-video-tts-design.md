@@ -301,7 +301,7 @@ bl speech synthesize \
 #### 8.3.1 配音优化参数（百炼文档）
 
 - `--rate` / `--pitch` / `--volume` / `--seed`：透传给 `bl` 的 `--rate/--pitch/--volume/--seed`，HTTP 兜底写入同名 `input` 字段；只允许在线。
-- `--enable-ssml`：仅 3.1 Plus 旗舰音色；透传 `bl --enable-ssml` / `input.enable_ssml=true`，SRT 文本可含 `<break>` 等 SSML。
+- `--enable-ssml`：仅 3.1 Plus 旗舰音色；透传 `bl --enable-ssml` / `input.enable_ssml=true`，SRT 文本可含 `<break>` 等 SSML；provider 自动套 `<speak>...</speak>`（已套则不重复）。
 - `--instruct`：仅 3.1 Plus；可用于语速、情绪、角色、方言（如「请用粤语说」）。Qwen-TTS 备选组忽略。
 - 情感/拟声标签（`[excited]`、`[laughing]` 等）直接写在 SRT 文本里，仅 3.1 Plus。
 - 语言：3.1 Plus 的 HTTP 请求使用 `language_hints: [code]`；Qwen-TTS 使用 `language_type`；粤语系统音色由 voice 决定语种，不发送语言字段。

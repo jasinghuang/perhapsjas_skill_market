@@ -495,7 +495,7 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 - **随机种子**：`--seed` 固定在线采样，帮助跨段音色更稳定；同一 seed + 文本 + 音色更容易复现。
 - **指令控制**：`--instruct` 仅 3.1 Plus 生效，可同时说语种、语速、情绪、角色。例：`"请用粤语说，语速稍慢，语气温柔"`。
 - **情感 / 拟声标签**：3.1 Plus 支持把 `[excited]`、`[sad]`、`[laughing]` 等直接写进 SRT 文本；Qwen-TTS 备选组不支持。
-- **SSML**：`--enable-ssml` 后可在 SRT 文本里用 `<break time="300ms"/>` 等控制停顿/读音，仅 3.1 Plus；普通文本不要默认开启。
+- **SSML**：`--enable-ssml` 后可在 SRT 文本里用 `<break time="300ms"/>` 等控制停顿/读音，仅 3.1 Plus；provider 会自动给每条文本套 `<speak>...</speak>`（已套则不重复），普通文本不要默认开启。
 - **语言提示**：`--lang` 在 3.1 Plus 走 `language_hints`，在 Qwen-TTS 走 `language_type`；粤语音色由 voice 本身决定语种，不发送语言字段。
 - **hot_fix（专名发音/替换）**：`bl` CLI 未暴露该参数，v1 不提供。需要纠正专名时，先在上游 `text-refine` 改成同音字/拼音，或改用支持 `hot_fix` 的 HTTP 接口。
 - 在线风格参数会进入缓存键：改 `--rate/--pitch/--volume/--seed/--enable-ssml` 会触发重新合成。

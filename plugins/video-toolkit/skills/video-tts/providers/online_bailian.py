@@ -83,6 +83,14 @@ def _language_code(lang: str) -> str:
     return LANG_CODES.get(lang, lang)
 
 
+def _wrap_ssml(text: str) -> str:
+    """SSML 文本必须以 <speak>...</speak> 包裹；已包裹则原样返回。"""
+    stripped = text.strip()
+    if stripped.startswith("<speak") and stripped.endswith("</speak>"):
+        return stripped
+    return f"<speak>{text}</speak>"
+
+
 def _language_type(lang: str) -> str:
     """把 `--lang` 映射成 DashScope 的 `language_type`（语言名首字母大写）。"""
     name = lang.strip().lower()
@@ -286,12 +294,13 @@ class OnlineBailianProvider:
         enable_ssml: bool = False,
     ) -> list[str]:
         """构造 `bl speech synthesize` 命令行。"""
+        payload_text = _wrap_ssml(text) if enable_ssml else text
         cmd = [
             self.bl_bin,
             "speech",
             "synthesize",
             "--text",
-            text,
+            payload_text,
             "--model",
             voice.model,
             "--voice",
@@ -405,7 +414,7 @@ class OnlineBailianProvider:
         payload = {
             "model": voice.model,
             "input": {
-                "text": text,
+                "text": _wrap_ssml(text) if enable_ssml else text,
                 "voice": voice.voice_id,
                 "format": "wav",
                 "sample_rate": SAMPLE_RATE,
