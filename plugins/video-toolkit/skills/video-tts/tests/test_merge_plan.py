@@ -40,6 +40,15 @@ def test_existing_punctuation_is_not_duplicated(tmp_path):
     assert merged[0].text == "第一句，第二句。"
 
 
+def test_dash_and_ellipsis_do_not_add_a_comma(tmp_path):
+    cues = [
+        cue(1, 0.0, 1.0, "秘密在于——", 1.0),
+        cue(2, 1.0, 2.0, "把精力放在静态图像上。", 2.0),
+    ]
+    merged = load_merge_plan(write_plan(tmp_path, [[1, 2]]), cues)
+    assert merged[0].text == "秘密在于——把精力放在静态图像上。"
+
+
 def test_rejects_missing_duplicate_and_noncontiguous(tmp_path):
     cues = [
         cue(1, 0.0, 1.0, "一", 1.0),

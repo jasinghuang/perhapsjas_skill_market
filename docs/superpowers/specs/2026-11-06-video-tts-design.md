@@ -208,6 +208,19 @@ skill 放 `plugins/<plugin>/skills/<skill>/`；`SKILL.md` + `run.py` + `skill_ma
   - 有视频时：`start_s >= 视频时长` → 报错；`end_s > 视频时长` → 夹到视频时长并 warning。
 - SRT 条目重叠：按开始时间排序后，若 `start_i < end_{i-1}`，warning；规划时令 `effective_start_i = max(start_i, 上一条实际结束位置)`，若 `effective_start_i >= next_start` 则该条无可用窗口，按失败处理。
 
+#### 7.1.1 语义合并计划（推荐，`--merge-plan`）
+
+逐条合成会让每条字幕独立起调、句尾收束；短条目多时听感卡顿。CLI 支持一个显式计划：
+
+```json
+{"groups": [[1, 2, 3], [4, 5], [6]]}
+```
+
+- 分组由 Claude 读完整 SRT 后按语义决定，**不按时间间隙机械合并**；每组必须是完整语义单元，合并文本以句末标点结尾。
+- 规则：逗号/顿号/冒号结尾或无标点的条目并入下一组；人物介绍、步骤标题、明显新话题单独起组；长停顿且语义另起时断开；每组约 3–8 条、≤18s，过长在最近句末标点处拆。
+- `merge_plan.load_merge_plan()` 校验：覆盖全部条目、顺序递增、组内连续；非法计划退出 2。
+- 合并后 `Cue.index` 取组首条目，`start` 取组首开始，`end` 取组末结束，`next_start` 取下一组开始；引擎、缓存、适配逻辑不变。
+
 ### 7.2 单条适配
 
 对第 i 条：
@@ -406,6 +419,7 @@ ffprobe -v error -show_entries \
 | `--json-report` | 写机器可读报告 | 无 |
 | `--continue-on-error` | 单条失败继续（会缺句） | false |
 | `--skip-bracketed` | 跳过纯音效标记条目 | false |
+| `--merge-plan` | 语义合并计划 JSON（推荐；按整句分组） | 无 |
 | `--max-speed` | 最大 atempo | `1.30` |
 | `--yes` | 跳过在线费用确认 | false |
 | `--dry-run` | 只解析并打印计划，不合成 | false |
@@ -428,6 +442,7 @@ ffprobe -v error -show_entries \
 | 本地 | 音色方向 | 普通话 / 方言 / 英语 / 日语·韩语 | 传了 `--voice` |
 | 本地 | 具体音色 | 该方向 2–3 个 | 传了 `--voice` |
 | 选完音色 | 语气 | 默认 / 平稳解说 / 活泼；自定义走 Other | 传了 `--instruct` |
+| SRT 解析后 | 语义合并 | 语义合并（推荐）/ 逐条合成 | 传了 `--merge-plan` 或用户明确不要合并 |
 | SRT 解析后 | 是否开跑 | 开始合成 / 只预览（dry-run）/ 取消 | |
 | 在线开跑前 | 费用确认 | 继续 / 切本地 / 取消 | `--yes` |
 | 在线未登录（超时后） | 登录方式 | 重新获取链接 / 重新登录 / 切本地 | 已登录或链接等待中 |

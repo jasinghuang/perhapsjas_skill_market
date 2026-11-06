@@ -17,7 +17,7 @@ from pathlib import Path
 
 from srt_parse import Cue
 
-_END_PUNCT = re.compile(r"[，、；：,;:。！？!?]$")
+_END_PUNCT = re.compile(r"[，、；：,;:。！？!?—…\"'”’）)]$")
 
 
 def _join_texts(texts: list[str]) -> str:
