@@ -44,6 +44,7 @@ from providers import (
     is_voice_design_model,
 )
 from providers.base import Voice
+from merge_plan import load_merge_plan
 from srt_parse import Cue, SRTError, load_cues
 from track_build import write_wav
 
@@ -112,6 +113,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--skip-bracketed", action="store_true", help="跳过纯音效标记条目"
+    )
+    parser.add_argument(
+        "--merge-plan",
+        help="语义合并计划 JSON（groups 数组；由 Claude 读 SRT 后生成）",
     )
     parser.add_argument(
         "--max-speed", type=float, default=1.30, help="最大 atempo 倍率（默认 1.30）"
@@ -252,6 +257,8 @@ def validate_args(args: argparse.Namespace) -> None:
 
     if not Path(args.srt).is_file():
         _fail(f"SRT not found: {args.srt}")
+    if args.merge_plan and not Path(args.merge_plan).is_file():
+        _fail(f"merge plan not found: {args.merge_plan}")
 
     if args.video and args.out and not args.track_only:
         video = Path(args.video)
@@ -507,6 +514,14 @@ def _run(args: argparse.Namespace) -> int:
         print(f"warning: {warning}", file=sys.stderr)
     if not cues:
         raise SRTError(f"{srt}: no cues found")
+
+    if args.merge_plan:
+        original_count = len(cues)
+        try:
+            cues = load_merge_plan(Path(args.merge_plan), cues)
+        except ValueError as exc:
+            _fail(str(exc))
+        print(f"合并: {original_count} 条 → {len(cues)} 组")
 
     total_duration = video_duration if video_duration is not None else cues[-1].end
 
