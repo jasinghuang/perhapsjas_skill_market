@@ -62,13 +62,24 @@ def _provider_from_argv(argv: list[str]) -> str | None:
     return provider
 
 
+def _is_preview(argv: list[str]) -> bool:
+    """`--dry-run` / `--help` 只需要解析，不需要 provider 依赖。"""
+    return any(
+        argument in ("--dry-run", "-h", "--help") for argument in argv
+    )
+
+
 def required_imports(argv: list[str]) -> list[str]:
     """返回本次运行需要的顶层 import 名。
 
     `soundfile` / `numpy` 永远需要；本地 provider 额外需要 `mlx_audio`，
-    在线 provider 的 HTTP 兜底额外需要 `requests`。
+    在线 provider 的 HTTP 兜底额外需要 `requests`。`--dry-run` 与
+    `--help` 不创建 provider、不发起请求，因此永远只要求基础依赖——
+    预览绝不应触发模型依赖的安装。
     """
     imports = list(BASE_IMPORTS)
+    if _is_preview(argv):
+        return imports
     provider = _provider_from_argv(argv)
     if provider == "local":
         imports.extend(LOCAL_IMPORTS)

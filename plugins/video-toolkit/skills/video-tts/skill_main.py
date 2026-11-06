@@ -17,8 +17,8 @@ video-tts — 非交互 CLI：预检、流程编排、进度与报告。
 不合成。退出码：全部成功 0；截断 / 超速 warning 仍为 0；合成失败或混流
 失败为 1。
 
-在线合成只从环境变量 `DASHSCOPE_API_KEY`（或 `--api-key`）读取 HTTP 兜底
-所需的 key，且从不打印它。
+在线合成只从环境变量 `DASHSCOPE_API_KEY` 读取 HTTP 兜底所需的 key，且从不
+打印它。
 """
 
 from __future__ import annotations
@@ -71,11 +71,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="DashScope HTTP 兜底 endpoint（仅在 bl 不可用时使用）",
     )
     parser.add_argument("--bl-bin", default="bl", help="百炼 bl CLI 可执行文件")
-    parser.add_argument(
-        "--api-key",
-        default=None,
-        help="HTTP 兜底用 DashScope API key；缺省读 DASHSCOPE_API_KEY，绝不打印",
-    )
     parser.add_argument(
         "--track-only", action="store_true", help="只出配音轨，不混流"
     )
@@ -136,13 +131,22 @@ def validate_args(args: argparse.Namespace) -> None:
         if not args.voice:
             _fail("online provider requires --voice")
 
-    if args.provider == "online" and not args.yes:
+    if args.provider == "online" and not args.yes and not args.dry_run:
         _fail(
             "online synthesis is billed; re-run with --yes after confirming cost"
         )
 
     if not Path(args.srt).is_file():
         _fail(f"SRT not found: {args.srt}")
+
+    if args.video and args.out and not args.track_only:
+        video = Path(args.video)
+        output = _video_output_from_out(Path(args.out))
+        if _same_path(output, video):
+            _fail(
+                f"--out would overwrite the input video in place ({video}); "
+                "ffmpeg cannot rewrite a file in place, choose a different output"
+            )
 
 
 def _require_binary(name: str) -> None:
@@ -167,6 +171,21 @@ def _with_suffix(path: Path, suffix: str) -> Path:
     return path.with_name(path.name + suffix)
 
 
+def _video_output_from_out(raw: Path) -> Path:
+    """把 `--out` 解析成最终的成品 mp4 路径。"""
+    if raw.suffix.lower() in VIDEO_SUFFIXES:
+        return raw
+    return _with_suffix(raw, ".dub.mp4")
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    """比较两个路径是否指向同一文件（尽量解开符号链接 / `..`）。"""
+    try:
+        return left.resolve() == right.resolve()
+    except OSError:  # pragma: no cover - resolve 失败时退回字符串比较
+        return os.path.abspath(str(left)) == os.path.abspath(str(right))
+
+
 def _resolve_outputs(
     args: argparse.Namespace,
     video: Path | None,
@@ -182,7 +201,7 @@ def _resolve_outputs(
         raw = Path(args.out)
         if raw.suffix.lower() in VIDEO_SUFFIXES:
             return raw.with_suffix(""), raw
-        return raw, _with_suffix(raw, ".dub.mp4")
+        return raw, _video_output_from_out(raw)
     base = (video if video is not None else srt).with_suffix("")
     return base, _with_suffix(base, ".dub.mp4")
 
@@ -302,7 +321,7 @@ def _build_provider(args: argparse.Namespace, design: str | None):
         if args.tts_endpoint:
             kwargs["endpoint"] = args.tts_endpoint
         # key 只用于 bl 不可用时的 HTTP 兜底；绝不打印。
-        api_key = args.api_key or os.environ.get("DASHSCOPE_API_KEY")
+        api_key = os.environ.get("DASHSCOPE_API_KEY")
         if api_key:
             kwargs["api_key"] = api_key
     return get_provider(args.provider, **kwargs)
