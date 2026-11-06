@@ -3,9 +3,11 @@
 video-tts — 视频探测、混流与成片校验。
 
 `probe_video()` 用 ffprobe 读第一条视频流的编码、分辨率、帧率与时长，供
-CLI 决定主音轨长度与是否重编码。`needs_reencode()` 只放行 mp4 可直接
-复制的 H.264 / HEVC；VP9 / AV1 及未知编码一律重编码为 H.264（AV1 虽然
-理论上可装进 mp4，但兼容性差，按 spec §9 统一重编码）。
+CLI 决定主音轨长度与是否重编码。MKV / WebM 的视频流条目常常没有
+`duration`，此时回退到同一次 ffprobe 输出里的容器级 `format.duration`。
+`needs_reencode()` 只放行 mp4 可直接复制的 H.264 / HEVC；VP9 / AV1 及
+未知编码一律重编码为 H.264（AV1 虽然理论上可装进 mp4，但兼容性差，按
+spec §9 统一重编码）。
 
 `mux_video()` 用一条 ffmpeg 把配音轨替换进视频（不映射原音轨、不用
 `-shortest`），失败或产出校验不过时删除半成品，避免留下音画不同步的
@@ -24,8 +26,10 @@ from pathlib import Path
 COPY_CODECS = frozenset({"h264", "hevc"})
 
 FFPROBE_BASE = ["ffprobe", "-v", "error"]
-PROBE_ENTRIES = "stream=codec_name,width,height,r_frame_rate,duration"
-VERIFY_ENTRIES = "stream=index,codec_type,codec_name,duration"
+PROBE_ENTRIES = (
+    "stream=codec_name,width,height,r_frame_rate,duration:format=duration"
+)
+VERIFY_ENTRIES = "stream=codec_type,duration:format=duration"
 
 
 @dataclass(frozen=True)
@@ -41,8 +45,8 @@ def _ffprobe(
     entries: str,
     path: Path,
     select_streams: str | None = None,
-) -> list[dict]:
-    """跑一次 ffprobe 并返回 `streams` 列表；失败抛 `RuntimeError`。"""
+) -> dict:
+    """跑一次 ffprobe 并返回解析后的 JSON；失败抛 `RuntimeError`。"""
     command = [*FFPROBE_BASE]
     if select_streams is not None:
         command += ["-select_streams", select_streams]
@@ -55,30 +59,31 @@ def _ffprobe(
     if result.returncode != 0:
         stderr = (result.stderr or "").strip()
         raise RuntimeError(f"ffprobe failed for {path}: {stderr}")
-    return json.loads(result.stdout).get("streams", [])
+    return json.loads(result.stdout)
 
 
-def _stream_duration(stream: dict, path: Path) -> float:
-    """取出流的 `duration` 并转成 float；缺失或非法时抛 `RuntimeError`。"""
-    raw = stream.get("duration")
-    if raw is None:
-        raise RuntimeError(f"stream in {path} has no duration")
-    try:
-        return float(raw)
-    except (TypeError, ValueError):
-        raise RuntimeError(
-            f"stream in {path} has invalid duration {raw!r}"
-        ) from None
+def _duration(stream: dict, probe: dict, path: Path) -> float:
+    """取流时长；流条目没有 `duration`（MKV/WebM 常见）时用容器时长。"""
+    container = probe.get("format") or {}
+    for raw in (stream.get("duration"), container.get("duration")):
+        if raw is None:
+            continue
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            continue
+    raise RuntimeError(f"could not determine duration for {path}")
 
 
 def probe_video(path: Path) -> VideoInfo:
     """探测第一条视频流的基本信息。"""
-    streams = _ffprobe(PROBE_ENTRIES, path, select_streams="v:0")
+    probe = _ffprobe(PROBE_ENTRIES, path, select_streams="v:0")
+    streams = probe.get("streams", [])
     if not streams:
         raise RuntimeError(f"no video stream found in {path}")
     stream = streams[0]
     return VideoInfo(
-        duration=_stream_duration(stream, path),
+        duration=_duration(stream, probe, path),
         codec_name=stream.get("codec_name", ""),
         width=int(stream.get("width", 0)),
         height=int(stream.get("height", 0)),
@@ -102,10 +107,11 @@ def _remove_quietly(path: Path) -> None:
 def mux_video(video: Path, track: Path, out: Path, codec_name: str) -> None:
     """把 `track` 作为唯一音轨混进 `video`，写出 `out` 并校验。
 
-    视频编码可直接复制时用 `-c:v copy`，否则用
-    `-c:v libx264 -crf 18 -preset medium` 重编码。ffmpeg 失败、或混流后
-    校验不通过（缺流、时长漂移）都会删除 `out` 再抛 `RuntimeError`。
+    先探测输入视频时长作为校验基准；视频编码可直接复制时用 `-c:v copy`，
+    否则用 `-c:v libx264 -crf 18 -preset medium` 重编码。ffmpeg 失败、或
+    混流后校验不通过（缺流、时长漂移）都会删除 `out` 再抛 `RuntimeError`。
     """
+    expected = probe_video(video).duration
     command = [
         "ffmpeg", "-y",
         "-i", str(video),
@@ -132,7 +138,6 @@ def mux_video(video: Path, track: Path, out: Path, codec_name: str) -> None:
         raise RuntimeError(f"ffmpeg mux failed for {out}: {stderr}")
 
     try:
-        expected = probe_video(video).duration
         verify_output(out, expected)
     except Exception:
         _remove_quietly(out)
@@ -145,7 +150,8 @@ def verify_output(
     tolerance: float = 0.2,
 ) -> None:
     """校验成片：恰好一条视频流 + 一条音频流，时长与期望相差 ≤ `tolerance`。"""
-    streams = _ffprobe(VERIFY_ENTRIES, path)
+    probe = _ffprobe(VERIFY_ENTRIES, path)
+    streams = probe.get("streams", [])
     videos = [stream for stream in streams if stream.get("codec_type") == "video"]
     audios = [stream for stream in streams if stream.get("codec_type") == "audio"]
     if len(videos) != 1:
@@ -156,7 +162,7 @@ def verify_output(
         raise RuntimeError(
             f"expected exactly one audio stream in {path}, found {len(audios)}"
         )
-    duration = _stream_duration(videos[0], path)
+    duration = _duration(videos[0], probe, path)
     drift = abs(duration - expected_duration)
     if drift > tolerance:
         raise RuntimeError(
