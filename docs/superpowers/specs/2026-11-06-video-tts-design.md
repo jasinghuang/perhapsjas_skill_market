@@ -71,9 +71,9 @@
 | 项目 | 事实 |
 | --- | --- |
 | 首选模型 | `qwen-audio-3.1-tts-plus` |
-| 首选调用方式 | `bl speech synthesize --text ... --model ... --voice ... --format wav --sample-rate 24000 --out <wav>`（`bl` 2.8+ 已验证参数透传） |
+| 首选调用方式 | `bl speech synthesize --text ... --model ... --voice ... --format wav --language zh --sample-rate 24000 --out <wav>`（`bl` 2.8+ 已验证参数透传） |
 | 鉴权 | 复用 `bl` CLI 登录态：`bl auth status --output json` 为 `authenticated: true` 即可；凭据由 `bl` 存在 `~/.bailian/config.json`（0600），skill 不接收、不保存、不打印明文 key |
-| 未登录时 | 运行 `bl auth login --console --no-browser`，捕获打印出的登录 URL，以可点击链接展示给用户；后台等待 CLI 回调，并轮询 `bl auth status` 直到 `authenticated: true`。超时后再让用户选「重新获取链接 / 用 API Key 登录 / 切本地」；skill 只检测，不代存 key |
+| 未登录时 | 运行 `bl auth login --console --no-browser`，捕获打印出的登录 URL，以可点击链接展示给用户；后台等待 CLI 回调，并轮询 `bl auth status` 直到 `authenticated: true`。超时后再让用户选「重新获取链接 / 重新登录 / 切本地」；skill 只检测，不代存 key |
 | 兜底调用方式 | 仅在 `bl` 不可用时：`DASHSCOPE_API_KEY` + DashScope HTTP（`services/audio/tts/SpeechSynthesizer`），响应 `output.audio.url` 下载 wav |
 | 音色枚举 | 不要依赖 `bl speech synthesize --list-voices`：对 `qwen-audio-3.1-tts-plus` 与 `qwen3-tts-flash` 返回 `voices: null`；以附录 A 内置目录为准 |
 | 旗舰音色（首选） | 列表页 3.1 Plus 只列 4 个 v3.1 旗舰：`longanlingxin_v3.1`、`xunanchuan_v3.1`、`longanhuan_v3.1`、`longanfengyue_v3.1` |
@@ -169,7 +169,7 @@ skill 放 `plugins/<plugin>/skills/<skill>/`；`SKILL.md` + `run.py` + `skill_ma
 ### 5.4 模型覆盖与映射
 
 - 本地默认 CustomVoice 1.7B bf16；`--model <hf-id>` 可覆盖（0.6B / 8bit / VoiceDesign）。
-- 本地 `--design "<音色描述>"` 切 VoiceDesign，明确提示跨段漂移风险，仅建议短视频。
+- 本地 `--design "<音色描述>"` 切 VoiceDesign；未显式给 `--model` 时默认加载 `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16`，且与 `--voice` / `--instruct` 互斥。明确提示跨段漂移风险，仅建议短视频。
 - 在线按音色自动选模型：
   - 4 个 `*_v3.1` 旗舰音色 → `qwen-audio-3.1-tts-plus`
   - 10 个精选 Qwen-TTS 音色 → `qwen3-tts-flash`
@@ -270,7 +270,7 @@ class TTSProvider:
   2. 从 stdout 捕获登录 URL，以 Markdown 可点击链接展示给用户：
      `请点击登录：[打开百炼登录页](https://...)`
   3. 保持登录子进程存活，轮询 `bl auth status --output json`（默认每 2 秒，最多 5 分钟）。
-  4. 登录成功后杀掉/等待子进程退出，继续原流程；超时或子进程提前退出 → 用 `AskUserQuestion` 选「重新获取链接 / 用 API Key 登录 / 切本地」。
+  4. 登录成功后杀掉/等待子进程退出，继续原流程；超时或子进程提前退出 → 用 `AskUserQuestion` 选「重新获取链接 / 重新登录 / 切本地」。
   5. 登录 URL 只展示给当前用户，不写入报告/日志；skill 只读取登录态，**不接收、不保存、不打印明文 key**。
 - 逐条调用，不加载模型，只是网络请求；串行执行：
 
@@ -279,19 +279,19 @@ bl speech synthesize \
   --text "<单条台词>" \
   --model "qwen-audio-3.1-tts-plus" \
   --voice "longanlingxin_v3.1" \
-  --format wav --sample-rate 24000 \
+  --format wav --language zh --sample-rate 24000 \
   --out "<tmp>/seg.wav"
 ```
 
 - `--instruction` 仅对 3.1 Plus 组透传；Qwen-TTS 备选组忽略并 warning。
 - 不使用 `--list-voices`（这两个模型返回 `voices: null`）；音色以附录 A 为准。
-- 429 / 5xx 指数退避重试 2 次；401/403 提示重新 `bl auth login`；音色与模型不匹配在本地预检直接拦截，不调用 `bl`。
+- 429 / 5xx 指数退避重试 2 次（1s / 2s）；401/403 提示重新 `bl auth login`；额度不足 / Throttling 直接报错并给出百炼控制台链接；音色与模型不匹配在本地预检直接拦截，不调用 `bl`。
 - 输出 wav 由 `bl` 直接写到 `--out`，后续裁剪 / atempo / 拼轨与本地 provider 完全一致。
 
 **兜底路径：DashScope HTTP（仅 `bl` 不可用时）**
 
 - 读取 `DASHSCOPE_API_KEY`；endpoint 可用 `--tts-endpoint` 覆盖（官方示例为工作空间专属域名）。
-- 请求体：`input.text`、`input.voice`、`input.format="wav"`、`input.sample_rate=24000`；`input.instruction` 仅对 3.1 Plus 组。
+- 请求体：`input.text`、`input.voice`、`input.format="wav"`、`input.sample_rate=24000`、`input.language_type`（`--lang` 映射成 `Chinese` / `English` 等）；`input.instruction` 仅对 3.1 Plus 组。
 - 响应取 `output.audio.url` 下载 wav；下载失败重试一次。
 
 **费用提示**：开始批量合成前打印总字数与「按 token 计费」提示，需用户确认（`--yes` 可跳过）。
@@ -363,9 +363,9 @@ ffprobe -v error -show_entries \
   -of json "<out>.dub.mp4"
 ```
 
-- 必须存在一条视频流 + 一条音频流。
+- 必须存在一条视频流 + 一条音频流，且音频流编码为 AAC。
 - 输出视频时长与输入视频时长相差 ≤ 0.2 s。
-- 音频流为 AAC、48 kHz 或 44.1 kHz（由 ffmpeg 重采样），声道数按输出默认。
+- 音频源轨为 24 kHz 单声道；混流命令不加 `-ar`，由 ffmpeg 的 AAC 编码器按源采样率输出。
 - 校验失败 → 删除未完成的 `.dub.mp4` 并报错，不留下看起来成功但音画不同步的文件。
 
 ## 10. CLI 参数
@@ -375,12 +375,12 @@ ffprobe -v error -show_entries \
 | `--srt` | 中文 SRT 路径 | 必需 |
 | `--video` | 视频路径；提供则输出 mp4 | 无 |
 | `--provider` | `local` / `online` | 交互选择 |
-| `--out` | 输出前缀或路径 | `<video stem>` 或 `<srt stem>` |
+| `--out` | 输出前缀或 `.mp4` 路径（非 `.mp4` 后缀按前缀处理） | `<video stem>` 或 `<srt stem>` |
 | `--voice` | 音色名/参数（本地 9 个或在线 14 个） | 交互选择 |
 | `--instruct` | 语气/风格指令 | 空 |
-| `--design` | 本地 VoiceDesign 音色描述；与 `--voice` 互斥 | 无 |
-| `--lang` | 语言代码 | `chinese` |
-| `--model` | 覆盖 provider 的模型 id | 各 provider 默认 |
+| `--design` | 本地 VoiceDesign 音色描述；与 `--voice` / `--instruct` 互斥，自动加载 VoiceDesign 模型 | 无 |
+| `--lang` | 语言代码；在线映射为 `zh` / `en` / `ja` / `ko` / `de` / `fr` / `ru` / `pt` / `es` / `it` | `chinese` |
+| `--model` | 覆盖 provider 的模型 id；在线必须与音色同组， VoiceDesign 模型只能配 `--design` | 各 provider 默认 |
 | `--tts-endpoint` | 兜底 HTTP endpoint 覆盖（仅在 `bl` 不可用时） | 官方示例域名 |
 | `--track-only` | 只出配音轨，不混流 | false |
 | `--keep-segments` | 保留逐条 wav | false |
@@ -412,7 +412,7 @@ ffprobe -v error -show_entries \
 | 选完音色 | 语气 | 默认 / 平稳解说 / 活泼；自定义走 Other | 传了 `--instruct` |
 | SRT 解析后 | 是否开跑 | 开始合成 / 只预览（dry-run）/ 取消 | |
 | 在线开跑前 | 费用确认 | 继续 / 切本地 / 取消 | `--yes` |
-| 在线未登录（超时后） | 登录方式 | 重新获取链接 / 用 API Key 登录 / 切本地 | 已登录或链接等待中 |
+| 在线未登录（超时后） | 登录方式 | 重新获取链接 / 重新登录 / 切本地 | 已登录或链接等待中 |
 | 合成失败 | 失败处理 | 切本地重跑 / 终止 | `--continue-on-error` |
 | 输出已存在 | 覆盖策略 | 覆盖 / 另存 / 取消 | 输出不存在 |
 
@@ -421,7 +421,7 @@ ffprobe -v error -show_entries \
 1. 选方案 → 选音色组 → 选性别（仅 Qwen-TTS）→ 选具体音色 → 选语气。
 2. 完整音色表是纯信息展示；选择动作在表后由 `AskUserQuestion` 完成。
 3. 预检：本地查 `ffmpeg` / `mlx_audio` / 模型缓存；在线查 `bl` + `bl auth status`。
-   - 未登录：自动后台运行 `bl auth login --console --no-browser`，把捕获到的登录 URL 以可点击链接展示，轮询 `bl auth status` 等待完成；只有超时或子进程提前退出时才用 `AskUserQuestion` 选「重新获取链接 / 用 API Key 登录 / 切本地」。不接收、不代存 key。
+   - 未登录：自动后台运行 `bl auth login --console --no-browser`，把捕获到的登录 URL 以可点击链接展示，轮询 `bl auth status` 等待完成；只有超时或子进程提前退出时才用 `AskUserQuestion` 选「重新获取链接 / 重新登录 / 切本地」。不接收、不代存 key。
    - 未安装 `bl`：用 `AskUserQuestion` 让用户选「安装 bl / 走 HTTP 兜底（需 DASHSCOPE_API_KEY）/ 切本地」。
 4. 解析 SRT，打印摘要 → `AskUserQuestion` 确认「开始合成 / 只预览 / 取消」。
 5. 在线：打印总字数与计费提示 → `AskUserQuestion` 确认「继续 / 切本地 / 取消」。
@@ -473,13 +473,13 @@ plugins/video-toolkit/skills/video-tts/
 | 缺 ffmpeg / ffprobe | 报错并给 `brew install ffmpeg` |
 | 缺 mlx-audio | `run.py` 自动选解释器安装；装不上给出 pip 命令 |
 | 本地模型首次下载失败 | 报错，提示检查网络或手动 `huggingface-cli download` |
-| 本地音色名非法 | 列出 9 个合法音色后退出 |
-| 在线缺 `bl` | 提示安装；可询问是否切本地；已有 `DASHSCOPE_API_KEY` 时可走兜底 HTTP |
-| `bl` 未登录 | 自动展示 `bl auth login --console --no-browser` 的登录链接并轮询；超时后用 `AskUserQuestion` 选重新获取链接 / API Key 登录 / 切本地；skill 不代存 key |
-| `bl` 401/403 | 提示重新登录；可切本地 |
-| 在线 429 / 5xx | 指数退避重试 2 次；仍失败则询问切本地或终止 |
-| 在线额度不足 | 报错并给出控制台链接；可切本地 |
-| 在线音色与模型不匹配 | 本地预检直接报错，不发请求 |
+| 本地音色名非法 | 参数校验阶段列出 9 个合法音色后退出（码 2） |
+| 在线缺 `bl` | 提示安装；可询问是否切本地；已有 `DASHSCOPE_API_KEY` 时可加 `--tts-endpoint` 走兜底 HTTP |
+| `bl` 未登录 | 自动展示 `bl auth login --console --no-browser` 的登录链接并轮询；超时后用 `AskUserQuestion` 选重新获取链接 / 重新登录 / 切本地；skill 不代存 key |
+| `bl` 401/403 | provider 立即报错并提示运行 `bl auth login` 重新登录；可切本地 |
+| 在线 429 / 5xx | provider 内指数退避重试 2 次（1s / 2s）；仍失败则询问切本地或终止 |
+| 在线额度不足 / Throttling | provider 立即报错并给出[百炼控制台](https://bailian.console.aliyun.com/)链接；可切本地 |
+| 在线音色与模型不匹配 | 参数校验阶段直接报错（码 2），不发请求 |
 | `bl --list-voices` 返回空 | 正常现象（这两个模型返回 null）；以附录 A 为准，不报错 |
 | SRT 为空 / 时间非法 / 零时长 | 列出条目号并退出 |
 | 单条合成失败 / 空音频 / 全静音 | 重试 1 次；仍失败终止（除非 `--continue-on-error`），不写缓存 |

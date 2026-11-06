@@ -99,7 +99,7 @@ def test_verify_rejects_missing_audio_or_duration_drift(tmp_path):
 def test_verify_accepts_one_video_and_one_audio_within_tolerance(tmp_path):
     payload = _streams_payload(
         {"codec_type": "video", "duration": "10.05"},
-        {"codec_type": "audio", "duration": "10.0"},
+        {"codec_type": "audio", "codec_name": "aac", "duration": "10.0"},
     )
     with patch("subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout=json.dumps(payload))
@@ -109,7 +109,7 @@ def test_verify_accepts_one_video_and_one_audio_within_tolerance(tmp_path):
 def test_verify_rejects_duration_drift(tmp_path):
     payload = _streams_payload(
         {"codec_type": "video", "duration": "11.0"},
-        {"codec_type": "audio", "duration": "11.0"},
+        {"codec_type": "audio", "codec_name": "aac", "duration": "11.0"},
     )
     with patch("subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout=json.dumps(payload))
@@ -121,7 +121,7 @@ def test_verify_rejects_extra_video_stream(tmp_path):
     payload = _streams_payload(
         {"codec_type": "video", "duration": "10.0"},
         {"codec_type": "video", "duration": "10.0"},
-        {"codec_type": "audio", "duration": "10.0"},
+        {"codec_type": "audio", "codec_name": "aac", "duration": "10.0"},
     )
     with patch("subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout=json.dumps(payload))
@@ -132,8 +132,8 @@ def test_verify_rejects_extra_video_stream(tmp_path):
 def test_verify_rejects_extra_audio_stream(tmp_path):
     payload = _streams_payload(
         {"codec_type": "video", "duration": "10.0"},
-        {"codec_type": "audio", "duration": "10.0"},
-        {"codec_type": "audio", "duration": "10.0"},
+        {"codec_type": "audio", "codec_name": "aac", "duration": "10.0"},
+        {"codec_type": "audio", "codec_name": "aac", "duration": "10.0"},
     )
     with patch("subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout=json.dumps(payload))
@@ -141,11 +141,22 @@ def test_verify_rejects_extra_audio_stream(tmp_path):
             verify_output(tmp_path / "out.mp4", 10.0)
 
 
+def test_verify_rejects_non_aac_audio(tmp_path):
+    payload = _streams_payload(
+        {"codec_type": "video", "duration": "10.0"},
+        {"codec_type": "audio", "codec_name": "opus", "duration": "10.0"},
+    )
+    with patch("subprocess.run") as run:
+        run.return_value = MagicMock(returncode=0, stdout=json.dumps(payload))
+        with pytest.raises(RuntimeError, match="AAC"):
+            verify_output(tmp_path / "out.mp4", 10.0)
+
+
 def test_verify_falls_back_to_format_duration(tmp_path):
     payload = {
         "streams": [
             {"codec_type": "video"},
-            {"codec_type": "audio", "duration": "10.0"},
+            {"codec_type": "audio", "codec_name": "aac", "duration": "10.0"},
         ],
         "format": {"duration": "10.1"},
     }
@@ -199,6 +210,28 @@ def test_mux_reencode_command_shape(tmp_path):
     assert cmd[cmd.index("-map_metadata") + 1] == "0"
     assert "-shortest" not in cmd
     verify.assert_called_once_with(out, 10.0)
+
+
+def test_mux_warns_when_reencoding(tmp_path, capsys):
+    out = tmp_path / "out.mp4"
+    with patch("subprocess.run") as run, patch("mux.verify_output"):
+        run.side_effect = [
+            MagicMock(returncode=0, stdout=json.dumps(_probe_payload("vp9"))),
+            MagicMock(returncode=0),
+        ]
+        mux_video(tmp_path / "in.webm", tmp_path / "t.wav", out, "vp9")
+    assert "重编码" in capsys.readouterr().err
+
+
+def test_mux_does_not_warn_when_copying(tmp_path, capsys):
+    out = tmp_path / "out.mp4"
+    with patch("subprocess.run") as run, patch("mux.verify_output"):
+        run.side_effect = [
+            MagicMock(returncode=0, stdout=json.dumps(_probe_payload())),
+            MagicMock(returncode=0),
+        ]
+        mux_video(tmp_path / "in.mp4", tmp_path / "t.wav", out, "h264")
+    assert "重编码" not in capsys.readouterr().err
 
 
 def test_mux_deletes_output_when_ffmpeg_fails(tmp_path):

@@ -18,8 +18,18 @@ from __future__ import annotations
 from .base import TTSProvider, Voice
 
 LOCAL_MODEL = "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16"
+LOCAL_DESIGN_MODEL = "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
 FLAGSHIP_MODEL = "qwen-audio-3.1-tts-plus"
 QWEN_TTS_MODEL = "qwen3-tts-flash"
+
+# 模型 id 里出现这些标记即可判定模型族；大小写不敏感。
+CUSTOM_VOICE_MARKER = "customvoice"
+VOICE_DESIGN_MARKER = "voicedesign"
+
+
+def is_voice_design_model(model_id: str | None) -> bool:
+    """返回模型 id 是否属于 VoiceDesign 族。"""
+    return bool(model_id) and VOICE_DESIGN_MARKER in model_id.lower()
 
 LOCAL_VOICES: tuple[Voice, ...] = (
     Voice("Uncle_Fu", "Uncle_Fu", "男", "低沉醇厚的成熟男声", LOCAL_MODEL, "local"),

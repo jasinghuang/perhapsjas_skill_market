@@ -62,11 +62,27 @@ def _provider_from_argv(argv: list[str]) -> str | None:
     return provider
 
 
+# `--help` 的任意非空前缀（argparse 允许时）与短选项 `-h`。
+PREVIEW_FLAGS = ("--dry-run", "--help")
+
+
 def _is_preview(argv: list[str]) -> bool:
-    """`--dry-run` / `--help` 只需要解析，不需要 provider 依赖。"""
-    return any(
-        argument in ("--dry-run", "-h", "--help") for argument in argv
-    )
+    """`--dry-run` / `--help` 只需要解析，不需要 provider 依赖。
+
+    认 `--dry` / `--hel` 这类前缀：即使 argparse 因 `allow_abbrev=False`
+    最终拒绝该参数，也不应在解析前先触发模型依赖安装。
+    """
+    for argument in argv:
+        if argument == "-h":
+            return True
+        if not argument.startswith("--"):
+            continue
+        name = argument.split("=", 1)[0]
+        if name == "--":
+            continue
+        if any(flag.startswith(name) for flag in PREVIEW_FLAGS):
+            return True
+    return False
 
 
 def required_imports(argv: list[str]) -> list[str]:

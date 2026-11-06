@@ -303,6 +303,20 @@ def test_invalid_audio_continue_on_error_records_failure(tmp_path):
     assert np.allclose(master, 0.0)
 
 
+def test_cache_write_failure_does_not_fail_the_cue(tmp_path, monkeypatch):
+    def boom(*args, **kwargs):
+        raise OSError("cache directory is read-only")
+
+    monkeypatch.setattr("cache.sf.write", boom)
+    master, results = run_engine(
+        [cue(1, 0.0, 1.0, 2.0)], FakeProvider(1.0), None, "", "chinese", 2.0,
+        EngineOptions(), SegmentCache(root=tmp_path / "cache"),
+        progress=lambda _line: None,
+    )
+    assert results[0].failed is False
+    assert np.any(master[:24000] != 0.0)
+
+
 def test_real_voice_is_used_in_cache_key(tmp_path):
     p = FakeProvider(1.0)
     run_engine([cue(1, 0.0, 1.0, 2.0)], p, VOICE, "", "chinese", 2.0,

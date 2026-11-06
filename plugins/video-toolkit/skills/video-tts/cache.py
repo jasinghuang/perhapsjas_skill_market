@@ -77,19 +77,36 @@ class SegmentCache:
         pcm: np.ndarray,
         sample_rate: int = SAMPLE_RATE,
     ) -> None:
-        """写入缓存；缓存禁用时不落盘，写入过程对读者原子可见。"""
+        """写入缓存；缓存禁用时不落盘，写入过程对读者原子可见。
+
+        缓存是加速手段而非正确性依赖：磁盘满、权限不足等 `OSError`
+        只跳过本次缓存，绝不让已经合成好的条目失败。
+        """
         if not self.enabled:
             return
         path = self._path(key)
-        self.root.mkdir(parents=True, exist_ok=True)
-        fd, tmp_name = tempfile.mkstemp(
-            dir=self.root, prefix=f".{key}.", suffix=".wav"
-        )
-        os.close(fd)
+        tmp_name: str | None = None
         try:
+            self.root.mkdir(parents=True, exist_ok=True)
+            fd, tmp_name = tempfile.mkstemp(
+                dir=self.root, prefix=f".{key}.", suffix=".wav"
+            )
+            os.close(fd)
             samples = np.asarray(pcm, dtype=np.float32).reshape(-1)
             sf.write(tmp_name, samples, sample_rate, subtype="FLOAT")
             os.replace(tmp_name, path)
+        except OSError:
+            _unlink_quietly(tmp_name)
         except BaseException:
-            Path(tmp_name).unlink(missing_ok=True)
+            _unlink_quietly(tmp_name)
             raise
+
+
+def _unlink_quietly(path: str | None) -> None:
+    """删除临时文件；不存在或删除失败都不再抛错。"""
+    if path is None:
+        return
+    try:
+        Path(path).unlink(missing_ok=True)
+    except OSError:
+        pass

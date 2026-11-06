@@ -128,6 +128,18 @@ def test_prepare_raises_when_mlx_audio_missing():
             p.prepare()
 
 
+def test_model_load_error_includes_download_hint():
+    p = LocalMLXProvider()
+    with patch(
+        "providers.local_mlx.load_model", side_effect=RuntimeError("boom")
+    ):
+        with pytest.raises(ProviderError) as excinfo:
+            p.prepare()
+    message = str(excinfo.value)
+    assert "huggingface-cli download" in message
+    assert MODEL_ID in message
+
+
 def test_synthesize_requires_prepare_first():
     p = LocalMLXProvider()
     with pytest.raises(ProviderError, match="prepare"):

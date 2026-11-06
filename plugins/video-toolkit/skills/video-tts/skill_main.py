@@ -35,12 +35,17 @@ from pathlib import Path
 from cache import SegmentCache
 from engine import EngineOptions, SegmentResult, run_engine
 from mux import mux_video, probe_video, verify_output
-from providers import FLAGSHIP_MODEL, find_voice, get_provider
+from providers import (
+    FLAGSHIP_MODEL,
+    LOCAL_DESIGN_MODEL,
+    find_voice,
+    get_provider,
+    is_voice_design_model,
+)
 from providers.base import Voice
 from srt_parse import Cue, SRTError, load_cues
 from track_build import write_wav
 
-VIDEO_SUFFIXES = frozenset({".mp4", ".mkv", ".webm", ".mov", ".m4v"})
 PLAN_PREVIEW = 10
 
 
@@ -49,6 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="video-tts",
         description="把中文 SRT 配成与视频等长的中文配音轨 / 成片（非交互）。",
+        allow_abbrev=False,
     )
     parser.add_argument("--srt", required=True, help="中文 SRT 路径（UTF-8）")
     parser.add_argument("--video", help="视频路径；提供则混流输出 mp4")
@@ -89,10 +95,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-speed", type=float, default=1.30, help="最大 atempo 倍率（默认 1.30）"
     )
     parser.add_argument(
-        "--sample-rate", type=int, default=24000, help="输出采样率（默认 24000）"
-    )
-    parser.add_argument(
-        "--yes", action="store_true", help="确认在线合成费用（online 必需）"
+        "--yes",
+        action="store_true",
+        help="确认在线合成费用（online 真实运行必需；--dry-run 免确认）",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="只解析并打印计划，不合成"
@@ -106,11 +111,20 @@ def _fail(message: str) -> None:
     raise SystemExit(2)
 
 
+def _require_voice(provider: str, voice_id: str) -> Voice:
+    """按 provider 查音色；非法音色以状态码 2 退出（而不是运行期 ValueError）。"""
+    try:
+        return find_voice(provider, voice_id)
+    except ValueError as exc:
+        _fail(str(exc))
+
+
 def validate_args(args: argparse.Namespace) -> None:
     """结构性校验后再检查输入文件，错误一律 `SystemExit`。
 
     顺序很重要：provider / 音色 / `--yes` / 倍率的检查先于 `--srt`
-    是否存在，避免用户先被文件错误掩盖真正的参数问题。
+    是否存在，避免用户先被文件错误掩盖真正的参数问题。音色与模型在
+    这里就完成查找与一致性校验，非法音色统一退出 2。
     """
     if args.provider not in ("local", "online"):
         _fail(f"unknown provider {args.provider!r}; expected local or online")
@@ -119,17 +133,40 @@ def validate_args(args: argparse.Namespace) -> None:
             f"--max-speed must be a finite value >= 1.0 (got {args.max_speed}); "
             "video-tts never slows speech down"
         )
-    if args.sample_rate <= 0:
-        _fail(f"--sample-rate must be positive (got {args.sample_rate})")
 
+    voice: Voice | None = None
     if args.provider == "local":
         if bool(args.voice) == bool(args.design):
             _fail("local provider requires exactly one of --voice or --design")
+        if args.design and args.instruct:
+            _fail(
+                "--design cannot be combined with --instruct; "
+                "the design description already controls the voice"
+            )
+        if args.voice:
+            voice = _require_voice("local", args.voice)
+            if args.model and is_voice_design_model(args.model):
+                _fail(
+                    f"--voice {args.voice!r} cannot be used with VoiceDesign "
+                    f"model {args.model!r}; use --design or a CustomVoice model"
+                )
+        if args.design and args.model and not is_voice_design_model(args.model):
+            _fail(
+                f"--design requires a VoiceDesign model (got {args.model!r}); "
+                f"omit --model to use {LOCAL_DESIGN_MODEL}"
+            )
     else:
         if args.design:
             _fail("--design is only supported by the local provider")
         if not args.voice:
             _fail("online provider requires --voice")
+        voice = _require_voice("online", args.voice)
+        if args.model and args.model != voice.model:
+            _fail(
+                f"--model {args.model!r} does not match voice {args.voice!r} "
+                f"(which uses {voice.model!r}); online --model can only "
+                "restate the model of the selected voice group"
+            )
 
     if args.provider == "online" and not args.yes and not args.dry_run:
         _fail(
@@ -172,8 +209,12 @@ def _with_suffix(path: Path, suffix: str) -> Path:
 
 
 def _video_output_from_out(raw: Path) -> Path:
-    """把 `--out` 解析成最终的成品 mp4 路径。"""
-    if raw.suffix.lower() in VIDEO_SUFFIXES:
+    """把 `--out` 解析成最终的成品 mp4 路径。
+
+    只有 `.mp4` 后缀被当作显式成品路径；其它后缀（`.mkv`、`.mov` 等）
+    按输出前缀处理，避免把非 mp4 名字直接当成容器格式。
+    """
+    if raw.suffix.lower() == ".mp4":
         return raw
     return _with_suffix(raw, ".dub.mp4")
 
@@ -194,12 +235,12 @@ def _resolve_outputs(
     """返回 `(out_prefix, video_out)`。
 
     `--out` 可以是前缀（`foo` → `foo.dub.wav` / `foo.dub.mp4`），也可以是
-    成品 mp4 路径（`foo.mp4` → `foo.dub.wav` / `foo.mp4`）。未提供时用
-    视频 stem（无视频则 SRT stem）。
+    成品 mp4 路径（`foo.mp4` → `foo.dub.wav` / `foo.mp4`）。非 `.mp4`
+    后缀一律按前缀处理。未提供时用视频 stem（无视频则 SRT stem）。
     """
     if args.out:
         raw = Path(args.out)
-        if raw.suffix.lower() in VIDEO_SUFFIXES:
+        if raw.suffix.lower() == ".mp4":
             return raw.with_suffix(""), raw
         return raw, _video_output_from_out(raw)
     base = (video if video is not None else srt).with_suffix("")
@@ -220,6 +261,7 @@ def _print_plan(
     if video is not None:
         print(f"视频: {video}")
     print(f"条目: {len(cues)} 条")
+    print(f"总字数: {sum(len(cue.text) for cue in cues)} 字")
     print(f"总时长: {total_duration:.3f}s")
     if voice is not None:
         print(f"音色: {voice.name} ({voice.voice_id}, {voice.model})")
@@ -291,10 +333,11 @@ def _print_report(
 
     cue_warnings = sum(1 for result in results if result.warning)
     failures = sum(1 for result in results if result.failed)
+    total_chars = sum(len(result.cue.text) for result in results)
     print()
     print(
-        f"汇总：{len(results)} 条；警告 {srt_warning_count + cue_warnings} 条；"
-        f"失败 {failures} 条"
+        f"汇总：{len(results)} 条；{total_chars} 字；"
+        f"警告 {srt_warning_count + cue_warnings} 条；失败 {failures} 条"
     )
     return srt_warning_count + cue_warnings, failures
 
@@ -312,10 +355,12 @@ def _build_provider(args: argparse.Namespace, design: str | None):
     """按 provider 组装 kwargs 并实例化（实现模块懒导入）。"""
     kwargs: dict = {}
     if args.provider == "local":
-        if args.model:
-            kwargs["model_id"] = args.model
         if design:
             kwargs["design"] = design
+            # VoiceDesign 模式必须加载 VoiceDesign 模型；未显式覆盖时用默认。
+            kwargs["model_id"] = args.model or LOCAL_DESIGN_MODEL
+        elif args.model:
+            kwargs["model_id"] = args.model
     else:
         kwargs["bl_bin"] = args.bl_bin
         if args.tts_endpoint:
@@ -325,6 +370,40 @@ def _build_provider(args: argparse.Namespace, design: str | None):
         if api_key:
             kwargs["api_key"] = api_key
     return get_provider(args.provider, **kwargs)
+
+
+def _report_payload(
+    args: argparse.Namespace,
+    srt: Path,
+    video: Path | None,
+    voice: Voice | None,
+    design: str | None,
+    total_duration: float,
+    track_path: Path,
+    final_path: Path | None,
+    srt_warnings: list[str],
+    warning_count: int,
+    failures: int,
+    results: list[SegmentResult],
+) -> dict:
+    """组装 JSON 报告；`output` 只在成片真正写成功后才有值。"""
+    return {
+        "srt": str(srt),
+        "video": str(video) if video is not None else None,
+        "provider": args.provider,
+        "voice": _voice_payload(voice),
+        "design": design,
+        "instruct": args.instruct,
+        "lang": args.lang,
+        "max_speed": args.max_speed,
+        "total_duration": total_duration,
+        "track": str(track_path),
+        "output": str(final_path) if final_path is not None else None,
+        "srt_warnings": srt_warnings,
+        "warning_count": warning_count,
+        "failure_count": failures,
+        "cues": [_result_payload(result) for result in results],
+    }
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -390,7 +469,6 @@ def _run(args: argparse.Namespace) -> int:
     track_path.parent.mkdir(parents=True, exist_ok=True)
 
     options = EngineOptions(
-        sample_rate=args.sample_rate,
         max_speed=args.max_speed,
         keep_segments=args.keep_segments,
         segments_dir=out_prefix.parent / "segments" if args.keep_segments else None,
@@ -425,7 +503,23 @@ def _run(args: argparse.Namespace) -> int:
         cache,
         progress=lambda line: print(line, flush=True),
     )
-    write_wav(track_path, master, args.sample_rate)
+    write_wav(track_path, master)
+
+    warning_count, failures = _print_report(results, len(srt_warnings))
+    # 先报告音轨与逐条结果：即使随后混流失败，用户仍拿到完整可用的 wav。
+    print(f"配音轨: {track_path}")
+
+    report_path: Path | None = None
+    if args.json_report:
+        report_path = Path(args.json_report)
+        _write_json_report(
+            report_path,
+            _report_payload(
+                args, srt, video, voice, design, total_duration, track_path,
+                None, srt_warnings, warning_count, failures, results,
+            ),
+        )
+        print(f"报告: {report_path}")
 
     final_path: Path | None = None
     if video is not None and not args.track_only:
@@ -433,36 +527,16 @@ def _run(args: argparse.Namespace) -> int:
         mux_video(video, track_path, video_out, codec_name)
         verify_output(video_out, video_duration)
         final_path = video_out
-
-    warning_count, failures = _print_report(results, len(srt_warnings))
-    print(f"配音轨: {track_path}")
-    if final_path is not None:
         print(f"成片: {final_path}")
-
-    if args.json_report:
-        report_path = Path(args.json_report)
-        _write_json_report(
-            report_path,
-            {
-                "srt": str(srt),
-                "video": str(video) if video is not None else None,
-                "provider": args.provider,
-                "voice": _voice_payload(voice),
-                "design": design,
-                "instruct": args.instruct,
-                "lang": args.lang,
-                "sample_rate": args.sample_rate,
-                "max_speed": args.max_speed,
-                "total_duration": total_duration,
-                "track": str(track_path),
-                "output": str(final_path) if final_path is not None else None,
-                "srt_warnings": srt_warnings,
-                "warning_count": warning_count,
-                "failure_count": failures,
-                "cues": [_result_payload(result) for result in results],
-            },
-        )
-        print(f"报告: {report_path}")
+        if report_path is not None:
+            _write_json_report(
+                report_path,
+                _report_payload(
+                    args, srt, video, voice, design, total_duration,
+                    track_path, final_path, srt_warnings, warning_count,
+                    failures, results,
+                ),
+            )
 
     return 1 if failures else 0
 

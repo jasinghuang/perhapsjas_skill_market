@@ -421,7 +421,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
   --srt video.srt --video video.mp4 --provider local --voice Serena --out s2
 
-# 本地 VoiceDesign 试音（与 --voice 互斥；跨段音色会漂，仅建议短视频）
+# 本地 VoiceDesign 试音（与 --voice / --instruct 互斥；自动加载 VoiceDesign 模型；跨段音色会漂，仅建议短视频）
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
   --srt video.srt --provider local --design "温暖、温柔的年轻女声"
 
@@ -440,19 +440,20 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
 
 | 产物 | 何时生成 |
 | --- | --- |
-| `<out>.dub.wav` | 总是生成：默认 24 kHz 单声道整轨（`--sample-rate` 可改），长度 = 视频时长（无视频时 = 最后一句结束时间） |
-| `<out>.dub.mp4` | 提供 `--video` 且未 `--track-only`：视频流复制（必要时重编码 H.264），音频替换为 AAC 192k |
+| `<out>.dub.wav` | 总是生成：24 kHz 单声道整轨，长度 = 视频时长（无视频时 = 最后一句结束时间） |
+| `<out>.dub.mp4` | 提供 `--video` 且未 `--track-only`：视频流复制（必要时重编码 H.264），音频替换为 AAC 192k（源轨 24 kHz 单声道） |
 
 输出命名：
 
 - 默认 `<out>` = 视频 stem（无视频时 = SRT stem）。
 - `--out foo` → `foo.dub.wav` + `foo.dub.mp4`。
-- `--out foo.mp4` → `foo.dub.wav` + `foo.mp4`（mp4 用给定路径）。
+- `--out foo.mp4` → `foo.dub.wav` + `foo.mp4`（只有 `.mp4` 后缀视为成品路径）。
+- `--out foo.mkv` / 其它非 `.mp4` 后缀 → `foo.mkv.dub.wav` + `foo.mkv.dub.mp4`（按前缀处理）。
 - `--track-only` 只写 `.dub.wav`。
 - `--keep-segments` 把逐条片段写到 `<out_dir>/segments/`。
-- `--json-report <path>` 写机器可读 JSON（逐条时长、动作、告警、失败数等）。
+- `--json-report <path>` 写机器可读 JSON（逐条时长、动作、告警、失败数等）；混流失败时报告仍保留音轨与逐条结果，`output` 为 `null`。
 
-stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时长 / 倍率 / 状态`，末尾汇总警告数与失败数。退出码：全部成功或只有截断 / 超速警告 → 0；有合成失败或混流失败 → 1；参数错误 → 2。
+stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时长 / 倍率 / 状态`，末尾汇总总字数、警告数与失败数。退出码：全部成功或只有截断 / 超速警告 → 0；有合成失败或混流失败 → 1；参数错误 → 2。
 
 ## 参数
 
@@ -461,12 +462,12 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | `--srt` | 中文 SRT 路径（UTF-8） | 必需 |
 | `--video` | 视频路径；提供则混流输出 mp4 | 无 |
 | `--provider` | `local` / `online` | 必需（由 AskUserQuestion 决定） |
-| `--out` | 输出前缀或 `.mp4` 路径 | 视频 / SRT stem |
+| `--out` | 输出前缀或 `.mp4` 路径（非 `.mp4` 后缀按前缀处理） | 视频 / SRT stem |
 | `--voice` | 音色 ID（本地 9 / 在线 14，区分大小写） | 交互选择；local 与 `--design` 二选一，online 必需 |
 | `--instruct` | 语气 / 风格指令 | 空 |
-| `--design` | 本地 VoiceDesign 音色描述；与 `--voice` 互斥 | 无 |
-| `--lang` | 语言代码 | `chinese` |
-| `--model` | 覆盖 provider 模型 id | 各 provider 默认 |
+| `--design` | 本地 VoiceDesign 音色描述；与 `--voice` / `--instruct` 互斥，自动加载 VoiceDesign 模型 | 无 |
+| `--lang` | 语言代码（在线映射 `chinese` 等 → `zh` / `en` / …） | `chinese` |
+| `--model` | 覆盖 provider 模型 id；在线必须与音色同组，本地 VoiceDesign 只能配 `--design` | 各 provider 默认 |
 | `--tts-endpoint` | DashScope HTTP 兜底 endpoint（仅 `bl` 不可用时） | 无 |
 | `--bl-bin` | `bl` 可执行文件 | `bl` |
 | `--track-only` | 只出配音轨，不混流 | false |
@@ -476,8 +477,7 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | `--continue-on-error` | 单条失败继续（会缺句，退出码仍为 1） | false |
 | `--skip-bracketed` | 跳过纯音效标记条目（如 `[音乐]`、`（掌声）`） | false |
 | `--max-speed` | 最大 atempo 倍率（只加速，不减速） | `1.30` |
-| `--sample-rate` | 输出采样率 | `24000` |
-| `--yes` | 跳过在线费用确认（online 真实运行必需） | false |
+| `--yes` | 确认在线合成费用（online 真实运行必需；`--dry-run` 免确认） | false |
 | `--dry-run` | 只解析并打印计划，不合成 | false |
 
 ## 错误处理
@@ -486,14 +486,15 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | --- | --- |
 | 缺 ffmpeg / ffprobe | 报错并提示 `brew install ffmpeg`（Windows 用 `winget install ffmpeg`） |
 | 缺 mlx-audio | `run.py` 自动选解释器安装；装不上给出 `python3 -m pip install --break-system-packages mlx-audio` |
-| 本地模型首次下载失败 | 报错，提示检查网络或手动 `huggingface-cli download mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` |
-| 本地音色名非法 | 报错并列出 9 个合法音色后退出 |
-| 在线缺 `bl` | 提示安装（`npm install -g bailian-cli`，需 Node.js ≥ 18.17；详见预检一节）；询问是否切本地；已有 `DASHSCOPE_API_KEY` 时可用 `--tts-endpoint` 走 HTTP 兜底 |
+| 本地模型首次下载失败 | 报错，提示检查网络或手动 `huggingface-cli download mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16`（错误信息里已带命令） |
+| 本地音色名非法 | 参数校验阶段报错并列出 9 个合法音色后退出（码 2） |
+| 在线缺 `bl` | 提示安装（`npm install -g bailian-cli`，需 Node.js ≥ 18.17；详见预检一节）；询问是否切本地；已有 `DASHSCOPE_API_KEY` 时可加 `--tts-endpoint` 走 HTTP 兜底 |
 | `bl` 未登录 | 自动展示 `bl auth login --console --no-browser` 的登录链接并轮询；超时后用 AskUserQuestion 选重新获取链接 / 重新登录 / 切本地；不代存 key |
-| `bl` 401 / 403 | 提示重新登录；可切本地 |
-| 在线 429 / 5xx | 失败条目自动重试一次；仍失败则询问切本地或终止 |
-| 在线额度不足 | 报错并给出[百炼控制台](https://bailian.console.aliyun.com/)链接；可切本地 |
-| 在线音色与模型不匹配 | `--voice` 自动决定模型；`--model` 只用于同组覆盖，跨组混用会被百炼拒绝（InvalidParameter） |
+| `bl` 401 / 403 | provider 立即报错并提示运行 `bl auth login` 重新登录；可切本地 |
+| 在线 429 / 5xx | provider 自动指数退避重试 2 次（1s / 2s）；仍失败则询问切本地或终止 |
+| 在线额度不足 / Throttling | provider 立即报错并给出[百炼控制台](https://bailian.console.aliyun.com/)链接；可切本地 |
+| 在线音色与模型不匹配 | `--voice` 自动决定模型；显式 `--model` 必须与音色同组，跨组在本地参数校验阶段退出 2，不发请求 |
+| 在线音色名非法 | 参数校验阶段报错并列出 14 个合法音色后退出（码 2） |
 | `bl --list-voices` 返回空 | 正常现象（这两个模型返回 `null`）；以本文音色表为准，不报错 |
 | SRT 为空 / 时间非法 / 零时长 | 列出条目号并退出 |
 | 单条合成失败 / 空音频 / 全静音 | 重试一次；仍失败终止（除非 `--continue-on-error`），不写缓存 |

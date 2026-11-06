@@ -2,7 +2,14 @@ from pathlib import Path
 
 import pytest
 
-from srt_parse import Cue, SRTError, load_cues, normalize_text, parse_timestamp
+from srt_parse import (
+    Cue,
+    SRTError,
+    load_cues,
+    normalize_text,
+    parse_srt,
+    parse_timestamp,
+)
 
 
 def test_parse_timestamp_comma_and_dot():
@@ -67,3 +74,54 @@ def test_load_cues_overlap_clamps_effective_start(tmp_path: Path):
     cues, warnings = load_cues(srt, video_duration=10.0)
     assert cues[1].effective_start == 5.0
     assert warnings
+
+
+def test_end_timestamp_tolerates_trailing_position_suffix(tmp_path: Path):
+    srt = tmp_path / "a.srt"
+    srt.write_text(
+        "1\n00:00:01,000 --> 00:00:04,000 X1:100 X2:200\n带位置后缀\n",
+        encoding="utf-8",
+    )
+    cues, warnings = load_cues(srt)
+    assert len(cues) == 1
+    assert cues[0].end == 4.0
+    assert not any("块" in warning for warning in warnings)
+
+
+def test_malformed_blocks_produce_numbered_warnings(tmp_path: Path):
+    srt = tmp_path / "a.srt"
+    srt.write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\n好\n\n"
+        "2\n这不是时间轴\n坏块\n\n"
+        "3\n00:00:02,000 --> 00:00:03,000\n好\n",
+        encoding="utf-8",
+    )
+    warnings: list[str] = []
+    cues = parse_srt(srt, warnings=warnings)
+    assert [cue.text for cue in cues] == ["好", "好"]
+    assert len(warnings) == 1
+    assert "第 2 块" in warnings[0]
+    assert "缺少时间轴" in warnings[0]
+
+
+def test_unparseable_timestamp_produces_numbered_warning(tmp_path: Path):
+    srt = tmp_path / "a.srt"
+    srt.write_text(
+        "1\n00:00:00,000 --> not-a-time\n坏时间\n", encoding="utf-8"
+    )
+    warnings: list[str] = []
+    assert parse_srt(srt, warnings=warnings) == []
+    assert "第 1 块" in warnings[0]
+    assert "时间戳无法解析" in warnings[0]
+
+
+def test_load_cues_includes_malformed_block_warnings(tmp_path: Path):
+    srt = tmp_path / "a.srt"
+    srt.write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\n好\n\n"
+        "2\n缺少时间轴\n",
+        encoding="utf-8",
+    )
+    cues, warnings = load_cues(srt)
+    assert len(cues) == 1
+    assert any("第 2 块" in warning for warning in warnings)

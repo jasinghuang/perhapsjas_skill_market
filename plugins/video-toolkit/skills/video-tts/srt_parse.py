@@ -21,6 +21,10 @@ _TIMESTAMP_RE = re.compile(
     r"^(?P<sign>-)?(?P<hours>\d+):(?P<minutes>\d{1,2}):(?P<seconds>\d{1,2})"
     r"(?P<separator>[,.])(?P<millis>\d+)$"
 )
+# 时间轴行里结束时间后可能带位置后缀（`00:00:04,000 X1:100 X2:200`）。
+_LEADING_TIMESTAMP_RE = re.compile(
+    r"^\s*(?P<ts>-?\d+:\d{1,2}:\d{1,2}[,.]\d+)"
+)
 _ASCII_ALNUM_RE = re.compile(r"[A-Za-z0-9]")
 _WHITESPACE_RE = re.compile(r"\s+")
 _BRACKETED_RE = re.compile(r"[\[\(（【].*[\]\)）】]")
@@ -83,6 +87,12 @@ def normalize_text(text: str) -> str:
     return _WHITESPACE_RE.sub(" ", merged).strip()
 
 
+def _leading_timestamp(raw: str) -> str:
+    """取时间轴字段开头的第一个时间戳，忽略其后的位置后缀。"""
+    match = _LEADING_TIMESTAMP_RE.match(raw)
+    return match.group("ts") if match else raw.strip()
+
+
 def _read_blocks(path: Path) -> list[list[str]]:
     raw = Path(path).read_text(encoding="utf-8-sig")
     raw = raw.replace("\r\n", "\n").replace("\r", "\n")
@@ -93,28 +103,45 @@ def _read_blocks(path: Path) -> list[list[str]]:
     ]
 
 
-def parse_srt(path: Path, *, skip_bracketed: bool = False) -> list[Subtitle]:
+def parse_srt(
+    path: Path,
+    *,
+    skip_bracketed: bool = False,
+    warnings: list[str] | None = None,
+) -> list[Subtitle]:
     """解析 SRT 为按开始时间排序的 `Subtitle` 列表。
 
-    结构不完整的块（缺序号、缺时间轴、时间戳无法解析）按 malformed 跳过；
-    时间轴语义非法（负时间、零/负时长）或文本归一化后为空则抛 `SRTError`。
+    结构不完整的块（缺序号、缺时间轴、时间戳无法解析）按 malformed 跳过，
+    并在传入 `warnings` 时追加带块号的说明；时间轴语义非法（负时间、
+    零/负时长）或文本归一化后为空则抛 `SRTError`。
     """
     subtitles: list[Subtitle] = []
-    for lines in _read_blocks(path):
+    for block_number, lines in enumerate(_read_blocks(path), start=1):
+        reason: str | None = None
         if len(lines) < 2:
-            continue
-        try:
-            index = int(lines[0].strip())
-        except ValueError:
-            continue
-        timing = lines[1]
-        if "-->" not in timing:
-            continue
-        start_raw, end_raw = timing.split("-->", 1)
-        try:
-            start = parse_timestamp(start_raw)
-            end = parse_timestamp(end_raw)
-        except SRTError:
+            reason = "内容不足两行"
+        else:
+            try:
+                index = int(lines[0].strip())
+            except ValueError:
+                reason = "缺少序号"
+            else:
+                timing = lines[1]
+                if "-->" not in timing:
+                    reason = "缺少时间轴"
+                else:
+                    start_raw, end_raw = timing.split("-->", 1)
+                    try:
+                        start = parse_timestamp(_leading_timestamp(start_raw))
+                        end = parse_timestamp(_leading_timestamp(end_raw))
+                    except SRTError as exc:
+                        reason = f"时间戳无法解析（{exc}）"
+
+        if reason is not None:
+            if warnings is not None:
+                warnings.append(
+                    f"SRT 第 {block_number} 块格式不完整（{reason}），已跳过"
+                )
             continue
 
         text = normalize_text("\n".join(lines[2:]))
@@ -144,11 +171,14 @@ def load_cues(
 ) -> tuple[list[Cue], list[str]]:
     """解析 SRT 并计算每条字幕的配音时间窗。
 
-    返回 `(cues, warnings)`。`warnings` 是给用户看的说明，包括结束时间超出
-    视频时长被夹取、与上一条字幕重叠导致 `effective_start` 后移。
+    返回 `(cues, warnings)`。`warnings` 是给用户看的说明，包括 malformed
+    块、结束时间超出视频时长被夹取、与上一条字幕重叠导致 `effective_start`
+    后移。
     """
-    subtitles = parse_srt(path, skip_bracketed=skip_bracketed)
     warnings: list[str] = []
+    subtitles = parse_srt(
+        path, skip_bracketed=skip_bracketed, warnings=warnings
+    )
 
     # 先把结束时间夹进视频时长，并记录 warning。
     bounded: list[tuple[Subtitle, float]] = []

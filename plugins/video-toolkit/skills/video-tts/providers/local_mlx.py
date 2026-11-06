@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from . import LOCAL_MODEL
 from .base import Voice
 
 try:  # mlx-audio 只在 Apple Silicon 上可用；测试会 patch 这两个名字。
@@ -28,7 +29,7 @@ try:
 except ImportError:
     mx = None
 
-DEFAULT_MODEL = "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16"
+DEFAULT_MODEL = LOCAL_MODEL
 SAMPLE_RATE = 24000
 
 
@@ -61,7 +62,9 @@ class LocalMLXProvider:
             model = load_model(self.model_id)
         except Exception as exc:
             raise ProviderError(
-                f"failed to load local model {self.model_id!r}: {exc}"
+                f"failed to load local model {self.model_id!r}: {exc}. "
+                "若模型尚未缓存，先运行："
+                f"huggingface-cli download {self.model_id}"
             ) from exc
         self._model = model
         self._sample_rate = getattr(model, "sample_rate", None)

@@ -1,8 +1,15 @@
 import pytest
 from providers import (
-    LOCAL_VOICES, ONLINE_FLAGSHIP_VOICES, ONLINE_QWEN_TTS_VOICES,
-    find_voice, get_provider,
+    FLAGSHIP_MODEL,
+    LOCAL_DESIGN_MODEL,
+    LOCAL_VOICES,
+    ONLINE_FLAGSHIP_VOICES,
+    ONLINE_QWEN_TTS_VOICES,
+    find_voice,
+    get_provider,
+    is_voice_design_model,
 )
+from providers.online_bailian import FLAGSHIP_MODEL as ONLINE_FLAGSHIP_MODEL
 
 
 def test_local_catalog_has_nine_voices():
@@ -51,3 +58,14 @@ def test_find_voice_returns_catalog_voice():
 def test_find_voice_requires_exact_id():
     with pytest.raises(ValueError):
         find_voice("local", "serena")
+
+
+def test_voice_design_model_marker_and_default_constant():
+    assert LOCAL_DESIGN_MODEL.endswith("VoiceDesign-bf16")
+    assert is_voice_design_model(LOCAL_DESIGN_MODEL)
+    assert not is_voice_design_model(find_voice("local", "Serena").model)
+    assert not is_voice_design_model(None)
+
+
+def test_online_provider_shares_flagship_model_constant():
+    assert ONLINE_FLAGSHIP_MODEL == FLAGSHIP_MODEL

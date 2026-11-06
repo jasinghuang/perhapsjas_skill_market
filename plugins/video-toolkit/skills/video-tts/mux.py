@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,7 +30,7 @@ FFPROBE_BASE = ["ffprobe", "-v", "error"]
 PROBE_ENTRIES = (
     "stream=codec_name,width,height,r_frame_rate,duration:format=duration"
 )
-VERIFY_ENTRIES = "stream=codec_type,duration:format=duration"
+VERIFY_ENTRIES = "stream=codec_type,codec_name,duration:format=duration"
 
 
 @dataclass(frozen=True)
@@ -121,6 +122,11 @@ def mux_video(video: Path, track: Path, out: Path, codec_name: str) -> None:
         "-map_metadata", "0",
     ]
     if needs_reencode(codec_name):
+        print(
+            f"warning: 视频编码 {codec_name or 'unknown'} 无法直接复制进 mp4，"
+            "正在重编码为 H.264（耗时变长）",
+            file=sys.stderr,
+        )
         command += ["-c:v", "libx264", "-crf", "18", "-preset", "medium"]
     else:
         command += ["-c:v", "copy"]
@@ -149,7 +155,7 @@ def verify_output(
     expected_duration: float,
     tolerance: float = 0.2,
 ) -> None:
-    """校验成片：恰好一条视频流 + 一条音频流，时长与期望相差 ≤ `tolerance`。"""
+    """校验成片：恰好一条视频流 + 一条 AAC 音频流，时长与期望相差 ≤ `tolerance`。"""
     probe = _ffprobe(VERIFY_ENTRIES, path)
     streams = probe.get("streams", [])
     videos = [stream for stream in streams if stream.get("codec_type") == "video"]
@@ -161,6 +167,11 @@ def verify_output(
     if len(audios) != 1:
         raise RuntimeError(
             f"expected exactly one audio stream in {path}, found {len(audios)}"
+        )
+    audio_codec = audios[0].get("codec_name")
+    if audio_codec != "aac":
+        raise RuntimeError(
+            f"expected AAC audio stream in {path}, found {audio_codec!r}"
         )
     duration = _duration(videos[0], probe, path)
     drift = abs(duration - expected_duration)

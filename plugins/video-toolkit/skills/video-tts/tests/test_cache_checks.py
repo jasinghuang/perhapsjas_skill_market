@@ -64,6 +64,19 @@ def test_disabled_cache_does_not_write_or_read(tmp_path):
     assert not (tmp_path / "new.wav").exists()
 
 
+def test_put_is_best_effort_when_write_raises_oserror(tmp_path, monkeypatch):
+    cache = SegmentCache(root=tmp_path)
+
+    def boom(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("cache.sf.write", boom)
+    cache.put("k", np.full(24000, 0.2, dtype=np.float32))
+    assert not (tmp_path / "k.wav").exists()
+    # 临时文件也要清理掉。
+    assert list(tmp_path.glob(".k.*.wav")) == []
+
+
 def test_default_root_honors_xdg_cache_home(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     cache = SegmentCache()

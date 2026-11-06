@@ -1,13 +1,20 @@
 import subprocess
+import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-from providers import find_voice
+from providers import FLAGSHIP_MODEL, find_voice
 from providers.online_bailian import (
-    OnlineBailianProvider, ProviderError, find_login_url, is_authenticated,
+    BAILIAN_CONSOLE_URL,
+    OnlineBailianProvider,
+    ProviderError,
+    _readline_with_timeout,
+    find_login_url,
+    is_authenticated,
 )
 
 FLAG = find_voice("online", "longanlingxin_v3.1")
@@ -35,8 +42,44 @@ def test_build_bl_command_exact_order_and_audio_options():
     assert cmd == [
         "bl", "speech", "synthesize", "--text", "你好",
         "--model", "qwen3-tts-flash", "--voice", "Cherry",
-        "--format", "wav", "--sample-rate", "24000", "--out", "/tmp/a.wav",
+        "--format", "wav", "--language", "zh",
+        "--sample-rate", "24000", "--out", "/tmp/a.wav",
     ]
+
+
+@pytest.mark.parametrize(
+    ("lang", "code"),
+    [
+        ("chinese", "zh"), ("english", "en"), ("japanese", "ja"),
+        ("korean", "ko"), ("german", "de"), ("french", "fr"),
+        ("russian", "ru"), ("portuguese", "pt"), ("spanish", "es"),
+        ("italian", "it"),
+    ],
+)
+def test_build_bl_command_maps_language_code(lang, code):
+    p = OnlineBailianProvider()
+    cmd = p.build_bl_command("你好", QTTS, Path("/tmp/a.wav"), lang=lang)
+    assert cmd[cmd.index("--language") + 1] == code
+
+
+def test_http_payload_maps_language_type(tmp_path):
+    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    response = MagicMock(
+        raise_for_status=MagicMock(),
+        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
+    )
+    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
+    with patch("requests.post", return_value=response) as post, \
+         patch("requests.get", return_value=download):
+        p._synthesize_http("hello", QTTS, "", "english", tmp_path / "a.wav")
+    assert post.call_args.kwargs["json"]["input"]["language_type"] == "English"
+
+
+def test_describe_reports_online_and_shared_flagship_constant():
+    p = OnlineBailianProvider()
+    info = p.describe()
+    assert info["provider"] == "online"
+    assert info["model"] == FLAGSHIP_MODEL
 
 
 def test_find_login_url():
@@ -59,11 +102,15 @@ def test_authenticated_false_on_any_error():
         assert is_authenticated("bl") is False
 
 
-def test_missing_bl_without_key_raises():
+def test_missing_bl_error_mentions_dashscope_env_and_endpoint():
     with patch("shutil.which", return_value=None):
         p = OnlineBailianProvider(api_key=None)
-        with pytest.raises(ProviderError, match="bl"):
+        with pytest.raises(ProviderError) as excinfo:
             p.prepare()
+    message = str(excinfo.value)
+    assert "DASHSCOPE_API_KEY" in message
+    assert "--tts-endpoint" in message
+    assert "--api-key" not in message
 
 
 def test_prepare_with_bl_checks_login():
@@ -75,7 +122,7 @@ def test_prepare_with_bl_checks_login():
 
 
 def test_login_flow_prints_url_and_polls_until_authenticated(capsys):
-    p = OnlineBailianProvider()
+    p = OnlineBailianProvider(poll_interval=0.001)
     calls = []
     with patch.object(p, "is_authenticated", side_effect=[False, False, True]), \
          patch("subprocess.Popen") as popen:
@@ -86,10 +133,13 @@ def test_login_flow_prints_url_and_polls_until_authenticated(capsys):
         p.ensure_authenticated(on_url=calls.append)
     assert calls == ["https://login.example.com/abc"]
     assert "https://login.example.com/abc" in capsys.readouterr().out
+    # 成功后也必须回收登录子进程，避免遗留。
+    proc.terminate.assert_called_once()
+    proc.wait.assert_called_once()
 
 
 def test_login_flow_raises_when_process_exits():
-    p = OnlineBailianProvider()
+    p = OnlineBailianProvider(poll_interval=0.001)
     with patch.object(p, "is_authenticated", side_effect=[False, False]), \
          patch("subprocess.Popen") as popen:
         proc = MagicMock()
@@ -98,6 +148,37 @@ def test_login_flow_raises_when_process_exits():
         popen.return_value = proc
         with pytest.raises(ProviderError, match="https://login.example.com/abc"):
             p.ensure_authenticated()
+    proc.wait.assert_called_once()
+
+
+def test_login_flow_terminates_child_on_timeout():
+    p = OnlineBailianProvider(login_timeout=0.0, poll_interval=0.0)
+    with patch.object(p, "is_authenticated", return_value=False), \
+         patch("subprocess.Popen") as popen:
+        proc = MagicMock()
+        proc.stdout.readline.side_effect = ["no url here\n", ""]
+        proc.poll.return_value = None
+        popen.return_value = proc
+        with pytest.raises(ProviderError, match="超时"):
+            p.ensure_authenticated()
+    proc.terminate.assert_called_once()
+    proc.wait.assert_called_once()
+
+
+def test_readline_with_timeout_does_not_hang_without_newline():
+    unblock = threading.Event()
+
+    class BlockingStream:
+        def readline(self):
+            unblock.wait(2.0)
+            return ""
+
+    started = time.monotonic()
+    try:
+        assert _readline_with_timeout(BlockingStream(), 0.05) == ""
+        assert time.monotonic() - started < 1.0
+    finally:
+        unblock.set()
 
 
 def test_synthesize_returns_mono_float32_at_24k():
@@ -119,6 +200,52 @@ def test_synthesize_raises_provider_error_with_stderr():
     with patch("subprocess.run", side_effect=error):
         with pytest.raises(ProviderError, match="boom"):
             p.synthesize("你好", QTTS)
+
+
+def test_429_is_retried_then_succeeds():
+    p = OnlineBailianProvider()
+    rate_limited = subprocess.CalledProcessError(
+        1, ["bl"], stderr="429 Too Many Requests"
+    )
+    mono = np.full((100, 1), 0.2, dtype=np.float32)
+    with patch(
+        "subprocess.run",
+        side_effect=[rate_limited, rate_limited, MagicMock(returncode=0)],
+    ) as run, \
+         patch("providers.online_bailian.time.sleep") as sleep, \
+         patch("providers.online_bailian.sf.read", return_value=(mono, 24000)):
+        out = p.synthesize("你好", QTTS)
+    assert out.shape == (100,)
+    assert run.call_count == 3
+    assert [call.args[0] for call in sleep.call_args_list] == [1.0, 2.0]
+
+
+def test_401_fails_immediately_with_login_hint():
+    p = OnlineBailianProvider()
+    unauthorized = subprocess.CalledProcessError(
+        1, ["bl"], stderr="401 Unauthorized"
+    )
+    with patch("subprocess.run", side_effect=unauthorized) as run, \
+         patch("providers.online_bailian.time.sleep") as sleep:
+        with pytest.raises(ProviderError, match="bl auth login"):
+            p.synthesize("你好", QTTS)
+    assert run.call_count == 1
+    sleep.assert_not_called()
+
+
+def test_quota_error_mentions_console_link():
+    p = OnlineBailianProvider()
+    quota = subprocess.CalledProcessError(
+        1, ["bl"], stderr="Throttling.User: 额度不足"
+    )
+    with patch("subprocess.run", side_effect=quota) as run:
+        with pytest.raises(ProviderError, match="bailian.console.aliyun.com"):
+            p.synthesize("你好", QTTS)
+    assert run.call_count == 1
+
+
+def test_console_url_constant_is_the_shared_link():
+    assert BAILIAN_CONSOLE_URL == "https://bailian.console.aliyun.com/"
 
 
 def test_synthesize_rejects_non_24k_audio():
