@@ -1,0 +1,512 @@
+---
+name: video-tts
+description: >
+  中文视频配音工具：把 SRT 字幕逐条合成中文配音，按时间轴对齐后替换视频原声，
+  输出与视频等长的配音轨或配音成片。当用户要视频配音、中文配音、SRT 配音、
+  把字幕读成声音、外语视频转中文配音、给视频配旁白、dubbing、voiceover、TTS 时触发。
+  **不是通用 TTS**：输入必须是 SRT 字幕；纯文本转语音、长文朗读不在本 skill 范围内。
+  支持本地 Apple Silicon（免费离线，mlx-audio）与百炼在线（付费，bl）两种 provider。
+---
+
+# video-tts
+
+把一条中文 SRT 逐句合成配音，按字幕时间轴对齐（必要时 atempo 加速；仍放不下则截断并告警），输出「与视频等长的配音轨」或「替换原声的成片」。
+
+> **不是通用 TTS。** 输入必须是一条 SRT 字幕。纯文本转语音、整段文章朗读、单句试音请直接用 TTS 工具，不要用本 skill。没有字幕先做 `audio-transcribe`；字幕不是中文、术语不准或有错别字，先做 `text-refine`。
+
+## 上游链路
+
+```text
+video-downloader → audio-transcribe → text-refine → video-tts
+```
+
+| 步骤 | 产出 | 说明 |
+| --- | --- | --- |
+| video-downloader | 视频文件 | B 站 / YouTube 下载 |
+| audio-transcribe | SRT / 文本 | 转录出带时间轴的字幕 |
+| text-refine | 中文 SRT | 纠错、术语校准、翻译成中文；**保持原时间轴** |
+| video-tts | `.dub.wav` / `.dub.mp4` | 按 SRT 时间轴配音并混流 |
+
+本 skill 只消费**已经是中文**、时间轴与视频一致的 SRT。视频与 SRT 的时间原点必须一致（SRT 从视频 0 秒开始计时）。需要翻译、断句、纠错时，先在上游完成。
+
+## 入口
+
+始终通过 `run.py` 调用（它负责挑选已装好依赖的 Python 解释器；`skill_main.py` 是非交互 CLI）：
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py --srt <字幕> --provider <local|online> [其它参数]
+```
+
+- `run.py` 会打印 `[video-tts] Using /path/to/python`：说明命中了已有环境，没有重复安装。把它转述给用户。
+- 只有所有候选解释器都缺依赖时才会自动 pip 安装；装不上会打印手动 pip 命令后退出。
+- **CLI 完全非交互**：不会在终端里提问。所有选择都由本 SKILL 用 `AskUserQuestion` 收集后，以显式参数传入。
+- Windows 把 `python3` 换成 `python`；本地 provider 仅支持 Apple Silicon macOS，Windows 只能走在线。
+
+## 交互方式（硬性规则）
+
+**所有需要用户做选择的地方，一律使用 `AskUserQuestion`。** 纯文本只用于展示音色表、SRT 摘要、进度和最终报告；不用来问「选哪个 / 要不要继续」，也**禁止**要求用户回复「1/2/3」或「a/b/c」。
+
+`AskUserQuestion` 的真实 schema 约束：
+
+- 每次调用最多 4 个问题；**每题最多 4 个选项**。
+- 每个选项是 `{label, description}`（不是 `value`）。
+- `header` ≤ 12 字符。
+- `multiSelect` 必填；本 skill 全部单选，固定 `multiSelect: false`。
+- 超过 4 个选项必须拆成多次调用（Qwen-TTS 的 5 个音色拆成 3 + 2 两页）。
+
+例外：需要用户补充**路径**（视频 / SRT / 输出目录）时可以用纯文本提问——这是补充信息，不是多选决策。
+
+如果用户在对话里已经明确指定（如「用本地」「用 Serena」「语气平静点」），等同于传了对应参数，跳过对应问题。
+
+## 决策点清单
+
+| 时机 | 问题（header） | 选项 | 何时跳过 |
+| --- | --- | --- | --- |
+| 启动 | 配音方案 | 本地（推荐）/ 在线 | 传了 `--provider` |
+| 在线 | 音色组 | 3.1 Plus 旗舰（推荐）/ Qwen-TTS 10 音色 | |
+| 在线·旗舰 | 具体音色 | 4 个旗舰音色 | 传了 `--voice` |
+| 在线·Qwen-TTS | 性别 | 女声（5）/ 男声（5） | |
+| 在线·Qwen-TTS | 具体音色 | 每组 5 个，拆 3 + 2 两页 | 传了 `--voice` |
+| 本地 | 音色方向 | 普通话 / 方言 / 英语 / 日语·韩语 | 传了 `--voice` |
+| 本地 | 具体音色 | 该方向 2–3 个 | 传了 `--voice` |
+| 选完音色 | 语气 | 默认 / 平稳解说 / 活泼；自定义走 Other | 传了 `--instruct` |
+| SRT 解析后 | 是否开跑 | 开始合成 / 只预览（dry-run）/ 取消 | |
+| 在线开跑前 | 费用确认 | 继续 / 切本地 / 取消 | `--yes` |
+| 在线未登录（超时后） | 登录方式 | 重新获取链接 / 用 API Key 登录 / 切本地 | 已登录或链接等待中 |
+| 合成失败 | 失败处理 | 切本地重跑 / 终止 | `--continue-on-error` |
+| 输出已存在 | 覆盖策略 | 覆盖 / 另存 / 取消 | 输出不存在 |
+
+表格里的「传了某参数」在对话场景中同样适用于「用户已经明确说了」；Qwen-TTS 组不支持语气指令，选到该组时跳过语气问题（详见下文）。
+
+推荐执行顺序：
+
+1. 选 provider → 做该 provider 的预检（见下）。
+2. 选音色组 / 方向 → 选具体音色 → 选语气。
+3. 解析 SRT，用纯文本打印摘要（条数、总时长、前几条；可用 `--dry-run` 让 CLI 打印计划）→ 问「是否开跑」。
+4. 在线：打印总字数与计费提示 → 问「费用确认」。
+5. 检查输出是否已存在 → 问「覆盖策略」。
+6. 运行 CLI；在线未登录时按登录流程展示链接并等待。
+7. 完成后展示报告摘要与产物路径；失败时问「失败处理」。
+
+## 音色菜单
+
+### 选 provider（header：配音方案）
+
+```text
+AskUserQuestion({
+  questions: [{
+    question: "用哪种配音方案？",
+    header: "配音方案",
+    multiSelect: false,
+    options: [
+      {"label": "本地（推荐）", "description": "免费、离线、隐私优先；仅 Apple Silicon Mac；首次需下载约 3.4 GB 模型"},
+      {"label": "在线（百炼）", "description": "音色更多、表现力更强；按 token 付费，需要 bl 登录"}
+    ]
+  }]
+})
+```
+
+选择建议：想免费 / 离线 / 隐私优先、音色够用 → 本地；想要更细分的普通话人格音色和更强表现力，且接受付费 → 在线。
+
+### 本地 9 音色：先选方向，再选音色
+
+先问方向（正好 4 个选项）：
+
+```text
+AskUserQuestion({
+  questions: [{
+    question: "想用哪一类本地音色？",
+    header: "音色方向",
+    multiSelect: false,
+    options: [
+      {"label": "普通话", "description": "Uncle_Fu / Serena / Vivian，中文解说与叙述"},
+      {"label": "方言", "description": "Dylan（北京话）/ Eric（四川话）"},
+      {"label": "英语", "description": "Ryan / Aiden，英语原生音色"},
+      {"label": "日语·韩语", "description": "Ono_Anna（日语）/ Sohee（韩语）"}
+    ]
+  }]
+})
+```
+
+完整目录（`--voice` 区分大小写）：
+
+| 方向 | 显示名 | `--voice` | 描述 |
+| --- | --- | --- | --- |
+| 普通话 | Uncle_Fu | `Uncle_Fu` | 低沉醇厚的成熟男声（解说 / 口播首选） |
+| 普通话 | Serena | `Serena` | 温暖、温柔的年轻女声（温柔叙述首选） |
+| 普通话 | Vivian | `Vivian` | 明亮、略带锋利感的年轻女声 |
+| 方言 | Dylan | `Dylan` | 年轻北京男声，自动切北京话 |
+| 方言 | Eric | `Eric` | 活泼成都男声，自动切四川话 |
+| 英语 | Ryan | `Ryan` | 节奏感强的男声（英语原生） |
+| 英语 | Aiden | `Aiden` | 阳光美式男声，中频清晰（英语原生） |
+| 日语·韩语 | Ono_Anna | `Ono_Anna` | 活泼轻盈的日语女声 |
+| 日语·韩语 | Sohee | `Sohee` | 温暖、情感丰富的韩语女声 |
+
+按方向发第二问（每个方向 2–3 个选项）：
+
+```text
+# 普通话
+AskUserQuestion({ questions: [{
+  question: "选一个普通话音色：", header: "具体音色", multiSelect: false,
+  options: [
+    {"label": "Uncle_Fu（成熟男声）", "description": "低沉醇厚，解说 / 口播首选；--voice Uncle_Fu"},
+    {"label": "Serena（温柔女声）", "description": "温暖、温柔，温柔叙述首选；--voice Serena"},
+    {"label": "Vivian（明亮女声）", "description": "明亮、略带锋利感的年轻女声；--voice Vivian"}
+  ]
+}]})
+```
+
+```text
+# 方言
+AskUserQuestion({ questions: [{
+  question: "选一个方言音色：", header: "具体音色", multiSelect: false,
+  options: [
+    {"label": "Dylan（北京话）", "description": "年轻北京男声，清晰自然；--voice Dylan"},
+    {"label": "Eric（四川话）", "description": "活泼成都男声，略带沙哑亮度；--voice Eric"}
+  ]
+}]})
+```
+
+```text
+# 英语
+AskUserQuestion({ questions: [{
+  question: "选一个英语音色：", header: "具体音色", multiSelect: false,
+  options: [
+    {"label": "Ryan（节奏男声）", "description": "节奏感强的男声；--voice Ryan"},
+    {"label": "Aiden（阳光男声）", "description": "阳光美式男声，中频清晰；--voice Aiden"}
+  ]
+}]})
+```
+
+```text
+# 日语·韩语
+AskUserQuestion({ questions: [{
+  question: "选一个日语 / 韩语音色：", header: "具体音色", multiSelect: false,
+  options: [
+    {"label": "Ono_Anna（日语女声）", "description": "活泼轻盈的日语女声；--voice Ono_Anna"},
+    {"label": "Sohee（韩语女声）", "description": "温暖、情感丰富的韩语女声；--voice Sohee"}
+  ]
+}]})
+```
+
+### 在线：先选音色组（header：音色组）
+
+```text
+AskUserQuestion({
+  questions: [{
+    question: "用哪组在线音色？",
+    header: "音色组",
+    multiSelect: false,
+    options: [
+      {"label": "3.1 Plus 旗舰（推荐）", "description": "qwen-audio-3.1-tts-plus，4 个 v3.1 音色，支持语气指令"},
+      {"label": "Qwen-TTS 10 音色", "description": "qwen3-tts-flash，5 女 / 5 男普通话人格音色，不支持语气指令"}
+    ]
+  }]
+})
+```
+
+两组音色**不能混用**，`--voice` 决定模型：`*_v3.1` → `qwen-audio-3.1-tts-plus`，其余 10 个 → `qwen3-tts-flash`。
+
+### 在线·旗舰 4 音色（header：具体音色）
+
+| 显示名 | `--voice` | 性别 | 描述 |
+| --- | --- | --- | --- |
+| 龙安灵心_v3.1 | `longanlingxin_v3.1` | 女 | 知心、温柔 |
+| 许南川_v3.1 | `xunanchuan_v3.1` | 男 | 磁性、讲故事 |
+| 龙安欢_v3.1 | `longanhuan_v3.1` | 女 | 活泼、爱笑 |
+| 龙安风悦_v3.1 | `longanfengyue_v3.1` | 女 | 自然亲切、播报感 |
+
+```text
+AskUserQuestion({
+  questions: [{
+    question: "选一个 3.1 Plus 旗舰音色：",
+    header: "具体音色",
+    multiSelect: false,
+    options: [
+      {"label": "龙安灵心（温柔女声）", "description": "知心、温柔；--voice longanlingxin_v3.1"},
+      {"label": "许南川（磁性男声）", "description": "磁性、讲故事；--voice xunanchuan_v3.1"},
+      {"label": "龙安欢（活泼女声）", "description": "活泼、爱笑；--voice longanhuan_v3.1"},
+      {"label": "龙安风悦（播报女声）", "description": "自然亲切、播报感；--voice longanfengyue_v3.1"}
+    ]
+  }]
+})
+```
+
+这 4 个音色支持 `--instruct` 自然语言语气控制；本 skill 只透传 instruction，不生成 SSML。
+
+### 在线·Qwen-TTS 10 音色（5 女 / 5 男）
+
+| 性别 | 显示名 | `--voice` | 描述 |
+| --- | --- | --- | --- |
+| 女 | 芊悦 | `Cherry` | 阳光积极、亲切自然小姐姐 |
+| 女 | 苏瑶 | `Serena` | 温柔小姐姐 |
+| 女 | 四月 | `Maia` | 知性与温柔的碰撞 |
+| 女 | 十三 | `Vivian` | 拽拽的、可爱的小暴躁 |
+| 女 | 茉兔 | `Momo` | 撒娇搞怪，逗你开心 |
+| 男 | 晨煦 | `Ethan` | 标准普通话（带部分北方口音）；阳光、温暖、活力 |
+| 男 | 甜茶 | `Ryan` | 节奏拉满，戏感炸裂 |
+| 男 | 月白 | `Moon` | 率性帅气 |
+| 男 | 安德雷 | `Andre` | 声音磁性，自然舒服、沉稳 |
+| 男 | 阿闻 | `Neil` | 字正腔圆，专业新闻主持人 |
+
+先问性别（header：性别）：
+
+```text
+AskUserQuestion({
+  questions: [{
+    question: "选女声还是男声音色？",
+    header: "性别",
+    multiSelect: false,
+    options: [
+      {"label": "女声（5 个）", "description": "Cherry / Serena / Maia / Vivian / Momo"},
+      {"label": "男声（5 个）", "description": "Ethan / Ryan / Moon / Andre / Neil"}
+    ]
+  }]
+})
+```
+
+5 个选项超过 4 个上限，拆成 3 + 2 两页；第一页留一个「下一页」选项，第二页留「返回上一页」：
+
+```text
+# 女声 · 第 1 页（3 个音色 + 下一页）
+AskUserQuestion({ questions: [{
+  question: "选一个女声音色（第 1 / 2 页）：", header: "具体音色", multiSelect: false,
+  options: [
+    {"label": "芊悦 Cherry", "description": "阳光积极、亲切自然；--voice Cherry"},
+    {"label": "苏瑶 Serena", "description": "温柔小姐姐；--voice Serena"},
+    {"label": "四月 Maia", "description": "知性与温柔的碰撞；--voice Maia"},
+    {"label": "下一页（2 个）", "description": "查看十三 Vivian、茉兔 Momo"}
+  ]
+}]})
+```
+
+```text
+# 女声 · 第 2 页（2 个音色 + 返回）
+AskUserQuestion({ questions: [{
+  question: "选一个女声音色（第 2 / 2 页）：", header: "具体音色", multiSelect: false,
+  options: [
+    {"label": "十三 Vivian", "description": "拽拽的、可爱的小暴躁；--voice Vivian"},
+    {"label": "茉兔 Momo", "description": "撒娇搞怪，逗你开心；--voice Momo"},
+    {"label": "返回上一页", "description": "回到 Cherry / Serena / Maia"}
+  ]
+}]})
+```
+
+```text
+# 男声 · 第 1 页（3 个音色 + 下一页）
+AskUserQuestion({ questions: [{
+  question: "选一个男声音色（第 1 / 2 页）：", header: "具体音色", multiSelect: false,
+  options: [
+    {"label": "晨煦 Ethan", "description": "标准普通话、阳光温暖；--voice Ethan"},
+    {"label": "甜茶 Ryan", "description": "节奏拉满，戏感炸裂；--voice Ryan"},
+    {"label": "月白 Moon", "description": "率性帅气；--voice Moon"},
+    {"label": "下一页（2 个）", "description": "查看安德雷 Andre、阿闻 Neil"}
+  ]
+}]})
+```
+
+```text
+# 男声 · 第 2 页（2 个音色 + 返回）
+AskUserQuestion({ questions: [{
+  question: "选一个男声音色（第 2 / 2 页）：", header: "具体音色", multiSelect: false,
+  options: [
+    {"label": "安德雷 Andre", "description": "声音磁性、沉稳；--voice Andre"},
+    {"label": "阿闻 Neil", "description": "字正腔圆、专业新闻主持人；--voice Neil"},
+    {"label": "返回上一页", "description": "回到 Ethan / Ryan / Moon"}
+  ]
+}]})
+```
+
+Qwen-TTS 组属于 `qwen3-tts-flash`，**不接受 `instruction`**：选了这组就不要再问语气（CLI 传了 `--instruct` 也只会警告并忽略）。需要语气控制时提示用户改选旗舰组或本地。
+
+### 语气（header：语气）
+
+只对本地 / 在线旗舰询问；默认 / 平稳解说 / 活泼，自定义用 Other 输入：
+
+```text
+AskUserQuestion({
+  questions: [{
+    question: "配音用什么语气？",
+    header: "语气",
+    multiSelect: false,
+    options: [
+      {"label": "默认", "description": "不加指令，使用音色默认语气"},
+      {"label": "平稳解说", "description": "平稳、稍慢的解说感；--instruct \"用平稳的解说语气，语速稍慢\""},
+      {"label": "活泼", "description": "更轻快、有活力；--instruct \"用活泼、轻快的语气\""}
+    ]
+  }]
+})
+```
+
+映射：默认 → 不传 `--instruct`；平稳解说 / 活泼 → 传上面引号里的文本；Other → 用户输入的文本原样作为 `--instruct`。
+
+## 预检
+
+### 本地（macOS Apple Silicon）
+
+```bash
+uname -sm                                      # 需要 Darwin arm64
+command -v ffmpeg && command -v ffprobe        # 缺一不可
+python3 -c "import mlx_audio" 2>/dev/null && echo ok || echo missing
+ls ~/.cache/huggingface/hub 2>/dev/null | grep -i qwen3-tts || echo "no cache"
+```
+
+处理：
+
+- 非 Darwin arm64 → 本地不可用，回到 provider 选择改走在线。
+- 缺 `ffmpeg` / `ffprobe` → 报错并给安装命令：`brew install ffmpeg`（Windows 用 `winget install ffmpeg`）。
+- 缺 `mlx_audio` → 告诉用户 `run.py` 首次真实运行会自动选择解释器安装；也可手动 `python3 -m pip install --break-system-packages mlx-audio`。装不上时把 `run.py` 打印的 pip 命令转给用户。
+- 模型未缓存 → 首次会下载约 3.4 GB（`mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16`），缓存在 `~/.cache/huggingface/hub`。把这个信息写进「是否开跑」问题的 description，让用户决定现在跑还是先预览；下载失败时提示检查网络或手动 `huggingface-cli download mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16`。
+
+### 在线（百炼）
+
+```bash
+command -v bl
+bl auth status --output json    # 期望 {"authenticated": true, ...}
+```
+
+缺 `bl` 时用 `AskUserQuestion`（header：登录方式）让用户选：
+
+- 安装 bl → 按百炼文档安装后重试；
+- HTTP 兜底 → 仅当环境已有 `DASHSCOPE_API_KEY` 时提供；运行时加 `--tts-endpoint <DashScope endpoint>`；
+- 切本地 → 回到 provider 选择。
+
+未登录（`authenticated` 不是 `true`）时不要先弹问题，直接进入登录流程。
+
+#### 登录链接流程
+
+1. 用**后台方式**运行 CLI（否则登录 URL 要等进程结束才看得到），或先手动后台运行 `bl auth login --console --no-browser`。
+2. CLI / provider 会打印 `请点击登录：https://...`。**一看到 URL 就立刻**作为可点击的 Markdown 链接贴给用户，例如 `[点击这里登录百炼](https://...)`，并说明「登录完成后回来告诉我，我会继续等待」。
+3. provider 每 2 秒轮询 `bl auth status`，最长等待 300 秒；等待期间不要重复启动登录。
+4. 超时或登录子进程提前退出后，用 `AskUserQuestion`（header：登录方式）：
+   - 重新获取链接 → 重新后台运行 `bl auth login --console --no-browser`，展示新链接；
+   - 用 API Key 登录 → 仅当环境已有 `DASHSCOPE_API_KEY` 时提供；说明会走 HTTP 兜底（需 `--tts-endpoint`），不把 key 贴进对话；
+   - 切本地 → 改 provider。
+5. **skill 不接收、不保存、不打印任何明文 key。** 不要要求用户把 key 发到对话里。
+
+## 命令示例
+
+```bash
+# 本地：视频 + SRT → 成片（默认输出 video.dub.wav + video.dub.mp4）
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
+  --srt video.srt --video video.mp4 \
+  --provider local --voice Serena \
+  --instruct "用平稳的解说语气，语速稍慢"
+
+# 本地：只出配音轨，不混流
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
+  --srt video.srt --provider local --voice Uncle_Fu --track-only
+
+# 在线旗舰（费用已确认后才加 --yes）
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
+  --srt video.srt --video video.mp4 \
+  --provider online --voice longanlingxin_v3.1 --yes
+
+# 在线 Qwen-TTS
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
+  --srt video.srt --video video.mp4 \
+  --provider online --voice Cherry --yes
+
+# 预览：只解析 SRT 并打印计划（不加载模型、不联网；online 预览不需要 --yes）
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
+  --srt video.srt --provider local --voice Serena --dry-run
+
+# 保留逐条片段 + 机器可读报告
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
+  --srt video.srt --video video.mp4 --provider local --voice Serena \
+  --keep-segments --json-report report.json
+
+# 指定输出前缀（输出 s2.dub.wav / s2.dub.mp4）
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
+  --srt video.srt --video video.mp4 --provider local --voice Serena --out s2
+
+# 本地 VoiceDesign 试音（与 --voice 互斥；跨段音色会漂，仅建议短视频）
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
+  --srt video.srt --provider local --design "温暖、温柔的年轻女声"
+
+# 在线 HTTP 兜底（bl 不可用，且环境已有 DASHSCOPE_API_KEY；不要在命令里回显 key）
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
+  --srt video.srt --video video.mp4 --provider online --voice Cherry \
+  --tts-endpoint <DashScope SpeechSynthesizer endpoint> --yes
+```
+
+- `--provider` 是必需参数；本地必须且只能给 `--voice` / `--design` 之一；在线必须给 `--voice`。
+- 在线**真实运行**必须带 `--yes`（费用确认的机器可读形式）：只有用户在「费用确认」里选了「继续」才加。
+- `--dry-run` 只解析并打印计划，不加载模型、不联网、不写文件；退出码 0。
+- 遇到登录链接时按上面的登录流程处理，不要等命令超时后才回头看输出。
+
+## 输出与退出码
+
+| 产物 | 何时生成 |
+| --- | --- |
+| `<out>.dub.wav` | 总是生成：24 kHz 单声道整轨，长度 = 视频时长（无视频时 = 最后一句结束时间） |
+| `<out>.dub.mp4` | 提供 `--video` 且未 `--track-only`：视频流复制（必要时重编码 H.264），音频替换为 AAC 192k |
+
+输出命名：
+
+- 默认 `<out>` = 视频 stem（无视频时 = SRT stem）。
+- `--out foo` → `foo.dub.wav` + `foo.dub.mp4`。
+- `--out foo.mp4` → `foo.dub.wav` + `foo.mp4`（mp4 用给定路径）。
+- `--track-only` 只写 `.dub.wav`。
+- `--keep-segments` 把逐条片段写到 `<out_dir>/segments/`。
+- `--json-report <path>` 写机器可读 JSON（逐条时长、动作、告警、失败数等）。
+
+stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时长 / 倍率 / 状态`，末尾汇总警告数与失败数。退出码：全部成功或只有截断 / 超速警告 → 0；有合成失败或混流失败 → 1；参数错误 → 2。
+
+## 参数
+
+| 参数 | 说明 | 默认 |
+| --- | --- | --- |
+| `--srt` | 中文 SRT 路径（UTF-8） | 必需 |
+| `--video` | 视频路径；提供则混流输出 mp4 | 无 |
+| `--provider` | `local` / `online` | 必需（由 AskUserQuestion 决定） |
+| `--out` | 输出前缀或 `.mp4` 路径 | 视频 / SRT stem |
+| `--voice` | 音色 ID（本地 9 / 在线 14，区分大小写） | 交互选择；local 与 `--design` 二选一，online 必需 |
+| `--instruct` | 语气 / 风格指令 | 空 |
+| `--design` | 本地 VoiceDesign 音色描述；与 `--voice` 互斥 | 无 |
+| `--lang` | 语言代码 | `chinese` |
+| `--model` | 覆盖 provider 模型 id | 各 provider 默认 |
+| `--tts-endpoint` | DashScope HTTP 兜底 endpoint（仅 `bl` 不可用时） | 无 |
+| `--bl-bin` | `bl` 可执行文件 | `bl` |
+| `--track-only` | 只出配音轨，不混流 | false |
+| `--keep-segments` | 保留逐条 wav 到 `segments/` | false |
+| `--no-cache` | 禁用片段缓存 | false |
+| `--json-report` | 写机器可读报告到该路径 | 无 |
+| `--continue-on-error` | 单条失败继续（会缺句，退出码仍为 1） | false |
+| `--skip-bracketed` | 跳过纯音效标记条目（如 `[音乐]`、`（掌声）`） | false |
+| `--max-speed` | 最大 atempo 倍率（只加速，不减速） | `1.30` |
+| `--sample-rate` | 输出采样率 | `24000` |
+| `--yes` | 跳过在线费用确认（online 真实运行必需） | false |
+| `--dry-run` | 只解析并打印计划，不合成 | false |
+
+## 错误处理
+
+| 现象 | 处理 |
+| --- | --- |
+| 缺 ffmpeg / ffprobe | 报错并提示 `brew install ffmpeg`（Windows 用 `winget install ffmpeg`） |
+| 缺 mlx-audio | `run.py` 自动选解释器安装；装不上给出 `python3 -m pip install --break-system-packages mlx-audio` |
+| 本地模型首次下载失败 | 报错，提示检查网络或手动 `huggingface-cli download mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` |
+| 本地音色名非法 | 报错并列出 9 个合法音色后退出 |
+| 在线缺 `bl` | 提示安装；询问是否切本地；已有 `DASHSCOPE_API_KEY` 时可用 `--tts-endpoint` 走 HTTP 兜底 |
+| `bl` 未登录 | 自动展示 `bl auth login --console --no-browser` 的登录链接并轮询；超时后用 AskUserQuestion 选重新获取链接 / API Key 登录 / 切本地；不代存 key |
+| `bl` 401 / 403 | 提示重新登录；可切本地 |
+| 在线 429 / 5xx | 失败条目自动重试一次；仍失败则询问切本地或终止 |
+| 在线额度不足 | 报错并给出[百炼控制台](https://bailian.console.aliyun.com/)链接；可切本地 |
+| 在线音色与模型不匹配 | `--voice` 自动决定模型；`--model` 只用于同组覆盖，跨组混用会被百炼拒绝（InvalidParameter） |
+| `bl --list-voices` 返回空 | 正常现象（这两个模型返回 `null`）；以本文音色表为准，不报错 |
+| SRT 为空 / 时间非法 / 零时长 | 列出条目号并退出 |
+| 单条合成失败 / 空音频 / 全静音 | 重试一次；仍失败终止（除非 `--continue-on-error`），不写缓存 |
+| 单条放不下 | 先 atempo 加速（上限 `--max-speed`）；仍放不下则截断并记 warning |
+| 视频无视频流 | 混流前报错，不出残缺文件 |
+| 视频编码不兼容 mp4 | 自动重编码 H.264（VP9 / AV1 等也会重编码） |
+| 输出已存在 | 默认覆盖（ffmpeg `-y`）；开跑前按决策表询问覆盖 / 另存 / 取消 |
+
+## 示例触发
+
+```text
+用户: 把这个视频配上中文旁白，字幕是 video.srt
+用户: 用本地音色给这条 SRT 配个音
+用户: 帮我把英文字幕翻译成中文后配音（先走 text-refine，再走本 skill）
+用户: 用百炼的龙安灵心给这个视频配音
+用户: 只要配音轨，不用合成视频
+```
