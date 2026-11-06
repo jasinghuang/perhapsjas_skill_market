@@ -72,11 +72,11 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py --srt <字幕> --provider 
 | 选完音色 | 语气 | 默认 / 平稳解说 / 活泼；自定义走 Other | 传了 `--instruct` |
 | SRT 解析后 | 是否开跑 | 开始合成 / 只预览（dry-run）/ 取消 | |
 | 在线开跑前 | 费用确认 | 继续 / 切本地 / 取消 | `--yes` |
-| 在线未登录（超时后） | 登录方式 | 重新获取链接 / 用 API Key 登录 / 切本地 | 已登录或链接等待中 |
+| 在线未登录（超时后） | 登录方式 | 重新获取链接 / 重新登录 / 切本地 | 已登录或链接等待中 |
 | 合成失败 | 失败处理 | 切本地重跑 / 终止 | `--continue-on-error` |
 | 输出已存在 | 覆盖策略 | 覆盖 / 另存 / 取消 | 输出不存在 |
 
-表格里的「传了某参数」在对话场景中同样适用于「用户已经明确说了」；Qwen-TTS 组不支持语气指令，选到该组时跳过语气问题（详见下文）。
+表格里的「传了某参数」在对话场景中同样适用于「用户已经明确说了」；Qwen-TTS 组不支持语气指令，选到该组时跳过语气问题（详见下文）。「另存」通过传不同的 `--out` 路径实现——CLI 没有独立的 save-as 参数，默认覆盖。
 
 推荐执行顺序：
 
@@ -367,7 +367,7 @@ bl auth status --output json    # 期望 {"authenticated": true, ...}
 
 缺 `bl` 时用 `AskUserQuestion`（header：登录方式）让用户选：
 
-- 安装 bl → 按百炼文档安装后重试；
+- 安装 bl → `npm install -g bailian-cli`（需 Node.js ≥ 18.17），或 `curl -fsSL https://bailian.aliyun.com/cli/install.sh | bash`；详见[百炼 CLI 安装说明](https://bailian.aliyun.com/cli/install.md)，装好后重试；
 - HTTP 兜底 → 仅当环境已有 `DASHSCOPE_API_KEY` 时提供；运行时加 `--tts-endpoint <DashScope endpoint>`；
 - 切本地 → 回到 provider 选择。
 
@@ -380,9 +380,10 @@ bl auth status --output json    # 期望 {"authenticated": true, ...}
 3. provider 每 2 秒轮询 `bl auth status`，最长等待 300 秒；等待期间不要重复启动登录。
 4. 超时或登录子进程提前退出后，用 `AskUserQuestion`（header：登录方式）：
    - 重新获取链接 → 重新后台运行 `bl auth login --console --no-browser`，展示新链接；
-   - 用 API Key 登录 → 仅当环境已有 `DASHSCOPE_API_KEY` 时提供；说明会走 HTTP 兜底（需 `--tts-endpoint`），不把 key 贴进对话；
+   - 重新登录 → 结束可能卡住的登录进程，重走完整登录流程（后台运行、展示新链接、继续轮询 `bl auth status`，最长再等 300 秒）；
    - 切本地 → 改 provider。
-5. **skill 不接收、不保存、不打印任何明文 key。** 不要要求用户把 key 发到对话里。
+5. **HTTP 兜底（API Key）不在这个决策点**：只要 PATH 上能找到 `bl`，provider 就一定走 `bl` 登录路径，API key 兜底只在 `bl` 缺失时生效——那是预检里「缺 `bl`」的选项，不要在这里提供。
+6. **skill 不接收、不保存、不打印任何明文 key。** 不要要求用户把 key 发到对话里。
 
 ## 命令示例
 
@@ -439,7 +440,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py \
 
 | 产物 | 何时生成 |
 | --- | --- |
-| `<out>.dub.wav` | 总是生成：24 kHz 单声道整轨，长度 = 视频时长（无视频时 = 最后一句结束时间） |
+| `<out>.dub.wav` | 总是生成：默认 24 kHz 单声道整轨（`--sample-rate` 可改），长度 = 视频时长（无视频时 = 最后一句结束时间） |
 | `<out>.dub.mp4` | 提供 `--video` 且未 `--track-only`：视频流复制（必要时重编码 H.264），音频替换为 AAC 192k |
 
 输出命名：
@@ -487,8 +488,8 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | 缺 mlx-audio | `run.py` 自动选解释器安装；装不上给出 `python3 -m pip install --break-system-packages mlx-audio` |
 | 本地模型首次下载失败 | 报错，提示检查网络或手动 `huggingface-cli download mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` |
 | 本地音色名非法 | 报错并列出 9 个合法音色后退出 |
-| 在线缺 `bl` | 提示安装；询问是否切本地；已有 `DASHSCOPE_API_KEY` 时可用 `--tts-endpoint` 走 HTTP 兜底 |
-| `bl` 未登录 | 自动展示 `bl auth login --console --no-browser` 的登录链接并轮询；超时后用 AskUserQuestion 选重新获取链接 / API Key 登录 / 切本地；不代存 key |
+| 在线缺 `bl` | 提示安装（`npm install -g bailian-cli`，需 Node.js ≥ 18.17；详见预检一节）；询问是否切本地；已有 `DASHSCOPE_API_KEY` 时可用 `--tts-endpoint` 走 HTTP 兜底 |
+| `bl` 未登录 | 自动展示 `bl auth login --console --no-browser` 的登录链接并轮询；超时后用 AskUserQuestion 选重新获取链接 / 重新登录 / 切本地；不代存 key |
 | `bl` 401 / 403 | 提示重新登录；可切本地 |
 | 在线 429 / 5xx | 失败条目自动重试一次；仍失败则询问切本地或终止 |
 | 在线额度不足 | 报错并给出[百炼控制台](https://bailian.console.aliyun.com/)链接；可切本地 |
@@ -499,7 +500,7 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | 单条放不下 | 先 atempo 加速（上限 `--max-speed`）；仍放不下则截断并记 warning |
 | 视频无视频流 | 混流前报错，不出残缺文件 |
 | 视频编码不兼容 mp4 | 自动重编码 H.264（VP9 / AV1 等也会重编码） |
-| 输出已存在 | 默认覆盖（ffmpeg `-y`）；开跑前按决策表询问覆盖 / 另存 / 取消 |
+| 输出已存在 | 默认覆盖（ffmpeg `-y`）；开跑前按决策表询问覆盖 / 另存（换 `--out`）/ 取消 |
 
 ## 示例触发
 

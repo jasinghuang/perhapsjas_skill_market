@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "Video_Toolkit",
-      "description": "视频内容一站工具：video-downloader (Bilibili/YouTube下载) + audio-transcribe (跨平台转录) + text-refine (Claude校准翻译) + add-subtitle (字幕叠加)",
+      "description": "视频内容一站工具：video-downloader (Bilibili/YouTube下载) + audio-transcribe (跨平台转录) + text-refine (Claude校准翻译) + add-subtitle (字幕叠加) + video-tts (SRT 配音)",
       "source": "./plugins/video-toolkit",
       "strict": false,
       "skills": [
