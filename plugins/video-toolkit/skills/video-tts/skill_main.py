@@ -1,0 +1,463 @@
+#!/usr/bin/env python3
+"""
+video-tts — 非交互 CLI：预检、流程编排、进度与报告。
+
+所有交互选择（provider / 音色 / 语气 / 是否开跑 / 在线费用确认）都由
+`SKILL.md` 在调用本脚本前用 `AskUserQuestion` 收集，本脚本只接受参数：
+
+1. 有 `--video` 时先 `probe_video()` 取时长，否则总时长取最后一条字幕结束。
+2. `load_cues()` 解析 SRT，打印越界 / 重叠 warning。
+3. 解析音色（`find_voice`）或本地 VoiceDesign 描述，实例化 provider 并
+   `prepare()`（加载模型 / 校验在线登录态）。
+4. `run_engine()` 逐条合成、适配、拼轨，写 `<out>.dub.wav`。
+5. 有视频且未 `--track-only` 时 `mux_video()` 混流并 `verify_output()` 校验。
+6. 打印逐条报告与汇总；`--json-report` 另写机器可读 JSON。
+
+`--dry-run` 只解析 SRT 并打印前 10 条计划，不创建 provider、不加载模型、
+不合成。退出码：全部成功 0；截断 / 超速 warning 仍为 0；合成失败或混流
+失败为 1。
+
+在线合成只从环境变量 `DASHSCOPE_API_KEY`（或 `--api-key`）读取 HTTP 兜底
+所需的 key，且从不打印它。
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import os
+import shutil
+import sys
+from dataclasses import replace
+from pathlib import Path
+
+from cache import SegmentCache
+from engine import EngineOptions, SegmentResult, run_engine
+from mux import mux_video, probe_video, verify_output
+from providers import FLAGSHIP_MODEL, find_voice, get_provider
+from providers.base import Voice
+from srt_parse import Cue, SRTError, load_cues
+from track_build import write_wav
+
+VIDEO_SUFFIXES = frozenset({".mp4", ".mkv", ".webm", ".mov", ".m4v"})
+PLAN_PREVIEW = 10
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """构造 `video-tts` 的 argparse 解析器（spec §10 的参数表）。"""
+    parser = argparse.ArgumentParser(
+        prog="video-tts",
+        description="把中文 SRT 配成与视频等长的中文配音轨 / 成片（非交互）。",
+    )
+    parser.add_argument("--srt", required=True, help="中文 SRT 路径（UTF-8）")
+    parser.add_argument("--video", help="视频路径；提供则混流输出 mp4")
+    parser.add_argument(
+        "--provider",
+        required=True,
+        choices=("local", "online"),
+        help="local = 本地 MLX Qwen3-TTS；online = 百炼 qwen3-tts",
+    )
+    parser.add_argument("--out", help="输出前缀或 .mp4 路径（默认取视频 / SRT 的 stem）")
+    parser.add_argument("--voice", help="音色 ID（本地 9 个 / 在线 14 个）")
+    parser.add_argument("--instruct", default="", help="语气 / 风格指令")
+    parser.add_argument(
+        "--design", help="本地 VoiceDesign 音色描述；与 --voice 互斥"
+    )
+    parser.add_argument("--lang", default="chinese", help="语言代码（默认 chinese）")
+    parser.add_argument("--model", help="覆盖 provider 的模型 id")
+    parser.add_argument(
+        "--tts-endpoint",
+        help="DashScope HTTP 兜底 endpoint（仅在 bl 不可用时使用）",
+    )
+    parser.add_argument("--bl-bin", default="bl", help="百炼 bl CLI 可执行文件")
+    parser.add_argument(
+        "--api-key",
+        default=None,
+        help="HTTP 兜底用 DashScope API key；缺省读 DASHSCOPE_API_KEY，绝不打印",
+    )
+    parser.add_argument(
+        "--track-only", action="store_true", help="只出配音轨，不混流"
+    )
+    parser.add_argument(
+        "--keep-segments", action="store_true", help="保留逐条 wav 到 segments/"
+    )
+    parser.add_argument("--no-cache", action="store_true", help="禁用片段缓存")
+    parser.add_argument("--json-report", help="写机器可读 JSON 报告到该路径")
+    parser.add_argument(
+        "--continue-on-error", action="store_true", help="单条失败继续（会缺句）"
+    )
+    parser.add_argument(
+        "--skip-bracketed", action="store_true", help="跳过纯音效标记条目"
+    )
+    parser.add_argument(
+        "--max-speed", type=float, default=1.30, help="最大 atempo 倍率（默认 1.30）"
+    )
+    parser.add_argument(
+        "--sample-rate", type=int, default=24000, help="输出采样率（默认 24000）"
+    )
+    parser.add_argument(
+        "--yes", action="store_true", help="确认在线合成费用（online 必需）"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="只解析并打印计划，不合成"
+    )
+    return parser
+
+
+def _fail(message: str) -> None:
+    """按 argparse 的约定打印错误并以状态码 2 退出。"""
+    print(f"error: {message}", file=sys.stderr)
+    raise SystemExit(2)
+
+
+def validate_args(args: argparse.Namespace) -> None:
+    """结构性校验后再检查输入文件，错误一律 `SystemExit`。
+
+    顺序很重要：provider / 音色 / `--yes` / 倍率的检查先于 `--srt`
+    是否存在，避免用户先被文件错误掩盖真正的参数问题。
+    """
+    if args.provider not in ("local", "online"):
+        _fail(f"unknown provider {args.provider!r}; expected local or online")
+    if not math.isfinite(args.max_speed) or args.max_speed < 1.0:
+        _fail(
+            f"--max-speed must be a finite value >= 1.0 (got {args.max_speed}); "
+            "video-tts never slows speech down"
+        )
+    if args.sample_rate <= 0:
+        _fail(f"--sample-rate must be positive (got {args.sample_rate})")
+
+    if args.provider == "local":
+        if bool(args.voice) == bool(args.design):
+            _fail("local provider requires exactly one of --voice or --design")
+    else:
+        if args.design:
+            _fail("--design is only supported by the local provider")
+        if not args.voice:
+            _fail("online provider requires --voice")
+
+    if args.provider == "online" and not args.yes:
+        _fail(
+            "online synthesis is billed; re-run with --yes after confirming cost"
+        )
+
+    if not Path(args.srt).is_file():
+        _fail(f"SRT not found: {args.srt}")
+
+
+def _require_binary(name: str) -> None:
+    """预检外部工具；缺失时给出可执行的安装提示。"""
+    if shutil.which(name) is None:
+        raise RuntimeError(
+            f"{name} not found on PATH; install it with: brew install ffmpeg"
+        )
+
+
+def _format_time(seconds: float) -> str:
+    """把秒数格式化成 `HH:MM:SS.mmm`（与报告列宽一致）。"""
+    millis = int(round(max(0.0, seconds) * 1000))
+    hours, millis = divmod(millis, 3_600_000)
+    minutes, millis = divmod(millis, 60_000)
+    secs, millis = divmod(millis, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
+
+
+def _with_suffix(path: Path, suffix: str) -> Path:
+    """返回 `path` 名字后接 `suffix` 的同目录路径（保留原后缀）。"""
+    return path.with_name(path.name + suffix)
+
+
+def _resolve_outputs(
+    args: argparse.Namespace,
+    video: Path | None,
+    srt: Path,
+) -> tuple[Path, Path | None]:
+    """返回 `(out_prefix, video_out)`。
+
+    `--out` 可以是前缀（`foo` → `foo.dub.wav` / `foo.dub.mp4`），也可以是
+    成品 mp4 路径（`foo.mp4` → `foo.dub.wav` / `foo.mp4`）。未提供时用
+    视频 stem（无视频则 SRT stem）。
+    """
+    if args.out:
+        raw = Path(args.out)
+        if raw.suffix.lower() in VIDEO_SUFFIXES:
+            return raw.with_suffix(""), raw
+        return raw, _with_suffix(raw, ".dub.mp4")
+    base = (video if video is not None else srt).with_suffix("")
+    return base, _with_suffix(base, ".dub.mp4")
+
+
+def _print_plan(
+    args: argparse.Namespace,
+    srt: Path,
+    video: Path | None,
+    total_duration: float,
+    cues: list[Cue],
+    voice: Voice | None,
+) -> None:
+    """打印 `--dry-run` 的计划摘要（前 10 条），不触碰 provider。"""
+    print("video-tts 预演（--dry-run：仅解析，不合成）")
+    print(f"SRT: {srt}")
+    if video is not None:
+        print(f"视频: {video}")
+    print(f"条目: {len(cues)} 条")
+    print(f"总时长: {total_duration:.3f}s")
+    if voice is not None:
+        print(f"音色: {voice.name} ({voice.voice_id}, {voice.model})")
+    elif args.design:
+        print(f"VoiceDesign: {args.design}")
+    print(f"计划（前 {min(PLAN_PREVIEW, len(cues))} 条）:")
+    print("序号  开始          窗口    文本")
+    for cue in cues[:PLAN_PREVIEW]:
+        window = cue.end - cue.start
+        print(f"{cue.index:<4}  {_format_time(cue.effective_start)}  "
+              f"{window:5.2f}s  {cue.text}")
+    if len(cues) > PLAN_PREVIEW:
+        print(f"... 其余 {len(cues) - PLAN_PREVIEW} 条从略")
+
+
+def _voice_payload(voice: Voice | None) -> dict | None:
+    """把 `Voice` 转成 JSON 报告里的字典。"""
+    if voice is None:
+        return None
+    return {
+        "name": voice.name,
+        "voice_id": voice.voice_id,
+        "gender": voice.gender,
+        "description": voice.description,
+        "model": voice.model,
+        "provider": voice.provider,
+    }
+
+
+def _result_payload(result: SegmentResult) -> dict:
+    """把单条合成结果转成 JSON 报告里的字典。"""
+    cue = result.cue
+    return {
+        "index": cue.index,
+        "start": cue.start,
+        "end": cue.end,
+        "effective_start": cue.effective_start,
+        "next_start": cue.next_start,
+        "text": cue.text,
+        "synth_duration": result.synth_duration,
+        "final_duration": result.final_duration,
+        "speed": result.speed,
+        "action": result.action.value,
+        "failed": result.failed,
+        "warning": result.warning,
+    }
+
+
+def _print_report(
+    results: list[SegmentResult],
+    srt_warning_count: int,
+) -> tuple[int, int]:
+    """打印逐条报告与汇总，返回 `(警告数, 失败数)`。"""
+    print()
+    print("序号  开始          窗口    合成    最终    倍率  状态         说明")
+    for result in results:
+        cue = result.cue
+        window = cue.end - cue.start
+        status = "failed" if result.failed else result.action.value
+        line = (
+            f"{cue.index:<4}  {_format_time(cue.effective_start)}  "
+            f"{window:5.2f}s  {result.synth_duration:5.2f}s  "
+            f"{result.final_duration:5.2f}s  {result.speed:4.2f}x  "
+            f"{status:<12}"
+        )
+        if result.warning:
+            line += f"  {result.warning}"
+        print(line)
+
+    cue_warnings = sum(1 for result in results if result.warning)
+    failures = sum(1 for result in results if result.failed)
+    print()
+    print(
+        f"汇总：{len(results)} 条；警告 {srt_warning_count + cue_warnings} 条；"
+        f"失败 {failures} 条"
+    )
+    return srt_warning_count + cue_warnings, failures
+
+
+def _write_json_report(path: Path, payload: dict) -> None:
+    """把报告写成 UTF-8 JSON（保留中文）。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _build_provider(args: argparse.Namespace, design: str | None):
+    """按 provider 组装 kwargs 并实例化（实现模块懒导入）。"""
+    kwargs: dict = {}
+    if args.provider == "local":
+        if args.model:
+            kwargs["model_id"] = args.model
+        if design:
+            kwargs["design"] = design
+    else:
+        kwargs["bl_bin"] = args.bl_bin
+        if args.tts_endpoint:
+            kwargs["endpoint"] = args.tts_endpoint
+        # key 只用于 bl 不可用时的 HTTP 兜底；绝不打印。
+        api_key = args.api_key or os.environ.get("DASHSCOPE_API_KEY")
+        if api_key:
+            kwargs["api_key"] = api_key
+    return get_provider(args.provider, **kwargs)
+
+
+def _run(args: argparse.Namespace) -> int:
+    """执行一次完整流程，返回退出码。"""
+    srt = Path(args.srt)
+    video = Path(args.video) if args.video else None
+
+    video_duration: float | None = None
+    codec_name = ""
+    if video is not None:
+        _require_binary("ffprobe")
+        info = probe_video(video)
+        video_duration = info.duration
+        codec_name = info.codec_name
+
+    cues, srt_warnings = load_cues(
+        srt,
+        video_duration,
+        skip_bracketed=args.skip_bracketed,
+    )
+    for warning in srt_warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if not cues:
+        raise SRTError(f"{srt}: no cues found")
+
+    total_duration = video_duration if video_duration is not None else cues[-1].end
+
+    voice = find_voice(args.provider, args.voice) if args.voice else None
+    if voice is not None and args.model:
+        voice = replace(voice, model=args.model)
+    design = args.design if args.provider == "local" else None
+
+    if args.dry_run:
+        _print_plan(args, srt, video, total_duration, cues, voice)
+        return 0
+
+    # 真正的合成流程才需要 ffmpeg（atempo / 混流）；dry-run 不检查。
+    _require_binary("ffmpeg")
+
+    provider = _build_provider(args, design)
+    provider.prepare()
+
+    if voice is not None:
+        print(
+            f"video-tts: provider={args.provider} voice={voice.voice_id} "
+            f"model={voice.model}"
+        )
+    else:
+        print(f"video-tts: provider={args.provider} design={design}")
+    if (
+        args.provider == "online"
+        and args.instruct
+        and voice is not None
+        and voice.model != FLAGSHIP_MODEL
+    ):
+        print(
+            f"warning: {voice.model} 不支持 --instruct，已忽略该指令",
+            file=sys.stderr,
+        )
+
+    out_prefix, video_out = _resolve_outputs(args, video, srt)
+    track_path = _with_suffix(out_prefix, ".dub.wav")
+    track_path.parent.mkdir(parents=True, exist_ok=True)
+
+    options = EngineOptions(
+        sample_rate=args.sample_rate,
+        max_speed=args.max_speed,
+        keep_segments=args.keep_segments,
+        segments_dir=out_prefix.parent / "segments" if args.keep_segments else None,
+        no_cache=args.no_cache,
+        continue_on_error=args.continue_on_error,
+    )
+    cache = SegmentCache(enabled=not args.no_cache)
+
+    # VoiceDesign 模式下 provider 用 design 作为 prompt、忽略 instruct；
+    # 把 design 传进引擎可让它进入片段缓存 key，避免不同设计串音。伪 Voice
+    # 只用于让缓存 key 带上实际模型 id（provider 在 design 模式会忽略它）。
+    engine_instruct = design if design else args.instruct
+    engine_voice = voice
+    if design:
+        engine_voice = Voice(
+            name="VoiceDesign",
+            voice_id="",
+            gender="",
+            description=design,
+            model=getattr(provider, "model_id", "unknown"),
+            provider=args.provider,
+        )
+
+    master, results = run_engine(
+        cues,
+        provider,
+        engine_voice,
+        engine_instruct,
+        args.lang,
+        total_duration,
+        options,
+        cache,
+        progress=lambda line: print(line, flush=True),
+    )
+    write_wav(track_path, master, args.sample_rate)
+
+    final_path: Path | None = None
+    if video is not None and not args.track_only:
+        video_out.parent.mkdir(parents=True, exist_ok=True)
+        mux_video(video, track_path, video_out, codec_name)
+        verify_output(video_out, video_duration)
+        final_path = video_out
+
+    warning_count, failures = _print_report(results, len(srt_warnings))
+    print(f"配音轨: {track_path}")
+    if final_path is not None:
+        print(f"成片: {final_path}")
+
+    if args.json_report:
+        report_path = Path(args.json_report)
+        _write_json_report(
+            report_path,
+            {
+                "srt": str(srt),
+                "video": str(video) if video is not None else None,
+                "provider": args.provider,
+                "voice": _voice_payload(voice),
+                "design": design,
+                "instruct": args.instruct,
+                "lang": args.lang,
+                "sample_rate": args.sample_rate,
+                "max_speed": args.max_speed,
+                "total_duration": total_duration,
+                "track": str(track_path),
+                "output": str(final_path) if final_path is not None else None,
+                "srt_warnings": srt_warnings,
+                "warning_count": warning_count,
+                "failure_count": failures,
+                "cues": [_result_payload(result) for result in results],
+            },
+        )
+        print(f"报告: {report_path}")
+
+    return 1 if failures else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI 入口：参数错误以 `SystemExit` 退出，运行错误返回 1。"""
+    args = build_parser().parse_args(argv)
+    validate_args(args)
+    try:
+        return _run(args)
+    except Exception as exc:  # noqa: BLE001 - CLI 边界统一转成退出码
+        print(f"video-tts: error: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
