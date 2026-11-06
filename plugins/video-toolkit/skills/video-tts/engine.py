@@ -7,8 +7,9 @@ video-tts — 合成引擎：逐条合成、适配、缓存与拼轨。
 1. 起点取 `max(cue.effective_start, 上一条实际结束时间)`；起点已到
    `next_start` 时该条无可用窗口，记 `NO_WINDOW` 失败。
 2. 文本按 `split_long_text()` 切块；每块先查 `SegmentCache`，未命中才调用
-   provider，合成结果经 `trim_silence()` / `validate_pcm()` 校验后才写缓存，
-   绝不缓存空音频、静音或 NaN。
+   provider。合成失败（provider 异常或校验不通过）重试一次，仍失败才向上
+   抛出；结果经 `trim_silence()` / `validate_pcm()` 校验后才写缓存，绝不
+   缓存空音频、静音或 NaN。
 3. 用 `plan_fit()` 决定 atempo 倍率与动作，`apply_atempo()` 施加到整条音频；
    `TRUNCATED` 时在 `next_start` 前截断并做 50 ms 淡出，保证不与下一条重叠。
 4. 处理结果按起点交给 `track_build.build_track()` 拼成整轨，因此越界 /
@@ -106,9 +107,14 @@ def _cache_key(
     chunk_index: int,
     chunk_count: int,
 ) -> str:
-    """块级缓存 key；长文本切块时把块序号一并纳入 key。"""
+    """块级缓存 key；长文本切块时把块序号一并纳入 key。
+
+    `normalize_text()` 会把所有空白（含换行）压成单个空格，因此规范化后的
+    文本里不可能出现 `\\n`；用它分隔块序号，任何单块文本都不会伪造成
+    多块文本的 key。
+    """
     voice_id, model_id = _voice_ids(voice)
-    text = chunk if chunk_count == 1 else f"{chunk_index}:{chunk}"
+    text = chunk if chunk_count == 1 else f"{chunk_index}\n{chunk}"
     return segment_cache_key(
         provider_name, model_id, voice_id, instruct, lang, text
     )
@@ -141,12 +147,22 @@ def _synthesize_chunk(
             else:
                 return cached
 
-    raw = provider.synthesize(chunk, voice, instruct=instruct, lang=lang)
-    pcm = trim_silence(raw, sample_rate)
-    validate_pcm(pcm, sample_rate)
-    if use_cache:
-        cache.put(key, pcm, sample_rate)
-    return pcm
+    # spec §8.4：单块合成失败（provider 异常或校验不通过）重试一次，
+    # 第二次仍失败才把异常抛给调用方（或由 continue_on_error 记为失败）。
+    for attempt in range(2):
+        try:
+            raw = provider.synthesize(chunk, voice, instruct=instruct, lang=lang)
+            pcm = trim_silence(raw, sample_rate)
+            validate_pcm(pcm, sample_rate)
+        except Exception:
+            if attempt == 1:
+                raise
+            continue
+        if use_cache:
+            cache.put(key, pcm, sample_rate)
+        return pcm
+
+    raise AssertionError("retry loop exhausted")  # pragma: no cover
 
 
 def _fade_out(pcm: np.ndarray, sample_rate: int) -> np.ndarray:
@@ -172,9 +188,14 @@ def _report_progress(
     position: int,
     total: int,
     cue: Cue,
+    available: float,
     result: SegmentResult,
 ) -> None:
-    """向调用方报告单条进度（默认直接 print）。"""
+    """向调用方报告单条进度（默认直接 print）。
+
+    “窗口”是字幕自身的 `end - start`；“可用”是从 `effective_start` 到
+    `next_start` 的实际可用时长，两者在起点被前一条挤后时会不同。
+    """
     if progress is None:
         return
     window = cue.end - cue.start
@@ -182,7 +203,7 @@ def _report_progress(
     line = (
         f"[{position}/{total}] {_format_time(cue.effective_start)}  "
         f"合成 {result.synth_duration:.2f}s  窗口 {window:.2f}s  "
-        f"atempo {result.speed:.2f}x  {status}"
+        f"可用 {available:.2f}s  atempo {result.speed:.2f}x  {status}"
     )
     if result.warning:
         line += f"  ({result.warning})"
@@ -239,7 +260,7 @@ def run_engine(
                 failed=True,
             )
             results.append(result)
-            _report_progress(progress, position, total, cue, result)
+            _report_progress(progress, position, total, cue, available, result)
             if not options.continue_on_error:
                 raise ValueError(
                     f"cue {cue.index}: no usable window (effective start "
@@ -328,7 +349,7 @@ def run_engine(
             )
 
         results.append(result)
-        _report_progress(progress, position, total, cue, result)
+        _report_progress(progress, position, total, cue, available, result)
 
     master = build_track(total_duration, placements, sample_rate)
     return master, results
