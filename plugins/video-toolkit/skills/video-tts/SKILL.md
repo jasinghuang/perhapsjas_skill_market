@@ -474,6 +474,7 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | `--volume` | 在线音量 0-100 | 模型默认 |
 | `--seed` | 在线随机种子 0-65535 | 模型默认 |
 | `--enable-ssml` | 在线 SSML 模式（仅 3.1 Plus 旗舰音色） | false |
+| `--hotfix-file` | hot_fix JSON（仅在线 3.1 Plus；强制 HTTP 兜底，需 `DASHSCOPE_API_KEY` + `--tts-endpoint`） | 无 |
 | `--design` | 本地 VoiceDesign 音色描述；与 `--voice` / `--instruct` 互斥，自动加载 VoiceDesign 模型 | 无 |
 | `--lang` | 语言代码（在线映射 `chinese` 等 → `zh` / `en` / …） | `chinese` |
 | `--model` | 覆盖 provider 模型 id；在线必须与音色同组，本地 VoiceDesign 只能配 `--design` | 各 provider 默认 |
@@ -497,7 +498,15 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 - **情感 / 拟声标签**：3.1 Plus 支持把 `[excited]`、`[sad]`、`[laughing]` 等直接写进 SRT 文本；Qwen-TTS 备选组不支持。
 - **SSML**：`--enable-ssml` 后可在 SRT 文本里用 `<break time="300ms"/>` 等控制停顿/读音，仅 3.1 Plus；provider 会自动给每条文本套 `<speak>...</speak>`（已套则不重复），普通文本不要默认开启。
 - **语言提示**：`--lang` 在 3.1 Plus 走 `language_hints`，在 Qwen-TTS 走 `language_type`；粤语音色由 voice 本身决定语种，不发送语言字段。
-- **hot_fix（专名发音/替换）**：`bl` CLI 未暴露该参数，v1 不提供。需要纠正专名时，先在上游 `text-refine` 改成同音字/拼音，或改用支持 `hot_fix` 的 HTTP 接口。
+- **hot_fix（专名发音/替换）**：`--hotfix-file <json>`，仅在线 3.1 Plus；`bl` 不支持该参数，provider 会强制走 DashScope HTTP 兜底，因此必须设置 `DASHSCOPE_API_KEY` 并提供 `--tts-endpoint`。
+
+  JSON 结构：
+
+  ```json
+  {"pronunciation": [{"重庆": "chong2 qing4"}], "replace": [{"今天": "金天"}]}
+  ```
+
+  `pronunciation` 用拼音纠正发音，`replace` 在合成前替换文本；两者都可省略。
 - 在线风格参数会进入缓存键：改 `--rate/--pitch/--volume/--seed/--enable-ssml` 会触发重新合成。
 
 ## 错误处理
@@ -513,6 +522,7 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | `bl` 401 / 403 | provider 立即报错并提示运行 `bl auth login` 重新登录；可切本地 |
 | 在线 429 / 5xx | provider 自动指数退避重试 2 次（1s / 2s）；仍失败则询问切本地或终止 |
 | 在线额度不足 / Throttling | provider 立即报错并给出[百炼控制台](https://bailian.console.aliyun.com/)链接；可切本地 |
+| `--hotfix-file` 缺 key / endpoint | 参数校验直接报错：需 `DASHSCOPE_API_KEY` + `--tts-endpoint`（hot_fix 只走 HTTP 兜底） |
 | 在线音色与模型不匹配 | `--voice` 自动决定模型；显式 `--model` 必须与音色同组，跨组在本地参数校验阶段退出 2，不发请求 |
 | 在线音色名非法 | 参数校验阶段报错并列出 16 个合法音色后退出（码 2） |
 | `bl --list-voices` 返回空 | 正常现象（这两个模型返回 `null`）；以本文音色表为准，不报错 |

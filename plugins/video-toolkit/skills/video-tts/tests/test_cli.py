@@ -462,3 +462,38 @@ def test_enable_ssml_is_flagship_only(tmp_path, capsys):
     with pytest.raises(SystemExit):
         validate_args(args)
     assert "--enable-ssml" in capsys.readouterr().err
+
+
+def test_hotfix_requires_flagship_http_env_and_endpoint(tmp_path, capsys, monkeypatch):
+    hotfix = tmp_path / "hotfix.json"
+    hotfix.write_text('{"replace": [{"今天": "金天"}]}', encoding="utf-8")
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "online",
+        "--voice", "longanlingxin_v3.1", "--yes",
+        "--hotfix-file", str(hotfix),
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "DASHSCOPE_API_KEY" in capsys.readouterr().err
+
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "sk-test")
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "--tts-endpoint" in capsys.readouterr().err
+
+    args.tts_endpoint = "https://example.test/tts"
+    validate_args(args)
+    assert args.hotfix == {"replace": [{"今天": "金天"}]}
+
+
+def test_hotfix_rejects_local_and_qwen_tts(tmp_path, capsys):
+    hotfix = tmp_path / "hotfix.json"
+    hotfix.write_text('{"replace": [{"a": "b"}]}', encoding="utf-8")
+    for provider, voice in (("local", "Serena"), ("online", "Cherry")):
+        args = build_parser().parse_args([
+            "--srt", str(_write_srt(tmp_path)), "--provider", provider,
+            "--voice", voice, "--yes", "--hotfix-file", str(hotfix),
+        ])
+        with pytest.raises(SystemExit):
+            validate_args(args)
+        assert "hotfix" in capsys.readouterr().err.lower()

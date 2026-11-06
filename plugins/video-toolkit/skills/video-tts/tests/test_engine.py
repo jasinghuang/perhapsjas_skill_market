@@ -388,3 +388,9 @@ def test_style_options_reach_provider_and_cache_key(tmp_path):
                progress=lambda _line: None)
     assert len(p.calls) == 2
     assert p.calls[1]["rate"] == 1.2
+
+    hotfix = {"replace": [{"今天": "金天"}]}
+    run_engine([c], p, None, "", "chinese", 3.0,
+               EngineOptions(hot_fix=hotfix), cache,
+               progress=lambda _line: None)
+    assert p.calls[2]["hot_fix"] == hotfix

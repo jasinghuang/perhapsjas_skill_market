@@ -86,6 +86,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="在线 SSML 模式（仅 3.1 Plus 旗舰音色支持）",
     )
     parser.add_argument(
+        "--hotfix-file",
+        help="hot_fix JSON 文件（仅在线 3.1 Plus，强制走 HTTP 兜底）",
+    )
+    parser.add_argument(
         "--design", help="本地 VoiceDesign 音色描述；与 --voice 互斥"
     )
     parser.add_argument("--lang", default="chinese", help="语言代码（默认 chinese）")
@@ -212,6 +216,34 @@ def validate_args(args: argparse.Namespace) -> None:
             "--enable-ssml is only supported by qwen-audio-3.1-tts-plus "
             "flagship voices"
         )
+
+    args.hotfix = None
+    if args.hotfix_file:
+        if args.provider != "online":
+            _fail("--hotfix-file is only supported by the online provider")
+        if voice is None or voice.model != FLAGSHIP_MODEL:
+            _fail("--hotfix-file requires a 3.1 Plus flagship voice")
+        if not args.dry_run:
+            if not os.environ.get("DASHSCOPE_API_KEY"):
+                _fail("--hotfix-file requires DASHSCOPE_API_KEY (HTTP fallback)")
+            if not args.tts_endpoint:
+                _fail("--hotfix-file requires --tts-endpoint (HTTP fallback)")
+        hotfix_path = Path(args.hotfix_file)
+        if not hotfix_path.is_file():
+            _fail(f"--hotfix-file not found: {args.hotfix_file}")
+        try:
+            hotfix = json.loads(hotfix_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            _fail(f"--hotfix-file is not valid JSON: {exc}")
+        if not isinstance(hotfix, dict) or not (
+            isinstance(hotfix.get("pronunciation", []), list)
+            and isinstance(hotfix.get("replace", []), list)
+        ):
+            _fail(
+                "--hotfix-file must be a JSON object with optional "
+                "'pronunciation' and 'replace' arrays"
+            )
+        args.hotfix = hotfix
 
     if args.provider == "online" and not args.yes and not args.dry_run:
         _fail(
@@ -414,6 +446,8 @@ def _build_provider(args: argparse.Namespace, design: str | None):
         api_key = os.environ.get("DASHSCOPE_API_KEY")
         if api_key:
             kwargs["api_key"] = api_key
+        if getattr(args, "hotfix", None) is not None:
+            kwargs["force_http"] = True
     return get_provider(args.provider, **kwargs)
 
 
@@ -524,6 +558,7 @@ def _run(args: argparse.Namespace) -> int:
         volume=args.volume,
         seed=args.seed,
         enable_ssml=args.enable_ssml,
+        hot_fix=args.hotfix,
     )
     cache = SegmentCache(enabled=not args.no_cache)
 

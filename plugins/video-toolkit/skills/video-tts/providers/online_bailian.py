@@ -197,12 +197,14 @@ class OnlineBailianProvider:
         endpoint: str | None = None,
         poll_interval: float = 2.0,
         login_timeout: float = 300.0,
+        force_http: bool = False,
     ) -> None:
         self.bl_bin = bl_bin
         self.api_key = api_key
         self.endpoint = endpoint
         self.poll_interval = poll_interval
         self.login_timeout = login_timeout
+        self.force_http = force_http
         self._use_http = False
 
     def is_authenticated(self) -> bool:
@@ -211,6 +213,17 @@ class OnlineBailianProvider:
 
     def prepare(self) -> None:
         """选择合成路径：优先 `bl` CLI，否则用 DashScope HTTP 兜底。"""
+        if self.force_http:
+            if not self.api_key:
+                raise ProviderError(
+                    "hot_fix requires the HTTP fallback: set DASHSCOPE_API_KEY"
+                )
+            if not self.endpoint:
+                raise ProviderError(
+                    "hot_fix requires the HTTP fallback: provide --tts-endpoint"
+                )
+            self._use_http = True
+            return
         if shutil.which(self.bl_bin) is not None:
             self._use_http = False
             self.ensure_authenticated()
@@ -394,6 +407,7 @@ class OnlineBailianProvider:
         volume: int | None = None,
         seed: int | None = None,
         enable_ssml: bool = False,
+        hot_fix: dict | None = None,
     ) -> Path:
         """通过 DashScope HTTP API 合成并把音频下载到 out_path。
 
@@ -437,6 +451,8 @@ class OnlineBailianProvider:
             payload["input"]["seed"] = seed
         if enable_ssml:
             payload["input"]["enable_ssml"] = True
+        if hot_fix is not None:
+            payload["input"]["hot_fix"] = hot_fix
 
         headers = {"Authorization": f"Bearer {self.api_key}"}
         try:
@@ -478,9 +494,15 @@ class OnlineBailianProvider:
         volume = style.get("volume")
         seed = style.get("seed")
         enable_ssml = bool(style.get("enable_ssml", False))
+        hot_fix = style.get("hot_fix")
+        if hot_fix is not None and (not self.api_key or not self.endpoint):
+            raise ProviderError(
+                "hot_fix requires the HTTP fallback: set DASHSCOPE_API_KEY "
+                "and provide --tts-endpoint"
+            )
         with tempfile.TemporaryDirectory(prefix="video-tts-online-") as tmp:
             out_path = Path(tmp) / "segment.wav"
-            if self._use_http:
+            if self._use_http or hot_fix is not None:
                 self._synthesize_http(
                     text,
                     voice,
@@ -492,6 +514,7 @@ class OnlineBailianProvider:
                     volume=volume,
                     seed=seed,
                     enable_ssml=enable_ssml,
+                    hot_fix=hot_fix,
                 )
             else:
                 self._synthesize_bl(

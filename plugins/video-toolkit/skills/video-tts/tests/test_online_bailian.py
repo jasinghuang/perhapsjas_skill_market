@@ -138,6 +138,44 @@ def test_http_payload_wraps_ssml_once(tmp_path):
     assert payload["enable_ssml"] is True
 
 
+def test_force_http_prepare_for_hotfix():
+    p = OnlineBailianProvider(
+        api_key="sk-test", endpoint="https://example.test/tts", force_http=True
+    )
+    with patch("shutil.which") as which:
+        p.prepare()
+    which.assert_not_called()
+    assert p._use_http is True
+
+
+def test_http_payload_includes_hot_fix(tmp_path):
+    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    response = MagicMock(
+        raise_for_status=MagicMock(),
+        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
+    )
+    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
+    hotfix = {"replace": [{"今天": "金天"}]}
+    with patch("requests.post", return_value=response) as post, \
+         patch("requests.get", return_value=download):
+        p._synthesize_http(
+            "今天", FLAG, "", "chinese", tmp_path / "a.wav", hot_fix=hotfix
+        )
+    assert post.call_args.kwargs["json"]["input"]["hot_fix"] == hotfix
+
+
+def test_synthesize_routes_hotfix_to_http_even_with_bl(tmp_path):
+    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    p._use_http = False
+    with patch.object(p, "_synthesize_http") as http, \
+         patch.object(p, "_synthesize_bl") as bl, \
+         patch("soundfile.read") as read:
+        read.return_value = (np.zeros((24000, 1), dtype=np.float32), 24000)
+        p.synthesize("今天", FLAG, hot_fix={"replace": [{"今天": "金天"}]})
+    http.assert_called_once()
+    bl.assert_not_called()
+
+
 def test_http_payload_cantonese_omits_language_and_carries_style(tmp_path):
     p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
     response = MagicMock(

@@ -23,6 +23,7 @@ video-tts — 合成引擎：逐条合成、适配、缓存与拼轨。
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
@@ -66,6 +67,7 @@ class EngineOptions:
     volume: int | None = None
     seed: int | None = None
     enable_ssml: bool = False
+    hot_fix: dict | None = None
 
 
 @dataclass
@@ -124,7 +126,9 @@ def _cache_key(
     text = chunk if chunk_count == 1 else f"{chunk_index}\n{chunk}"
     if style:
         # 语速 / 音调 / 音量 / seed / SSML 都影响音频，必须进入缓存键。
-        text += "\nstyle=" + repr(sorted(style.items()))
+        text += "\nstyle=" + json.dumps(
+            style, sort_keys=True, ensure_ascii=False, default=str
+        )
     return segment_cache_key(
         provider_name, model_id, voice_id, instruct, lang, text
     )
@@ -259,6 +263,8 @@ def run_engine(
             style[key] = value
     if options.enable_ssml:
         style["enable_ssml"] = True
+    if options.hot_fix is not None:
+        style["hot_fix"] = options.hot_fix
 
     segments_dir: Path | None = None
     if options.keep_segments:

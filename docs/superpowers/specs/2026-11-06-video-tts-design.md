@@ -305,7 +305,7 @@ bl speech synthesize \
 - `--instruct`：仅 3.1 Plus；可用于语速、情绪、角色、方言（如「请用粤语说」）。Qwen-TTS 备选组忽略。
 - 情感/拟声标签（`[excited]`、`[laughing]` 等）直接写在 SRT 文本里，仅 3.1 Plus。
 - 语言：3.1 Plus 的 HTTP 请求使用 `language_hints: [code]`；Qwen-TTS 使用 `language_type`；粤语系统音色由 voice 决定语种，不发送语言字段。
-- `hot_fix`：`bl` CLI 未暴露，v1 不提供；需要专名发音纠正时在上游 `text-refine` 处理，或改用支持 `hot_fix` 的 HTTP 接口。
+- `hot_fix`：`--hotfix-file <json>`，仅在线 3.1 Plus；`bl` 不暴露该参数，因此强制走 DashScope HTTP 兜底（需 `DASHSCOPE_API_KEY` + `--tts-endpoint`）。JSON 形如 `{"pronunciation": [{"重庆": "chong2 qing4"}], "replace": [{"今天": "金天"}]}`，两个数组都可省略。
 - 以上风格参数都进入缓存键，改参数会重新合成。
 
 ### 8.4 合成结果校验与缓存
@@ -395,6 +395,7 @@ ffprobe -v error -show_entries \
 | `--volume` | 在线音量 0-100 | 模型默认 |
 | `--seed` | 在线随机种子 0-65535 | 模型默认 |
 | `--enable-ssml` | 在线 SSML（仅 3.1 Plus 旗舰） | false |
+| `--hotfix-file` | hot_fix JSON（仅 3.1 Plus，强制 HTTP 兜底，需 key + endpoint） | 无 |
 | `--design` | 本地 VoiceDesign 音色描述；与 `--voice` / `--instruct` 互斥，自动加载 VoiceDesign 模型 | 无 |
 | `--lang` | 语言代码；在线映射为 `zh` / `en` / `ja` / `ko` / `de` / `fr` / `ru` / `pt` / `es` / `it` | `chinese` |
 | `--model` | 覆盖 provider 的模型 id；在线必须与音色同组， VoiceDesign 模型只能配 `--design` | 各 provider 默认 |
