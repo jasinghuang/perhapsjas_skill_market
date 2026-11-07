@@ -34,7 +34,7 @@ from pathlib import Path
 
 from cache import SegmentCache
 from engine import EngineOptions, SegmentResult, run_engine
-from mux import mux_video, probe_video, verify_output
+from mux import mux_video, probe_audio_duration, probe_video, verify_output
 from providers import (
     FLAGSHIP_MODEL,
     LOCAL_BASE_MODEL,
@@ -61,6 +61,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--srt", required=True, help="中文 SRT 路径（UTF-8）")
     parser.add_argument("--video", help="视频路径；提供则混流输出 mp4")
+    parser.add_argument(
+        "--audio", help="音频文件（只取时长，不混流；与 --video 互斥）"
+    )
     parser.add_argument(
         "--provider",
         required=True,
@@ -297,6 +300,8 @@ def validate_args(args: argparse.Namespace) -> None:
             "online synthesis is billed; re-run with --yes after confirming cost"
         )
 
+    if args.audio and args.video:
+        _fail("--audio and --video are mutually exclusive")
     if not Path(args.srt).is_file():
         _fail(f"SRT not found: {args.srt}")
     if args.merge_plan and not Path(args.merge_plan).is_file():
@@ -540,18 +545,23 @@ def _run(args: argparse.Namespace) -> int:
     """执行一次完整流程，返回退出码。"""
     srt = Path(args.srt)
     video = Path(args.video) if args.video else None
+    audio = Path(args.audio) if args.audio else None
 
     video_duration: float | None = None
+    audio_duration: float | None = None
     codec_name = ""
     if video is not None:
         _require_binary("ffprobe")
         info = probe_video(video)
         video_duration = info.duration
         codec_name = info.codec_name
+    elif audio is not None:
+        _require_binary("ffprobe")
+        audio_duration = probe_audio_duration(audio)
 
     cues, srt_warnings = load_cues(
         srt,
-        video_duration,
+        video_duration if video_duration is not None else audio_duration,
         skip_bracketed=args.skip_bracketed,
     )
     for warning in srt_warnings:
@@ -567,7 +577,12 @@ def _run(args: argparse.Namespace) -> int:
             _fail(str(exc))
         print(f"合并: {original_count} 条 → {len(cues)} 组")
 
-    total_duration = video_duration if video_duration is not None else cues[-1].end
+    if video_duration is not None:
+        total_duration = video_duration
+    elif audio_duration is not None:
+        total_duration = audio_duration
+    else:
+        total_duration = cues[-1].end
 
     voice = find_voice(args.provider, args.voice) if args.voice else None
     if voice is not None and args.model:

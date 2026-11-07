@@ -184,6 +184,7 @@ skill 放 `plugins/<plugin>/skills/<skill>/`；`SKILL.md` + `run.py` + `skill_ma
 
 - `--srt <path>`：必需。标准 SRT，UTF-8，文本已是中文。
 - `--video <path>`：可选。提供时输出成品 mp4；不提供时只输出整条配音 wav。
+- `--audio <path>`：可选。只取音频时长（用于总轨长度），不混流；与 `--video` 互斥。
 - 视频与 SRT 的时间原点一致（SRT 从视频 0 秒开始计时）。
 
 ### 输出
@@ -402,6 +403,7 @@ ffprobe -v error -show_entries \
 | --- | --- | --- |
 | `--srt` | 中文 SRT 路径 | 必需 |
 | `--video` | 视频路径；提供则输出 mp4 | 无 |
+| `--audio` | 音频路径（只取时长，不混流；与 `--video` 互斥） | 无 |
 | `--provider` | `local` / `online` | 交互选择 |
 | `--out` | 输出前缀或 `.mp4` 路径（非 `.mp4` 后缀按前缀处理） | `<video stem>` 或 `<srt stem>` |
 | `--voice` | 音色名/参数（本地 9 个或在线 16 个） | 交互选择 |
@@ -442,7 +444,8 @@ ffprobe -v error -show_entries \
 
 | 时机 | 问题（header） | 选项 | 何时跳过 |
 | --- | --- | --- | --- |
-| 启动 | 配音方案 | 本地（推荐）/ 在线 | 传了 `--provider` |
+| 启动（有视频/音频） | 音色来源 | 原声克隆（推荐）/ 系统音色 | 已传 `--ref-audio` 或已选 `--voice`/`--design` |
+| 启动 | 配音方案 | 本地（推荐）/ 在线 | 原声克隆（只能本地）/ 传了 `--provider` |
 | 在线 | 音色组 | 3.1 Plus 旗舰（推荐）/ Qwen-TTS 12 音色 | |
 | 在线·旗舰 | 具体音色 | 4 个旗舰音色 | 传了 `--voice` |
 | 在线·Qwen-TTS | 性别 | 女声（6，含粤语）/ 男声（6，含粤语） | |

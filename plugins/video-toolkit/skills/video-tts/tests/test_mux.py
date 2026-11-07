@@ -2,7 +2,14 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
-from mux import VideoInfo, mux_video, needs_reencode, probe_video, verify_output
+from mux import (
+    VideoInfo,
+    mux_video,
+    needs_reencode,
+    probe_audio_duration,
+    probe_video,
+    verify_output,
+)
 
 
 def _probe_payload(codec_name="h264", duration="10.0"):
@@ -62,6 +69,13 @@ def test_probe_video_raises_with_ffprobe_stderr():
         run.return_value = MagicMock(returncode=1, stderr="boom")
         with pytest.raises(RuntimeError, match="boom"):
             probe_video(Path("in.mp4"))
+
+
+def test_probe_audio_duration_parses_format():
+    payload = {"format": {"duration": "12.5"}}
+    with patch("subprocess.run") as run:
+        run.return_value = MagicMock(returncode=0, stdout=json.dumps(payload))
+        assert probe_audio_duration(Path("a.wav")) == 12.5
 
 
 def test_needs_reencode():

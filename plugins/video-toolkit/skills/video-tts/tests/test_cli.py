@@ -486,6 +486,16 @@ def test_hotfix_requires_flagship_http_env_and_endpoint(tmp_path, capsys, monkey
     assert args.hotfix == {"replace": [{"今天": "金天"}]}
 
 
+def test_audio_and_video_are_mutually_exclusive(tmp_path, capsys):
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "local",
+        "--voice", "Serena", "--audio", "a.wav", "--video", "v.mp4",
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "mutually exclusive" in capsys.readouterr().err
+
+
 def test_ref_audio_pair_and_base_model_validation(tmp_path, capsys):
     ref = tmp_path / "ref.wav"
     ref.write_bytes(b"RIFF")

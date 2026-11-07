@@ -92,6 +92,16 @@ def probe_video(path: Path) -> VideoInfo:
     )
 
 
+def probe_audio_duration(path: Path) -> float:
+    """探测纯音频文件的容器时长（用于只给音频、不混流的配音）。"""
+    probe = _ffprobe("format=duration", path)
+    raw = (probe.get("format") or {}).get("duration")
+    try:
+        return float(raw)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"could not determine audio duration for {path}") from exc
+
+
 def needs_reencode(codec_name: str) -> bool:
     """编码不能直接复制进 mp4 时返回 True（含 VP9 / AV1）。"""
     return codec_name not in COPY_CODECS

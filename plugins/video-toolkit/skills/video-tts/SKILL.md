@@ -62,7 +62,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py --srt <字幕> --provider 
 
 | 时机 | 问题（header） | 选项 | 何时跳过 |
 | --- | --- | --- | --- |
-| 启动 | 配音方案 | 本地（推荐）/ 在线 | 传了 `--provider` |
+| 启动（用户给了视频/音频） | 音色来源 | 原声克隆（推荐）/ 系统音色 | 已传 `--ref-audio` 或已选 `--voice`/`--design` |
+| 启动 | 配音方案 | 本地（推荐）/ 在线 | 原声克隆（只能本地）/ 传了 `--provider` |
 | 在线 | 音色组 | 3.1 Plus 旗舰（推荐）/ Qwen-TTS 12 音色 | |
 | 在线·旗舰 | 具体音色 | 4 个旗舰音色 | 传了 `--voice` |
 | 在线·Qwen-TTS | 性别 | 女声（6，含粤语）/ 男声（6，含粤语） | |
@@ -81,8 +82,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py --srt <字幕> --provider 
 
 推荐执行顺序：
 
-1. 选 provider → 做该 provider 的预检（见下）。
-2. 选音色组 / 方向 → 选具体音色 → 选语气。
+1. 如果用户给了视频/音频，先问「音色来源：原声克隆（推荐）/ 系统音色」。原声克隆只能本地 Base，跳到第 2 步的克隆分支；系统音色继续选 provider。
+2. 系统音色：选 provider → 做预检 → 选音色组 / 方向 → 选具体音色 → 选语气。原声克隆：提取 3–10s 参考音频 + 对应文本，用 `--ref-audio/--ref-text`，跳过音色/语气菜单。
 3. 解析 SRT，用纯文本打印摘要（条数、总时长、前几条）；按「语义合并」一节的规则生成 merge plan，问「是否语义合并（推荐）/ 逐条合成」。
 4. 语义合并时用 `--merge-plan`；先 `--dry-run` 看合并后的组数与前几条，确认没有半句切断 → 问「是否开跑」。
 5. 在线：打印总字数与计费提示 → 问「费用确认」。
@@ -503,6 +504,7 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | --- | --- | --- |
 | `--srt` | 中文 SRT 路径（UTF-8） | 必需 |
 | `--video` | 视频路径；提供则混流输出 mp4 | 无 |
+| `--audio` | 音频路径（只取时长，不混流；与 `--video` 互斥） | 无 |
 | `--provider` | `local` / `online` | 必需（由 AskUserQuestion 决定） |
 | `--out` | 输出前缀或 `.mp4` 路径（非 `.mp4` 后缀按前缀处理） | 视频 / SRT stem |
 | `--voice` | 音色 ID（本地 9 / 在线 16，区分大小写） | 交互选择；local 与 `--design` 二选一，online 必需 |
@@ -577,6 +579,14 @@ python3 <skill>/run.py --srt video.srt --provider local \
   --temperature 0.6 --top-p 0.9 --top-k 40 --seed 42 --track-only
 ```
 
+从用户给的视频/音频提取参考（3–10 秒、单说话人、无背景音乐）：
+
+```bash
+ffmpeg -ss <start> -t <duration> -i <media> -vn -ac 1 -ar 24000 ref.wav
+```
+
+- `--ref-text` 必须是**这段参考音频的原语言文本**，不能用翻译后的中文 SRT；没有原文字幕时先对参考片段做 ASR。
+- 只有音频、没有视频时，用 `--audio <media>` 让 CLI 取音频时长（不混流），输出 `<out>.dub.wav`。
 - 不传 `--model` 时自动用 `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16`；显式 `--model` 必须是 Base 族。
 - 与 `--voice` / `--design` / `--instruct` 互斥；参考音频必须是单说话人、干净、3–10 秒，`--ref-text` 要和音频逐字一致。
 - Base **推理**在 Apple Silicon/MLX 上可用，不需要 CUDA；官方 finetuning 才需要 CUDA。
