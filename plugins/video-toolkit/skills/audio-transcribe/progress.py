@@ -37,6 +37,9 @@ class ProgressReporter:
 
         self._total = total_seconds
         fraction = min(max(fraction, 0.0), 1.0)
+        if fraction >= 1.0 and self._last_fraction >= 1.0:
+            return
+        elapsed_seconds = min(max(elapsed_seconds, 0.0), total_seconds)
         now = self._clock()
         should_print = (
             self._last_emit is None

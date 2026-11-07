@@ -163,8 +163,10 @@ def transcribe(
     if reporter is not None:
         reporter.finish()
 
+    detected_lang = result.get("language", "unknown")
+    print(f"  Detected language: {detected_lang}")
+
     segments = result["segments"]
-    detected_lang = result["language"]
 
     # Apply zhconv for Chinese
     if detected_lang in ("zh", "chinese"):

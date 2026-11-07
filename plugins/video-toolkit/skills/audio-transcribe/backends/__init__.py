@@ -20,6 +20,14 @@ class TranscriptionBackend(ABC):
     ) -> Dict:
         """Transcribe audio and return unified result.
 
+        Args:
+            audio_path: Input audio/video path.
+            language: Language code, or None/"auto" to auto-detect.
+            on_progress: Optional callback invoked as
+                ``(fraction, elapsed_seconds, total_seconds)`` with
+                ``fraction`` in [0, 1]. Implementations must swallow
+                callback errors so progress can never abort transcription.
+
         Returns:
             {"segments": [{"start": float, "end": float, "text": str}],
              "language": str}

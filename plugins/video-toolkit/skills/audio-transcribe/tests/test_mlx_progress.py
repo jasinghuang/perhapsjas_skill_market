@@ -36,12 +36,14 @@ def test_hook_replaces_and_restores_tqdm():
     original = tqdm.tqdm
     seen = []
     restore = _install_progress_hook(lambda f, e, t: seen.append((f, e, t)))
-    assert tqdm.tqdm is not original
-    with tqdm.tqdm(total=100) as bar:
-        bar.update(50)
-    _restore_progress_hook(restore)
+    try:
+        assert tqdm.tqdm is not original
+        with tqdm.tqdm(total=100) as bar:
+            bar.update(50)
+        assert seen == [(0.0, 0.0, 1.0), (0.5, 0.5, 1.0)]
+    finally:
+        _restore_progress_hook(restore)
     assert tqdm.tqdm is original
-    assert seen == [(0.0, 0.0, 1.0), (0.5, 0.5, 1.0)]
 
 
 def test_transcribe_survives_hook_install_failure(monkeypatch):

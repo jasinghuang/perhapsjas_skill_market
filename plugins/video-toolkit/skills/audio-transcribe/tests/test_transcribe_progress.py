@@ -42,3 +42,24 @@ def test_no_progress_disables_callback(tmp_path, monkeypatch, capsys):
     assert backend.on_progress is None
     assert "%" not in capsys.readouterr().out
     assert output.exists()
+
+
+def test_finish_precedes_detected_language(tmp_path, monkeypatch, capsys):
+    _run(tmp_path, monkeypatch, True)
+    out = capsys.readouterr().out
+    assert "Detected language: en" in out
+    assert out.index("100.0%") < out.index("Detected language: en")
+
+
+def test_progress_does_not_change_srt_bytes(tmp_path, monkeypatch):
+    backend = FakeBackend()
+    monkeypatch.setattr(skill_main, "get_backend", lambda: backend)
+    video = tmp_path / "a.mp4"
+    video.write_bytes(b"")
+    on = tmp_path / "on.srt"
+    off = tmp_path / "off.srt"
+
+    skill_main.transcribe(video_path=video, output_path=on, show_progress=True)
+    skill_main.transcribe(video_path=video, output_path=off, show_progress=False)
+
+    assert on.read_bytes() == off.read_bytes()

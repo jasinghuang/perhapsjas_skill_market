@@ -59,7 +59,6 @@ class FasterWhisperBackend(TranscriptionBackend):
                     pass
 
         detected_lang = info.language
-        print(f"  Detected language: {detected_lang}")
 
         segments = []
         for seg in raw_segments:

@@ -81,3 +81,18 @@ def test_reporter_never_raises_on_broken_stream():
     reporter = ProgressReporter(stream=BrokenStream())
     reporter.update(0.5, 50.0, 100.0)  # must not raise
     reporter.finish()  # must not raise
+
+
+def test_duplicate_100_percent_is_suppressed(capsys):
+    reporter = ProgressReporter(stream=None)
+    reporter.update(1.0, 100.0, 100.0)
+    reporter.update(1.0, 101.0, 100.0)
+    assert capsys.readouterr().out.count("100.0%") == 1
+
+
+def test_elapsed_is_clamped_to_total(capsys):
+    reporter = ProgressReporter(stream=None)
+    reporter.update(0.5, 150.0, 100.0)
+    out = capsys.readouterr().out
+    assert "1:40 / 1:40" in out
+    assert "2:30" not in out

@@ -170,7 +170,6 @@ class MLXBackend(TranscriptionBackend):
                     pass
 
         detected_lang = result.get("language", "unknown")
-        print(f"  Detected language: {detected_lang}")
 
         segments = []
         for seg in result["segments"]:
