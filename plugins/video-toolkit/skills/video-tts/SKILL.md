@@ -109,6 +109,14 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py --srt <字幕> --provider 
 {"groups": [[1, 2, 3], [4, 5], [6], [7, 8, 9]]}
 ```
 
+需要在不改 SRT 的前提下精简某组文本时，把该组写成对象：
+
+```json
+{"groups": [[1, 2], {"indices": [3, 4], "text": "精简后但不改变语义的整句。"}]}
+```
+
+`text` 只影响配音文本，时间窗仍按 `indices` 的首尾计算。
+
 运行：
 
 ```bash

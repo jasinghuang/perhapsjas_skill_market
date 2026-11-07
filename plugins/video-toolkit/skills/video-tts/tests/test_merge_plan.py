@@ -49,6 +49,17 @@ def test_dash_and_ellipsis_do_not_add_a_comma(tmp_path):
     assert merged[0].text == "秘密在于——把精力放在静态图像上。"
 
 
+def test_group_text_override_replaces_joined_text(tmp_path):
+    cues = [
+        cue(1, 0.0, 1.0, "很长的第一句，", 1.0),
+        cue(2, 1.0, 2.0, "很长的第二句。", 2.0),
+    ]
+    plan = [{"indices": [1, 2], "text": "精简后的句子。"}]
+    merged = load_merge_plan(write_plan(tmp_path, plan), cues)
+    assert merged[0].text == "精简后的句子。"
+    assert merged[0].start == 0.0 and merged[0].end == 2.0
+
+
 def test_rejects_missing_duplicate_and_noncontiguous(tmp_path):
     cues = [
         cue(1, 0.0, 1.0, "一", 1.0),
