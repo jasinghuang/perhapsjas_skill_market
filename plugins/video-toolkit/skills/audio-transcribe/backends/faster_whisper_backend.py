@@ -1,6 +1,6 @@
 """Windows backend — Faster-Whisper with CUDA auto-detection and CPU fallback."""
 
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 from . import TranscriptionBackend
 
@@ -32,7 +32,12 @@ class FasterWhisperBackend(TranscriptionBackend):
             print("  CUDA not available, using CPU with int8 quantization")
             self._model = WhisperModel(model_name, device="cpu", compute_type="int8")
 
-    def transcribe(self, audio_path: str, language: Optional[str] = None) -> Dict:
+    def transcribe(
+        self,
+        audio_path: str,
+        language: Optional[str] = None,
+        on_progress: Optional[Callable[[float, float, float], None]] = None,
+    ) -> Dict:
         whisper_language = None if language in ("auto", None) else language
 
         segments_gen, info = self._model.transcribe(
@@ -41,8 +46,17 @@ class FasterWhisperBackend(TranscriptionBackend):
             beam_size=5,
         )
 
+        duration = getattr(info, "duration", None)
+
         # Generator must be consumed — transcription runs here
-        raw_segments = list(segments_gen)
+        raw_segments = []
+        for seg in segments_gen:
+            raw_segments.append(seg)
+            if on_progress and duration:
+                try:
+                    on_progress(min(seg.end / duration, 1.0), seg.end, duration)
+                except Exception:
+                    pass
 
         detected_lang = info.language
         print(f"  Detected language: {detected_lang}")

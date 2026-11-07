@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 from backends import get_backend
+from progress import ProgressReporter
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
 
@@ -129,6 +130,7 @@ def transcribe(
     language: str = "auto",
     output_format: str = "md",
     keep_timestamps: bool = False,
+    show_progress: bool = True,
 ) -> Path:
     if model_size is None:
         model_size = DEFAULT_MODEL
@@ -150,8 +152,16 @@ def transcribe(
     backend = get_backend()
     backend.load_model(model_size)
 
+    reporter = ProgressReporter() if show_progress else None
+
     print(f"Transcribing: {video_path.name}")
-    result = backend.transcribe(str(video_path), language=language)
+    result = backend.transcribe(
+        str(video_path),
+        language=language,
+        on_progress=reporter.update if reporter else None,
+    )
+    if reporter is not None:
+        reporter.finish()
 
     segments = result["segments"]
     detected_lang = result["language"]
@@ -240,6 +250,11 @@ Examples:
         default=config.get("keep_timestamps", False),
         help="Keep timestamps in markdown output",
     )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable live transcription progress lines",
+    )
 
     args = parser.parse_args()
 
@@ -304,6 +319,7 @@ Examples:
                 language=args.language,
                 output_format=output_format,
                 keep_timestamps=args.keep_timestamps,
+                show_progress=not args.no_progress,
             )
             print(f"  Done: {result_path}")
         except Exception as e:

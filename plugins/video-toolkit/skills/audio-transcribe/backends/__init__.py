@@ -1,7 +1,7 @@
 """Audio transcription backends — auto-select based on platform."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 
 class TranscriptionBackend(ABC):
@@ -12,7 +12,12 @@ class TranscriptionBackend(ABC):
         """Load the transcription model. Must be called before transcribe()."""
 
     @abstractmethod
-    def transcribe(self, audio_path: str, language: Optional[str] = None) -> Dict:
+    def transcribe(
+        self,
+        audio_path: str,
+        language: Optional[str] = None,
+        on_progress: Optional[Callable[[float, float, float], None]] = None,
+    ) -> Dict:
         """Transcribe audio and return unified result.
 
         Returns:

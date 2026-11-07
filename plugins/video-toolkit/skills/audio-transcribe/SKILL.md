@@ -118,6 +118,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/run.py video.mp4 --format 
 
 批量任务顺序执行，单个文件失败不会中断其余文件；结束时汇总失败项，并以非零退出码退出。
 
+- **进度显示**：转录时默认每 ~2 秒打印一行 `42.1% 12:30 / 29:13`；重定向到日志时同样可见。`--no-progress` 可关闭。
+
 ## 参数
 
 | 参数 | 说明 | 默认值 |
@@ -128,6 +130,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/run.py video.mp4 --format 
 | `--language, -l` | 语言代码（auto/zh/en/ko/ja 等） | auto |
 | `--format, -f` | 输出格式（srt/md/json） | md，或由 `-o` 后缀推断 |
 | `--keep-timestamps, -t` | Markdown 保留时间码 | false |
+| `--no-progress` | 关闭实时转录进度输出 | 进度开启 |
 
 模型名写错时 Mac 后端会直接报错并列出可用模型，不会静默回退到别的模型。
 
