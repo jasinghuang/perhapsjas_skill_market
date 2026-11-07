@@ -359,6 +359,37 @@ def test_chunk_cache_key_does_not_alias_single_chunk_text(tmp_path):
     assert p.calls == calls_after_long + 1
 
 
+def test_tiny_safety_trim_is_not_reported_as_truncated(tmp_path, monkeypatch):
+    p = FakeProvider(1.0)
+    c = cue(1, 0.0, 1.0, 1.0)
+    cache = SegmentCache(root=tmp_path)
+
+    # 10ms overrun: atempo/取整噪声，不应记 TRUNCATED。
+    monkeypatch.setattr(
+        "engine.apply_atempo",
+        lambda pcm, speed, sr: np.full(24240, 0.2, dtype=np.float32),
+    )
+    _, results = run_engine(
+        [c], p, None, "", "chinese", 2.0, EngineOptions(), cache,
+        progress=lambda _line: None,
+    )
+    assert results[0].action is FitAction.FIT
+    assert results[0].warning is None
+    assert results[0].final_duration <= 1.0
+
+    # 100ms overrun: 真实截断。
+    monkeypatch.setattr(
+        "engine.apply_atempo",
+        lambda pcm, speed, sr: np.full(26400, 0.2, dtype=np.float32),
+    )
+    _, results = run_engine(
+        [c], p, None, "", "chinese", 2.0, EngineOptions(), cache,
+        progress=lambda _line: None,
+    )
+    assert results[0].action is FitAction.TRUNCATED
+    assert results[0].warning
+
+
 class StyleProvider:
     def __init__(self):
         self.calls = []

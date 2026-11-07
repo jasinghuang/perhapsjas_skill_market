@@ -48,6 +48,9 @@ if TYPE_CHECKING:
 Progress = Callable[[str], None]
 
 _FADE_SECONDS = 0.050
+# atempo / 采样取整可能让结果比可用窗口多几个样本；50ms 内视为取整，
+# 不记 TRUNCATED，避免把“无损微调”报成截断。
+_SAFETY_TRIM_EPSILON = 0.050
 
 
 @dataclass
@@ -351,9 +354,11 @@ def run_engine(
                 final = _fade_out(final[:limit], sample_rate)
             elif final.size > limit:
                 # 兜底：即使 plan_fit 判为可放，也绝不越进下一条。
+                overrun = final.size - limit
                 final = _fade_out(final[:limit], sample_rate)
-                action = FitAction.TRUNCATED
-                warning = "truncated at next cue start"
+                if overrun > int(_SAFETY_TRIM_EPSILON * sample_rate):
+                    action = FitAction.TRUNCATED
+                    warning = "truncated at next cue start"
 
             final_duration = final.size / sample_rate
             if segments_dir is not None:
