@@ -1,8 +1,0 @@
-.cdp-grid {
-  display: grid;
-  gap: var(--grid-gutter);
-}
-
-.cdp-grid-half {
-  grid-template-columns: 1fr 1fr;
-}

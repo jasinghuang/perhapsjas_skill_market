@@ -1,8 +1,0 @@
-/* 涨跌文本（A股规则：涨橙跌绿）——文本内 [+-]NN(.NN)% 片段着色；无片段原样输出。 */
-.cdp-delta-text-up {
-  color: var(--accent-3);
-}
-
-.cdp-delta-text-down {
-  color: var(--accent-1);
-}
