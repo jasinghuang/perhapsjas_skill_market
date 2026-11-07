@@ -79,7 +79,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--volume", type=int, help="在线音量 0-100（默认由模型决定）"
     )
     parser.add_argument(
-        "--seed", type=int, help="在线随机种子 0-65535（用于复现音色）"
+        "--seed", type=int, help="随机种子 0-65535（本地/在线，提升一致性）"
+    )
+    parser.add_argument(
+        "--temperature", type=float, help="本地采样温度（默认 0.9；越低越稳定）"
+    )
+    parser.add_argument(
+        "--top-p", type=float, help="本地 top-p 采样（0-1，默认 1.0）"
+    )
+    parser.add_argument(
+        "--top-k", type=int, help="本地 top-k 采样（默认 50）"
     )
     parser.add_argument(
         "--enable-ssml",
@@ -195,12 +204,12 @@ def validate_args(args: argparse.Namespace) -> None:
                 "restate the model of the selected voice group"
             )
 
-    style_values = (args.rate, args.pitch, args.volume, args.seed)
-    if args.provider == "local" and any(value is not None for value in style_values):
-        _fail(
-            "--rate/--pitch/--volume/--seed are only supported by the online "
-            "provider"
-        )
+    online_only = (args.rate, args.pitch, args.volume)
+    if args.provider == "local" and any(value is not None for value in online_only):
+        _fail("--rate/--pitch/--volume are only supported by the online provider")
+    sampling = (args.temperature, args.top_p, args.top_k)
+    if args.provider == "online" and any(value is not None for value in sampling):
+        _fail("--temperature/--top-p/--top-k are only supported by the local provider")
     if args.provider == "local" and args.enable_ssml:
         _fail("--enable-ssml is only supported by the online provider")
     if args.rate is not None and not (0.5 <= args.rate <= 2.0):
@@ -211,6 +220,12 @@ def validate_args(args: argparse.Namespace) -> None:
         _fail(f"--volume must be in [0, 100] (got {args.volume})")
     if args.seed is not None and not (0 <= args.seed <= 65535):
         _fail(f"--seed must be in [0, 65535] (got {args.seed})")
+    if args.temperature is not None and not (0.0 <= args.temperature <= 2.0):
+        _fail(f"--temperature must be in [0, 2] (got {args.temperature})")
+    if args.top_p is not None and not (0.0 < args.top_p <= 1.0):
+        _fail(f"--top-p must be in (0, 1] (got {args.top_p})")
+    if args.top_k is not None and args.top_k < 1:
+        _fail(f"--top-k must be >= 1 (got {args.top_k})")
     if (
         args.enable_ssml
         and args.provider == "online"
@@ -574,6 +589,9 @@ def _run(args: argparse.Namespace) -> int:
         seed=args.seed,
         enable_ssml=args.enable_ssml,
         hot_fix=args.hotfix,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        top_k=args.top_k,
     )
     cache = SegmentCache(enabled=not args.no_cache)
 

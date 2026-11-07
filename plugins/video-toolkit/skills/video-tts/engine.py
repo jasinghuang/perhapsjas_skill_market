@@ -71,6 +71,9 @@ class EngineOptions:
     seed: int | None = None
     enable_ssml: bool = False
     hot_fix: dict | None = None
+    temperature: float | None = None
+    top_p: float | None = None
+    top_k: int | None = None
 
 
 @dataclass
@@ -260,7 +263,7 @@ def run_engine(
     provider_name = _provider_name(provider)
     use_cache = not options.no_cache
     style: dict = {}
-    for key in ("rate", "pitch", "volume", "seed"):
+    for key in ("rate", "pitch", "volume", "seed", "temperature", "top_p", "top_k"):
         value = getattr(options, key)
         if value is not None:
             style[key] = value

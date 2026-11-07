@@ -77,10 +77,15 @@ class LocalMLXProvider:
         lang: str = "chinese",
         **style,
     ) -> np.ndarray:
-        """合成一段文本，返回 24 kHz 单声道 float32 PCM。"""
-        if style:
+        """合成一段文本，返回 24 kHz 单声道 float32 PCM。
+
+        本地支持 temperature / top_p / top_k / seed 控制采样稳定性；
+        rate/pitch/volume/enable_ssml 只属于在线 provider。
+        """
+        unsupported = {"rate", "pitch", "volume", "enable_ssml"} & set(style)
+        if unsupported:
             raise ProviderError(
-                "rate/pitch/volume/seed/enable_ssml are only supported by the "
+                f"{', '.join(sorted(unsupported))} are only supported by the "
                 "online provider"
             )
         if self._model is None:
@@ -101,11 +106,24 @@ class LocalMLXProvider:
             voice_id = voice.voice_id
             prompt = instruct or None
 
+        seed = style.get("seed")
+        if seed is not None and mx is not None:
+            mx.random.seed(int(seed))
+
+        generate_kwargs = {"temperature": style.get("temperature"),
+                           "top_p": style.get("top_p"),
+                           "top_k": style.get("top_k")}
+        generate_kwargs = {
+            key: value
+            for key, value in generate_kwargs.items()
+            if value is not None
+        }
         results = self._model.generate(
             text=text,
             voice=voice_id,
             instruct=prompt,
             lang_code=lang,
+            **generate_kwargs,
         )
         try:
             result = next(iter(results))

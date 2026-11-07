@@ -270,6 +270,7 @@ class TTSProvider:
 
 - 复用 `audio-transcribe/run.py` 的解释器选择策略：上次成功解释器 → 当前 → PATH python3 → Homebrew 版本化 Python → pyenv → `/usr/bin/python3`，逐个验证 `import mlx_audio`；全都没有才安装（跳过 `/usr/bin/python3`）。
 - 模型只加载一次，循环内调用 `model.generate(...)`。
+- 采样稳定性：`--seed` 调 `mx.random.seed()`；`--temperature/--top-p/--top-k` 透传给 `model.generate`。默认 `temperature=0.9` 波动较大，长片建议 0.6–0.7 + 固定 seed。
 - 进度：`[12/87] 00:01:23.400  合成 4.2s  窗口 3.8s  atempo 1.11x ✓`。
 
 ### 8.3 在线 provider
@@ -406,7 +407,10 @@ ffprobe -v error -show_entries \
 | `--rate` | 在线语速 0.5-2.0 | 模型默认 |
 | `--pitch` | 在线音调 0.5-2.0 | 模型默认 |
 | `--volume` | 在线音量 0-100 | 模型默认 |
-| `--seed` | 在线随机种子 0-65535 | 模型默认 |
+| `--seed` | 随机种子 0-65535（本地/在线） | 模型默认 |
+| `--temperature` | 本地采样温度（默认 0.9；越低越稳定） | 模型默认 |
+| `--top-p` | 本地 top-p 采样 | 模型默认 |
+| `--top-k` | 本地 top-k 采样 | 模型默认 |
 | `--enable-ssml` | 在线 SSML（仅 3.1 Plus 旗舰） | false |
 | `--hotfix-file` | hot_fix JSON（仅 3.1 Plus，强制 HTTP 兜底，需 key + endpoint） | 无 |
 | `--design` | 本地 VoiceDesign 音色描述；与 `--voice` / `--instruct` 互斥，自动加载 VoiceDesign 模型 | 无 |

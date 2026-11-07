@@ -192,3 +192,25 @@ def test_describe_reports_provider_model_and_design():
         "model": MODEL_ID,
         "design": "温柔女声",
     }
+
+
+def test_sampling_params_and_seed_are_forwarded():
+    voice = find_voice("local", "Serena")
+    calls = []
+    fake = _fake_model()
+    fake.generate = lambda **kw: (
+        calls.append(kw),
+        iter([SimpleNamespace(audio=np.zeros(10), sample_rate=24000)]),
+    )[1]
+    p = LocalMLXProvider()
+    with patch("providers.local_mlx.load_model", return_value=fake), \
+         patch("providers.local_mlx.mx") as mx:
+        mx.array.side_effect = lambda x: np.asarray(x)
+        p.prepare()
+        p.synthesize(
+            "你好", voice, temperature=0.6, top_p=0.9, top_k=40, seed=42
+        )
+    assert calls[0]["temperature"] == 0.6
+    assert calls[0]["top_p"] == 0.9
+    assert calls[0]["top_k"] == 40
+    mx.random.seed.assert_called_once_with(42)

@@ -502,7 +502,10 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | `--rate` | 在线语速 0.5-2.0 | 模型默认 |
 | `--pitch` | 在线音调 0.5-2.0 | 模型默认 |
 | `--volume` | 在线音量 0-100 | 模型默认 |
-| `--seed` | 在线随机种子 0-65535 | 模型默认 |
+| `--seed` | 随机种子 0-65535（本地/在线；提升跨段一致性） | 模型默认 |
+| `--temperature` | 本地采样温度（默认 0.9；越低越稳定） | 模型默认 |
+| `--top-p` | 本地 top-p 采样（0-1） | 模型默认 |
+| `--top-k` | 本地 top-k 采样 | 模型默认 |
 | `--enable-ssml` | 在线 SSML 模式（仅 3.1 Plus 旗舰音色） | false |
 | `--hotfix-file` | hot_fix JSON（仅在线 3.1 Plus；强制 HTTP 兜底，需 `DASHSCOPE_API_KEY` + `--tts-endpoint`） | 无 |
 | `--design` | 本地 VoiceDesign 音色描述；与 `--voice` / `--instruct` 互斥，自动加载 VoiceDesign 模型 | 无 |
@@ -539,6 +542,20 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 
   `pronunciation` 用拼音纠正发音，`replace` 在合成前替换文本；两者都可省略。
 - 在线风格参数会进入缓存键：改 `--rate/--pitch/--volume/--seed/--enable-ssml` 会触发重新合成。
+
+## 音色 / 情绪一致性（本地）
+
+本地 Qwen3-TTS 的 `generation_config` 默认 `temperature=0.9, top_p=1.0, top_k=50`，每条独立采样；长片逐组生成时，情绪、节奏、音色会有可见波动。优先用这几个参数压稳定：
+
+```bash
+--temperature 0.6 --top-p 0.9 --top-k 40 --seed 42
+```
+
+- `--temperature` 从 0.9 降到 0.6–0.7 最有效；过低会变平、失去自然起伏。
+- `--seed` 固定采样起点，便于复现；配合较低 temperature 效果更好。
+- `--instruct` 保持全片同一句，不要逐条换风格；语气指令越强，跨文本波动通常越明显。
+- 9 组真实截断和部分组的 atempo 加速也会造成“节奏/音色突变”；优先精简这些组的文本，其次才提高 `--max-speed`。
+- 如果仍不满意，再考虑用 `Qwen3-TTS-12Hz-1.7B-Base` 做单说话人微调：官方 [finetuning](https://github.com/QwenLM/Qwen3-TTS/tree/main/finetuning) 目前只支持 Base 模型、单说话人、CUDA + `qwen-tts`，需要 `audio/text/ref_audio` JSONL；同一 `ref_audio` 贯穿数据集能提升说话人一致性。这不是 Mac/MLX 上的快速修复，只有想要专属固定音色时才值得做。
 
 ## 错误处理
 

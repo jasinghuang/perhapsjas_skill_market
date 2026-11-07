@@ -486,6 +486,28 @@ def test_hotfix_requires_flagship_http_env_and_endpoint(tmp_path, capsys, monkey
     assert args.hotfix == {"replace": [{"今天": "金天"}]}
 
 
+def test_local_sampling_params_validate(tmp_path):
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "local",
+        "--voice", "Serena", "--temperature", "0.6", "--top-p", "0.9",
+        "--top-k", "40", "--seed", "42",
+    ])
+    validate_args(args)
+    assert (args.temperature, args.top_p, args.top_k, args.seed) == (
+        0.6, 0.9, 40, 42
+    )
+
+
+def test_online_rejects_local_sampling(tmp_path, capsys):
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "online",
+        "--voice", "Cherry", "--yes", "--temperature", "0.6",
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "temperature" in capsys.readouterr().err
+
+
 def test_hotfix_rejects_local_and_qwen_tts(tmp_path, capsys):
     hotfix = tmp_path / "hotfix.json"
     hotfix.write_text('{"replace": [{"a": "b"}]}', encoding="utf-8")
