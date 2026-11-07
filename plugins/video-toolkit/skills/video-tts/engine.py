@@ -74,6 +74,8 @@ class EngineOptions:
     temperature: float | None = None
     top_p: float | None = None
     top_k: int | None = None
+    ref_audio: str | None = None
+    ref_text: str | None = None
 
 
 @dataclass
@@ -263,7 +265,10 @@ def run_engine(
     provider_name = _provider_name(provider)
     use_cache = not options.no_cache
     style: dict = {}
-    for key in ("rate", "pitch", "volume", "seed", "temperature", "top_p", "top_k"):
+    for key in (
+        "rate", "pitch", "volume", "seed", "temperature", "top_p", "top_k",
+        "ref_audio", "ref_text",
+    ):
         value = getattr(options, key)
         if value is not None:
             style[key] = value

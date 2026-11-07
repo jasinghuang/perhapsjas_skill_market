@@ -82,7 +82,7 @@ class LocalMLXProvider:
         本地支持 temperature / top_p / top_k / seed 控制采样稳定性；
         rate/pitch/volume/enable_ssml 只属于在线 provider。
         """
-        unsupported = {"rate", "pitch", "volume", "enable_ssml"} & set(style)
+        unsupported = {"rate", "pitch", "volume", "enable_ssml", "hot_fix"} & set(style)
         if unsupported:
             raise ProviderError(
                 f"{', '.join(sorted(unsupported))} are only supported by the "
@@ -91,7 +91,18 @@ class LocalMLXProvider:
         if self._model is None:
             raise ProviderError("prepare() must be called before synthesize()")
 
-        if self.design is not None:
+        ref_audio = style.get("ref_audio")
+        ref_text = style.get("ref_text")
+        if ref_audio:
+            if not ref_text:
+                raise ProviderError(
+                    "Base voice cloning requires both --ref-audio and --ref-text"
+                )
+            if self.design is not None:
+                raise ProviderError("ref_audio cannot be combined with --design")
+            voice_id = None
+            prompt = None
+        elif self.design is not None:
             if not self.design.strip():
                 raise ProviderError(
                     "design mode requires a non-empty design description"
@@ -118,6 +129,9 @@ class LocalMLXProvider:
             for key, value in generate_kwargs.items()
             if value is not None
         }
+        if ref_audio:
+            generate_kwargs["ref_audio"] = ref_audio
+            generate_kwargs["ref_text"] = ref_text
         results = self._model.generate(
             text=text,
             voice=voice_id,

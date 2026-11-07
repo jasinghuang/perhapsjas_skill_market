@@ -37,10 +37,11 @@ from engine import EngineOptions, SegmentResult, run_engine
 from mux import mux_video, probe_video, verify_output
 from providers import (
     FLAGSHIP_MODEL,
-    FLAGSHIP_MODEL,
+    LOCAL_BASE_MODEL,
     LOCAL_DESIGN_MODEL,
     find_voice,
     get_provider,
+    is_base_model,
     is_voice_design_model,
 )
 from providers.base import Voice
@@ -101,6 +102,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--design", help="本地 VoiceDesign 音色描述；与 --voice 互斥"
+    )
+    parser.add_argument(
+        "--ref-audio", help="本地 Base 克隆参考音频（与 --ref-text 成对）"
+    )
+    parser.add_argument(
+        "--ref-text", help="参考音频对应的文本（与 --ref-audio 成对）"
     )
     parser.add_argument("--lang", default="chinese", help="语言代码（默认 chinese）")
     parser.add_argument("--model", help="覆盖 provider 的模型 id")
@@ -172,28 +179,48 @@ def validate_args(args: argparse.Namespace) -> None:
 
     voice: Voice | None = None
     if args.provider == "local":
-        if bool(args.voice) == bool(args.design):
-            _fail("local provider requires exactly one of --voice or --design")
-        if args.design and args.instruct:
-            _fail(
-                "--design cannot be combined with --instruct; "
-                "the design description already controls the voice"
-            )
-        if args.voice:
-            voice = _require_voice("local", args.voice)
-            if args.model and is_voice_design_model(args.model):
+        if bool(args.ref_audio) != bool(args.ref_text):
+            _fail("--ref-audio and --ref-text must be provided together")
+        if args.ref_audio:
+            if args.voice or args.design:
+                _fail("--ref-audio cannot be combined with --voice or --design")
+            if args.instruct:
+                _fail("--ref-audio cannot be combined with --instruct")
+            if not Path(args.ref_audio).is_file():
+                _fail(f"--ref-audio not found: {args.ref_audio}")
+            if args.model and not is_base_model(args.model):
                 _fail(
-                    f"--voice {args.voice!r} cannot be used with VoiceDesign "
-                    f"model {args.model!r}; use --design or a CustomVoice model"
+                    f"--ref-audio requires a Base model (got {args.model!r}); "
+                    f"omit --model to use {LOCAL_BASE_MODEL}"
                 )
-        if args.design and args.model and not is_voice_design_model(args.model):
-            _fail(
-                f"--design requires a VoiceDesign model (got {args.model!r}); "
-                f"omit --model to use {LOCAL_DESIGN_MODEL}"
-            )
+        else:
+            if bool(args.voice) == bool(args.design):
+                _fail(
+                    "local provider requires exactly one of --voice, --design, "
+                    "or --ref-audio/--ref-text"
+                )
+            if args.design and args.instruct:
+                _fail(
+                    "--design cannot be combined with --instruct; "
+                    "the design description already controls the voice"
+                )
+            if args.voice:
+                voice = _require_voice("local", args.voice)
+                if args.model and is_voice_design_model(args.model):
+                    _fail(
+                        f"--voice {args.voice!r} cannot be used with VoiceDesign "
+                        f"model {args.model!r}; use --design or a CustomVoice model"
+                    )
+            if args.design and args.model and not is_voice_design_model(args.model):
+                _fail(
+                    f"--design requires a VoiceDesign model (got {args.model!r}); "
+                    f"omit --model to use {LOCAL_DESIGN_MODEL}"
+                )
     else:
         if args.design:
             _fail("--design is only supported by the local provider")
+        if args.ref_audio or args.ref_text:
+            _fail("--ref-audio/--ref-text are only supported by the local provider")
         if not args.voice:
             _fail("online provider requires --voice")
         voice = _require_voice("online", args.voice)
@@ -454,7 +481,9 @@ def _build_provider(args: argparse.Namespace, design: str | None):
     """按 provider 组装 kwargs 并实例化（实现模块懒导入）。"""
     kwargs: dict = {}
     if args.provider == "local":
-        if design:
+        if args.ref_audio:
+            kwargs["model_id"] = args.model or LOCAL_BASE_MODEL
+        elif design:
             kwargs["design"] = design
             # VoiceDesign 模式必须加载 VoiceDesign 模型；未显式覆盖时用默认。
             kwargs["model_id"] = args.model or LOCAL_DESIGN_MODEL
@@ -543,6 +572,16 @@ def _run(args: argparse.Namespace) -> int:
     voice = find_voice(args.provider, args.voice) if args.voice else None
     if voice is not None and args.model:
         voice = replace(voice, model=args.model)
+    if args.provider == "local" and args.ref_audio:
+        # Base 克隆没有预设音色；伪 Voice 只用于缓存 key / 报告。
+        voice = Voice(
+            "Reference",
+            f"ref:{Path(args.ref_audio).resolve()}",
+            "",
+            "",
+            args.model or LOCAL_BASE_MODEL,
+            "local",
+        )
     design = args.design if args.provider == "local" else None
 
     if args.dry_run:
@@ -592,6 +631,8 @@ def _run(args: argparse.Namespace) -> int:
         temperature=args.temperature,
         top_p=args.top_p,
         top_k=args.top_k,
+        ref_audio=args.ref_audio,
+        ref_text=args.ref_text,
     )
     cache = SegmentCache(enabled=not args.no_cache)
 

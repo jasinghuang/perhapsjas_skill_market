@@ -272,6 +272,7 @@ class TTSProvider:
 - 复用 `audio-transcribe/run.py` 的解释器选择策略：上次成功解释器 → 当前 → PATH python3 → Homebrew 版本化 Python → pyenv → `/usr/bin/python3`，逐个验证 `import mlx_audio`；全都没有才安装（跳过 `/usr/bin/python3`）。
 - 模型只加载一次，循环内调用 `model.generate(...)`。
 - 采样稳定性：`--seed` 调 `mx.random.seed()`；`--temperature/--top-p/--top-k` 透传给 `model.generate`。默认 `temperature=0.9` 波动较大，长片建议 0.6–0.7 + 固定 seed。
+- Base 克隆：`--ref-audio/--ref-text` 时自动加载 `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16`（或显式 Base 模型），调用 `generate(ref_audio=..., ref_text=...)`；参考音频 3–10s 单说话人，文本需逐字一致。Base 推理可在 MLX 本地跑，不需要 CUDA。
 - 进度：`[12/87] 00:01:23.400  合成 4.2s  窗口 3.8s  atempo 1.11x ✓`。
 
 ### 8.3 在线 provider
@@ -415,6 +416,8 @@ ffprobe -v error -show_entries \
 | `--enable-ssml` | 在线 SSML（仅 3.1 Plus 旗舰） | false |
 | `--hotfix-file` | hot_fix JSON（仅 3.1 Plus，强制 HTTP 兜底，需 key + endpoint） | 无 |
 | `--design` | 本地 VoiceDesign 音色描述；与 `--voice` / `--instruct` 互斥，自动加载 VoiceDesign 模型 | 无 |
+| `--ref-audio` | 本地 Base 克隆参考音频（3–10s，需 `--ref-text`；与 `--voice`/`--design`/`--instruct` 互斥） | 无 |
+| `--ref-text` | 参考音频对应文本 | 无 |
 | `--lang` | 语言代码；在线映射为 `zh` / `en` / `ja` / `ko` / `de` / `fr` / `ru` / `pt` / `es` / `it` | `chinese` |
 | `--model` | 覆盖 provider 的模型 id；在线必须与音色同组， VoiceDesign 模型只能配 `--design` | 各 provider 默认 |
 | `--tts-endpoint` | 兜底 HTTP endpoint 覆盖（仅在 `bl` 不可用时） | 官方示例域名 |

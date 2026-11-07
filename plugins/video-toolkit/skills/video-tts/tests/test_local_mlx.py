@@ -194,6 +194,27 @@ def test_describe_reports_provider_model_and_design():
     }
 
 
+def test_base_clone_forwards_ref_audio_and_ref_text():
+    calls = []
+    fake = _fake_model()
+    fake.generate = lambda **kw: (
+        calls.append(kw),
+        iter([SimpleNamespace(audio=np.zeros(10), sample_rate=24000)]),
+    )[1]
+    p = LocalMLXProvider()
+    with patch("providers.local_mlx.load_model", return_value=fake), \
+         patch("providers.local_mlx.mx") as mx:
+        mx.array.side_effect = lambda x: np.asarray(x)
+        p.prepare()
+        p.synthesize(
+            "你好", None, ref_audio="ref.wav", ref_text="参考文本"
+        )
+    assert calls[0]["voice"] is None
+    assert calls[0]["instruct"] is None
+    assert calls[0]["ref_audio"] == "ref.wav"
+    assert calls[0]["ref_text"] == "参考文本"
+
+
 def test_sampling_params_and_seed_are_forwarded():
     voice = find_voice("local", "Serena")
     calls = []

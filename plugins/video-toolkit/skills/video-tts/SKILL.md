@@ -517,6 +517,8 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 | `--enable-ssml` | 在线 SSML 模式（仅 3.1 Plus 旗舰音色） | false |
 | `--hotfix-file` | hot_fix JSON（仅在线 3.1 Plus；强制 HTTP 兜底，需 `DASHSCOPE_API_KEY` + `--tts-endpoint`） | 无 |
 | `--design` | 本地 VoiceDesign 音色描述；与 `--voice` / `--instruct` 互斥，自动加载 VoiceDesign 模型 | 无 |
+| `--ref-audio` | 本地 Base 克隆参考音频（3–10s，需 `--ref-text`；与 `--voice`/`--design`/`--instruct` 互斥） | 无 |
+| `--ref-text` | 参考音频对应的准确文本 | 无 |
 | `--lang` | 语言代码（在线映射 `chinese` 等 → `zh` / `en` / …） | `chinese` |
 | `--model` | 覆盖 provider 模型 id；在线必须与音色同组，本地 VoiceDesign 只能配 `--design` | 各 provider 默认 |
 | `--tts-endpoint` | DashScope HTTP 兜底 endpoint（仅 `bl` 不可用时） | 无 |
@@ -564,6 +566,21 @@ stdout 报告逐条打印 `序号 / 开始 / 窗口 / 合成时长 / 最终时�
 - `--instruct` 保持全片同一句，不要逐条换风格；语气指令越强，跨文本波动通常越明显。
 - 9 组真实截断和部分组的 atempo 加速也会造成“节奏/音色突变”；优先精简这些组的文本，其次才提高 `--max-speed`。
 - 如果仍不满意，再考虑用 `Qwen3-TTS-12Hz-1.7B-Base` 做单说话人微调：官方 [finetuning](https://github.com/QwenLM/Qwen3-TTS/tree/main/finetuning) 目前只支持 Base 模型、单说话人、CUDA + `qwen-tts`，需要 `audio/text/ref_audio` JSONL；同一 `ref_audio` 贯穿数据集能提升说话人一致性。这不是 Mac/MLX 上的快速修复，只有想要专属固定音色时才值得做。
+
+## Base 克隆（本地，音色最稳）
+
+如果预设音色仍不够统一，用 Base 模型做一次参考克隆，之后每组都从同一参考条件生成：
+
+```bash
+python3 <skill>/run.py --srt video.srt --provider local \
+  --ref-audio ref.wav --ref-text "参考音频的准确文本" \
+  --temperature 0.6 --top-p 0.9 --top-k 40 --seed 42 --track-only
+```
+
+- 不传 `--model` 时自动用 `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16`；显式 `--model` 必须是 Base 族。
+- 与 `--voice` / `--design` / `--instruct` 互斥；参考音频必须是单说话人、干净、3–10 秒，`--ref-text` 要和音频逐字一致。
+- Base **推理**在 Apple Silicon/MLX 上可用，不需要 CUDA；官方 finetuning 才需要 CUDA。
+- 克隆只锁音色，不消除韵律采样波动；仍建议配合固定 `--seed` 和较低 `--temperature`。
 
 ## 错误处理
 

@@ -19,6 +19,7 @@ from .base import TTSProvider, Voice
 
 LOCAL_MODEL = "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16"
 LOCAL_DESIGN_MODEL = "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
+LOCAL_BASE_MODEL = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16"
 FLAGSHIP_MODEL = "qwen-audio-3.1-tts-plus"
 QWEN_TTS_MODEL = "qwen3-tts-flash"
 
@@ -30,6 +31,11 @@ VOICE_DESIGN_MARKER = "voicedesign"
 def is_voice_design_model(model_id: str | None) -> bool:
     """返回模型 id 是否属于 VoiceDesign 族。"""
     return bool(model_id) and VOICE_DESIGN_MARKER in model_id.lower()
+
+
+def is_base_model(model_id: str | None) -> bool:
+    """返回模型 id 是否属于 Base(声音克隆/微调)族。"""
+    return bool(model_id) and "base" in model_id.lower()
 
 LOCAL_VOICES: tuple[Voice, ...] = (
     Voice("Uncle_Fu", "Uncle_Fu", "男", "低沉醇厚的成熟男声", LOCAL_MODEL, "local"),

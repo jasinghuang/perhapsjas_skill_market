@@ -56,7 +56,7 @@ def test_local_design_and_voice_are_mutually_exclusive(tmp_path, capsys):
                                       "--voice", "Serena", "--design", "温柔"])
     with pytest.raises(SystemExit):
         validate_args(args)
-    assert "exactly one of --voice or --design" in capsys.readouterr().err
+    assert "exactly one of --voice, --design" in capsys.readouterr().err
 
 
 def test_defaults():
@@ -125,7 +125,7 @@ def test_local_requires_voice_or_design(tmp_path, capsys):
                                       "--provider", "local"])
     with pytest.raises(SystemExit):
         validate_args(args)
-    assert "exactly one of --voice or --design" in capsys.readouterr().err
+    assert "exactly one of --voice, --design" in capsys.readouterr().err
 
 
 def test_online_rejects_design(tmp_path, capsys):
@@ -484,6 +484,54 @@ def test_hotfix_requires_flagship_http_env_and_endpoint(tmp_path, capsys, monkey
     args.tts_endpoint = "https://example.test/tts"
     validate_args(args)
     assert args.hotfix == {"replace": [{"今天": "金天"}]}
+
+
+def test_ref_audio_pair_and_base_model_validation(tmp_path, capsys):
+    ref = tmp_path / "ref.wav"
+    ref.write_bytes(b"RIFF")
+    base = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16"
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "local",
+        "--ref-audio", str(ref), "--ref-text", "参考文本", "--model", base,
+    ])
+    validate_args(args)
+
+    missing = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "local",
+        "--ref-audio", str(ref),
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(missing)
+    assert "together" in capsys.readouterr().err
+
+    with_voice = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "local",
+        "--ref-audio", str(ref), "--ref-text", "参考文本", "--voice", "Serena",
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(with_voice)
+    assert "cannot be combined" in capsys.readouterr().err
+
+    wrong_model = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "local",
+        "--ref-audio", str(ref), "--ref-text", "参考文本", "--model", LOCAL_MODEL,
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(wrong_model)
+    assert "Base model" in capsys.readouterr().err
+
+
+def test_online_rejects_ref_audio(tmp_path, capsys):
+    ref = tmp_path / "ref.wav"
+    ref.write_bytes(b"RIFF")
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "online",
+        "--voice", "Cherry", "--yes",
+        "--ref-audio", str(ref), "--ref-text", "参考文本",
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "local provider" in capsys.readouterr().err
 
 
 def test_local_sampling_params_validate(tmp_path):
