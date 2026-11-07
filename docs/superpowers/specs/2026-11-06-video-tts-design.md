@@ -440,6 +440,8 @@ ffprobe -v error -show_entries \
 
 `AskUserQuestion` 的真实 schema：每题最多 4 个选项、每次最多 4 个问题；每个选项是 `{label, description}`；`header` ≤ 12 字符；`multiSelect` 必填。选项超过 4 个就拆成多次调用。
 
+有视频/音频时，第一个决策「音色来源：原声克隆 / 系统音色」同样必须用 `AskUserQuestion`（header：音色来源）；没有媒体可截参考时跳过该问题，已给 `--ref-audio` 或 `--voice`/`--design` 时也跳过。
+
 ### 11.1 决策点清单
 
 | 时机 | 问题（header） | 选项 | 何时跳过 |

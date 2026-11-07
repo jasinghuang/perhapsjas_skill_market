@@ -129,6 +129,26 @@ python3 <skill>/run.py --srt video.srt --provider local --voice Serena \
 
 ## 音色菜单
 
+### 选音色来源（header：音色来源）
+
+**仅当用户给了视频/音频时问**；没有媒体可截参考时跳过，直接走系统音色。用户已给 `--ref-audio` 或已选 `--voice`/`--design` 时也跳过。
+
+```text
+AskUserQuestion({
+  questions: [{
+    question: "用原声克隆还是系统音色？",
+    header: "音色来源",
+    multiSelect: false,
+    options: [
+      {"label": "原声克隆（推荐）", "description": "从视频/音频截 3–10s 参考，克隆原说话人音色；只能本地 Base 模型"},
+      {"label": "系统音色", "description": "本地 9 个预设或在线 16 个音色，可选语气/风格"}
+    ]
+  }]
+})
+```
+
+选「原声克隆」→ 进入 Base 克隆分支，不再问 provider / 音色 / 语气；选「系统音色」→ 继续下面的 provider 菜单。
+
 ### 选 provider（header：配音方案）
 
 ```text
