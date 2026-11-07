@@ -214,6 +214,11 @@ def validate_args(args: argparse.Namespace) -> None:
                         f"--voice {args.voice!r} cannot be used with VoiceDesign "
                         f"model {args.model!r}; use --design or a CustomVoice model"
                     )
+                if args.model and is_base_model(args.model):
+                    _fail(
+                        f"--voice {args.voice!r} cannot be used with Base model "
+                        f"{args.model!r}; Base is only for --ref-audio clone"
+                    )
             if args.design and args.model and not is_voice_design_model(args.model):
                 _fail(
                     f"--design requires a VoiceDesign model (got {args.model!r}); "

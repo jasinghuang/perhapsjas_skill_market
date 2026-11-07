@@ -531,6 +531,17 @@ def test_ref_audio_pair_and_base_model_validation(tmp_path, capsys):
     assert "Base model" in capsys.readouterr().err
 
 
+def test_voice_rejects_base_model(tmp_path, capsys):
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "local",
+        "--voice", "Serena",
+        "--model", "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "Base model" in capsys.readouterr().err
+
+
 def test_online_rejects_ref_audio(tmp_path, capsys):
     ref = tmp_path / "ref.wav"
     ref.write_bytes(b"RIFF")
