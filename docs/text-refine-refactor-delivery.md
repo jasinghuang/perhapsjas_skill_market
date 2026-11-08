@@ -36,16 +36,32 @@
 - 分块落盘、恢复与最终发布的全流程
 - `${CLAUDE_PLUGIN_ROOT}` 反斜杠形式调用（SKILL.md 已写明两种写法）
 
-## B 类抽样行为评测（本次实际执行的 4 例）
+## B 类抽样行为评测（本次实际执行的 5 例）
 
 | 用例 | 执行方式 | 结果 |
 | --- | --- |---|
-| B02 校对英文字幕只纠错 | demo 场景 1 真跑管线：输出保持英文、拼写修正、命名关系保留、时间轴逐行一致 | 通过 |
+| B01 「refine 一下」意图不明 | **真实宿主执行**：AskUserQuestion 三选一（新 SKILL.md 原题原选项），答复前未改正文；用户选「原语言校对」后走完整管线 | 通过 |
+| B02 校对英文字幕只纠错 | B01 演示真实跑管线 + demo 场景 1：输出保持英文、拼写修正、命名关系保留、时间轴逐行一致 | 通过 |
 | B04 中文字幕翻成英文 | demo 场景 2 真跑管线：数字/否定/专名保真、时间轴不变 | 通过 |
 | B19 美化 TXT 不加 Markdown | demo 场景 3 真跑管线：无 `#`/`**`/`>` 标记、事实保留 | 通过 |
 | B25 只校对不自动配音 | SKILL.md 工作流与上下游节均无任何 TTS 调用路径；管线代码无 TTS 依赖 | 通过（文档级验证） |
 
-其余 B 用例（B01 交互路由、B03 目标语言询问、B05–B26）需在真实宿主会话中按 `tests/eval-cases.md` 执行，本次未逐一跑——不将其标为已通过。
+其余 B 用例（B03 目标语言询问、B05–B26）需在真实宿主会话中按 `tests/eval-cases.md` 执行，本次未逐一跑——不将其标为已通过。
+
+## 全分支评审与修复轮（交付后追加）
+
+独立评审（opus，含 5 组对抗探针实测）：**0 Critical / 5 Important / 7 Minor**，核心承诺（时间轴逐字节保真、位置 ID、原子与恢复、不覆盖发布、清理零残留）全部实测成立。随后完成唯一修复轮（每项先写失败测试再修）：
+
+| 评审发现 | 修复 | 回归测试 |
+| --- | --- | --- |
+| 未捕获异常使崩溃返回 exit 1（与「成功带警告」语义冲突）：text 任务未知 ID KeyError、GBK 输入 UnicodeDecodeError、txt+resegment AttributeError | `main()` 增加兜底（任何未预期异常 → exit 3 + JSON）；`submit_chunk_text` 未知 ID 对齐 `.get` 防护；inspect/init 捕获 `UnicodeDecodeError` 明确报「非 UTF-8」；txt/md + resegment 在 init 即拒（exit 2） | test_cli_text_unknown_id_no_crash / gbk_input_exit3 / txt_resegment_rejected / main_catchall_returns_3 |
+| `--chunk-entries 0` 无限循环挂死 | CLI 校验 `< 1 → exit 2`；`plan_chunks` 入口 `ValueError` 双保险；测试端 `run_cli` 加超时把挂死变失败 | test_cli_chunk_entries_zero_exit2 / test_plan_chunks_rejects_nonpositive |
+| 已 validated 块无重做入口（A12 后半句「可重新处理受影响块」） | 新增 `submit --force`：覆盖该块结果文件并重算 sha 与校验 | test_cli_submit_force_redoes_chunk（篡改→检出→force 重做→validate/publish 通过） |
+| 组合意图（翻译并精简）无法记入任务配置（spec §3.2） | 新增 `init --allow-simplify`（仅 translate），授权落 `task_config.extra`，config_hash 覆盖；SKILL.md/file-interface.md 同步 | test_cli_translate_allow_simplify |
+| B01 未按计划以真实宿主执行 | 本轮补真实执行（见上表 B01 行） | 上表 B01 行 |
+| （Minor 重定级 Important）相对路径入 state，跨 cwd 恢复可能写错位置 | init 时 input/output/working_dir 三个路径统一 `resolve()` | test_cli_init_paths_absolute |
+
+修复轮后全套件 **92 passed**、演示 4/4。其余 7 项 Minor 与搁置裁定记录在执行台账（`.superpowers/sdd/2026-11-08-text-refine-refactor/progress.md`）。
 
 ## 剩余限制
 

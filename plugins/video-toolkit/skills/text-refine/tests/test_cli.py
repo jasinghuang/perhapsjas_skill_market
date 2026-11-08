@@ -223,3 +223,120 @@ def test_cli_unknown_format_exit2(tmp_path: Path):
     src = tmp_path / "a.docx"
     src.write_text("x", encoding="utf-8")
     assert run_cli("inspect", str(src))[0] == 2
+
+
+# =====================================================================
+# 评审修复轮：退出码契约 / 参数校验 / 块重做 / 组合意图 / 路径绝对化
+# =====================================================================
+
+def test_cli_text_unknown_id_no_crash(tmp_path: Path):
+    """text 任务 submit 带未知 ID：exit 3 + JSON（不得崩溃 exit 1 无输出）。"""
+    src = tmp_path / "n.md"
+    src.write_text("# T\n\n一段文字。\n", encoding="utf-8")
+    r, out, _ = run_cli("init", str(src), "--task", "simplify")
+    assert r == 0
+    wd = Path(json.loads(out)["working_dir"])
+    r, out, _ = run_cli("chunk", wd, "chunk-0001")
+    ids = [i["source_id"] for i in json.loads(out)["items"]]
+    payload = {
+        "chunk_id": "chunk-0001",
+        "items": [{"source_id": i, "text": "改写"} for i in ids]
+        + [{"source_id": "entry-000099", "text": "幽灵"}],
+    }
+    rp = tmp_path / "m.json"
+    rp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    r, out, err = run_cli("submit", wd, "chunk-0001", str(rp))
+    assert r == 3
+    assert json.loads(out)["ok"] is False and "entry-000099" in out
+
+
+def test_cli_gbk_input_exit3(tmp_path: Path):
+    """非 UTF-8 输入：明确 exit 3 + 提示编码，不得 traceback。"""
+    src = tmp_path / "gbk.srt"
+    src.write_bytes("1\n00:00:01,000 --> 00:00:02,000\n中文GBK编码\n".encode("gbk"))
+    r, out, err = run_cli("inspect", str(src))
+    assert r == 3 and json.loads(out)["ok"] is False and "UTF-8" in out + err
+    r, out, err = run_cli("init", str(src), "--task", "proofread")
+    assert r == 3 and "UTF-8" in out + err
+
+
+def test_cli_txt_resegment_rejected(tmp_path: Path):
+    """文本任务不支持重新分段：init 直接 exit 2，不得等到 submit 才崩。"""
+    src = tmp_path / "a.txt"
+    src.write_text("一些文字\n", encoding="utf-8")
+    r, out, err = run_cli(
+        "init", str(src), "--task", "simplify",
+        "--timing", "resegment", "--timing-reason", "srt-estimate",
+    )
+    assert r == 2 and json.loads(out)["ok"] is False
+
+
+def test_cli_chunk_entries_zero_exit2(tmp_path: Path):
+    """--chunk-entries 0：立即 exit 2，不得无限循环挂死。"""
+    src = tmp_path / "a.srt"
+    src.write_text(make_srt(2), encoding="utf-8")
+    r, out, err = run_cli("init", str(src), "--task", "proofread", "--chunk-entries", "0")
+    assert r == 2 and json.loads(out)["ok"] is False
+
+
+def test_main_catchall_returns_3(tmp_path: Path, monkeypatch):
+    """main() 兜底：任何未预期异常 → exit 3 + JSON，不得以 exit 1 裸崩。"""
+    import skill_main
+
+    def boom(path):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(skill_main, "read_text", boom)
+    (tmp_path / "a.srt").write_text(make_srt(1), encoding="utf-8")
+    assert skill_main.main(["inspect", str(tmp_path / "a.srt")]) == 3
+
+
+def test_cli_submit_force_redoes_chunk(tmp_path: Path):
+    """篡改检出后 submit --force 重做该块，validate 恢复通过（A12 后半句）。"""
+    src = tmp_path / "a.srt"
+    src.write_text(make_srt(2), encoding="utf-8")
+    r, out, _ = run_cli("init", str(src), "--task", "proofread")
+    wd = Path(json.loads(out)["working_dir"])
+    r, out, _ = run_cli("chunk", wd, "chunk-0001")
+    items = json.loads(out)["items"]
+    rp = tmp_path / "good.json"
+    rp.write_text(json.dumps({"chunk_id": "chunk-0001",
+        "items": [{"source_id": i["source_id"], "text": i["text"]} for i in items]}, ensure_ascii=False), encoding="utf-8")
+    assert run_cli("submit", wd, "chunk-0001", str(rp))[0] == 0
+
+    stored = wd / "chunks" / "chunk-0001.result.json"
+    stored.write_text(stored.read_text(encoding="utf-8").replace("line 1", "篡改"), encoding="utf-8")
+    assert run_cli("validate", wd)[0] == 3
+
+    # 不带 --force 拒绝重做；带 --force 允许
+    assert run_cli("submit", wd, "chunk-0001", str(rp))[0] == 3
+    assert run_cli("submit", wd, "chunk-0001", str(rp), "--force")[0] == 0
+    assert run_cli("validate", wd)[0] == 0
+    assert run_cli("publish", wd)[0] == 0
+
+
+def test_cli_translate_allow_simplify(tmp_path: Path):
+    """组合意图（翻译并精简）记入任务配置：--allow-simplify 仅限 translate。"""
+    src = tmp_path / "zh.srt"
+    src.write_text(make_srt(2, text_fmt="第{i}句"), encoding="utf-8")
+    r, out, _ = run_cli("init", str(src), "--task", "translate", "--target-lang", "en", "--allow-simplify")
+    assert r == 0
+    wd = Path(json.loads(out)["working_dir"])
+    state = json.loads((wd / "state.json").read_text(encoding="utf-8"))
+    assert state["task_config"]["extra"].get("allow_simplify") is True
+
+    r, out, err = run_cli("init", str(src), "--task", "proofread", "--allow-simplify",
+                          "--output", str(tmp_path / "zh_refined2.srt"))
+    assert r == 2
+
+
+def test_cli_init_paths_absolute(tmp_path: Path, monkeypatch):
+    """相对路径输入：state 中三个路径均为绝对路径，跨 cwd 恢复不漂移。"""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "rel.srt").write_text(make_srt(2), encoding="utf-8")
+    r, out, _ = run_cli("init", "rel.srt", "--task", "proofread")
+    assert r == 0
+    wd = Path(json.loads(out)["working_dir"])
+    state = json.loads((wd / "state.json").read_text(encoding="utf-8"))
+    for key in ("input_path", "output_path", "working_dir"):
+        assert Path(state[key]).is_absolute(), key

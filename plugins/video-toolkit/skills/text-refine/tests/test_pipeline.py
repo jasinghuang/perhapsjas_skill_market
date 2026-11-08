@@ -493,3 +493,11 @@ def test_atomic_write_leaves_no_partial(tmp_path, monkeypatch):
     monkeypatch.setattr("pipeline.os.replace", real_replace)
     atomic_write(target, "data")
     assert target.read_text(encoding="utf-8") == "data"
+
+
+def test_plan_chunks_rejects_nonpositive():
+    import pytest as _pytest
+    with _pytest.raises(ValueError):
+        plan_chunks(5, 0)
+    with _pytest.raises(ValueError):
+        plan_chunks(5, -3)

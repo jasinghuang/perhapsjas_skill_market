@@ -36,6 +36,8 @@ class ChunkDef:
 
 
 def plan_chunks(n: int, max_per_chunk: int = 40) -> list[ChunkDef]:
+    if max_per_chunk < 1:
+        raise ValueError(f"max_per_chunk 必须 ≥ 1（收到 {max_per_chunk}），否则分块无法推进")
     if n <= 0:
         return []
     defs: list[ChunkDef] = []
@@ -208,7 +210,9 @@ def submit_chunk_text(
     _check_ids(expected, provided, issues)
 
     for sid, new_text in mapping.items():
-        block = by_id[sid]
+        block = by_id.get(sid)
+        if block is None:
+            continue  # 未知 ID 已在上面的 _check_ids 里记录
         old = block.content
         if sorted(extract_link_targets(old)) != sorted(extract_link_targets(new_text)):
             issues.append(f"块 {sid} 链接地址被改动（可见文字可改，地址必须原值）")

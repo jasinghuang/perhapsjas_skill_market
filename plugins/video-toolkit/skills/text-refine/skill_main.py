@@ -132,6 +132,8 @@ def cmd_inspect(args) -> int:
         text = read_text(path)
     except OSError as e:
         return _fail(EXIT_BLOCKED, f"文件不可读: {e}")
+    except UnicodeDecodeError:
+        return _fail(EXIT_BLOCKED, f"输入不是 UTF-8 编码: {path}（仅支持 UTF-8，含带 BOM 的 UTF-8）")
     if fmt == "srt":
         try:
             doc = parse_srt(text)
@@ -165,6 +167,12 @@ def cmd_init(args) -> int:
         return _fail(EXIT_USAGE, f"{args.task} 默认保持原语言，不应设置 --target-lang")
     if args.timing != "preserve" and not args.timing_reason:
         return _fail(EXIT_USAGE, "重新分段需要用户明确要求；请以 --timing-reason 记录时间来源（word-timestamps/audio-align/srt-estimate）")
+    if args.timing == "resegment" and fmt != "srt":
+        return _fail(EXIT_USAGE, "重新分段仅适用于 SRT（TXT/MD 没有时间轴）")
+    if args.chunk_entries < 1:
+        return _fail(EXIT_USAGE, f"--chunk-entries 必须 ≥ 1（收到 {args.chunk_entries}）")
+    if args.allow_simplify and args.task != "translate":
+        return _fail(EXIT_USAGE, "--allow-simplify 是「翻译并精简」组合意图的授权，仅 translate 任务可用")
 
     try:
         text = read_text(path)
@@ -176,7 +184,12 @@ def cmd_init(args) -> int:
             n_items, diags = len(blocks), []
     except (OSError, SrtFormatError) as e:
         return _fail(EXIT_BLOCKED, f"输入解析失败: {e}")
+    except UnicodeDecodeError:
+        return _fail(EXIT_BLOCKED, f"输入不是 UTF-8 编码: {path}（仅支持 UTF-8，含带 BOM 的 UTF-8）")
 
+    extra: dict = {"timing_reason": args.timing_reason} if args.timing_reason else {}
+    if args.allow_simplify:
+        extra["allow_simplify"] = True
     try:
         cfg = TaskConfig(
             task=args.task,
@@ -184,13 +197,14 @@ def cmd_init(args) -> int:
             timing_policy=args.timing,
             terms_path=str(Path(args.terms).resolve()) if args.terms else None,
             input_format=fmt,
-            extra={"timing_reason": args.timing_reason} if args.timing_reason else {},
+            extra=extra,
         )
     except ValueError as e:
         return _fail(EXIT_USAGE, str(e))
 
     output = Path(args.output) if args.output else path.with_name(f"{path.stem}_refined{path.suffix}")
-    workdir = output.parent / f"{path.stem}_refine_work"
+    output = output.resolve()
+    workdir = (output.parent / f"{output.stem.removesuffix('_refined')}_refine_work").resolve()
     if workdir.exists():
         return _fail(
             EXIT_BLOCKED,
@@ -266,8 +280,12 @@ def cmd_submit(args) -> int:
     chunk = _find_chunk(state, args.chunk_id)
     if chunk is None:
         return _fail(EXIT_BLOCKED, f"块不存在: {args.chunk_id}")
-    if args.chunk_id in [c.chunk_id for c in state.chunks if c.status == "validated"]:
-        return _fail(EXIT_BLOCKED, f"块 {args.chunk_id} 已提交且校验通过；重做请先处理对应结果文件")
+    already = args.chunk_id in [c.chunk_id for c in state.chunks if c.status == "validated"]
+    if already and not args.force:
+        return _fail(
+            EXIT_BLOCKED,
+            f"块 {args.chunk_id} 已提交且校验通过；重做该块请加 --force（覆盖其结果文件并重算校验）",
+        )
 
     try:
         raw = Path(args.result).read_bytes()
@@ -442,6 +460,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("input")
     sp.add_argument("--task", required=True, choices=["proofread", "translate", "simplify"])
     sp.add_argument("--target-lang")
+    sp.add_argument("--allow-simplify", action="store_true",
+                    help="「翻译并精简」组合意图的删改授权（仅 translate 可用，记入任务配置）")
     sp.add_argument("--timing", default="preserve", choices=["preserve", "resegment"])
     sp.add_argument("--timing-reason", choices=["word-timestamps", "audio-align", "srt-estimate"],
                     help="重新分段的时间来源（resegment 必填）")
@@ -460,6 +480,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("workdir")
     sp.add_argument("chunk_id")
     sp.add_argument("result")
+    sp.add_argument("--force", action="store_true",
+                    help="重做已提交的块（覆盖结果文件并重算校验，用于审校返工或篡改修复）")
     sp.add_argument("--allow-inline-code-edit", action="store_true",
                     help="仅当用户明确要求翻译代码注释时使用")
     sp.set_defaults(func=cmd_submit)
@@ -484,8 +506,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except OSError as e:  # 统一兜底：磁盘/权限类
+    except OSError as e:  # 磁盘/权限类
         return _fail(EXIT_BLOCKED, f"IO 失败: {e}")
+    except Exception as e:  # 兜底：崩溃也走 JSON + 退出码 3，绝不以裸 traceback 收场
+        return _fail(EXIT_BLOCKED, f"未预期的失败（请带上命令与输入反馈）: {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":

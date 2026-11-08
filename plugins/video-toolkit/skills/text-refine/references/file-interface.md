@@ -9,8 +9,10 @@ inspect 输入 → init 输入(--task …) → [ chunk 工作目录 块ID → �
 → validate 工作目录 → publish 工作目录 [--overwrite]
 ```
 
-- 工作目录：`{输出目录}/{源文件名}_refine_work/`，内含 `state.json` 与 `chunks/<块ID>.result.json`。
+- 工作目录：`{输出目录}/{源文件名}_refine_work/`，内含 `state.json` 与 `chunks/<块ID>.result.json`；state 中的路径均为绝对路径（跨目录恢复不漂移）。
 - 默认输出：`{源文件名}_refined.{原扩展名}`；已有文件默认不覆盖（自动取 `_2`、`_3`… 序号名），`--overwrite` 需用户显式选择。
+- 「翻译并精简」组合意图：`init --task translate --allow-simplify`，删改授权记入 `task_config.extra.allow_simplify`（中断恢复与逐块审校都能拿到授权依据；仅 translate 可用）。
+- 重做已提交的块（审校返工、结果文件被篡改后的修复）：`submit … --force`，覆盖该块结果文件并重算 sha 与校验。
 - 结果一律走**文件**传递：宿主模型把改写结果写成 JSON 文件再 submit。正文是数据——含引号、反引号、`$()`、heredoc 结束标记也不会被 shell 解释或截断。
 
 ## 提交格式
