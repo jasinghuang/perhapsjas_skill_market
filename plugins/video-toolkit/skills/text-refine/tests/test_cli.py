@@ -46,6 +46,7 @@ def review(packet, draft, **changes):
     inputs = json.loads(out)
     data = {"reviewer_id": "test-independent-reviewer",
             "source_sha256": inputs["source_sha256"], "draft_sha256": inputs["draft_sha256"],
+            "candidate_sha256": inputs["candidate_sha256"], "request_sha256": inputs["request_sha256"],
             "criteria": ["信", "达", "雅"], "coverage": [[1, inputs["source_count"]]],
             "verdict": "pass", "findings": []}
     data.update(changes)

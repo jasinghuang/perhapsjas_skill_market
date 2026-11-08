@@ -18,10 +18,11 @@ from pathlib import Path
 
 from srt_struct import SrtFormatError, parse_srt, parse_timestamp, read_text, render_srt
 from textblocks import extract_inline_code, extract_link_targets, is_protected, split_blocks
+from semantic_timing import snapshot, schedule
 
 FORMATS = {".srt": "srt", ".md": "md", ".markdown": "md", ".txt": "txt"}
 TAGS = re.compile(r"<[^>\n]+>")
-VERSION = 2
+VERSION = 3
 
 
 def digest(raw: bytes) -> str:
@@ -79,7 +80,7 @@ def prepare(args) -> int:
         raise ValueError("校对和精简默认保留原语言，不接受 --target-lang")
     if args.allow_simplify and args.task != "translate":
         raise ValueError("--allow-simplify 仅用于用户明确要求翻译并精简")
-    if args.timing == "resegment" and (fmt != "srt" or not args.timing_reason):
+    if args.timing in {"semantic", "resegment"} and (fmt != "srt" or not args.timing_reason):
         raise ValueError("重新分段仅用于 SRT，需用户明确选择并填写 --timing-reason")
     if args.timing == "preserve" and args.timing_reason:
         raise ValueError("preserve 不应设置 --timing-reason")
@@ -93,6 +94,15 @@ def prepare(args) -> int:
     if output.suffix.lower() != source.suffix.lower():
         raise ValueError("保持输入文件格式；格式转换请单独处理")
     terms = read_text(Path(args.terms)) if args.terms else ""
+    timing_data = read_json(Path(args.timing_data)) if args.timing_data else None
+    parameters = read_json(Path(args.timing_parameters)) if args.timing_parameters else None
+    if (args.timing_data or args.timing_parameters) and args.timing != "semantic":
+        raise ValueError("词级数据和排时参数只用于 semantic 模式")
+    semantic = snapshot(text, parameters, timing_data, digest(raw)) if args.timing == "semantic" else None
+    if semantic and (args.timing_reason == "word-timestamps") != bool(timing_data):
+        raise ValueError("word-timestamps 需要实际 --timing-data；只有 SRT 时使用 srt-estimate")
+    if semantic and args.timing_reason == "audio-align":
+        raise ValueError("对齐结果请转换为已验证的词级 timing-data，不能仅声明 audio-align")
     workdir = Path(tempfile.mkdtemp(prefix="text-refine-"))
     job = {
         "version": VERSION, "working_dir": str(workdir.resolve()),
@@ -102,6 +112,7 @@ def prepare(args) -> int:
         "translator_id": args.translator_id, "allow_simplify": args.allow_simplify,
         "timing": args.timing, "timing_reason": args.timing_reason,
         "terms": terms, "diagnostics": diagnostics,
+        "semantic_source": semantic,
     }
     try:
         (workdir / "request.json").write_text(
@@ -109,9 +120,14 @@ def prepare(args) -> int:
     except BaseException:
         shutil.rmtree(workdir)
         raise
-    emit({k: v for k, v in job.items() if k not in {"source_text", "snapshot_sha256"}}
-         | {"items": items, "draft_path": str(workdir / "draft.json"),
-            "review_path": str(workdir / "review.json")})
+    packet = {k: v for k, v in job.items() if k not in {"source_text", "snapshot_sha256", "semantic_source"}}
+    if semantic:
+        packet["semantic_source"] = dict(semantic, segments=[
+            {k: v for k, v in s.items() if k not in {"text", "raw_text"}} for s in semantic["segments"]])
+    else:
+        packet["items"] = items
+    emit(packet | {"draft_path": str(workdir / "draft.json"),
+                   "review_path": str(workdir / "review.json")})
     return 0
 
 
@@ -217,16 +233,33 @@ def candidate(job: dict, path: Path) -> tuple[str, str]:
     draft = json.loads(raw.decode("utf-8"))
     if not isinstance(draft, dict):
         raise ValueError("译稿 JSON 顶层必须是对象")
-    content = (resegmented_text(job, draft) if job["timing"] == "resegment"
-               else preserved_text(job, draft))
+    if job["timing"] == "semantic":
+        content, _ = schedule(job["semantic_source"], draft)
+    else:
+        content = (resegmented_text(job, draft) if job["timing"] == "resegment"
+                   else preserved_text(job, draft))
     return content, digest(raw)
+
+
+def binding(job: dict, content: str) -> dict:
+    # 绑定真正的最终成品、配置和实现；只改排时参数也使旧审校失效。
+    engine = b"".join(Path(__file__).with_name(n).read_bytes()
+                      for n in ("skill_main.py", "semantic_timing.py", "srt_struct.py", "textblocks.py"))
+    request = {k: v for k, v in job.items() if k not in {"working_dir", "output_path"}}
+    request["engine_sha256"] = digest(engine)
+    return {"candidate_sha256": digest(content.encode("utf-8")),
+            "request_sha256": digest(json.dumps(request, ensure_ascii=False, sort_keys=True).encode())}
 
 
 def review_input(args) -> int:
     job = load_job(Path(args.workdir))
     content, draft_hash = candidate(job, Path(args.draft))
     source, _ = source_items(job["source_text"], job["format"])
+    details = None
+    if job["timing"] == "semantic":
+        _, details = schedule(job["semantic_source"], read_json(Path(args.draft)))
     emit({"source_sha256": job["source_sha256"], "draft_sha256": draft_hash,
+          **binding(job, content), "timing_plan": details,
           "translator_id": job["translator_id"], "task": job["task"],
           "target_lang": job["target_lang"], "allow_simplify": job["allow_simplify"],
           "terms": job["terms"], "timing": job["timing"],
@@ -235,13 +268,15 @@ def review_input(args) -> int:
     return 0
 
 
-def check_review(job: dict, draft_hash: str, review: dict) -> str:
+def check_review(job: dict, draft_hash: str, review: dict, content: str) -> str:
     reviewer = review.get("reviewer_id")
     if not isinstance(reviewer, str) or not reviewer.strip() or reviewer == job["translator_id"]:
         raise ValueError("需要不同于翻译者的独立 reviewer_id；自检不能代替独立审校")
     if (review.get("source_sha256"), review.get("draft_sha256")) != (
             job["source_sha256"], draft_hash):
         raise ValueError("审校对应的原文或译稿版本不匹配；修订后须独立复核")
+    if any(review.get(key) != value for key, value in binding(job, content).items()):
+        raise ValueError("审校对应的最终候选、排时参数或实现版本已改变，需要独立复核")
     if review.get("verdict") != "pass" or review.get("criteria") != ["信", "达", "雅"]:
         raise ValueError("独立信达雅审校尚未通过")
     sources, _ = source_items(job["source_text"], job["format"])
@@ -310,7 +345,7 @@ def finish(args) -> int:
     if job["task"] == "translate" or args.review:
         if not args.review:
             raise ValueError("翻译必须提供独立 agent 的 --review；仅结构通过不能交付")
-        reviewer = check_review(job, draft_hash, read_json(Path(args.review)))
+        reviewer = check_review(job, draft_hash, read_json(Path(args.review)), content)
     else:
         reviewer = None
     output = Path(job["output_path"])
@@ -319,6 +354,8 @@ def finish(args) -> int:
     load_job(workdir)
     final = publish(output, content, args.overwrite)
     warnings = list(job["diagnostics"])
+    if job["timing"] == "semantic":
+        warnings = [f"{w['source_id']}: {w['message']}" for w in job["semantic_source"]["warnings"]]
     if job["timing_reason"] == "srt-estimate":
         warnings.append("重新分段时间为估算，未经音频或词级时间对齐")
     if workdir.parent == Path(tempfile.gettempdir()).resolve() and workdir.name.startswith("text-refine-"):
@@ -342,8 +379,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--translator-id", default="main")
     p.add_argument("--terms")
     p.add_argument("--output")
-    p.add_argument("--timing", choices=["preserve", "resegment"], default="preserve")
+    p.add_argument("--timing", choices=["preserve", "semantic", "resegment"], default="preserve")
     p.add_argument("--timing-reason", choices=["word-timestamps", "audio-align", "srt-estimate"])
+    p.add_argument("--timing-data", help="包含源摘要、字符范围与毫秒时间的已匹配词级数据")
+    p.add_argument("--timing-parameters", help="JSON 排时参数覆盖；仅 semantic")
     p.set_defaults(func=prepare)
     p = commands.add_parser("review-input", help="供独立审校 agent 一次读取原文、稿件与版本摘要")
     p.add_argument("workdir")
