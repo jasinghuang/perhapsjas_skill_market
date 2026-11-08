@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>text-refine v3 · 现行架构解剖</title>
+<style>
+:root{
+  --bg:#0b0f1a; --bg2:#0e1424; --panel:rgba(255,255,255,.032); --panel2:rgba(255,255,255,.055);
+  --line:rgba(255,255,255,.09); --text:#e7ecf5; --dim:#93a0b4; --faint:#6b768c;
+  --py:#38d9f0; --py-soft:rgba(56,217,240,.12);
+  --llm:#b7a5ff; --llm-soft:rgba(183,165,255,.12);
+  --ok:#3ddc97; --ok-soft:rgba(61,220,151,.12);
+  --info:#fbd449; --info-soft:rgba(251,212,73,.12);
+  --warn:#fb923c; --warn-soft:rgba(251,146,60,.14);
+  --bad:#f87a7a; --bad-soft:rgba(248,122,122,.13);
+  --mono:"Cascadia Code","JetBrains Mono",Consolas,"Courier New",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+  radial-gradient(1100px 500px at 85% -10%, rgba(61,220,151,.07), transparent 60%),
+  radial-gradient(900px 480px at 0% 0%, rgba(56,217,240,.07), transparent 55%),
+  linear-gradient(180deg,var(--bg) 0%, var(--bg2) 100%);
+  color:var(--text);
+  font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  line-height:1.65; -webkit-font-smoothing:antialiased;}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:44px 44px;mask-image:linear-gradient(180deg,transparent 0%,#000 18%,#000 82%,transparent 100%);}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+a{color:var(--py);text-decoration:none}
+a:hover{text-decoration:underline}
+
+nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(11,15,26,.72);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:4px;height:54px;overflow-x:auto;scrollbar-width:none}
+nav .wrap::-webkit-scrollbar{display:none}
+.nav-logo{font-weight:600;letter-spacing:.4px;margin-right:14px;white-space:nowrap}
+.nav-logo b{color:var(--ok)}
+nav a{color:var(--dim);font-size:13.5px;padding:6px 11px;border-radius:8px;white-space:nowrap}
+nav a:hover{color:var(--text);background:var(--panel2);text-decoration:none}
+
+header{padding:78px 0 54px;position:relative}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim);
+  border:1px solid var(--line);border-radius:999px;padding:5px 14px;background:var(--panel);letter-spacing:1px}
+.kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok)}
+h1{font-size:clamp(30px,5vw,46px);line-height:1.22;margin:22px 0 10px;font-weight:700;letter-spacing:.5px}
+h1 .grad{background:linear-gradient(92deg,var(--ok) 0%,var(--py) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--dim);font-size:16.5px;max-width:780px;margin:0 0 10px}
+.phil{display:flex;flex-wrap:wrap;gap:12px;margin:26px 0 0}
+.phil .pill{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:14px;padding:12px 18px;background:var(--panel)}
+.phil .pill .t{font-size:13px;color:var(--dim)}
+.phil .pill .v{font-size:14.5px;font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:30px}
+.stat{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel)}
+.stat .n{font-size:24px;font-weight:700;font-family:var(--mono)}
+.stat .l{font-size:12.5px;color:var(--dim);margin-top:2px}
+
+section{padding:58px 0 8px}
+.shead{display:flex;align-items:baseline;gap:14px;margin-bottom:26px}
+.shead .no{font-family:var(--mono);font-size:15px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:2px 10px;background:var(--panel)}
+.shead h2{font-size:26px;margin:0;font-weight:700}
+.shead .hint{color:var(--dim);font-size:13.5px;margin-left:auto;text-align:right}
+@media(max-width:720px){.shead{flex-wrap:wrap}.shead .hint{margin-left:0;text-align:left}}
+
+/* skeleton */
+.skel{border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow:hidden}
+.srow{display:flex;gap:16px;padding:15px 20px;border-bottom:1px solid rgba(255,255,255,.05);align-items:flex-start}
+.srow:last-child{border-bottom:none}
+.srow .sn{font-family:var(--mono);color:var(--ok);font-weight:700;flex:none;width:64px;padding-top:2px}
+.srow .bd b{font-size:15px}
+.srow .bd p{margin:4px 0 0;font-size:13.5px;color:var(--dim)}
+.srow.core{background:linear-gradient(90deg,var(--py-soft),transparent 65%)}
+
+/* timeline */
+.tl{position:relative;margin-left:8px;padding-left:30px;border-left:2px solid var(--line)}
+.tl .item{position:relative;padding:0 0 26px}
+.tl .item::before{content:"";position:absolute;left:-37px;top:7px;width:12px;height:12px;border-radius:50%;
+  background:var(--bg);border:3px solid var(--py);box-shadow:0 0 0 4px rgba(56,217,240,.12)}
+.tl .item.llm::before{border-color:var(--llm);box-shadow:0 0 0 4px rgba(183,165,255,.12)}
+.tl .cmd{display:inline-block;font-family:var(--mono);font-size:13px;color:var(--py);
+  background:var(--py-soft);border:1px solid rgba(56,217,240,.25);border-radius:8px;padding:4px 10px;margin-bottom:6px}
+.tl .item.llm .cmd{color:var(--llm);background:var(--llm-soft);border-color:rgba(183,165,255,.25)}
+.tl .item h4{margin:2px 0 4px;font-size:15.5px}
+.tl .item p{margin:0;font-size:13.5px;color:var(--dim)}
+
+/* mode cards */
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:920px){.modes{grid-template-columns:1fr}}
+.mode{border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--panel);display:flex;flex-direction:column}
+.mode .mtag{align-self:flex-start;font-size:11.5px;padding:3px 10px;border-radius:999px;letter-spacing:.5px;margin-bottom:10px}
+.mode h3{margin:0 0 6px;font-size:16.5px}
+.mode p{margin:0 0 12px;font-size:13px;color:var(--dim);flex:1}
+.mode .mini{font-family:var(--mono);font-size:11.8px;background:#0a0e18;border:1px solid var(--line);border-radius:10px;padding:10px 12px;overflow-x:auto;white-space:pre;line-height:1.65}
+.m-rec{background:var(--llm-soft);color:var(--llm)}
+.m-def{background:var(--py-soft);color:var(--py)}
+.m-leg{background:var(--info-soft);color:var(--info)}
+.jk{color:var(--py)} .js{color:#ffd684} .jn{color:#7ce38b} .jb{color:var(--llm)} .jp{color:#5f6b80}
+
+/* grid cards */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:860px){.g2{grid-template-columns:1fr}}
+.gcard{border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--panel)}
+.gcard h3{margin:0 0 10px;font-size:15.5px}
+.gcard ul{margin:0;padding-left:18px;font-size:13px;color:var(--dim)}
+.gcard li{margin:5px 0}
+.gcard li b{color:var(--text)}
+.gcard .oklist li::marker{color:var(--ok)}
+.gcard .badlist li::marker{color:var(--bad)}
+.hashchips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px}
+.hashchips span{font-family:var(--mono);font-size:11.8px;color:var(--py);background:var(--py-soft);border:1px solid rgba(56,217,240,.25);border-radius:8px;padding:4px 10px}
+
+/* engine flow */
+.eflow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.eflow .eb{flex:1 1 130px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel);font-size:12.5px}
+.eflow .eb b{display:block;font-size:13px;color:var(--py)}
+.eflow .eb span{color:var(--dim)}
+.eflow .arr{align-self:center;color:var(--dim)}
+.params{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.params span{font-family:var(--mono);font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--panel)}
+.params b{color:var(--text);font-weight:600}
+
+/* files */
+.tree{border:1px solid var(--line);border-radius:16px;padding:20px 22px;background:var(--panel);font-family:var(--mono);font-size:13.5px;overflow-x:auto}
+.trow{display:flex;align-items:center;gap:10px;padding:3.5px 0;white-space:nowrap}
+.trow .ind{color:var(--faint);width:20px;flex:none}
+.trow .fname{min-width:260px}
+.trow .role{font-family:"Segoe UI","Microsoft YaHei",sans-serif;color:var(--dim);font-size:12.5px;flex:1}
+.badge{flex:none;font-size:11px;padding:2px 9px;border-radius:999px;letter-spacing:.5px}
+.b-core{background:var(--py-soft);color:var(--py)}
+.b-eng{background:var(--llm-soft);color:var(--llm)}
+.b-std{background:var(--ok-soft);color:var(--ok)}
+.b-tst{background:var(--info-soft);color:var(--info)}
+.b-gone{background:var(--bad-soft);color:var(--bad)}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{color:var(--dim);font-weight:500;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.5px}
+td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+.tbl{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel)}
+tr.gap-b td{background:linear-gradient(90deg,var(--bad-soft),transparent 70%)}
+tr.gap-m td{background:linear-gradient(90deg,var(--warn-soft),transparent 70%)}
+.gname{font-weight:600}
+tr.gap-b .gname{color:var(--bad)} tr.gap-m .gname{color:var(--warn)}
+.mono{font-family:var(--mono)}
+
+/* handover */
+.hand{border:1px solid rgba(56,217,240,.3);border-radius:18px;padding:26px;background:linear-gradient(135deg,var(--py-soft),var(--llm-soft));margin-top:26px}
+.hand h3{margin:0 0 8px;font-size:19px}
+.hand p{margin:0 0 14px;font-size:14px;color:var(--dim)}
+.hand a.btn{display:inline-block;margin-top:2px;background:var(--py);color:#06222a;font-weight:600;font-size:14px;border-radius:10px;padding:10px 20px}
+.hand a.btn:hover{text-decoration:none;filter:brightness(1.1)}
+
+.keep{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
+@media(max-width:760px){.keep{grid-template-columns:1fr}}
+.keep .k{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);font-size:12.8px;color:var(--dim)}
+.keep .k b{display:block;color:var(--text);font-size:13.5px;margin-bottom:3px}
+
+footer{margin-top:70px;border-top:1px solid var(--line);padding:26px 0 40px;color:var(--dim);font-size:13px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:10px 26px;justify-content:space-between}
+
+.rv{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}
+.rv.on{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <span class="nav-logo">text-refine<b>·v3</b></span>
+  <a href="#frame">SKILL 框架</a><a href="#cli">三命令协议</a><a href="#modes">时间模式</a><a href="#guard">守护机制</a><a href="#engine">排时引擎</a><a href="#standard">标准与审校</a><a href="#files">文件架构</a><a href="#gap">局限与接棒</a>
+</div></nav>
+
+<header class="wrap" id="top">
+  <span class="kicker"><span class="dot"></span>v3 · 现行版本 · 已由 v2 重建蓝图接替评审</span>
+  <h1>旧版单 SKILL.md<br><span class="grad">现行架构解剖</span></h1>
+  <p class="sub">v3 的形态：一份 SKILL.md 立下全部运行契约，四个纯标准库 Python 文件做薄文件层。宿主模型处理语言，脚本保护结构——没有本地模型、GPU、MLX 或 CUDA 依赖，不为普通文件启动逐块状态机。</p>
+  <div class="phil">
+    <div class="pill"><div><div class="t">日常路径</div><div class="v">准备全文 → 翻译/校对 → 独立审校 → 修订复核 → 一次输出</div></div></div>
+    <div class="pill"><div><div class="t">能力范围</div><div class="v">校对 · 翻译 · 精简润色 · SRT / MD / TXT</div></div></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="n">3 命令</div><div class="l">prepare → review-input → finish</div></div>
+    <div class="stat"><div class="n">3 模式</div><div class="l">preserve · semantic · resegment</div></div>
+    <div class="stat"><div class="n">4 哈希</div><div class="l">源 / 稿件 / 候选 / 任务+引擎 绑定</div></div>
+    <div class="stat"><div class="n">989 行</div><div class="l">纯标准库 Python · 5 个测试文件</div></div>
+  </div>
+</header>
+
+<section id="frame"><div class="wrap">
+  <div class="shead rv"><span class="no">01</span><h2>SKILL.md 框架骨架</h2><span class="hint">六个章节立下全部运行契约</span></div>
+  <div class="skel rv">
+    <div class="srow"><span class="sn">front</span><div class="bd"><b>frontmatter 定位声明</b><p>校对 / 翻译 / 精简 SRT、MD、TXT；结构由脚本保护；需要用户选择必须 AskUserQuestion；翻译必须独立 agent 审校信达雅；不自动翻译、不摘要、不启动配音</p></div></div>
+    <div class="srow core"><span class="sn">§1</span><div class="bd"><b>用户选择必须使用 AskUserQuestion</b><p>任务类型 / 目标语言 / 时间轴策略 / 覆盖文件——一律控件收集，不得文字列选项、不得默选、不得把推荐值当已选择；控件不可用时暂停并说明缺失能力</p></div></div>
+    <div class="srow"><span class="sn">§2</span><div class="bd"><b>先理解完整句意，再组织目标字幕</b><p>翻译与审校 agent 都必须先完整读 line-break-cases.md；ASR 条目是时间容器不是独立句子；中文默认单行；全篇统一术语与指代；ASR 疑点入审校记录不进成品</p></div></div>
+    <div class="srow"><span class="sn">§3</span><div class="bd"><b>时间轴与输出</b><p>翻译推荐 semantic（语义段重排，条数可变）；校对默认 preserve（1:1 保留时间轴）；输出 {原名}_refined 自动编号，永不覆盖源文件</p></div></div>
+    <div class="srow core"><span class="sn">§4</span><div class="bd"><b>执行方式</b><p>prepare 一个命令取全部材料；能容纳输入输出时<b>一次处理，不按 40/60/200 条机械切块</b>；确实超容量才按句意分批积累为一份 draft——这一条正是 v2 推翻的假设</p></div></div>
+    <div class="srow"><span class="sn">§5</span><div class="bd"><b>翻译必须经过独立 agent 审校</b><p>实际调用另一个独立 agent，不灌翻译者结论；未具备独立 agent 能力时明示"审校未完成"，不得把草稿当最终译文交付</p></div></div>
+    <div class="srow"><span class="sn">§6</span><div class="bd"><b>只交付用户需要的文件</b><p>素材目录只新增最终文件；分块 / JSON / 审校报告全留系统临时目录，成功即清理，失败可续用；不生成 _refine_work</p></div></div>
+  </div>
+</div></section>
+
+<section id="cli"><div class="wrap">
+  <div class="shead rv"><span class="no">02</span><h2>三命令协议</h2><span class="hint">薄文件层 · 中间材料不进素材目录</span></div>
+  <div class="tl rv">
+    <div class="item">
+      <span class="cmd">prepare 输入 --task translate --target-lang zh [--timing semantic --timing-reason srt-estimate]</span>
+      <h4>准备全文</h4>
+      <p>解析输入 → 系统临时目录建唯一任务（request.json 内嵌原文快照与哈希）→ 返回全文材料、每条时长、术语内容、draft_path 与 review_path；源文件旁不建任何工作文件夹</p>
+    </div>
+    <div class="item llm">
+      <span class="cmd">review-input workdir --draft draft.json</span>
+      <h4>独立审校材料</h4>
+      <p>审校 agent 一个命令拿到：完整原文、最终带时间轴候选、语义段与内部锚点、阅读诊断、术语、四项版本摘要——无需通读 skill 实现或重复准备步骤</p>
+    </div>
+    <div class="item">
+      <span class="cmd">finish workdir --draft draft.json --review review.json</span>
+      <h4>验证一次输出</h4>
+      <p>核对审校记录、覆盖与版本 → 原子发布 → 清理临时任务；翻译必须提供 --review，仅结构通过不能交付；失败保留临时目录供重试</p>
+    </div>
+  </div>
+  <div class="params rv">
+    <span>退出码 <b>0</b> 成功</span><span>退出码 <b>2</b> 用法错误</span><span>退出码 <b>3</b> 输入 / 结构 / 审校 / 文件失败</span>
+    <span>临时目录 <b>mkdtemp 唯一</b> · 成功清理 / 失败保留</span>
+  </div>
+</div></section>
+
+<section id="modes"><div class="wrap">
+  <div class="shead rv"><span class="no">03</span><h2>三种时间模式与稿件格式</h2><span class="hint">模式决定 draft 结构与校验规则</span></div>
+  <div class="modes rv">
+    <div class="mode">
+      <span class="mtag m-def">preserve · 校对默认 / 兼容</span>
+      <h3>严格保留原时间轴</h3>
+      <p>原条目数、序号、时间轴完全不变，只替换正文；样式标签集合必须一致；渲染后回读逐条比对</p>
+      <div class="mini"><span class="jk">"items"</span>: [{<span class="jk">"id"</span>: <span class="js">"entry-000001"</span>,
+          <span class="jk">"text"</span>: <span class="js">"译文"</span>}]</div>
+    </div>
+    <div class="mode">
+      <span class="mtag m-rec">semantic · 翻译推荐</span>
+      <h3>自然重新分段</h3>
+      <p>按完整句形成语义段，段内按意群重排，条数可变；模型用连续原文片段标对应，程序核对全文覆盖并算毫秒——时间不手填</p>
+      <div class="mini"><span class="jk">"blocks"</span>: [{<span class="jk">"id"</span>: <span class="js">"b001"</span>, <span class="jk">"units"</span>: [
+ {<span class="jk">"source"</span>: <span class="js">"Even big AI companies"</span>,
+  <span class="jk">"text"</span>: <span class="js">"连大型 AI 公司也开始"</span>}]}]</div>
+    </div>
+    <div class="mode">
+      <span class="mtag m-leg">resegment · 旧稿兼容</span>
+      <h3>手填时间重分段</h3>
+      <p>仅兼容已有显式稿件，不作翻译推荐路线；每条引用连续有序源条目，时间须落在对应源范围内，覆盖全文且首尾保留</p>
+      <div class="mini"><span class="jk">"items"</span>: [{<span class="jk">"source_ids"</span>: [<span class="js">"entry-000001"</span>],
+ <span class="jk">"start"</span>: <span class="js">"00:00:00,000"</span>, <span class="jk">"end"</span>: <span class="js">"00:00:06,000"</span>,
+ <span class="jk">"text"</span>: <span class="js">"按中文意群组织的字幕。"</span>}]</div>
+    </div>
+  </div>
+  <div class="params rv"><span>MD：<b>editable=false</b> 块只读原样回填</span><span>MD 保护：<b>链接目标 / 行内代码 / 结构标记</b> 不可变</span><span>SRT：<b>样式标签</b> 集合不变</span><span>TXT：<b>不得引入</b> Markdown 标记</span></div>
+</div></section>
+
+<section id="guard"><div class="wrap">
+  <div class="shead rv"><span class="no">04</span><h2>确定性守护机制</h2><span class="hint">脚本管结构与文件，语义归宿主模型</span></div>
+  <div class="g2 rv">
+    <div class="gcard">
+      <h3>解析容错矩阵（诊断 ≠ 阻塞）</h3>
+      <ul class="oklist">
+        <li><b>只诊断不掩盖</b>：序号缺失 / 重号 / 断续 · 既有时间重叠 · 空正文 · 零时长——既成事实照单记录</li>
+        <li><b>容错</b>：序号行可选 · 时间轴整行保留（含 X1: 坐标附加）· CRLF / CR / LF 统一 · UTF-8 BOM 剥离</li>
+      </ul>
+      <ul class="badlist">
+        <li><b>阻塞</b>：时间无法解析 · 终止早于起始——此类文件不产出成品</li>
+      </ul>
+    </div>
+    <div class="gcard">
+      <h3>结构逐字保留</h3>
+      <ul>
+        <li>条目 ID 按<b>源位置</b>生成 <span class="mono">entry-%06d</span>，两个都显示 "5" 的条目依然是两个不同源条目（重号免疫）</li>
+        <li>渲染<b>只替换正文</b>：序号行与时间轴行逐字保留；new_texts 出现未知 ID 即报错，映射错位必须暴露</li>
+      </ul>
+    </div>
+    <div class="gcard">
+      <h3>四哈希绑定</h3>
+      <div class="hashchips">
+        <span>source_sha256</span><span>draft_sha256</span><span>candidate_sha256</span><span>request_sha256</span>
+      </div>
+      <ul>
+        <li>request 含 <b>engine_sha256</b>（四个 .py 文件字节摘要）——改代码、改排时参数同样使旧审校失效</li>
+        <li>审校报告四哈希与命令实际值逐一核对，<b>不能手算或手换哈希冒充复核</b></li>
+      </ul>
+    </div>
+    <div class="gcard">
+      <h3>原子发布</h3>
+      <ul>
+        <li>临时文件写入 + <b>fsync</b> → <b>硬链接</b> 落盘，不存在 exists→replace 覆盖竞态</li>
+        <li>已有文件自动编号 <span class="mono">_refined_2</span>；<b>源文件永不被覆盖</b>；用户经控件明确选择后才 --overwrite</li>
+        <li>Windows 文件系统需支持硬链接，不支持则明确失败、不降级</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section id="engine"><div class="wrap">
+  <div class="shead rv"><span class="no">05</span><h2>语义排时引擎</h2><span class="hint">semantic_timing.py · 确定性插值</span></div>
+  <div class="eflow rv">
+    <div class="eb"><b>规范化全文</b><span>剥样式标签 · 合并空白 · 条目间单空格连接</span></div>
+    <span class="arr">→</span>
+    <div class="eb"><b>字符范围</b><span>每条目记 [start_char, end_char) 与句级时间</span></div>
+    <span class="arr">→</span>
+    <div class="eb"><b>source 回显匹配</b><span>意群 source 必须连续覆盖全文，不切单词</span></div>
+    <span class="arr">→</span>
+    <div class="eb"><b>时间插值</b><span>句级线性插值；词级则必须落在词边界</span></div>
+    <span class="arr">→</span>
+    <div class="eb"><b>留白检测</b><span>≥800ms 间隔为段界，意群 / 语义段不得跨越</span></div>
+    <span class="arr">→</span>
+    <div class="eb"><b>尾延 ≤300ms</b><span>只借段内短空隙，不挪下条入点、不跨停顿</span></div>
+    <span class="arr">→</span>
+    <div class="eb"><b>诊断渲染</b><span>CPS / 行长 / 闪现报告 → 渲染 → 回读验证</span></div>
+  </div>
+  <div class="g2 rv" style="margin-top:16px">
+    <div class="gcard">
+      <h3>词级时间戳 schema（更细依据）</h3>
+      <ul>
+        <li><span class="mono">words: [{text, start_char, end_char, start_ms, end_ms}]</span> 逐词校验：字符切片与全文完全一致、时序不重叠、落在对应句级范围内</li>
+        <li><span class="mono">pauses</span> 停顿区间不得与任何词时间重叠；只有真实数据才能选 word-timestamps，audio-align 声明被拒绝</li>
+        <li>1~2ms 舍入重叠归一化为共同边界；超过容差的重叠阻塞自然重排</li>
+      </ul>
+    </div>
+    <div class="gcard">
+      <h3>集中参数 DEFAULTS（可 --timing-parameters 覆盖）</h3>
+      <div class="params" style="margin-top:6px">
+        <span>段目标 <b>20s</b> / 段警示 <b>30s</b></span><span>段界留白 <b>800ms</b></span>
+        <span>舒适 <b>5 字/s</b></span><span>警戒 <b>7 字/s</b></span><span>行长 <b>18 字</b></span>
+        <span>短条 <b>800ms</b></span><span>长条 <b>6s</b></span><span>尾延 <b>300ms</b></span><span>重叠容差 <b>2ms</b></span>
+      </div>
+      <ul style="margin-top:10px">
+        <li>阅读诊断（汉字压力 / 短闪 / 长条 / 超两行 / 行长）为<b>提示不阻塞</b>——先改表达，不为消警告删事实</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section id="standard"><div class="wrap">
+  <div class="shead rv"><span class="no">06</span><h2>质量标准与独立审校</h2><span class="hint">翻译与审校共用同一套标准</span></div>
+  <div class="params rv" style="margin-top:0">
+    <span>中文默认<b>单行</b>，不在条内换行</span><span>行长舒适区 <b>14~18 字</b></span>
+    <span>阅读目标 <b>3~5 字/s</b> · 警戒 <b>7 字/s</b></span><span>意群断句，不拆主谓动宾</span>
+    <span>保真优先：不删否定 / 条件 / 数字</span><span>术语 · 作品名 · 产品名全篇统一</span>
+  </div>
+  <div class="cols rv" style="display:grid;grid-template-columns:1.15fr 1fr;gap:16px;margin-top:18px">
+    <div style="border:1px solid var(--line);border-radius:14px;background:#0a0e18;overflow:hidden">
+      <div style="display:flex;gap:6px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--dim)">
+        <i style="width:10px;height:10px;border-radius:50%;background:#f87171;display:inline-block"></i><i style="width:10px;height:10px;border-radius:50%;background:#fbbf24;display:inline-block"></i><i style="width:10px;height:10px;border-radius:50%;background:#3ddc97;display:inline-block"></i><span style="margin-left:8px">review.json · 审校结构化结论</span>
+      </div>
+<pre style="margin:0;padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:12.6px;line-height:1.75">{
+  <span class="jk">"reviewer_id"</span>: <span class="js">"独立 agent 标识（≠译者）"</span>,
+  <span class="jk">"source_sha256"</span>: <span class="js">"命令返回，不手算"</span>,  <span class="jp">… 四哈希</span>
+  <span class="jk">"criteria"</span>: [<span class="js">"信"</span>, <span class="js">"达"</span>, <span class="js">"雅"</span>],
+  <span class="jk">"coverage"</span>: [[<span class="jn">1</span>, <span class="jn">163</span>]],
+  <span class="jk">"verdict"</span>: <span class="js">"pass"</span>,
+  <span class="jk">"findings"</span>: [{<span class="jk">"source_ids"</span>: […], <span class="jk">"dimension"</span>: <span class="js">"信"</span>,
+    <span class="jk">"severity"</span>: <span class="js">"required"</span>, <span class="jk">"status"</span>: <span class="js">"resolved"</span>, …}]
+}</pre>
+    </div>
+    <div class="gcard">
+      <h3>信达雅三维（现代翻译实践定义）</h3>
+      <ul>
+        <li><b>信</b> 意义不背离：事实、否定、条件、因果、程度、先后、数字、指代、专名、语气</li>
+        <li><b>达</b> 通顺流畅：完整意群、自然断句、跨条衔接、实际阅读负担——准确却难懂仍需修订</li>
+        <li><b>雅</b> 得体（Register &amp; Tone）：契合题材、角色、身份、情绪——不以古雅华丽为目标</li>
+        <li>coverage 须顺序覆盖全文无遗漏；<b>必修未 resolved 不得 finish</b>；两轮修订后仍有必修即不通过</li>
+        <li>每条 finding 写明位置 / 维度 / 理由 / 建议，不能只写分数或"有翻译腔"</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section id="files"><div class="wrap">
+  <div class="shead rv"><span class="no">07</span><h2>文件架构（v3 现状）</h2><span class="hint">989 行纯标准库 · 5 个测试文件</span></div>
+  <div class="tree rv">
+    <div class="trow"><span class="ind"></span><span class="fname">skills/text-refine/</span><span class="role"></span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">SKILL.md</span><span class="role">运行契约：六章节框架（见 01）</span><span class="badge b-std">契约</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">skill_main.py · 410 行</span><span class="role">薄文件层：prepare / review-input / finish · 哈希绑定 · 原子发布</span><span class="badge b-core">核心</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">srt_struct.py · 196 行</span><span class="role">解析与渲染：容错矩阵 · 逐字保留 · 诊断分级</span><span class="badge b-core">核心</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">semantic_timing.py · 256 行</span><span class="role">排时引擎：snapshot / schedule · 插值 · 词级 schema · 诊断</span><span class="badge b-eng">引擎</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">textblocks.py · 127 行</span><span class="role">MD/TXT 块拆分 · 只读块识别 · 结构保护</span><span class="badge b-gone">v2 废弃</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">references/line-break-cases.md</span><span class="role">质量标准与信达雅审校 · 181 行</span><span class="badge b-std">v2 保留原文</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">references/file-interface.md</span><span class="role">全文文件接口文档 · 103 行</span><span class="badge b-std">v2 重写</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">references/asr-corrections.md</span><span class="role">疑难 ASR 纠错候选表</span><span class="badge b-std">参考</span></div>
+    <div class="trow"><span class="ind">└─</span><span class="fname">tests/ · 5 个文件</span><span class="role">srt_struct / semantic_timing / textblocks / cli / eval-cases</span><span class="badge b-tst">v2 移植为规格</span></div>
+  </div>
+</div></section>
+
+<section id="gap"><div class="wrap">
+  <div class="shead rv"><span class="no">08</span><h2>局限与接棒</h2><span class="hint">K-Pop 482 条实测暴露的缺口</span></div>
+  <div class="tbl rv"><table>
+    <thead><tr><th style="width:170px">缺口</th><th>表现</th><th style="width:30%">v2 对策</th></tr></thead>
+    <tbody>
+      <tr class="gap-b"><td class="gname">单发全文</td><td>SKILL.md 明文"能容纳就一次处理、不机械切块"——482 条全靠一次 agent 生成，无批次、无逐批门禁、无断点续跑</td><td>批次管线成为唯一路径（40~60 条/批）</td></tr>
+      <tr class="gap-m"><td class="gname">preserve 无阅读诊断</td><td>CPS / 行长 / 闪现只在 semantic 模式计算且仅提示；1:1 翻译成品完全不做阅读检查</td><td>统一门禁分级：阻塞 / 必修 / 提示</td></tr>
+      <tr class="gap-m"><td class="gname">约束不进输入</td><td>材料带 duration_ms 但不换算预算、不进门禁——模型看不见时间槽红线</td><td>max_units / sentence_group / flash 进批次材料</td></tr>
+      <tr class="gap-m"><td class="gname">术语无闭环</td><td>--terms 自由文本只进材料不进校验；无探测、无锁定、无合规扫描</td><td>候选 → 确认 → 锁定 → 确定性扫描</td></tr>
+      <tr class="gap-b"><td class="gname">实测证据</td><td>K-Pop .zh.srt：482/482 与时间戳无损 ✅ 但 29 条超 25 字（最长 48）、80ms 槽强填"如果是"（CPS≈37）❌</td><td>语料成为 v2 验收基准</td></tr>
+    </tbody>
+  </table></div>
+  <div class="keep rv">
+    <div class="k"><b>规格继承：测试用例</b>容错矩阵与边界用例全部移植为 v2 验收清单，代码扔了用例不扔</div>
+    <div class="k"><b>原文保留：质量标准</b>line-break-cases.md 整篇进入 v2，信达雅三维与阅读预算不变</div>
+    <div class="k"><b>机制继承：协议不变量</b>四哈希绑定、独立审校门禁、原子发布、临时目录卫生按同一规格重新实现</div>
+  </div>
+  <div class="hand rv">
+    <h3>→ 接棒：v2 重建蓝图</h3>
+    <p>推倒重写代码、完整继承知识——批次化受控翻译、物理预算进输入、统一质量门禁、术语闭环、断点续跑。两页对照着看：本页是"从哪来"，v2 页是"到哪去"。</p>
+    <a class="btn" href="text-refine_v2_蓝图.html">查看 v2 重建蓝图 →</a>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <span>text-refine v3 现行架构解剖 · 2026-11-08</span>
+  <span><a href="text-refine_v2_蓝图.html">v2 重建蓝图</a> · <a href="text-refine_v2_完整技术需求文档.md">v2 需求文档</a> · <a href="plugins/video-toolkit/skills/text-refine/references/line-break-cases.md">质量标准</a></span>
+</div></footer>
+
+<script>
+(function(){
+  var els=document.querySelectorAll('.rv');
+  if(!('IntersectionObserver' in window)||window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    els.forEach(function(e){e.classList.add('on')});return;
+  }
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){if(en.isIntersecting){en.target.classList.add('on');io.unobserve(en.target)}});
+  },{threshold:.08});
+  els.forEach(function(e){io.observe(e)});
+  var links=document.querySelectorAll('nav a');
+  links.forEach(function(a){a.addEventListener('click',function(){
+    links.forEach(function(x){x.classList.remove('hot')});a.classList.add('hot');
+  })});
+})();
+</script>
+</body>
+</html>
