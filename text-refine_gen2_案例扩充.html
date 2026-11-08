@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>text-refine ②代 · 案例扩充与标准成文</title>
+<style>
+:root{
+  --bg:#0b0f1a; --bg2:#0e1424; --panel:rgba(255,255,255,.032); --panel2:rgba(255,255,255,.055);
+  --line:rgba(255,255,255,.09); --text:#e7ecf5; --dim:#93a0b4; --faint:#6b768c;
+  --py:#38d9f0; --py-soft:rgba(56,217,240,.12);
+  --vi:#b7a5ff; --vi-soft:rgba(183,165,255,.13);
+  --ok:#3ddc97; --ok-soft:rgba(61,220,151,.12);
+  --gold:#fbd449; --gold-soft:rgba(251,212,73,.12);
+  --amber:#fb923c; --amber-soft:rgba(251,146,60,.14);
+  --bad:#f87a7a; --bad-soft:rgba(248,122,122,.13);
+  --mono:"Cascadia Code","JetBrains Mono",Consolas,"Courier New",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+  radial-gradient(1100px 500px at 85% -10%, rgba(183,165,255,.09), transparent 60%),
+  radial-gradient(900px 480px at 0% 0%, rgba(56,217,240,.06), transparent 55%),
+  linear-gradient(180deg,var(--bg) 0%, var(--bg2) 100%);
+  color:var(--text);
+  font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  line-height:1.65; -webkit-font-smoothing:antialiased;}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:44px 44px;mask-image:linear-gradient(180deg,transparent 0%,#000 18%,#000 82%,transparent 100%);}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+a{color:var(--py);text-decoration:none}
+a:hover{text-decoration:underline}
+
+nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(11,15,26,.72);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:4px;height:54px;overflow-x:auto;scrollbar-width:none}
+nav .wrap::-webkit-scrollbar{display:none}
+.nav-logo{font-weight:600;letter-spacing:.4px;margin-right:14px;white-space:nowrap}
+.nav-logo b{color:var(--vi)}
+nav a{color:var(--dim);font-size:13.5px;padding:6px 11px;border-radius:8px;white-space:nowrap}
+nav a:hover{color:var(--text);background:var(--panel2);text-decoration:none}
+
+header{padding:78px 0 54px;position:relative}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim);
+  border:1px solid var(--line);border-radius:999px;padding:5px 14px;background:var(--panel);letter-spacing:1px}
+.kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--vi);box-shadow:0 0 10px var(--vi)}
+h1{font-size:clamp(30px,5vw,46px);line-height:1.22;margin:22px 0 10px;font-weight:700;letter-spacing:.5px}
+h1 .grad{background:linear-gradient(92deg,var(--vi) 0%,var(--py) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--dim);font-size:16.5px;max-width:820px;margin:0 0 10px}
+.phil{display:flex;flex-wrap:wrap;gap:12px;margin:26px 0 0}
+.phil .pill{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:14px;padding:12px 18px;background:var(--panel)}
+.phil .pill .t{font-size:13px;color:var(--dim)}
+.phil .pill .v{font-size:14.5px;font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:30px}
+.stat{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel)}
+.stat .n{font-size:24px;font-weight:700;font-family:var(--mono)}
+.stat .l{font-size:12.5px;color:var(--dim);margin-top:2px}
+
+section{padding:58px 0 8px}
+.shead{display:flex;align-items:baseline;gap:14px;margin-bottom:26px}
+.shead .no{font-family:var(--mono);font-size:15px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:2px 10px;background:var(--panel)}
+.shead h2{font-size:26px;margin:0;font-weight:700}
+.shead .hint{color:var(--dim);font-size:13.5px;margin-left:auto;text-align:right}
+@media(max-width:720px){.shead{flex-wrap:wrap}.shead .hint{margin-left:0;text-align:left}}
+
+/* timeline */
+.tl{position:relative;margin-left:8px;padding-left:30px;border-left:2px solid var(--line)}
+.tl .item{position:relative;padding:0 0 26px}
+.tl .item::before{content:"";position:absolute;left:-37px;top:7px;width:12px;height:12px;border-radius:50%;
+  background:var(--bg);border:3px solid var(--vi);box-shadow:0 0 0 4px rgba(183,165,255,.14)}
+.tl .item.key::before{border-color:var(--gold);box-shadow:0 0 0 4px rgba(251,212,73,.16)}
+.tl .cmd{display:inline-block;font-family:var(--mono);font-size:12.6px;color:var(--vi);
+  background:var(--vi-soft);border:1px solid rgba(183,165,255,.28);border-radius:8px;padding:4px 10px;margin-bottom:6px}
+.tl .item h4{margin:2px 0 4px;font-size:15.5px}
+.tl .item p{margin:0;font-size:13.5px;color:var(--dim)}
+.tl .item p b{color:var(--text)}
+
+/* cards */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:860px){.g2{grid-template-columns:1fr}}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:920px){.g3{grid-template-columns:1fr}}
+.gcard{border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--panel)}
+.gcard h3{margin:0 0 10px;font-size:15.5px}
+.gcard ul{margin:0;padding-left:18px;font-size:13px;color:var(--dim)}
+.gcard li{margin:5px 0}
+.gcard li b{color:var(--text)}
+.gcard .tag2{font-size:11.5px;color:var(--vi);background:var(--vi-soft);border-radius:999px;padding:3px 10px;margin-left:8px;vertical-align:2px}
+.legacy li::marker{color:var(--ok)}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.chips span{font-size:12.3px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--panel)}
+.chips b{color:var(--text);font-weight:600}
+
+/* tables */
+.tbl{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{color:var(--dim);font-weight:500;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.5px}
+td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+td.mono,.mono{font-family:var(--mono);font-size:12.6px}
+.vname{font-weight:600;color:var(--vi)}
+tr.hl td{background:linear-gradient(90deg,var(--vi-soft),transparent 70%)}
+.tblwrap{overflow-x:auto}
+
+/* code */
+.code{border:1px solid var(--line);border-radius:14px;background:#0a0e18;overflow:hidden}
+.code .bar{display:flex;align-items:center;gap:6px;padding:9px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--dim)}
+.code .bar i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.code pre{margin:0;padding:16px 18px;overflow-x:auto;font-size:12.6px;line-height:1.75;font-family:var(--mono)}
+.jv{color:var(--vi)} .jm{color:var(--dim)} .jk{color:var(--py)} .js{color:#ffd684}
+
+/* tree diff */
+.diffcard{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:860px){.diffcard{grid-template-columns:1fr}}
+.dtree{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:var(--panel);font-family:var(--mono);font-size:12.8px}
+.dtree .t{font-family:"Segoe UI","Microsoft YaHei",sans-serif;font-size:12.5px;color:var(--dim);margin-bottom:8px}
+.dtree .new{color:var(--ok)}
+.dtree .mod{color:var(--gold)}
+
+/* eras */
+.eras{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin-top:6px}
+.era{flex:1 1 140px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);font-size:12.3px;position:relative}
+.era b{display:block;font-size:13px}
+.era span{color:var(--dim)}
+.era .ec{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.era.now{border-color:rgba(183,165,255,.55);background:var(--vi-soft)}
+.era.now b{color:var(--vi)}
+.eras .arr{align-self:center;color:var(--dim)}
+.hand{border:1px solid rgba(183,165,255,.3);border-radius:18px;padding:26px;background:linear-gradient(135deg,var(--vi-soft),var(--py-soft));margin-top:26px}
+.hand h3{margin:0 0 8px;font-size:19px}
+.hand p{margin:0 0 14px;font-size:14px;color:var(--dim)}
+.hand a.btn{display:inline-block;margin-right:10px;background:var(--vi);color:#221540;font-weight:600;font-size:14px;border-radius:10px;padding:10px 20px}
+.hand a.btn:hover{text-decoration:none;filter:brightness(1.1)}
+
+footer{margin-top:70px;border-top:1px solid var(--line);padding:26px 0 40px;color:var(--dim);font-size:13px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:10px 26px;justify-content:space-between}
+
+.rv{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}
+.rv.on{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <span class="nav-logo">text-refine<b>·②代</b></span>
+  <a href="#tl4">四提交时间线</a><a href="#std">翻译标准成文</a><a href="#split">13 分钟重构</a><a href="#eval">回归用例</a><a href="#ancestors">祖先条款 II</a><a href="#eco">生态咬合</a><a href="#eras">演化之路</a>
+</div></nav>
+
+<header class="wrap" id="top">
+  <span class="kicker"><span class="dot"></span>②代 · 案例扩充与标准成文 · 11/7 22:16 → 11/8 10:26 · 约 12 小时四提交 · 仍然零 Python</span>
+  <h1>标准成文之夜<br><span class="grad">案例、数据、回归用例的诞生</span></h1>
+  <p class="sub">①代活了六个月只攒下一份 SKILL.md；②代用周六一个晚上加周日早晨，让它长出了 <b style="color:var(--text)">references/ 标准目录与 tests/ 回归用例</b>——"规范成文、数据外置、改完回归验证"，软件工程三件套的纯 prompt 等价物在一夜之间齐备。今天被 v2 原文保留的那份质量标准，出生证明就在这里。</p>
+  <div class="phil">
+    <div class="pill"><div><div class="t">形态</div><div class="v">SKILL.md + references/ + tests/（全是文档）</div></div></div>
+    <div class="pill"><div><div class="t">主题</div><div class="v">翻译标准 · 断句案例 · ASR 纠错表 · 回归用例</div></div></div>
+    <div class="pill"><div><div class="t">地位</div><div class="v">①的规则罗列 → ③的 Python 管线之间的桥梁</div></div></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="n">4 提交</div><div class="l">12 小时 · 周六夜 + 周日晨</div></div>
+    <div class="stat"><div class="n">261 行</div><div class="l">②代终点 SKILL.md（①终版 199 → 261）</div></div>
+    <div class="stat"><div class="n">100 行</div><div class="l">line-break-cases.md 初版（今日 181 行）</div></div>
+    <div class="stat"><div class="n">E1~E4</div><div class="l">第一份回归用例集</div></div>
+    <div class="stat"><div class="n">0 行</div><div class="l">Python——守护仍未代码化</div></div>
+  </div>
+</header>
+
+<section id="tl4"><div class="wrap">
+  <div class="shead rv"><span class="no">01</span><h2>四提交时间线</h2><span class="hint">一个周六晚上的密度</span></div>
+  <div class="tl rv">
+    <div class="item">
+      <span class="cmd">a935f27 · 11/7 22:16 · "优化" · SKILL.md +71 行</span>
+      <h4>翻译标准与独立审校首次成文</h4>
+      <p>新增整章 <b>"翻译标准（非中文 → 中文）"</b>：时空同步 · 版面意群 · 动态对等 · Transcreation；再加 <b>"长文件落盘节奏（防止单响应超限被终止）"</b>、<b>"多文件批处理（并行上限 3）"</b>、<b>"审校：独立 agent 复检信达雅"</b>——后世协议的 prompt 级蓝图在 40 分钟内写完</p>
+    </div>
+    <div class="item">
+      <span class="cmd">f12bb50 · 11/7 23:40 · +88 行</span>
+      <h4>五个断句与减词案例</h4>
+      <p>影视台词案例直接追加进 SKILL.md：介词短语与宾语不被割裂 · 连词不吊行尾 · 消口语填充词 · 长从句动作化拆解 · 中文 ASR 流水句先补标点再断行</p>
+    </div>
+    <div class="item key">
+      <span class="cmd">18ccc13 · 11/7 23:53 · 仅 13 分钟后 · 4 文件重构</span>
+      <h4>分水岭：案例拆出，references/ 与 tests/ 诞生</h4>
+      <p>SKILL.md 净减 121 行，拆出三个新文件：<b>references/line-break-cases.md</b>（100 行初版）· <b>references/asr-corrections.md</b>（34 行同音字表）· <b>tests/eval-cases.md</b>（19 行回归用例 E1~E4）</p>
+    </div>
+    <div class="item">
+      <span class="cmd">1889969 · 11/8 10:26 · SKILL.md 仅 1 行改动</span>
+      <h4>生态咬合：语义合并设为默认</h4>
+      <p>audio-transcribe 侧引入词级时间戳修正转录偏移；text-refine 这边只改一行——把与 video-tts 的衔接描述改为"<b>语义合并（--merge-plan）读全文按语义分组、配音语速约 4 字/秒，refine 不必为配音额外减词</b>"</p>
+    </div>
+  </div>
+  <div class="chips rv"><span>时间线前情：b810216（11/2，①代终点）到 a935f27（11/7 22:16）之间 text-refine 零改动——仓库用这一周 <b>37 个提交建成了 video-tts</b>（SRT 解析 / 时窗适配 / MLX Qwen3-TTS / 百炼 provider / 语义合并）。周六晚的 text-refine 冲刺，站在这一周"Python 管确定性"工程经验的地基上</span></div>
+</div></section>
+
+<section id="std"><div class="wrap">
+  <div class="shead rv"><span class="no">02</span><h2>翻译标准成文（a935f27）</h2><span class="hint">22:16 写下的四节标准 + 三个工程萌芽</span></div>
+  <div class="g2 rv">
+    <div class="gcard"><h3>时空同步<span class="tag2">第 1 节</span></h3><ul><li><b>译文长度由时间轴预算决定</b>——每个时间槽装得下的字数是物理约束，不是风格偏好</li></ul></div>
+    <div class="gcard"><h3>版面：一行一个意群<span class="tag2">第 2 节</span></h3><ul><li>断句落在自然思维停顿点，不拆主谓动宾、不把虚词吊在行尾</li></ul></div>
+    <div class="gcard"><h3>动态对等<span class="tag2">第 3 节</span></h3><ul><li>口语化 · 减词 · 即时可懂——观众是"听+看"，不是"读文件"</li></ul></div>
+    <div class="gcard"><h3>本地化 Transcreation<span class="tag2">第 4 节</span></h3><ul><li>双关与文化暗喻传达情境作用，不另编改变事实的梗</li></ul></div>
+  </div>
+  <div class="g3 rv" style="margin-top:14px">
+    <div class="gcard"><h3>工程萌芽 · 落盘节奏</h3><ul><li><b>长文件分段落盘，防止单响应超限被终止</b>——断点续跑意识的第一句 prompt 表述</li></ul></div>
+    <div class="gcard"><h3>工程萌芽 · 批处理</h3><ul><li><b>多文件批处理，并行上限 3</b>——批量与并行思想的首次出现（v2 的 U1/U4 议题此时已埋下）</li></ul></div>
+    <div class="gcard"><h3>工程萌芽 · 独立审校</h3><ul><li><b>审校：独立 agent 复检信达雅</b>——四哈希审校协议的 seed，此时还只是一句要求</li></ul></div>
+  </div>
+</div></section>
+
+<section id="split"><div class="wrap">
+  <div class="shead rv"><span class="no">03</span><h2>13 分钟的重构（18ccc13）</h2><span class="hint">从"规则堆在 prompt 里"到"标准有自己的家"</span></div>
+  <div class="diffcard rv">
+    <div class="dtree">
+      <div class="t">重构前（f12bb50 · 23:40）</div>
+      <div>skills/text-refine/</div>
+      <div>└─ SKILL.md <span class="mod">（356 行，案例内嵌）</span></div>
+    </div>
+    <div class="dtree">
+      <div class="t">重构后（18ccc13 · 23:53）</div>
+      <div>skills/text-refine/</div>
+      <div>├─ SKILL.md <span class="mod">（261 行，引用 references；356 → 261）</span></div>
+      <div>├─ references/line-break-cases.md <span class="new">+100 行 ★</span></div>
+      <div>├─ references/asr-corrections.md <span class="new">+34 行</span></div>
+      <div>└─ tests/eval-cases.md <span class="new">+19 行</span></div>
+    </div>
+  </div>
+  <div class="g3 rv" style="margin-top:14px">
+    <div class="gcard">
+      <h3>line-break-cases.md 初版</h3>
+      <ul>
+        <li>当时叫 <b>"断句与减词案例（影视台词）"</b>，100 行、五个案例</li>
+        <li>演化至今日的 <b>181 行"视频翻译标准与信达雅审校"</b>——v2 重建中唯一原文保留的资产</li>
+      </ul>
+    </div>
+    <div class="gcard">
+      <h3>asr-corrections.md</h3>
+      <ul>
+        <li>①代硬编码在 prompt 里的同音字表，第一次变成<b>独立可维护的数据文件</b></li>
+        <li>用法声明："按视频类型查对应段落；表外可疑词按同音+语境判断，不孤立套表"</li>
+      </ul>
+    </div>
+    <div class="gcard">
+      <h3>tests/ 诞生</h3>
+      <ul>
+        <li>第一个测试文件是 Markdown 用例集而非代码——"改完 SKILL.md / references 后回归验证"</li>
+        <li>这正是周日下午 pytest 测试套件的<b>前身</b></li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section id="eval"><div class="wrap">
+  <div class="shead rv"><span class="no">04</span><h2>回归用例 E1~E4</h2><span class="hint">"纯 prompt skill 没有可跑的单测"——所以用例先成文</span></div>
+  <div class="tblwrap rv"><div class="tbl"><table>
+    <thead><tr><th style="width:44px">#</th><th style="width:76px">验证点</th><th>输入（条目正文 / 时长）</th><th>必须满足</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">E1</td><td>意群断句</td><td class="mono">"We found traces of explosive materials inside the warehouse." / 2.6s</td><td>双行各自成意群；"的"不悬行尾；总字数 ≤ 硬上限（时长×7≈18）</td></tr>
+      <tr><td class="mono">E2</td><td>连词归属</td><td class="mono">"I didn't tell you the truth because I thought you couldn't handle it." / 2.2s</td><td>因果引导词不在第一行行尾领空；总字数 ≤ 硬上限 15</td></tr>
+      <tr><td class="mono">E3</td><td>减词</td><td class="mono">"Well, to be completely honest with you, I actually really don't remember…" / 2.0s</td><td>删 well/actually/really 填充词；≤14 字；信息点一个不缺</td></tr>
+      <tr><td class="mono">E4</td><td>动作化拆解</td><td class="mono">"The failure of the cooling system caused the core temperature to rise…" / 2.3s</td><td>无名词化直译；拆成两个动作短句；保住危机语气</td></tr>
+    </tbody>
+  </table></div></div>
+  <div class="chips rv">
+    <span>共同断言（所有用例）：<b>时间轴与序号原样保留 · 输出仍是 UTF-8 无 BOM 的 SRT · 无 Markdown 标记</b></span>
+    <span>彩蛋：E1~E4 就是今日 line-break-cases.md 里"仓库炸药 / 因果引导词 / 口供填充词 / 冷却系统"四个正反例的<b>原型</b></span>
+    <span>"硬上限 = 时长×7"——②代已在用 prompt 语言实现 <b>CPS 警戒线</b>，周日它变成 max_han_cps=7</span>
+  </div>
+</div></section>
+
+<section id="ancestors"><div class="wrap">
+  <div class="shead rv"><span class="no">05</span><h2>祖先条款 II</h2><span class="hint">②代夜里写下的句子 → 周日下午的代码</span></div>
+  <div class="tblwrap rv"><div class="tbl"><table>
+    <thead><tr><th style="width:44%">②代原文（prompt 语言）</th><th>后世实现（代码）</th></tr></thead>
+    <tbody>
+      <tr class="hl"><td>"时空同步：<b>译文长度由时间轴预算决定</b>"</td><td>duration_ms → max_units 预算换算（D5）</td></tr>
+      <tr><td>"版面：一行一个意群"</td><td>display_width 行长门禁 + 意群断句标准</td></tr>
+      <tr><td>"E1 总字数 ≤ <b>时长×7</b>"</td><td>DEFAULTS max_han_cps=7 → v2 必修档 7~10</td></tr>
+      <tr><td>"审校：<b>独立 agent 复检信达雅</b>"</td><td>review-input 四哈希绑定 + coverage + findings 协议</td></tr>
+      <tr><td>"长文件落盘节奏，防止单响应超限"</td><td>批次循环 + status.json 断点续跑</td></tr>
+      <tr><td>"多文件批处理（并行上限 3）"</td><td>U1 目录批量（建议 P1）/ U4 并行批次（建议 P2）</td></tr>
+      <tr><td>asr-corrections.md 数据外置</td><td>结构化 glossary：探测 → 锁定 → 合规扫描</td></tr>
+      <tr><td>eval-cases.md 回归用例</td><td>pytest 套件 + v2 §16.5 验收场景矩阵 S1~S6</td></tr>
+    </tbody>
+  </table></div></div>
+</div></section>
+
+<section id="eco"><div class="wrap">
+  <div class="shead rv"><span class="no">06</span><h2>生态咬合（1889969）</h2><span class="hint">一行改动，三个 skill 的时间预算契约对齐</span></div>
+  <div class="code rv">
+    <div class="bar"><i style="background:#f87171"></i><i style="background:#fbd449"></i><i style="background:#3ddc97"></i><span style="margin-left:8px">1889969 · SKILL.md 唯一的一行改动 · 与其他 skill 配合</span></div>
+<pre><span class="jm">- 交给 video-tts 配音时，每秒 3~5 字的阅读速度预算正好也是配音语速预算，译文长度天然匹配口型时长。</span>
+<span class="jv">+ 交给 video-tts 配音时，时间对齐由它的语义合并（--merge-plan，读全文按语义分组）兜住——</span>
+<span class="jv">+ 按语义段合并成块后整段朗读，配音语速预算约 4 字/秒（另计标点停顿），比字幕阅读预算宽松，</span>
+<span class="jv">+ refine 不必为配音额外减词。</span></pre>
+  </div>
+  <div class="g3 rv" style="margin-top:14px">
+    <div class="gcard"><h3>add-subtitle 契约</h3><ul><li>每条 ≤ 12 字——确定要叠加字幕时，<b>翻译阶段就按 12 字拆条</b></li></ul></div>
+    <div class="gcard"><h3>video-tts 契约</h3><ul><li>--merge-plan 语义合并读全文分组，配音预算约 <b>4 字/秒</b>（另计标点停顿）</li></ul></div>
+    <div class="gcard"><h3>text-refine 的自由度</h3><ul><li>阅读预算（3~5 字/秒）严于配音预算 → <b>refine 不必为配音额外减词</b>，两个预算解耦</li></ul></div>
+  </div>
+  <div class="chips rv"><span>同一次提交里 audio-transcribe 引入<b>词级时间戳修正转录偏移</b>——⑤代 word-timestamps schema 的生态源头</span></div>
+</div></section>
+
+<section id="eras"><div class="wrap">
+  <div class="shead rv"><span class="no">07</span><h2>演化之路</h2><span class="hint">本页位置：①与③之间的标准成文之夜</span></div>
+  <div class="eras rv">
+    <div class="era"><span class="ec">4/30 → 11/2</span><b>① 单文件时代</b><span>六个月纯提示词 · 终版 b810216</span></div>
+    <span class="arr">→</span>
+    <div class="era now"><span class="ec">11/7 → 11/8</span><b>② 案例扩充</b><span>标准成文 · references + tests 诞生</span></div>
+    <span class="arr">→</span>
+    <div class="era"><span class="ec">11/8 午后</span><b>③ 逐块状态机</b><span>七命令 CLI · init/chunk/submit</span></div>
+    <span class="arr">→</span>
+    <div class="era"><span class="ec">1f09ea8</span><b>④ 薄文件层</b><span>Simplify · 三命令协议</span></div>
+    <span class="arr">→</span>
+    <div class="era"><span class="ec">d4950bf</span><b>⑤ 排时引擎</b><span>semantic_timing · 信达雅审校</span></div>
+    <span class="arr">→</span>
+    <div class="era" style="border-color:rgba(56,217,240,.4)"><span class="ec">v2 重建</span><b>批次管线</b><span>评审中 · 需求文档 v0.3</span></div>
+  </div>
+  <div class="hand rv">
+    <h3>→ 四页一套，对照着看</h3>
+    <p>①看起点（纯提示词与格式铁律），②看标准如何成文（本页），⑤看现在的协议与引擎，v2 蓝图看批次管线的去向。</p>
+    <a class="btn" href="text-refine_v1_单文件版.html">①代 单文件时代 →</a>
+    <a class="btn" href="text-refine_v3_架构.html" style="background:var(--py);color:#06222a">⑤代 现行架构 →</a>
+    <a class="btn" href="text-refine_v2_蓝图.html" style="background:var(--gold);color:#33230a">v2 重建蓝图 →</a>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <span>text-refine ②代 案例扩充解剖 · f12bb50 ~ 1889969（2026-11-07 22:16 → 11-08 10:26）</span>
+  <span><a href="text-refine_v1_单文件版.html">①代 单文件时代</a> · <a href="text-refine_v3_架构.html">v3 现行架构</a> · <a href="text-refine_v2_蓝图.html">v2 重建蓝图</a> · <a href="text-refine_v2_完整技术需求文档.md">v2 需求文档</a></span>
+</div></footer>
+
+<script>
+(function(){
+  var els=document.querySelectorAll('.rv');
+  if(!('IntersectionObserver' in window)||window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    els.forEach(function(e){e.classList.add('on')});return;
+  }
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){if(en.isIntersecting){en.target.classList.add('on');io.unobserve(en.target)}});
+  },{threshold:.08});
+  els.forEach(function(e){io.observe(e)});
+})();
+</script>
+</body>
+</html>
