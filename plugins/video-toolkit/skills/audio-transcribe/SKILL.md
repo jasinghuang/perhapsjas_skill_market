@@ -106,8 +106,8 @@ python ${CLAUDE_PLUGIN_ROOT}\skills\audio-transcribe\run.py <输入...> --provid
 
 - **Whisper 后端已移除**（MLX-Whisper / Faster-Whisper 及 `--model/--format/--keep-timestamps/--keep-context`、MD 输出不再存在）。需要 Whisper 时请显式说明，本 skill 不再提供。
 - `--provider` 必填；产物从单文件变为 TXT+JSON+SRT 三件套；SRT 分句显著变细。
-- 下游 `add-subtitle` / `video-tts` 兼容性不变（仍消费标准 SRT）；
-  但 SRT 分句已较细，叠字幕前通常**不再需要** text-refine 断句（校准错别字仍可用）。
+- 下游 `video-tts` 兼容性不变（仍消费标准 SRT）；
+  但 SRT 分句已较细，配音前通常**不再需要** text-refine 断句（校准错别字仍可用）。
 
 ## 平台细节与排障（按需读取，勿在对话中展开）
 
@@ -118,7 +118,7 @@ python ${CLAUDE_PLUGIN_ROOT}\skills\audio-transcribe\run.py <输入...> --provid
 ## 与其它 skill 串联
 
 ```text
-video-downloader → audio-transcribe → text-refine（可选校准）→ add-subtitle / video-tts
+video-downloader → audio-transcribe → text-refine（可选校对/翻译）→ video-tts
 ```
 
 ## 示例

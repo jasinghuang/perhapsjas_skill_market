@@ -123,7 +123,7 @@ def test_trio_outputs_written_and_valid(monkeypatch, fast_env, media_file, tmp_p
     assert result["segments"], "segments carry the final subtitle entries"
 
     srt_text = srt.read_text(encoding="utf-8")
-    assert not srt_text.startswith("\ufeff")  # no BOM: add-subtitle breaks on it
+    assert not srt_text.startswith("\ufeff")  # no BOM: \u4e0b\u6e38\u89e3\u6790\u5668\u5bf9 BOM \u654f\u611f
     assert validate_srt(srt_text, 6.0) == []
 
 
