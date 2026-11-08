@@ -1,5 +1,10 @@
 # ASR Skill 跨平台改造技术需求文档
 
+> 后续决策覆盖：Mac 现固定使用 `mlx-community/Qwen3-ASR-1.7B-8bit` 识别及
+> `Qwen/Qwen3-ForcedAligner-0.6B` 对齐，已移除 `--precision` 和其他识别精度选项。
+> 本 v1 文档中的多精度配置及 P02／P03 对照验收保留为历史设计，不再执行；当前流程及交付格式以
+> [audio-transcribe/SKILL.md](plugins/video-toolkit/skills/audio-transcribe/SKILL.md) 为准。
+
 版本：1.0  
 日期：2026-11-08  
 实施对象：负责改造现有 skill 的 coding agent

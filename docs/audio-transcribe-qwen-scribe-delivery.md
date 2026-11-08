@@ -1,5 +1,11 @@
 # audio-transcribe 改造交付说明：Qwen3-ASR-1.7B 本地 + Scribe V2 在线
 
+> 此文为早期交付记录。后续已改为按用户选择交付单行 SRT 或 Markdown；Mac 固定
+> `mlx-community/Qwen3-ASR-1.7B-8bit`＋`Qwen/Qwen3-ForcedAligner-0.6B`，已移除 `--precision`。
+> 下文的多精度选项与待验收表为历史记录。当前约定及 Mac 实测记录见
+> [SKILL.md](../plugins/video-toolkit/skills/audio-transcribe/SKILL.md) 和
+> [mac-mlx.md](../plugins/video-toolkit/skills/audio-transcribe/references/mac-mlx.md)。
+
 日期：2026-11-08
 依据：`ASR_Skill_技术需求文档.md` v1.0
 范围：`plugins/video-toolkit/skills/audio-transcribe/`

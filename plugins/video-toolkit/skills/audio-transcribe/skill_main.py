@@ -253,8 +253,6 @@ def parse_args(argv=None) -> argparse.Namespace:
                         help=f"Comma-separated outputs among {FORMATS} (default: srt only)")
     parser.add_argument("--output", "-o", help="Output directory (default: alongside each input)")
     parser.add_argument("--device", default="auto", help="auto / cpu / cuda:0 (qwen torch route)")
-    parser.add_argument("--precision", default="8bit", choices=["8bit", "bf16", "6bit"],
-                        help="Mac MLX weight precision (advanced; default: 8bit)")
     parser.add_argument("--diarize", action="store_true",
                         help="Speaker diarization (scribe only; may add cost)")
     parser.add_argument("--audio-track", type=int, default=None,
@@ -328,7 +326,7 @@ def main(argv=None) -> int:
 
     try:
         backend = get_provider_backend(
-            provider, {"precision": args.precision, "device": args.device}
+            provider, {"device": args.device}
         )
     except Exception as exc:
         print(f"Error: {exc}")

@@ -9,9 +9,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import media
 from backends.qwen_mlx_backend import (
-    DEFAULT_PRECISION,
-    MLX_MODELS,
-    MLXBackendError,
+    ASR_MODEL_ID,
+    ALIGNER_MODEL_ID,
+    WEIGHT_PRECISION,
     QwenMLXBackend,
 )
 
@@ -69,7 +69,7 @@ def session_contract(monkeypatch, tmp_path):
         return original(self, *args, **kwargs)
     monkeypatch.setattr(QwenMLXBackend, "transcribe", transcribe)
     aligner = types.ModuleType("mlx_qwen3_asr.forced_aligner")
-    aligner.ForcedAligner = lambda: object()
+    aligner.ForcedAligner = lambda model_path: SimpleNamespace(model_path=model_path)
     monkeypatch.setitem(sys.modules, "mlx_qwen3_asr.forced_aligner", aligner)
     monkeypatch.setattr(media, "to_wav16k_mono", lambda src, dst, stream_index=None: dst)
 
@@ -78,25 +78,22 @@ def test_default_is_8bit_repo_never_tool_default(mlx_fakes):
     backend = QwenMLXBackend()
     result = backend.transcribe(str(mlx_fakes), language="auto")
     call = FakeMLXModule.calls[0]
-    assert call["model"] == MLX_MODELS["8bit"]  # NOT the tool's 0.6B default
+    assert call["model"] == ASR_MODEL_ID  # NOT the tool's 0.6B default
     assert "1.7B" in call["model"]
-    assert result["model_id"] == MLX_MODELS["8bit"]
-    assert result["weight_precision"] == DEFAULT_PRECISION
+    assert result["model_id"] == ASR_MODEL_ID
+    assert result["weight_precision"] == WEIGHT_PRECISION
+    assert backend._aligner.model_path == ALIGNER_MODEL_ID
     assert result["compute_dtype"] == "float16"  # loader converts fp params
     assert result["language"] == "zh"
     assert result["status"] == "complete"
 
 
-def test_precision_variants_map_to_repos(mlx_fakes):
-    QwenMLXBackend(precision="bf16").transcribe(str(mlx_fakes))
-    assert FakeMLXModule.calls[-1]["model"] == MLX_MODELS["bf16"]
-    QwenMLXBackend(precision="6bit").transcribe(str(mlx_fakes))
-    assert FakeMLXModule.calls[-1]["model"] == MLX_MODELS["6bit"]
-
-
-def test_unknown_precision_rejected():
-    with pytest.raises(MLXBackendError):
-        QwenMLXBackend(precision="4bit")
+@pytest.mark.parametrize("precision", ["8bit", "bf16", "6bit"])
+def test_removed_precision_cli_is_rejected(precision):
+    from skill_main import parse_args
+    with pytest.raises(SystemExit) as exc:
+        parse_args(["audio.wav", "--provider", "qwen", "--precision", precision])
+    assert exc.value.code == 2
 
 
 def test_language_mapping(mlx_fakes):

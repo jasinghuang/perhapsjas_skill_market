@@ -6,8 +6,8 @@ no post-processing here — that fact is recorded in the result warnings-free,
 per doc §8 ("the adapter must state whether the backend already chunks").
 
 Recognition stays at the 1.7B family; the package default is 0.6B, so the
-model id is ALWAYS passed explicitly. Default weight is the 8bit repo;
-bf16/6bit exist only as advanced `--precision` choices (doc §5).
+model id is ALWAYS passed explicitly. Recognition is fixed to 1.7B 8bit;
+the separate 0.6B model only supplies forced-alignment timestamps.
 """
 
 from pathlib import Path
@@ -15,33 +15,21 @@ from typing import Callable, Optional
 
 from results import build_result, make_word
 
-MLX_MODELS = {
-    "8bit": "mlx-community/Qwen3-ASR-1.7B-8bit",
-    "bf16": "mlx-community/Qwen3-ASR-1.7B-bf16",
-    "6bit": "mlx-community/Qwen3-ASR-1.7B-6bit",
-}
-DEFAULT_PRECISION = "8bit"
+ASR_MODEL_ID = "mlx-community/Qwen3-ASR-1.7B-8bit"
+ALIGNER_MODEL_ID = "Qwen/Qwen3-ForcedAligner-0.6B"
+WEIGHT_PRECISION = "8bit"
 
-# moona3k's loader converts float params to FP16 on load, regardless of the
-# weight repo's bf16 name — compute dtype is recorded separately (doc §5).
+# Quantized weight precision and floating-point compute dtype are distinct.
 COMPUTE_DTYPE = "float16"
-
-
-class MLXBackendError(Exception):
-    pass
 
 
 class QwenMLXBackend:
     provider = "qwen"
     backend = "mlx"
+    model_id = ASR_MODEL_ID
+    precision = WEIGHT_PRECISION
 
-    def __init__(self, precision: str = DEFAULT_PRECISION):
-        if precision not in MLX_MODELS:
-            raise MLXBackendError(
-                f"Unknown precision '{precision}'. Available: {', '.join(MLX_MODELS)}"
-            )
-        self.precision = precision
-        self.model_id = MLX_MODELS[precision]
+    def __init__(self):
         self._session = None
         self._aligner = None
         self._model_revision = None
@@ -106,7 +94,7 @@ class QwenMLXBackend:
             resolved = getattr(getattr(self._session, "model", None), "_resolved_model_path", None)
             self._model_revision = Path(resolved).name if resolved and Path(resolved).parent.name == "snapshots" else None
             from mlx_qwen3_asr.forced_aligner import ForcedAligner
-            self._aligner = ForcedAligner()
+            self._aligner = ForcedAligner(model_path=ALIGNER_MODEL_ID)
         result = self._session.transcribe(
             audio=str(audio),
             language=qwen_language,

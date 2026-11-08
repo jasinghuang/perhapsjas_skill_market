@@ -1,0 +1,6 @@
+# Keep development resources in the repository, omit them from git archive releases.
+tests export-ignore
+tests/** export-ignore
+**/__pycache__/** export-ignore
+.pytest_cache export-ignore
+.pytest_cache/** export-ignore

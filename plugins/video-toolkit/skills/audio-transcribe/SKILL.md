@@ -53,7 +53,6 @@ python <skill目录>/run.py "a.mp4" "b.mp4" --provider qwen --formats srt --outp
 | `--output / -o` | 输出目录，默认素材同目录；只写所选成品 |
 | `--audio-track` | ffprobe 的实际 stream index；默认第一条音轨。用户语种/声道意图有歧义时用控件选 |
 | `--device` | Windows/Torch：auto、cpu、cuda:0；无 CUDA 为 FP32 慢速兼容路线 |
-| `--precision` | Mac 高级选项 8bit（默认）、bf16、6bit；识别模型始终 1.7B |
 | `--diarize` | Scribe 可选说话人分离，不默认开启；可能影响费用 |
 | `--detect-env` | 只读检测，不安装；指定 qwen 时优先检查已有专属解释器 |
 | `--no-progress` | 关闭动态进度行，仍报告阶段 |
@@ -71,6 +70,8 @@ python <skill目录>/run.py "a.mp4" "b.mp4" --provider qwen --formats srt --outp
 ## 环境、缓存与排障
 
 `run.py` 仅在应用缓存中的专属 venv 安装固定版本；不修改系统 Python，不自动安装驱动。
+Mac 固定 `mlx-community/Qwen3-ASR-1.7B-8bit` 识别，使用独立的
+`Qwen/Qwen3-ForcedAligner-0.6B` 对齐时间；不提供识别权重精度切换。
 Scribe 使用标准库，不安装 MLX／Torch。首次下载耗时应与常规推理耗时区分。
 素材目录不创建工作文件夹；成功清理临时音频，原始结果缓存供重新导出复用。
 缓存包含源内容摘要、音轨、模型版本、语言及推理参数。失败保留内部进度：
