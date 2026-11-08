@@ -130,6 +130,7 @@ def transcribe(
     language: str = "auto",
     output_format: str = "md",
     keep_timestamps: bool = False,
+    keep_context: bool = False,
     show_progress: bool = True,
 ) -> Path:
     if model_size is None:
@@ -159,6 +160,7 @@ def transcribe(
         str(video_path),
         language=language,
         on_progress=reporter.update if reporter else None,
+        condition_on_previous_text=keep_context,
     )
     if reporter is not None:
         reporter.finish()
@@ -253,6 +255,14 @@ Examples:
         help="Keep timestamps in markdown output",
     )
     parser.add_argument(
+        "--keep-context",
+        action="store_true",
+        default=False,
+        help="Let each 30s window condition on the previous window's text "
+        "(default off: hallucinated context over music/silence can cascade "
+        "into repetition loops and degrade later windows)",
+    )
+    parser.add_argument(
         "--no-progress",
         action="store_true",
         help="Disable live transcription progress lines",
@@ -321,6 +331,7 @@ Examples:
                 language=args.language,
                 output_format=output_format,
                 keep_timestamps=args.keep_timestamps,
+                keep_context=args.keep_context,
                 show_progress=not args.no_progress,
             )
             print(f"  Done: {result_path}")

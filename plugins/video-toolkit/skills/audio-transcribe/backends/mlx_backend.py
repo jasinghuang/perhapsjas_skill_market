@@ -144,6 +144,7 @@ class MLXBackend(TranscriptionBackend):
         audio_path: str,
         language: Optional[str] = None,
         on_progress: Optional[Callable[[float, float, float], None]] = None,
+        condition_on_previous_text: bool = False,
     ) -> Dict:
         import mlx_whisper
 
@@ -161,6 +162,10 @@ class MLXBackend(TranscriptionBackend):
                 path_or_hf_repo=self._repo,
                 language=whisper_language,
                 word_timestamps=True,
+                # Off by default: hallucinated text over music/silence would
+                # otherwise be fed back as context and cascade into later
+                # windows (repetition loops, degrading quality).
+                condition_on_previous_text=condition_on_previous_text,
                 verbose=False,
             )
         finally:

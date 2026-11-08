@@ -4,7 +4,8 @@ from backends.faster_whisper_backend import FasterWhisperBackend
 
 
 class FakeModel:
-    def transcribe(self, path, language=None, beam_size=5, word_timestamps=False):
+    def transcribe(self, path, language=None, beam_size=5, word_timestamps=False,
+                   condition_on_previous_text=True):
         segments = iter([
             SimpleNamespace(start=0.0, end=2.0, text=" hello"),
             SimpleNamespace(start=2.0, end=4.0, text=" world"),
@@ -19,6 +20,23 @@ def test_reports_progress_per_segment():
     result = backend.transcribe("x.mp4", on_progress=lambda f, e, t: seen.append((f, e, t)))
     assert seen == [(0.5, 2.0, 4.0), (1.0, 4.0, 4.0)]
     assert [s["text"] for s in result["segments"]] == ["hello", "world"]
+
+
+def test_context_conditioning_disabled_by_default_and_opt_in():
+    recorded = {}
+
+    class RecordingModel:
+        def transcribe(self, path, language=None, beam_size=5, word_timestamps=False,
+                       condition_on_previous_text=True):
+            recorded["condition_on_previous_text"] = condition_on_previous_text
+            return iter([]), SimpleNamespace(language="en", duration=1.0)
+
+    backend = FasterWhisperBackend()
+    backend._model = RecordingModel()
+    backend.transcribe("x.mp4")  # default: context off
+    assert recorded["condition_on_previous_text"] is False
+    backend.transcribe("x.mp4", condition_on_previous_text=True)
+    assert recorded["condition_on_previous_text"] is True
 
 
 def test_callback_error_does_not_break_transcription():
@@ -36,7 +54,8 @@ def test_segment_times_follow_word_boundaries():
     # Token-level timestamps pin the first segment of a window to its start
     # when it opens on music; word boundaries must win.
     class FakeModelWithWords:
-        def transcribe(self, path, language=None, beam_size=5, word_timestamps=False):
+        def transcribe(self, path, language=None, beam_size=5, word_timestamps=False,
+                       condition_on_previous_text=True):
             segments = iter([
                 SimpleNamespace(
                     start=0.0,

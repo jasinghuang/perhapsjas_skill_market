@@ -71,6 +71,7 @@ class FasterWhisperBackend(TranscriptionBackend):
         audio_path: str,
         language: Optional[str] = None,
         on_progress: Optional[Callable[[float, float, float], None]] = None,
+        condition_on_previous_text: bool = False,
     ) -> Dict:
         whisper_language = None if language in ("auto", None) else language
 
@@ -79,6 +80,9 @@ class FasterWhisperBackend(TranscriptionBackend):
             language=whisper_language,
             beam_size=5,
             word_timestamps=True,
+            # Off by default — same rationale as the MLX backend: prevents
+            # hallucinated context from music/silence cascading into later windows.
+            condition_on_previous_text=condition_on_previous_text,
         )
 
         duration = getattr(info, "duration", None)
