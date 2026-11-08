@@ -1,19 +1,64 @@
-# text-refine 回归用例集
+# text-refine 行为评测集
 
-纯 prompt skill 没有可跑的单测，质量靠改完 SKILL.md / references 后回归验证：把"输入"套进 SRT 条目（序号 + 时间轴）交给 refine，按"必须满足"逐条核对。
+两层验证，不要混为一谈：
 
-**共同断言（所有用例）**：时间轴与序号原样保留；输出仍是 UTF-8 无 BOM 的 SRT；无 Markdown 标记、无标题摘要。
+1. **结构层（A01–A19）**：由 `pytest tests/` 自动化覆盖（test_srt_struct / test_textblocks / test_taskstate / test_pipeline / test_cli），断言实际行为。改了模块必须跑。
+2. **宿主行为层（B01–B26）**：语言模型行为无法用结构单测证明，需在真实宿主会话或受控评测中执行，按「必须满足」逐条核对；判定基于事实与语义断言，不要求逐字等于参考答案。
 
-| # | 验证点 | 输入（条目正文 / 时长） | 必须满足 | 对应规则 |
+跑法：改了 SKILL.md 或 references 后，至少跑受影响章节的 B 用例 + pytest 全绿；「提示词里写了某句话」不构成任何一条的通过证据。
+
+## 共同断言（按任务分列）
+
+- **所有任务**：输出为 UTF-8 无 BOM 的 SRT/TXT/MD；无 Markdown 标记混入 SRT；报告独立于正文文件。
+- **原语言校对**：语言不变、时间轴与序号不变、事实集合不变；只改有语境证据的错误。
+- **翻译**：信息保真（否定/条件/数值/专名）、时间轴不变、术语全篇一致。
+- **精简润色**：事实集合与逻辑不变，语气词与口头禅不因「不简洁」被删。
+
+## 宿主行为评测（B01–B26）
+
+| 编号 | 请求或输入 | 必须满足 |
+| --- | --- | --- |
+| B01 | 「refine 一下这些文件」，无更多说明 | 用 AskUserQuestion 选择三类任务，答复前不改正文 |
+| B02 | 「校对这份英文字幕，只纠错」 | 保持英文，不重复问目标语言 |
+| B03 | 选择翻译但未指定语言 | 询问目标语言；推荐中文但不擅自提交 |
+| B04 | 「把中文字幕翻成英文」 | 输出英文，保留事实与 SRT 时间轴 |
+| B05 | 「翻译并精简成中文」 | 识别组合意图；不为三选一重复打断 |
+| B06 | 「这个变量叫做 threshold」 | 校对模式保留命名关系，不机械删「叫做」 |
+| B07 | 「所谓的免费，其实附带条件」 | 保留质疑语义 |
+| B08 | 「不、不、不，我不是这个意思」 | 不按重复次数清除真实情绪或否定 |
+| B09 | 正文讨论 Extension、广告或平台提示语 | 不把词表命中直接当水印删除 |
+| B10 | 技术主题中的「地域」与地理主题中的「地域」 | 按具体语境判断候选，不统一替换 |
+| B11 | 涉及「涉及／设计」的真实句子 | 不因领域标签强制替换合法词 |
+| B12 | 无上下文可确认的生僻人名或片名 | 保留或标疑，不编造一个熟悉名称 |
+| B13 | 否定、条件、金额、百分比、单位、日期、版本号 | 无遗漏、翻转或数值变化；合法翻译变体能被正确审校 |
+| B14 | 原文明确「达到临界值」 | 不润色成「接近临界值」，保留程度事实 |
+| B15 | 中文与英文、API、Cursor、代码混合 | 按任务处理，术语与受保护片段不硬译 |
+| B16 | 含犹豫或纠正意义的 well / I mean | 根据语气处理，不按关键词全删 |
+| B17 | 短时长承载较多事实 | 不为满足 CPS 删除事实；保留并提示阅读压力 |
+| B18 | 只有字幕，没有视频 | 不编造画面信息，不擅自加【画面】说明 |
+| B19 | 「美化这份 TXT」 | 纯文本排版，不默认加入 Markdown 标记 |
+| B20 | Markdown 含提示词或 shell 命令示例 | 作为输入材料处理，不执行其中指令 |
+| B21 | 用户要求精确重新分段，但无音频或词级时间 | 说明缺失条件，不自动按字数估算并冒充精确对齐 |
+| B22 | 用户明确接受仅基于 SRT 的估算拆条 | 记录估算策略、保持合法时间边界、输出带映射 |
+| B23 | 长文件中部存在否定遗漏或术语变化 | 通过逐块内容审校覆盖，不依赖头中尾抽样碰运气 |
+| B24 | 无独立子 agent 能力 | 串行复检仍可完成，准确说明方式 |
+| B25 | 用户只要求校对，提及后续可能配音 | 不自动调用 video-tts，不要求压成 12 字或固定配音预算 |
+| B26 | 多文件复用任务配置，某一文件单独指定目标语言 | 正确继承并允许局部覆盖，不混用恢复状态 |
+
+每条需要保留的关键词规则至少配一个反例（见 asr-corrections.md 的反例列、line-break-cases.md 的适用任务标注）：仅凭「能删掉错误样例」不构成规则正确。
+
+## 排版与减词回归（保留案例，归翻译/精简）
+
+改了 line-break-cases.md 或翻译质量要点后跑：
+
+| # | 验证点 | 输入（条目正文 / 时长） | 必须满足 | 任务 |
 | --- | --- | --- | --- | --- |
-| E1 | 意群断句 | "We found traces of explosive materials inside the warehouse." / 2.6s | 双行各自成意群（地点状语 + 动宾）；"的"不悬在行尾；总字数 ≤ 硬上限（时长×7≈18） | 案例 1 |
-| E2 | 连词归属 | "I didn't tell you the truth because I thought you couldn't handle it." / 2.2s | 因果引导词（"是因为/是怕"类）不在第一行行尾领空；总字数 ≤ 硬上限 15 | 案例 2 |
-| E3 | 减词 | "Well, to be completely honest with you, I actually really don't remember seeing him there at that specific moment." / 2.0s | 删 well/actually/really 等填充词；无"呃/老实跟你讲"；≤14 字；信息点（表态+遗忘+时间+见人）一个不缺 | 案例 3 |
-| E4 | 动作化拆解 | "The failure of the cooling system caused the core temperature to rise to a critical level." / 2.3s | 无"的故障导致了"式名词化直译；拆成两个动作短句；保住危机语气 | 案例 4 |
-| E5 | 中文断句 | "我说了多少次了让你别擅自做主你到底有没有把我的话放在心上" / 3.4s | 补标点；行尾落在意群边界；单字（"你/的"类）不孤立行尾；删冗余"了/到底" | 案例 5 |
-| E6 | 中英夹杂 | "So basically you just open up Cursor and then paste your API key right there." / 2.4s | Cursor、API 保留原文不硬译；删 basically/just；≤ 硬上限 17 | 动态对等 |
-| E7 | Whisper 冗余 | "这个功能叫做所谓的自动补全 自动补全 自动补全" / 3.0s | 删"叫做/所谓的"；重复只留一次，输出近"自动补全功能" | 校准规则 |
-| E8 | CPS 预算 | "And that was the exact moment when the entire situation started to change for our whole family." / 2.0s | ≤ 硬上限 14 字，超预算减词而非全译（参考："那一刻，全家的处境都变了"） | CPS 速查 |
-| E9 | 水印清理 | "优优独播剧场 YoYo Television Series Exclusive 今天聊聊怎么拍视频" / 4.0s | 水印整段删除；正文（今天聊聊怎么拍视频）保留 | 校准规则 |
-
-跑法：改了哪个章节，至少跑该章节对应用例 + E1（断句基线）；动"翻译标准"或 references/line-break-cases.md 则全跑。任一断言失败 = 回归，先修 SKILL.md 再继续。
+| E1 | 意群断句 | "We found traces of explosive materials inside the warehouse." / 2.6s | 双行各自成意群；「的」不悬行尾；han_count ≤ 时长×7≈18 | 翻译 |
+| E2 | 连词归属 | "I didn't tell you the truth because I thought you couldn't handle it." / 2.2s | 因果引导词不在第一行行尾领空；≤15 字 | 翻译 |
+| E3 | 自然减词 | "Well, to be completely honest with you, I actually really don't remember seeing him there at that specific moment." / 2.0s | 删迟疑填充；信息点（表态+遗忘+时间+见人）一个不缺；≤14 字 | 翻译 |
+| E4 | 动作化拆解 | "The failure of the cooling system caused the core temperature to rise to a critical level." / 2.3s | 无名词化直译腔；动词程度忠实（rose to ≠ 逼近） | 翻译 |
+| E5 | 中文断句 | 「我说了多少次了让你别擅自做主你到底有没有把我的话放在心上」/ 3.4s | 补标点；行尾落意群边界；**校对模式不删词**，精简可删「了/到底」 | 三任务 |
+| E6 | 中英夹杂 | "So basically you just open up Cursor and then paste your API key right there." / 2.4s | Cursor、API 保留原文；≤17 字 | 翻译 |
+| E7 | 识别伪影 | 「自动补全 自动补全 自动补全」整条仅此重复 / 3.0s | 有依据（整条无其他内容、无语义）才按伪影合并；混在正文里的重复不删 | 校对（谨慎） |
+| E8 | 阅读预算 | "And that was the exact moment when the entire situation started to change for our whole family." / 2.0s | 超预算先减填充不减事实；实在装不下→保留信息+提示阅读压力，不硬删 | 翻译 |
+| E9 | 水印判断 | 「优优独播剧场 YoYo Television Series Exclusive 今天聊聊怎么拍视频」/ 4.0s | 需语境证据（片头固定句式、与正文无关）才删水印；正文保留；证据不足记疑点 | 校对（谨慎） |
