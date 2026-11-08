@@ -23,6 +23,20 @@ from srt_parse import Cue, parse_srt
 BASE_IMPORTS = ["soundfile", "numpy"]
 
 
+def _job_dir_of(tmp_path):
+    """conftest 把内部状态指到 tmp/state；返回最近一次任务的目录。"""
+    jobs = tmp_path / "state" / "jobs"
+    return max(jobs.iterdir(), key=lambda d: d.stat().st_mtime)
+
+
+def _job_json(tmp_path):
+    return _job_dir_of(tmp_path) / "job.json"
+
+
+def _report_json(tmp_path):
+    return _job_dir_of(tmp_path) / "report.json"
+
+
 def _write_srt(tmp_path, name="a.srt", body=None):
     """写一个真实存在的 SRT；内容只需能被 validate_args 看到文件。"""
     path = tmp_path / name
@@ -119,10 +133,19 @@ def test_yes_help_notes_dry_run_exemption():
 
 
 def test_required_route_local_vs_online():
-    assert route_imports("local") == BASE_IMPORTS + ["mlx_audio"]
+    # 本地路线按平台解析（Windows 实机即 torch 路线）；此处只验证
+    # 解析结果与其 import 表一致，具体平台断言见 test_regression T21。
+    route = required_route(["--provider", "local"])
+    assert route in ("local_mlx", "local_torch", "base")
+    if route == "local_mlx":
+        assert route_imports(route) == BASE_IMPORTS + ["mlx_audio"]
+    elif route == "local_torch":
+        assert route_imports(route) == BASE_IMPORTS + ["torch", "qwen_tts"]
     assert route_imports("online") == BASE_IMPORTS + ["requests"]
     assert route_imports("base") == BASE_IMPORTS
-    assert required_route(["--provider", "local"]) == "local"
+    assert required_route(["--provider", "local"]) in (
+        "local_mlx", "local_torch",
+    )
     assert required_route(["--provider=online"]) == "online"
 
 
@@ -144,7 +167,9 @@ def test_preview_prefixes_stay_base_only():
     assert required_route(["--provider", "online", "--hel"]) == "base"
     assert required_route(["--provider", "local", "--write"]) == "base"
     # `--` 是选项终止符，不是预览。
-    assert required_route(["--", "--provider", "local"]) == "local"
+    assert required_route(["--", "--provider", "local"]) in (
+        "local_mlx", "local_torch",
+    )
 
 
 def test_local_requires_voice_or_design(tmp_path, capsys):
@@ -265,7 +290,18 @@ def _local_args(tmp_path, *extra):
     )
 
 
-def test_design_mode_defaults_to_voice_design_model(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("backend", "expected_model"),
+    [
+        ("mlx", LOCAL_DESIGN_MODEL),
+        ("torch", "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"),
+    ],
+)
+def test_design_mode_defaults_per_backend(
+    tmp_path, monkeypatch, backend, expected_model
+):
+    # 默认模型随后端解析（spec §4.2）：mlx 用 mlx-community 镜像，
+    # torch 用官方 ID——用户不需要理解两套模型 ID。
     args = _local_args(tmp_path, "--design", "温柔、年轻的男声")
     captured = {}
 
@@ -274,12 +310,14 @@ def test_design_mode_defaults_to_voice_design_model(tmp_path, monkeypatch):
         captured.update(kwargs)
         return object()
 
+    monkeypatch.setattr(skill_main, "local_backend", lambda: backend)
     monkeypatch.setattr(skill_main, "get_provider", fake_get_provider)
     _build_provider(args, args.design)
     assert captured == {
         "name": "local",
+        "backend": backend,
         "design": "温柔、年轻的男声",
-        "model_id": LOCAL_DESIGN_MODEL,
+        "model_id": expected_model,
     }
 
 
@@ -428,12 +466,12 @@ def test_successful_run_writes_track_report_and_job(tmp_path, capsys, monkeypatc
     ])
     assert code == 0
     assert (tmp_path / "out.dub.wav").is_file()
-    report = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
+    report = json.loads(_report_json(tmp_path).read_text(encoding="utf-8"))
     assert report["schema_version"] == 2
     assert report["status"] == "complete"
     assert report["audio"]["master_sample_rate"] == 24000
     assert report["cues"][0]["actual_start"] == 0.0
-    job = json.loads((tmp_path / "out.job.json").read_text(encoding="utf-8"))
+    job = json.loads(_job_json(tmp_path).read_text(encoding="utf-8"))
     assert job["status"] == "complete"
     assert job["groups"][0]["status"] == "ok"
     assert (tmp_path / "out.dub.srt").is_file()  # 实际时间的块级字幕
@@ -461,7 +499,7 @@ def test_track_and_report_survive_mux_failure(tmp_path, capsys, monkeypatch):
     assert "4 字" in captured.out
     assert "mux boom" in captured.err
 
-    payload = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
+    payload = json.loads(_report_json(tmp_path).read_text(encoding="utf-8"))
     assert payload["track"].endswith("out.dub.wav")
     assert payload["output"] is None
     assert payload["status"] == "failed"
@@ -488,7 +526,7 @@ def test_mux_success_records_output(tmp_path, capsys, monkeypatch):
     ])
     assert code == 0
     assert "成片:" in capsys.readouterr().out
-    payload = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
+    payload = json.loads(_report_json(tmp_path).read_text(encoding="utf-8"))
     assert payload["output"].endswith("out.dub.mp4")
     assert mux_calls["sample_rate"] == 24000  # AAC 采样率与音轨一致
 
@@ -505,10 +543,10 @@ def test_overflow_default_exits_1_needs_attention(tmp_path, capsys, monkeypatch)
         "--master-sample-rate", "24000",
     ])
     assert code == 1
-    report = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
+    report = json.loads(_report_json(tmp_path).read_text(encoding="utf-8"))
     assert report["status"] == "needs_attention"
     assert not (tmp_path / "out.dub.wav").exists()  # 不出伪完整音轨
-    job = json.loads((tmp_path / "out.job.json").read_text(encoding="utf-8"))
+    job = json.loads(_job_json(tmp_path).read_text(encoding="utf-8"))
     assert job["status"] == "needs_attention"
     assert job["groups"][0]["overflow_gap"] > 1.0
 
@@ -525,7 +563,7 @@ def test_overflow_truncate_exits_3_with_warnings(tmp_path, capsys, monkeypatch):
         "--master-sample-rate", "24000", "--overflow-policy", "truncate",
     ])
     assert code == 3
-    report = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
+    report = json.loads(_report_json(tmp_path).read_text(encoding="utf-8"))
     assert report["status"] == "completed_with_warnings"
     assert report["content_truncated"] is True
     assert report["cues"][0]["truncated_seconds"] > 0.5
@@ -550,7 +588,7 @@ def test_continue_on_error_yields_partial_exit_1(tmp_path, capsys, monkeypatch):
         "--continue-on-error",
     ])
     assert code == 1
-    report = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
+    report = json.loads(_report_json(tmp_path).read_text(encoding="utf-8"))
     assert report["status"] == "partial"
     assert report["cues"][0]["attempts"] == 2  # 统一预算：2 次提交
 
@@ -558,19 +596,48 @@ def test_continue_on_error_yields_partial_exit_1(tmp_path, capsys, monkeypatch):
 # --- 覆盖保护（T20） --------------------------------------------------------
 
 
-def test_existing_output_refuses_without_overwrite(tmp_path, capsys, monkeypatch):
+def test_existing_output_auto_numbers_whole_set(tmp_path, capsys, monkeypatch):
+    # F09：同名成品默认整组自动编号 name_2（不覆盖、不报错），
+    # 旧文件原样保留，新产物全部落在同一编号下。
     srt = _write_srt(tmp_path)
     existing = tmp_path / "out.dub.wav"
     existing.write_bytes(b"previous")
+    old_report = tmp_path / "out.dub.srt"
+    old_report.write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\n旧字幕\n", encoding="utf-8"
+    )
     _patch_run(monkeypatch)
     code = skill_main.main([
         "--srt", str(srt), "--provider", "local", "--voice", "Serena",
         "--out", str(tmp_path / "out"), "--no-cache",
         "--master-sample-rate", "24000",
     ])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "自动编号" in captured.out
+    assert existing.read_bytes() == b"previous"          # 不覆盖旧成品
+    assert "旧字幕" in old_report.read_text(encoding="utf-8")
+    assert (tmp_path / "out_2.dub.wav").is_file()        # 整组统一编号
+    assert (tmp_path / "out_2.dub.srt").is_file()
+    # report/job 是内部状态（F12），在应用任务目录、不在素材目录。
+    assert (tmp_path / "out_2.report.json").exists() is False
+    assert (_job_dir_of(tmp_path) / "report.json").is_file()
+    assert (_job_dir_of(tmp_path) / "job.json").is_file()
+
+
+def test_output_never_overwrites_input_srt(tmp_path, capsys, monkeypatch):
+    # F09：输出撞输入（同文件）必须拒绝，--overwrite 也不放行。
+    srt = _write_srt(tmp_path)
+    _patch_run(monkeypatch)
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "ok"),
+        "--json-report", str(srt),  # 自定义报告直接指向输入 SRT
+        "--no-cache", "--master-sample-rate", "24000", "--overwrite",
+    ])
     assert code == 2
-    assert "refusing to overwrite" in capsys.readouterr().err
-    assert existing.read_bytes() == b"previous"
+    assert "覆盖输入" in capsys.readouterr().err
+    assert srt.read_text(encoding="utf-8").startswith("1\n")
 
 
 def test_failing_overwrite_run_keeps_existing_output(tmp_path, capsys, monkeypatch):
@@ -598,15 +665,23 @@ _DUB_BODY = (
 )
 
 
-def _write_plan_groups(tmp_path, groups):
+def _write_plan_groups(tmp_path, groups, srt=None, **extra):
+    payload = {"groups": groups, **extra}
+    if srt is not None:
+        import hashlib
+        payload["srt_sha256"] = hashlib.sha256(
+            Path(srt).read_bytes()
+        ).hexdigest()
+    else:
+        payload["srt_sha256"] = "hash"
     plan = tmp_path / "plan.json"
-    plan.write_text(json.dumps({"groups": groups}), encoding="utf-8")
+    plan.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     return plan
 
 
 def test_merge_plan_run_writes_actual_dub_srt(tmp_path, capsys, monkeypatch):
     srt = _write_srt(tmp_path, body=_DUB_BODY)
-    plan = _write_plan_groups(tmp_path, [[1, 2, 3], [4]])
+    plan = _write_plan_groups(tmp_path, [[1, 2, 3], [4]], srt=srt)
     _patch_run(monkeypatch)
     code = skill_main.main([
         "--srt", str(srt), "--provider", "local", "--voice", "Serena",
@@ -626,10 +701,29 @@ def test_merge_plan_run_writes_actual_dub_srt(tmp_path, capsys, monkeypatch):
     assert (tmp_path / "out.dub.wav").is_file()
 
 
+def test_write_plan_online_needs_no_cost_confirmation(tmp_path, capsys):
+    # F14：--write-plan 只写计划、不合成、不联网 → 不要求 --yes。
+    srt = _write_srt(tmp_path)
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "online", "--voice", "Cherry",
+        "--out", str(tmp_path / "out"), "--write-plan",
+    ])
+    assert code == 0
+    assert (tmp_path / "out.plan.json").is_file()
+    # 写出的计划带 srt_sha256，可直接作为 --merge-plan 回读（F13 往返）。
+    import hashlib
+    payload = json.loads(
+        (tmp_path / "out.plan.json").read_text(encoding="utf-8")
+    )
+    assert payload["srt_sha256"] == hashlib.sha256(
+        Path(srt).read_bytes()
+    ).hexdigest()
+
+
 def test_dry_run_with_merge_plan_writes_nothing(tmp_path, capsys):
     # F08：dry-run 不再隐式写 dub.srt。
     srt = _write_srt(tmp_path, body=_DUB_BODY)
-    plan = _write_plan_groups(tmp_path, [[1, 2, 3], [4]])
+    plan = _write_plan_groups(tmp_path, [[1, 2, 3], [4]], srt=srt)
     code = skill_main.main([
         "--srt", str(srt), "--provider", "local", "--voice", "Serena",
         "--merge-plan", str(plan),
@@ -645,7 +739,7 @@ def test_dry_run_with_merge_plan_writes_nothing(tmp_path, capsys):
 
 def test_write_plan_saves_plan_json_and_srt(tmp_path, capsys):
     srt = _write_srt(tmp_path, body=_DUB_BODY)
-    plan = _write_plan_groups(tmp_path, [[1, 2, 3], [4]])
+    plan = _write_plan_groups(tmp_path, [[1, 2, 3], [4]], srt=srt)
     code = skill_main.main([
         "--srt", str(srt), "--provider", "local", "--voice", "Serena",
         "--merge-plan", str(plan),
@@ -698,7 +792,7 @@ def test_resume_reuses_job_and_completes(tmp_path, capsys, monkeypatch):
         "--out", str(tmp_path / "out"), "--no-cache", "--max-attempts", "1",
     ])
     assert code == 1  # 单次提交失败 → failed；报告与 job 已落盘
-    job_path = tmp_path / "out.job.json"
+    job_path = _job_json(tmp_path)
     first_job = json.loads(job_path.read_text(encoding="utf-8"))
     assert first_job["status"] == "failed"
     # 失败后允许同任务继续（resume 放行覆盖保护）。
@@ -706,7 +800,7 @@ def test_resume_reuses_job_and_completes(tmp_path, capsys, monkeypatch):
     code = skill_main.main([
         "--srt", str(srt), "--provider", "local", "--voice", "Serena",
         "--out", str(tmp_path / "out"),
-        "--resume", str(job_path),
+        "--resume", str(_job_dir_of(tmp_path)),
     ])
     assert code == 0
     resumed = json.loads(job_path.read_text(encoding="utf-8"))
@@ -722,7 +816,7 @@ def test_resume_rejects_changed_srt(tmp_path, capsys, monkeypatch):
         "--out", str(tmp_path / "out"), "--no-cache",
         "--master-sample-rate", "24000",
     ])
-    job_path = tmp_path / "out.job.json"
+    job_path = _job_json(tmp_path)
     _write_srt(tmp_path, body="1\n00:00:00,000 --> 00:00:02,000\n完全不同的内容\n")
     code = skill_main.main([
         "--srt", str(srt), "--provider", "local", "--voice", "Serena",
@@ -731,6 +825,50 @@ def test_resume_rejects_changed_srt(tmp_path, capsys, monkeypatch):
     ])
     assert code == 2
     assert "srt_sha256" in capsys.readouterr().err
+
+
+def test_resume_rejects_identity_config_change(tmp_path, capsys, monkeypatch):
+    # F03：换音色 = 合成身份变化，不能借 --resume 静默改道。
+    srt = _write_srt(tmp_path)
+    _patch_run(monkeypatch)
+    skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--no-cache",
+        "--master-sample-rate", "24000",
+    ])
+    job_path = _job_json(tmp_path)
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Vivian",
+        "--out", str(tmp_path / "out"), "--resume", str(job_path),
+        "--master-sample-rate", "24000",
+    ])
+    assert code == 2
+    assert "voice" in capsys.readouterr().err
+
+
+def test_resume_allows_processing_change_with_revision_note(
+    tmp_path, capsys, monkeypatch
+):
+    # F03：只改制作采样率 → 允许 resume，原生音频复用，配置快照更新。
+    srt = _write_srt(tmp_path)
+    _patch_run(monkeypatch)
+    skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--no-cache",
+        "--master-sample-rate", "24000",
+    ])
+    job_path = _job_json(tmp_path)
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--resume", str(job_path),
+        "--master-sample-rate", "48000",
+    ])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "加工参数修订" in out
+    payload = json.loads(job_path.read_text(encoding="utf-8"))
+    assert payload["config"]["master_sample_rate"] == 48000
+    assert payload["config_history"][0]["config"]["master_sample_rate"] == 24000
 
 
 # --- 杂项：打印报告 / 风格参数（行为保持） ----------------------------------
@@ -820,7 +958,10 @@ def test_audio_and_video_are_mutually_exclusive(tmp_path, capsys):
     assert "mutually exclusive" in capsys.readouterr().err
 
 
-def test_ref_audio_pair_and_base_model_validation(tmp_path, capsys):
+def test_ref_audio_pair_and_base_model_validation(tmp_path, capsys, monkeypatch):
+    # 本用例测 ref 参数配对与模型族校验；平台路由（Windows 拒绝 MLX）
+    # 属于 launcher / 运行期路由，不在这里测。
+    monkeypatch.setattr(skill_main, "IS_WINDOWS", False)
     ref = tmp_path / "ref.wav"
     ref.write_bytes(b"RIFF")
     base = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16"
@@ -912,3 +1053,142 @@ def test_hotfix_rejects_local_and_qwen_tts(tmp_path, capsys):
         with pytest.raises(SystemExit):
             validate_args(args)
         assert "hotfix" in capsys.readouterr().err.lower()
+
+
+# --- A12：懒加载（缓存全命中 → 模型加载零次） ---------------------------------
+
+
+class _PreparingProvider:
+    """数 prepare 次数的假 provider；prepare 前调用 synthesize 会留下标记。"""
+
+    def __init__(self):
+        self.prepares = 0
+        self.synths = 0
+        self.synth_before_prepare = False
+
+    def prepare(self):
+        self.prepares += 1
+
+    def describe(self):
+        return {"provider": "lazy-test", "model": "m"}
+
+    def synthesize(self, text, voice, instruct="", lang="chinese", **style):
+        self.synths += 1
+        if self.prepares == 0:
+            self.synth_before_prepare = True
+        return SynthesisResult(
+            audio=np.full(24000, 0.2, dtype=np.float32),
+            sample_rate=24000, channels=1,
+            provider="lazy-test", model_id="m",
+        )
+
+
+def test_lazy_provider_defers_prepare_until_first_synthesis():
+    inner = _PreparingProvider()
+    lazy = skill_main._LazyProvider(inner)
+    assert lazy.describe() == {"provider": "lazy-test", "model": "m"}
+    assert inner.prepares == 0  # describe 不触发加载
+    lazy.synthesize("你好", None)
+    assert inner.prepares == 1
+    assert inner.synth_before_prepare is False
+    lazy.synthesize("再见", None)
+    assert inner.prepares == 1  # 只 prepare 一次
+    assert lazy.prepare_count == 1
+    assert lazy.prepare_seconds is not None
+
+
+def test_lazy_provider_download_never_prepares():
+    # 收据恢复只下载，不需要模型。
+    class Downloadable(_PreparingProvider):
+        def download(self, audio_url, voice=None, request_id=None):
+            return SynthesisResult(
+                audio=np.full(2400, 0.2, dtype=np.float32),
+                sample_rate=24000, channels=1,
+                provider="lazy-test", model_id="m",
+            )
+
+    inner = Downloadable()
+    lazy = skill_main._LazyProvider(inner)
+    lazy.download("https://example.test/a.wav")
+    assert inner.prepares == 0
+
+
+def test_cli_report_records_zero_prepare_on_full_cache_hit(tmp_path, monkeypatch):
+    # A12 端到端：第二次运行全命中缓存 → prepare_count == 0，
+    # 报告 prepare_seconds 为 null（模型加载零次，重拼轨不等模型）。
+    import shutil as _shutil
+    if _shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg required")
+
+    srt = _write_srt(tmp_path)
+    _patch_run(monkeypatch)
+    common = [
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"),
+        "--master-sample-rate", "24000",
+    ]
+    assert skill_main.main(common) == 0
+    job = json.loads(_job_json(tmp_path).read_text(encoding="utf-8"))
+    # resume 同任务第二次运行（缓存命中，无新合成）。
+    code = skill_main.main([*common, "--resume", str(_job_dir_of(tmp_path))])
+    assert code == 0
+    report = json.loads(
+        _report_json(tmp_path).read_text(encoding="utf-8")
+    )
+    assert report["timings"]["prepare_count"] == 0
+    assert report["timings"]["prepare_seconds"] is None
+    assert job["job_id"]
+
+
+# --- 设计后克隆第一步：--preview-text（spec §7.2） ----------------------------
+
+
+def test_design_preview_writes_only_preview_wav(tmp_path, capsys, monkeypatch):
+    srt = _write_srt(tmp_path)
+    seen = {}
+
+    class PreviewProvider:
+        def prepare(self):
+            seen["prepared"] = True
+
+        def describe(self):
+            return {"provider": "local-torch", "model": "m"}
+
+        def synthesize(self, text, voice, instruct="", lang="chinese", **style):
+            seen["text"] = text
+            seen["style"] = style
+            return SynthesisResult(
+                audio=np.full(24000, 0.2, dtype=np.float32),
+                sample_rate=24000, channels=1,
+                provider="local-torch", model_id="m",
+            )
+
+    monkeypatch.setattr(
+        skill_main, "get_provider",
+        lambda name, **kwargs: PreviewProvider(),
+    )
+    monkeypatch.setattr(skill_main, "_require_binary", lambda name: None)
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--design", "温柔女声",
+        "--preview-text", "这是试听文本。",
+        "--out", str(tmp_path / "pv"), "--master-sample-rate", "24000",
+    ])
+    assert code == 0
+    assert seen == {"prepared": True, "text": "这是试听文本。", "style": {}}
+    assert (tmp_path / "pv.preview.wav").is_file()
+    # 只产出试听一件：无整片轨、无字幕、无任务目录。
+    assert not (tmp_path / "pv.dub.wav").exists()
+    assert not (tmp_path / "state" / "jobs").exists()
+    out = capsys.readouterr().out
+    assert "--ref-audio" in out and "--ref-text" in out
+
+
+def test_design_preview_requires_design(tmp_path, capsys):
+    srt = _write_srt(tmp_path)
+    args = build_parser().parse_args([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--preview-text", "x", "--out", str(tmp_path / "pv"),
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "--design" in capsys.readouterr().err

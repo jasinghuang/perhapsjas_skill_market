@@ -30,8 +30,29 @@ Python / Homebrew / 其他 skill 的环境，也不使用 `--break-system-packag
 - `mlx_audio.tts.utils.load_model` 存在（TTS API 可用）。
 
 不满足时的提示：Intel Python → 装 arm64 Python（`brew install python@3.14`）
-或改在线；Metal 不可用（虚拟机 / 远程会话）→ 改在线。Windows 一律拒绝本地
-路线并提示 `--provider online`。
+或改在线；Metal 不可用（虚拟机 / 远程会话）→ 改在线。
+
+## 能力检测（Windows torch 路线）
+
+`--provider local` 在 Windows x64 解析到官方 qwen-tts + PyTorch/CUDA 路线，
+`run.py` 在子解释器里验证：
+
+- `platform.machine()` 为 x64（原生，非 ARM 模拟）；
+- `torch.cuda.is_available()`（不只看 nvidia-smi）；
+- 真实 CUDA 张量运算（`torch.ones(8, device='cuda')` 全链路）；
+- `qwen_tts.Qwen3TTSModel` API 存在。
+
+专用 venv：`%LOCALAPPDATA%ideo-toolkit\envsideo-tts-torch`（与
+audio-transcribe 的环境约定一致；安装器优先 uv——多 venv 同 wheel 经硬链接
+共享磁盘，uv 建的环境只用 uv 装）。CUDA wheel 按驱动报告的 CUDA 版本从
+`https://download.pytorch.org/whl/cuXXX` 安装（不把某个 cuXXX 当通用解），
+随后装 qwen-tts 锁定组合（torch/torchaudio 不写进 requirements-torch.txt，
+避免 PyPI 默认源装到 CPU wheel）。实测锁定基线：Python 3.14 + torch
+2.10.0 cu130 + qwen-tts 0.1.1 + transformers 4.57.3（RTX 4070 Ti / 驱动
+610.88）。
+
+不满足时的提示：无 NVIDIA GPU / 驱动异常 → `--provider online`；CPU 版
+torch → 重装 CUDA 构建；模型未缓存 → `huggingface-cli download <model>`。
 
 模型下载延迟到真正执行本地路线时（首次约 3.4 GB，缓存在
 `~/.cache/huggingface/hub`）；缓存齐全后支持离线运行。

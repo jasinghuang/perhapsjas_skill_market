@@ -126,14 +126,15 @@ def process_result(
     result: SynthesisResult,
     master_sample_rate: int,
     *,
-    trim_threshold: float = 0.01,
+    trim_threshold: float | None = None,
     trim_window_ms: int = 10,
     ffmpeg: str = "ffmpeg",
 ) -> ProcessedAudio:
     """把原生合成结果加工成 master 采样率的单声道波形。
 
     静音裁剪发生在原生采样率上（先裁剪再重采样，避免重采样引入的噪声
-    干扰 RMS 判定）；裁剪策略保守（保留一窗余量 + 10ms 淡入淡出）。
+    干扰 RMS 判定）；裁剪策略保守（保留一窗余量 + 10ms 淡入淡出），
+    阈值默认自适应（见 `trim_silence`，F06：轻声不被误杀）。
     """
     mono_native = downmix_to_mono(result.audio)
     before = mono_native.size / result.sample_rate

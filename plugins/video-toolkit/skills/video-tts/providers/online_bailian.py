@@ -38,6 +38,7 @@ import soundfile as sf
 from . import CANTONESE_VOICE_IDS, FLAGSHIP_MODEL
 from .base import SynthesisResult, Voice
 from .errors import (
+    DOWNLOAD_FAILED,
     FATAL,
     RETRYABLE,
     SUBMISSION_UNKNOWN,
@@ -49,6 +50,11 @@ SAMPLE_RATE = 24000  # 在线请求的采样率；实际结果仍以 WAV 元数�
 # 音频下载的独立重试预算（合成提交预算由 engine 统一控制，与此分开）。
 DOWNLOAD_ATTEMPTS = 3
 DOWNLOAD_RETRY_DELAYS = (1.0, 2.0)
+
+# `bl speech synthesize` 子进程必须有界（spec §14）：挂住的 bl 不能让整个
+# 任务无限等待。单块中文 ~300 字的正常耗时远低于该值。
+BL_SYNTH_TIMEOUT = 300.0
+BL_STATUS_TIMEOUT = 15.0
 
 # `--lang` 的人类可读语言名 → `bl --language` / DashScope 语言代码。
 LANG_CODES = {
@@ -200,7 +206,7 @@ def _stop_process(proc) -> None:
         pass
 
 
-def is_authenticated(bl_bin: str = "bl") -> bool:
+def is_authenticated(bl_bin: str = "bl", timeout: float = BL_STATUS_TIMEOUT) -> bool:
     """调用 `bl auth status --output json`；任何错误都视为未登录。"""
     try:
         result = subprocess.run(
@@ -208,6 +214,7 @@ def is_authenticated(bl_bin: str = "bl") -> bool:
             check=True,
             capture_output=True,
             text=True,
+            timeout=timeout,
         )
         payload = json.loads(result.stdout)
         return payload.get("authenticated") is True
@@ -260,7 +267,7 @@ class OnlineBailianProvider:
 
     def is_authenticated(self) -> bool:
         """检查当前 `bl_bin` 的登录态。"""
-        return is_authenticated(self.bl_bin)
+        return is_authenticated(self.bl_bin, timeout=BL_STATUS_TIMEOUT)
 
     def prepare(self) -> None:
         """选择合成路径：优先 `bl` CLI，否则用 DashScope HTTP 兜底。"""
@@ -432,8 +439,18 @@ class OnlineBailianProvider:
             enable_ssml=enable_ssml,
         )
         try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            subprocess.run(
+                cmd, check=True, capture_output=True, text=True,
+                timeout=BL_SYNTH_TIMEOUT,
+            )
             return out_path
+        except subprocess.TimeoutExpired as exc:
+            # 超时时无法确认服务端是否已受理/计费 → 状态不明，不自动重提。
+            raise SynthesisError(
+                f"bl synthesize timed out after {BL_SYNTH_TIMEOUT:.0f}s; "
+                "submission state unknown — refusing to auto-resubmit",
+                kind=SUBMISSION_UNKNOWN,
+            ) from exc
         except subprocess.CalledProcessError as exc:
             detail = "\n".join(
                 part for part in (exc.stderr, exc.stdout) if part
@@ -448,10 +465,17 @@ class OnlineBailianProvider:
                 kind=RETRYABLE,
             ) from exc
 
-    def _download_audio(self, audio_url: str, out_path: Path) -> None:
+    def _download_audio(
+        self,
+        audio_url: str,
+        out_path: Path,
+        request_id: str | None = None,
+    ) -> None:
         """下载已合成的音频；这是独立于合成提交的重试预算。
 
-        下载失败不会重新提交合成（音频已经生成、可能已计费），只重试拉取。
+        下载耗尽抛 ``download_failed``（携带 URL 收据），调用方绝不据此
+        重新提交合成——音频已经在服务端生成、可能已计费，恢复时只重试
+        下载这一步。
         """
         import requests
 
@@ -467,11 +491,37 @@ class OnlineBailianProvider:
                 raise SynthesisError(
                     f"failed to download synthesized audio after "
                     f"{self.download_attempts} attempts: {exc}",
-                    kind=RETRYABLE,
+                    kind=DOWNLOAD_FAILED,
                     audio_url=audio_url,
+                    request_id=request_id,
                 ) from exc
             out_path.write_bytes(download.content)
             return
+
+    def download(
+        self,
+        audio_url: str,
+        voice: Voice | None = None,
+        request_id: str | None = None,
+    ) -> SynthesisResult:
+        """按收据重新下载已生成的音频（resume 只下载、不重新提交）。
+
+        给上次 ``download_failed`` 的组用：URL 来自任务清单里的收据，
+        下载预算同样独立；成功后返回带真实采样率的 `SynthesisResult`。
+        """
+        with tempfile.TemporaryDirectory(prefix="video-tts-redl-") as tmp:
+            out_path = Path(tmp) / "segment.wav"
+            self._download_audio(audio_url, out_path, request_id=request_id)
+            pcm, sample_rate = _read_wav(out_path)
+        return SynthesisResult(
+            audio=pcm,
+            sample_rate=sample_rate,
+            channels=1,
+            provider="online",
+            model_id=(voice.model if voice is not None else FLAGSHIP_MODEL),
+            model_revision=None,
+            request_id=request_id,
+        )
 
     def _synthesize_http(
         self,
@@ -596,7 +646,7 @@ class OnlineBailianProvider:
                 f"DashScope HTTP TTS request failed: {detail}", kind=FATAL
             ) from exc
 
-        self._download_audio(audio_url, out_path)
+        self._download_audio(audio_url, out_path, request_id=request_id)
         self._last_request_id = request_id  # 诊断用；报告不携带敏感信息。
         return out_path
 

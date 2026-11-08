@@ -88,6 +88,19 @@ def test_end_timestamp_tolerates_trailing_position_suffix(tmp_path: Path):
     assert not any("块" in warning for warning in warnings)
 
 
+def test_malformed_blocks_raise_by_default(tmp_path: Path):
+    # F13：默认严格解析——坏块在合成前阻塞（带块号与原因），不静默跳过。
+    srt = tmp_path / "a.srt"
+    srt.write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\n好\n\n"
+        "2\n这不是时间轴\n坏块\n\n"
+        "3\n00:00:02,000 --> 00:00:03,000\n好\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SRTError, match="第 2 块"):
+        parse_srt(srt)
+
+
 def test_malformed_blocks_produce_numbered_warnings(tmp_path: Path):
     srt = tmp_path / "a.srt"
     srt.write_text(
@@ -97,7 +110,7 @@ def test_malformed_blocks_produce_numbered_warnings(tmp_path: Path):
         encoding="utf-8",
     )
     warnings: list[str] = []
-    cues = parse_srt(srt, warnings=warnings)
+    cues = parse_srt(srt, warnings=warnings, lenient=True)
     assert [cue.text for cue in cues] == ["好", "好"]
     assert len(warnings) == 1
     assert "第 2 块" in warnings[0]
@@ -110,7 +123,7 @@ def test_unparseable_timestamp_produces_numbered_warning(tmp_path: Path):
         "1\n00:00:00,000 --> not-a-time\n坏时间\n", encoding="utf-8"
     )
     warnings: list[str] = []
-    assert parse_srt(srt, warnings=warnings) == []
+    assert parse_srt(srt, warnings=warnings, lenient=True) == []
     assert "第 1 块" in warnings[0]
     assert "时间戳无法解析" in warnings[0]
 
@@ -122,9 +135,21 @@ def test_load_cues_includes_malformed_block_warnings(tmp_path: Path):
         "2\n缺少时间轴\n",
         encoding="utf-8",
     )
-    cues, warnings = load_cues(srt)
+    cues, warnings = load_cues(srt, lenient=True)
     assert len(cues) == 1
     assert any("第 2 块" in warning for warning in warnings)
+
+
+def test_load_cues_strict_default_blocks_on_malformed(tmp_path: Path):
+    # F13：load_cues 默认严格——坏块抛 SRTError，不能跳过后仍报告成功。
+    srt = tmp_path / "a.srt"
+    srt.write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\n好\n\n"
+        "2\n缺少时间轴\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SRTError, match="第 2 块"):
+        load_cues(srt)
 
 
 # --- format_timestamp / write_srt ---

@@ -11,13 +11,18 @@ def cue(i, start, end, text, nxt):
     return Cue(i, start, end, text, start, nxt)
 
 
-def write_plan(target, groups, **extra):
-    """把计划写进 target（目录或 .json 路径），返回计划文件路径。"""
+def write_plan(target, groups, srt_sha256="hash", **extra):
+    """把计划写进 target（目录或 .json 路径），返回计划文件路径。
+
+    F13 后计划必须带 srt_sha256（默认占位值）；传 None 显式省略。
+    """
     path = Path(target)
     if path.suffix != ".json":
         path = path / "merge.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"groups": groups, **extra}
+    if srt_sha256 is not None:
+        payload["srt_sha256"] = srt_sha256
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     return path
 
@@ -74,9 +79,35 @@ def test_group_text_override_replaces_joined_text(tmp_path):
         cue(2, 1.0, 2.0, "很长的第二句。", 2.0),
     ]
     plan = [{"indices": [1, 2], "text": "精简后的句子。"}]
-    merged = load_merge_plan(write_plan(tmp_path, plan), cues)
+    # F08：改文需要计划声明授权 + 调用方显式 allow_text_edits 双重确认。
+    path = write_plan(tmp_path, plan, text_edit_authorized=True)
+    merged = load_merge_plan(path, cues, allow_text_edits=True)
     assert merged[0].text == "精简后的句子。"
     assert merged[0].start == 0.0 and merged[0].end == 2.0
+    assert merged[0].text_edited is True
+
+
+def test_unauthorized_text_override_is_rejected(tmp_path):
+    # F08 复现：不带授权标记的 text override 不得替换正文。
+    cues = [cue(1, 0.0, 1.0, "原文。", 1.0)]
+    plan = [{"indices": [1], "text": "被换掉的整句。"}]
+    with pytest.raises(ValueError, match="text_edit_authorized"):
+        load_merge_plan(write_plan(tmp_path, plan), cues)
+
+
+def test_authorized_override_without_cli_flag_is_rejected(tmp_path):
+    # F08：宿主声明了授权，但 CLI 没给 --allow-text-edits 也不生效。
+    cues = [cue(1, 0.0, 1.0, "原文。", 1.0)]
+    plan = [{"indices": [1], "text": "改写后的句子。"}]
+    path = write_plan(tmp_path, plan, text_edit_authorized=True)
+    with pytest.raises(ValueError, match="--allow-text-edits"):
+        load_merge_plan(path, cues)
+
+
+def test_plain_plan_marks_no_text_edited(tmp_path):
+    cues = [cue(1, 0.0, 1.0, "一", 1.0), cue(2, 1.0, 2.0, "二", 2.0)]
+    merged = load_merge_plan(write_plan(tmp_path, [[1, 2]]), cues)
+    assert merged[0].text_edited is False
 
 
 def test_rejects_missing_duplicate_and_noncontiguous(tmp_path):
@@ -95,10 +126,37 @@ def test_srt_hash_mismatch_rejects_plan(tmp_path):
     plan = write_plan(tmp_path, [[1], [2]], srt_sha256="deadbeef")
     with pytest.raises(ValueError, match="srt_sha256"):
         load_merge_plan(plan, cues, srt_sha256="cafebabe")
-    # 哈希一致或计划未带哈希时正常加载。
+    # 哈希一致时正常加载。
     assert len(load_merge_plan(plan, cues, srt_sha256="deadbeef")) == 2
-    plain = write_plan(tmp_path / "x", [[1], [2]])
-    assert len(load_merge_plan(plain, cues, srt_sha256="cafebabe")) == 2
+
+
+def test_plan_without_hash_is_rejected(tmp_path):
+    # F13：源绑定必填——不带 srt_sha256 的计划不可加载。
+    cues = [cue(1, 0.0, 1.0, "一", 1.0)]
+    plan = write_plan(tmp_path, [[1]], srt_sha256=None)
+    with pytest.raises(ValueError, match="srt_sha256"):
+        load_merge_plan(plan, cues)
+
+
+def test_write_plan_output_round_trips_as_merge_plan(tmp_path):
+    # F13 复现：--write-plan 产物（source_indices 键）必须能直接作为
+    # --merge-plan 输入读回（原来一边写 source_indices、一边只认 indices）。
+    srt = tmp_path / "a.srt"
+    srt.write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\n一\n\n"
+        "2\n00:00:01,000 --> 00:00:02,000\n二\n",
+        encoding="utf-8",
+    )
+    cues = [cue(1, 0.0, 1.0, "一", 1.0), cue(2, 1.0, 2.0, "二", 2.0)]
+    merged = load_merge_plan(write_plan(tmp_path / "p", [[1, 2]]), cues)
+    payload = plan_payload(merged, srt)
+    written = tmp_path / "roundtrip.json"
+    written.write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
+    reloaded = load_merge_plan(written, cues)
+    assert [c.text for c in reloaded] == ["一二"]
+    assert reloaded[0].source_indices == (1, 2)
 
 
 def test_plan_payload_records_source_indices_and_hash(tmp_path):

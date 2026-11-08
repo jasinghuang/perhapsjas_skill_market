@@ -65,9 +65,22 @@ def file_sha256(path: Path, chunk_size: int = 1 << 20) -> str:
 
 
 def _default_root() -> Path:
-    base = os.environ.get("XDG_CACHE_HOME")
-    cache_home = Path(base).expanduser() if base else Path.home() / ".cache"
-    return cache_home / "video-tts" / "segments"
+    # 覆盖优先级：VIDEO_TTS_CACHE_DIR（测试 / 自定义缓存盘）>
+    # XDG_CACHE_HOME（显式设置即尊重，跨平台一致）> 平台默认
+    # （Windows: LOCALAPPDATA\video-toolkit\video-tts；其他: ~/.cache）。
+    override = os.environ.get("VIDEO_TTS_CACHE_DIR")
+    if override:
+        return Path(override).expanduser() / "segments"
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    if xdg:
+        return Path(xdg).expanduser() / "video-tts" / "segments"
+    if os.name == "nt":
+        base = Path(
+            os.environ.get("LOCALAPPDATA")
+            or (Path.home() / "AppData" / "Local")
+        )
+        return base / "video-toolkit" / "video-tts" / "segments"
+    return Path.home() / ".cache" / "video-tts" / "segments"
 
 
 class SegmentCache:

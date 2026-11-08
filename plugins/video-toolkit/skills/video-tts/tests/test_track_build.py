@@ -1,6 +1,13 @@
 import numpy as np
 import pytest
-from track_build import DEFAULT_SAMPLE_RATE, build_track, read_wav, write_track, write_wav
+from track_build import (
+    DEFAULT_SAMPLE_RATE,
+    build_track,
+    read_wav,
+    write_track,
+    write_track_files,
+    write_wav,
+)
 
 
 def test_empty_track_has_exact_duration():
@@ -94,3 +101,79 @@ def test_write_track_pads_head_and_tail(tmp_path):
     assert np.all(back[:12000] == 0)
     assert np.all(back[12000:16800] == 0.5)
     assert np.all(back[16800:] == 0)
+
+
+# --- F07：文件引用拼轨（低内存） ----------------------------------------------
+
+
+def _write_parts(tmp_path, specs, sample_rate=24000):
+    """specs: [(start, pcm)] → 返回文件引用 placements 与 part 路径列表。"""
+    parts = tmp_path / "parts"
+    parts.mkdir(exist_ok=True)
+    placements = []
+    for i, (start, pcm) in enumerate(specs):
+        path = parts / f"{i:05d}.wav"
+        write_wav(path, pcm, sample_rate=sample_rate)
+        placements.append((start, path, pcm.size))
+    return placements
+
+
+def test_write_track_files_matches_in_memory_result(tmp_path):
+    sr = 24000
+    specs = [
+        (1.0, np.full(2400, 0.3, dtype=np.float32)),
+        (4.5, np.full(1200, -0.2, dtype=np.float32)),
+        (8.0, np.full(sr, 0.1, dtype=np.float32)),
+    ]
+    placements = _write_parts(tmp_path, specs, sr)
+    out = tmp_path / "track.wav"
+    write_track_files(out, placements, 10.0, sample_rate=sr)
+
+    expected = build_track(10.0, specs, sample_rate=sr)
+    got, rate = read_wav(out)
+    assert rate == sr
+    assert got.size == expected.size
+    assert np.allclose(got, expected, atol=1e-6)
+
+
+def test_write_track_files_zero_gap_allocation_is_bounded(tmp_path, monkeypatch):
+    # F07 复现点：空档补零不得一次 zeros(整个空档)——用 spy 观测
+    # 单次分配大小的上界必须 ≤ IO_CHUNK_SAMPLES。
+    import track_build
+
+    sr = 24000
+    specs = [(0.0, np.full(2400, 0.3, dtype=np.float32))]
+    placements = _write_parts(tmp_path, specs, sr)
+    sizes = []
+    original = track_build._zeros
+
+    def spy(size):
+        sizes.append(size)
+        return original(size)
+
+    monkeypatch.setattr(track_build, "_zeros", spy)
+    out = tmp_path / "long.wav"
+    # 60s 整片、开头一段语音 → 57.6s 空档 ≈ 138 万样本需补零。
+    write_track_files(out, placements, 60.0, sample_rate=sr)
+    # 单缓冲复用：无论空档多长，只分配一次、且大小恰为块上限。
+    assert sizes == [track_build.IO_CHUNK_SAMPLES]
+
+
+def test_write_track_files_rejects_overlap_and_bad_count(tmp_path):
+    sr = 24000
+    pcm = np.full(2400, 0.2, dtype=np.float32)
+    placements = _write_parts(
+        tmp_path, [(0.0, pcm), (0.05, pcm)], sr
+    )
+    with pytest.raises(ValueError, match="overlap"):
+        write_track_files(
+            tmp_path / "t.wav", placements, 2.0, sample_rate=sr
+        )
+
+    # part 文件实际样本数与元数据不符 → 拒绝（防止静默错位）。
+    single = _write_parts(tmp_path, [(0.0, pcm)], sr)
+    single[0] = (0.0, single[0][1], single[0][2] + 100)
+    with pytest.raises(ValueError, match="expected"):
+        write_track_files(
+            tmp_path / "t2.wav", single, 2.0, sample_rate=sr
+        )

@@ -42,14 +42,24 @@ SYSTEM = platform.system()
 IS_MAC = SYSTEM == "Darwin"
 IS_WIN = SYSTEM == "Windows"
 
-# 每条路线一个锁定文件；base 由 -r 引入。
+# 每条路线一个锁定文件；base 由 -r 引入。本地路线按平台拆分：
+# Apple Silicon → mlx-audio；Windows x64 → 官方 qwen-tts + CUDA torch
+# （torch 本体由安装器按驱动从 cuXXX 索引装，不在 requirements 里）。
 REQUIREMENTS = {
-    "local": SKILL_DIR / "requirements-local.txt",
+    "local_mlx": SKILL_DIR / "requirements-local.txt",
+    "local_torch": SKILL_DIR / "requirements-torch.txt",
     "online": SKILL_DIR / "requirements-online.txt",
     "base": SKILL_DIR / "requirements-base.txt",
 }
 
-# 本地能力检测片段：解释器架构 + Metal + TTS API 一次查完。
+# Windows 本地 venv 与 audio-transcribe 的环境约定一致（video-toolkit/envs）。
+TORCH_VENV_NAME = "video-tts-torch"
+
+# Windows torch 路线锁定组合（实测基线；CUDA wheel 由安装器按驱动选索引）。
+TORCH_TORCH_PIN = "torch==2.10.0"
+TORCH_TORCHAUDIO_PIN = "torchaudio==2.10.0"
+
+# 本地能力检测片段（macOS / mlx）：解释器架构 + Metal + TTS API 一次查完。
 LOCAL_CAPABILITY_PROBE = (
     "import platform,sys;"
     "assert platform.machine()=='arm64', 'not arm64: '+platform.machine();"
@@ -58,6 +68,65 @@ LOCAL_CAPABILITY_PROBE = (
     "from mlx_audio.tts.utils import load_model;"
     "print('ok')"
 )
+
+# 本地能力检测片段（Windows / torch）：x64 + torch CUDA 构建 + 真实张量
+# 运算 + qwen-tts API（spec §5.2：不靠 nvidia-smi 单独判定）。
+TORCH_CAPABILITY_PROBE = (
+    "import platform;"
+    "assert platform.machine() in ('AMD64','x86_64'), "
+    "'not x64: '+platform.machine();"
+    "import torch;"
+    "assert torch.cuda.is_available(), 'CUDA unavailable';"
+    "x=(torch.ones(8,device='cuda')*2).sum().item();"
+    "assert x==16.0, 'cuda tensor op failed';"
+    "from qwen_tts import Qwen3TTSModel;"
+    "print('ok')"
+)
+
+# 驱动报告的 CUDA 版本 → 官方 wheel 索引（spec §5.2：按目标机实际选择，
+# 不把某个 cuXXX 当通用解；未知版本给出指引而不是硬猜）。
+CUDA_INDEXES = {
+    (13,): "cu130",
+    (12, 8): "cu128",
+    (12, 6): "cu126",
+    (12, 4): "cu124",
+}
+
+
+def local_route() -> str:
+    """`--provider local` 在当前平台的依赖路线：local_mlx / local_torch。"""
+    if IS_MAC:
+        return "local_mlx"
+    if IS_WIN:
+        return "local_torch"
+    return "local_mlx"  # 非 Win 平台按 mlx 探测失败并给出修复步骤
+
+
+def driver_cuda_index() -> str | None:
+    """读 nvidia-smi 头部的 CUDA Version，映射到官方 wheel 索引名。
+
+    nvidia-smi 的输出编码随系统区域设置（中文 Windows 是 GBK），
+    `text=True` 按 UTF-8 解码会抛 UnicodeDecodeError——按字节捕获后
+    用 errors="replace" 解码，"CUDA Version: X.Y" 本身是 ASCII 不受影响。
+    """
+    try:
+        result = subprocess.run(
+            ["nvidia-smi"], capture_output=True, timeout=15,
+        )
+    except Exception:
+        return None
+    output = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+    # 经典 Linux 格式是 "CUDA Version: 13.3"；新版 Windows 驱动的
+    # nvidia-smi 头部是 "CUDA UMD Version: 13.3"——两种都认。
+    match = re.search(
+        r"CUDA(?:\s+UMD)?\s+Version:\s*(\d+)\.(\d+)", output,
+    )
+    if not match:
+        return None
+    major, minor = int(match.group(1)), int(match.group(2))
+    if (major,) in CUDA_INDEXES:
+        return CUDA_INDEXES[(major,)]
+    return CUDA_INDEXES.get((major, minor))
 
 
 def _provider_from_argv(argv: list[str]) -> str | None:
@@ -96,12 +165,12 @@ def _is_preview(argv: list[str]) -> bool:
 
 
 def required_route(argv: list[str]) -> str:
-    """返回本次运行的依赖路线：`base` / `local` / `online`。"""
+    """返回本次运行的依赖路线：`base` / `local_mlx` / `local_torch` / `online`。"""
     if _is_preview(argv):
         return "base"
     provider = _provider_from_argv(argv)
     if provider == "local":
-        return "local"
+        return local_route()
     if provider == "online":
         return "online"
     return "base"
@@ -110,8 +179,10 @@ def required_route(argv: list[str]) -> str:
 def route_imports(route: str) -> list[str]:
     """返回路线所需的顶层 import 名（能力探测用）。"""
     base = ["soundfile", "numpy"]
-    if route == "local":
+    if route == "local_mlx":
         return base + ["mlx_audio"]
+    if route == "local_torch":
+        return base + ["torch", "qwen_tts"]
     if route == "online":
         return base + ["requests"]
     return base
@@ -126,10 +197,16 @@ def cache_path() -> Path:
     return base / "video-tts" / "env.json"
 
 
-def venv_python() -> Path:
-    """本 skill 专用 venv 的解释器路径。"""
+def venv_python(route: str = "base") -> Path:
+    """本 skill 专用 venv 的解释器路径（本地路线按后端分目录）。"""
     if IS_WIN:
         base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+        if route == "local_torch":
+            # 与 audio-transcribe 的环境约定一致（video-toolkit/envs/）。
+            return (
+                base / "video-toolkit" / "envs" / TORCH_VENV_NAME
+                / "Scripts" / "python.exe"
+            )
         return base / "video-tts" / "venv" / "Scripts" / "python.exe"
     base = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache"))
     return base / "video-tts" / "venv" / "bin" / "python"
@@ -156,7 +233,7 @@ def _version_key(path) -> tuple:
     return tuple(int(part) for part in parts) or (0,)
 
 
-def candidates() -> list[str]:
+def candidates(route: str = "base") -> list[str]:
     """返回待复用的解释器路径（只复用、不安装），最可能在前。"""
     found: list[str] = []
     seen: set[str] = set()
@@ -169,7 +246,7 @@ def candidates() -> list[str]:
         pass
 
     _add(found, seen, sys.executable)
-    _add(found, seen, venv_python())
+    _add(found, seen, venv_python(route))
 
     if IS_WIN:
         for name in ("python", "python3"):
@@ -198,14 +275,27 @@ def candidates() -> list[str]:
 
 
 def _run_probe(python: str, code: str, timeout: int = 180) -> subprocess.CompletedProcess | None:
-    """跑一次 `python -c`；超时 / 无法启动返回 None。"""
+    """跑一次 `python -c`；超时 / 无法启动返回 None。
+
+    解码用 errors="replace"：子进程输出可能带任意区域设置的警告文本
+    （中文 Windows 控制台是 GBK），探测只关心 ASCII 的断言信息。
+    """
     try:
         return subprocess.run(
             [python, "-c", code],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True, timeout=timeout,
         )
     except Exception:
         return None
+
+
+def _probe_text(result: subprocess.CompletedProcess) -> str:
+    """把探测输出的字节按 UTF-8 宽松解码成文本（GBK 环境不崩溃）。"""
+    raw = result.stderr or b""
+    try:
+        return raw.decode("utf-8", errors="replace")
+    except Exception:  # pragma: no cover - decode with replace 不会抛
+        return ""
 
 
 def has_imports(python: str, imports: list[str]) -> bool:
@@ -217,38 +307,76 @@ def has_imports(python: str, imports: list[str]) -> bool:
 def capability_problems(python: str, route: str) -> list[str]:
     """返回该解释器在本路线上的能力问题（空列表 = 可用）。
 
-    本地路线不止 import：还要 arm64 原生（排除 Rosetta 里的 Intel
-    Python）+ Metal 可用 + mlx_audio 的 TTS API 存在。
+    本地路线不止 import：mlx 要 arm64 原生 + Metal + TTS API；torch 要
+    x64 + CUDA 构建 + 真实张量运算 + qwen-tts API（spec §5.2）。
     """
-    if route != "local":
-        return []
-    if not IS_MAC:
+    if route == "local_mlx":
+        if not IS_MAC:
+            return [
+                "本地 MLX 路线仅支持 Apple Silicon macOS；当前系统 "
+                f"{SYSTEM or 'unknown'}，请使用 --provider online"
+            ]
+        result = _run_probe(python, LOCAL_CAPABILITY_PROBE)
+        if result is None:
+            return [f"无法在 {python} 上运行本地能力检测（启动 / 超时）"]
+        if result.returncode == 0:
+            return []
+        detail = _probe_text(result).strip().splitlines()
+        last = detail[-1] if detail else f"exit {result.returncode}"
+        if "not arm64" in last:
+            return [
+                f"{python} 不是 Apple Silicon 原生解释器（{last}）；"
+                "Rosetta / Intel Python 无法运行 MLX。请安装 arm64 版 Python "
+                "（如 `brew install python@3.14`）或改用 --provider online"
+            ]
+        if "Metal unavailable" in last:
+            return [
+                f"{python} 上 Metal 不可用（{last}）；MLX 需要 Metal。"
+                "请检查是否运行在虚拟机 / 远程会话，或改用 --provider online"
+            ]
         return [
-            "本地 MLX 路线仅支持 Apple Silicon macOS；当前系统 "
-            f"{SYSTEM or 'unknown'}，请使用 --provider online"
+            f"{python} 本地能力检测未通过：{last}；"
+            "请确认 mlx-audio 已正确安装，或改用 --provider online"
         ]
-    result = _run_probe(python, LOCAL_CAPABILITY_PROBE)
-    if result is None:
-        return [f"无法在 {python} 上运行本地能力检测（启动 / 超时）"]
-    if result.returncode == 0:
-        return []
-    detail = (result.stderr or "").strip().splitlines()
-    last = detail[-1] if detail else f"exit {result.returncode}"
-    if "not arm64" in last:
+
+    if route == "local_torch":
+        if not IS_WIN:
+            return [
+                "本地 torch 路线面向原生 Windows x64 + NVIDIA GPU；当前系统 "
+                f"{SYSTEM or 'unknown'}。macOS 请用 MLX 路线，其他环境可用 "
+                "--provider online"
+            ]
+        result = _run_probe(python, TORCH_CAPABILITY_PROBE, timeout=120)
+        if result is None:
+            return [f"无法在 {python} 上运行本地能力检测（启动 / 超时）"]
+        if result.returncode == 0:
+            return []
+        detail = _probe_text(result).strip().splitlines()
+        last = detail[-1] if detail else f"exit {result.returncode}"
+        if "not x64" in last:
+            return [
+                f"{python} 不是 x64 解释器（{last}）；torch CUDA 路线需要 "
+                "原生 x64 Python"
+            ]
+        if "CUDA unavailable" in last:
+            return [
+                f"{python} 上 torch.cuda 不可用（{last}）：无 NVIDIA GPU / "
+                "驱动不匹配 / 装到 CPU 版 torch。检查 nvidia-smi 与 "
+                "torch.version.cuda；本机无 NVIDIA 显卡时请用 "
+                "--provider online"
+            ]
+        if "cuda tensor op failed" in last:
+            return [
+                f"{python} 上 CUDA 张量运算失败（{last}）；请更新显卡驱动 "
+                "后重试，或改用 --provider online"
+            ]
         return [
-            f"{python} 不是 Apple Silicon 原生解释器（{last}）；"
-            "Rosetta / Intel Python 无法运行 MLX。请安装 arm64 版 Python "
-            "（如 `brew install python@3.14`）或改用 --provider online"
+            f"{python} 本地能力检测未通过：{last}；"
+            "请确认 qwen-tts 与 CUDA 版 torch 已正确安装，或改用 "
+            "--provider online"
         ]
-    if "Metal unavailable" in last:
-        return [
-            f"{python} 上 Metal 不可用（{last}）；MLX 需要 Metal。"
-            "请检查是否运行在虚拟机 / 远程会话，或改用 --provider online"
-        ]
-    return [
-        f"{python} 本地能力检测未通过：{last}；"
-        "请确认 mlx-audio 已正确安装，或改用 --provider online"
-    ]
+
+    return []
 
 
 def save_cache(python: str, route: str) -> None:
@@ -267,9 +395,9 @@ def save_cache(python: str, route: str) -> None:
         pass
 
 
-def _ensure_venv() -> str:
+def _ensure_venv(route: str) -> str:
     """创建（如需）专用 venv，返回其解释器路径。"""
-    python = venv_python()
+    python = venv_python(route)
     if not python.is_file():
         base = shutil.which("python3") or shutil.which("python")
         if not base:
@@ -283,18 +411,51 @@ def _ensure_venv() -> str:
     return str(python)
 
 
+def _installer(python: str) -> list[str]:
+    """安装命令前缀：优先 uv（多 venv 同 wheel 硬链接共享磁盘），无则 pip。"""
+    uv = shutil.which("uv")
+    if uv:
+        return [uv, "pip", "install", "--python", python]
+    return [python, "-m", "pip", "install"]
+
+
 def install_into_venv(route: str) -> str:
-    """把锁定依赖装进专用 venv（只装这一处，绝不装进全局解释器）。"""
-    python = _ensure_venv()
+    """把锁定依赖装进专用 venv（只装这一处，绝不装进全局解释器）。
+
+    torch 路线两阶段安装：先按驱动实际支持的 CUDA 版本从官方 cuXXX
+    索引装 torch / torchaudio（PyPI 默认源在 Windows 是 CPU wheel），
+    再装 qwen-tts 锁定组合。uv 存在时全程用 uv（硬链接去重）。
+    """
+    python = _ensure_venv(route)
     requirements = requirements_file(route)
-    print(
-        f"[video-tts] installing locked dependencies into the skill venv "
-        f"({requirements.name}) …",
-        flush=True,
-    )
     try:
+        if route == "local_torch":
+            index = driver_cuda_index()
+            if index is None:
+                sys.exit(
+                    "无法从 nvidia-smi 判断驱动支持的 CUDA 版本（无 NVIDIA "
+                    "显卡或驱动异常）。确认 `nvidia-smi` 可用后重试；无 "
+                    "NVIDIA GPU 的机器请使用 --provider online。"
+                )
+            print(
+                f"[video-tts] installing CUDA torch ({TORCH_TORCH_PIN}, "
+                f"{index} build) into {python.parent.parent} …",
+                flush=True,
+            )
+            subprocess.run(
+                _installer(python) + [
+                    TORCH_TORCH_PIN, TORCH_TORCHAUDIO_PIN,
+                    "--index-url", f"https://download.pytorch.org/whl/{index}",
+                ],
+                check=True,
+            )
+        print(
+            f"[video-tts] installing locked dependencies into the skill venv "
+            f"({requirements.name}) …",
+            flush=True,
+        )
         subprocess.run(
-            [python, "-m", "pip", "install", "-r", str(requirements)],
+            _installer(python) + ["-r", str(requirements)],
             check=True,
         )
     except Exception as exc:
@@ -331,14 +492,17 @@ def resolve_interpreter(route: str) -> str:
             )
         return found[0]
 
-    # 本地路线在非 Apple Silicon 上先给出明确结论，不做无谓尝试。
-    if route == "local":
-        problems = capability_problems(sys.executable, route)
-        if problems and not IS_MAC:
-            sys.exit("\n".join(problems))
+    # 本地路线在明确不支持的平台上先给出结论，不做无谓尝试。
+    if route in ("local_mlx", "local_torch"):
+        unsupported = capability_problems(sys.executable, route)
+        if unsupported and (
+            (route == "local_mlx" and not IS_MAC)
+            or (route == "local_torch" and not IS_WIN)
+        ):
+            sys.exit("\n".join(unsupported))
 
     # 只复用「已经能跑」的解释器；不在多个全局解释器间循环安装。
-    for python in candidates():
+    for python in candidates(route):
         if not has_imports(python, imports):
             continue
         problems = capability_problems(python, route)
@@ -347,11 +511,13 @@ def resolve_interpreter(route: str) -> str:
         return python
 
     # 都不行：创建 / 补装专用 venv（隔离且锁定，不用 break-system-packages）。
-    python = venv_python()
+    python = venv_python(route)
     if python.is_file():
-        target = str(python)
-        problems = capability_problems(target, route)
-        if problems and route == "local" and not IS_MAC:
+        problems = capability_problems(str(python), route)
+        if problems and (
+            (route == "local_mlx" and not IS_MAC)
+            or (route == "local_torch" and not IS_WIN)
+        ):
             sys.exit("\n".join(problems))
     python = install_into_venv(route)
     problems = capability_problems(python, route)
@@ -372,12 +538,6 @@ def main(argv: list[str] | None = None) -> int:
         sys.exit(f"skill_main.py not found next to run.py: {MAIN_SCRIPT}")
 
     route = required_route(argv)
-    if route == "local" and IS_WIN:
-        sys.exit(
-            "本地 MLX 配音仅支持 Apple Silicon macOS；Windows 请使用 "
-            "--provider online（百炼在线路线）。"
-        )
-
     chosen = resolve_interpreter(route)
     print(f"[video-tts] Using {chosen} (route: {route})", flush=True)
     save_cache(chosen, route)

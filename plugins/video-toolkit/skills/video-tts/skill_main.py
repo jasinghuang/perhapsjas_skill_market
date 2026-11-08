@@ -18,8 +18,17 @@ video-tts — 非交互 CLI：预检、流程编排、job manifest、报告与�
    （机器可读报告）与 `<out>.job.json`（恢复清单）默认生成。
 
 退出码：0 完整成功（含无内容裁剪的加速警告）；1 运行失败 / partial /
-needs_attention / submission_unknown / cancelled；2 参数或输入错误；
-3 用户显式允许裁剪且实际发生内容裁剪（有损成品，不能当普通成功）。
+needs_attention / submission_unknown / download_failed / cancelled；2 参数或
+输入错误；3 用户显式允许裁剪且实际发生内容裁剪（有损成品，不能当普通成功）。
+
+交付保护（spec §15.2）：同名成品默认**整组自动编号** `name_2`、`name_3`
+（不覆盖、不为每件单独询问）；`--overwrite` 显式替换；输出永不覆盖输入
+素材（SRT / 视频 / 音频 / 参考音频 / 计划）。
+
+恢复（spec §13）：`--resume` 按输入指纹与配置快照对账——SRT 变化、克隆
+身份变化（含移除参考参数）与合成身份配置变化阻断；计划修订与加工参数
+修订允许并记录历史；上次 `download_failed` 的组凭收据只重新下载、不重新
+提交合成。
 
 `--dry-run` 只读取输入、校验参数并打印计划——不加载模型、不联网、不
 合成、不写任何文件（含 dub.srt）；需要保存预览计划用显式 `--write-plan`。
@@ -39,6 +48,9 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
+from app_dirs import job_dir
+from audio_pipeline import process_result
+from track_build import write_wav
 from cache import SegmentCache, file_sha256
 from engine import (
     EngineAbort,
@@ -46,17 +58,22 @@ from engine import (
     SegmentResult,
     run_engine,
 )
-from job import JobManifest, write_json
+from job import JobManifest, new_job_id, write_json
 from merge_plan import load_merge_plan, plan_payload
 from mux import mux_video, probe_audio_duration, probe_video, verify_output
 from providers import (
     FLAGSHIP_MODEL,
     LOCAL_BASE_MODEL,
     LOCAL_DESIGN_MODEL,
+    LOCAL_MODEL,
+    TORCH_BASE_MODEL,
+    TORCH_CUSTOM_MODEL,
+    TORCH_DESIGN_MODEL,
     find_voice,
     get_provider,
     is_base_model,
     is_voice_design_model,
+    local_backend,
 )
 from providers.base import Voice
 from providers.errors import SUBMISSION_UNKNOWN, SynthesisError
@@ -125,6 +142,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--design", help="本地 VoiceDesign 音色描述；与 --voice 互斥"
     )
     parser.add_argument(
+        "--preview-text",
+        help="设计后克隆第一步（spec §7.2）：用 --design 只合成这段试听"
+             "文本并输出 <out>.preview.wav，不执行整片。用户选定后以"
+             " --ref-audio <该文件> --ref-text <试听文本> 走 Base 克隆。",
+    )
+    parser.add_argument(
         "--ref-audio", help="本地 Base 克隆参考音频（与 --ref-text 成对）"
     )
     parser.add_argument(
@@ -141,6 +164,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--track-only", action="store_true", help="只出配音轨，不混流"
     )
     parser.add_argument(
+        "--deliver",
+        help="交付成品，逗号分隔：audio,video,subtitle,report（默认 "
+             "audio,video,subtitle；report 只在明确选择时才进交付目录，"
+             "内部完整报告始终保留在应用任务目录）。--track-only 等价于 "
+             "--deliver audio",
+    )
+    parser.add_argument(
         "--keep-segments", action="store_true", help="保留逐条 wav 到 segments/"
     )
     parser.add_argument("--no-cache", action="store_true", help="禁用片段缓存")
@@ -150,6 +180,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--skip-bracketed", action="store_true", help="跳过纯音效标记条目"
+    )
+    parser.add_argument(
+        "--lenient-srt", action="store_true",
+        help="跳过格式不完整的 SRT 块（默认严格解析：坏块报错阻塞，"
+             "确认内容缺失后才用本开关）",
+    )
+    parser.add_argument(
+        "--allow-text-edits", action="store_true",
+        help="接受 merge plan 中已授权的正文改写（计划需带 "
+             "text_edit_authorized: true；改写逐组记录）",
     )
     parser.add_argument(
         "--merge-plan",
@@ -189,7 +229,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--overwrite", action="store_true",
-        help="显式允许覆盖已存在的成品（默认拒绝覆盖）",
+        help="显式覆盖已存在的成品（默认同名整组自动编号 name_2，不覆盖）",
     )
     parser.add_argument(
         "--write-plan", action="store_true",
@@ -211,6 +251,34 @@ def _fail(message: str) -> None:
     """按 argparse 的约定打印错误并以状态码 2 退出。"""
     print(f"error: {message}", file=sys.stderr)
     raise SystemExit(2)
+
+
+DELIVER_CHOICES = ("audio", "video", "subtitle", "report")
+
+
+def _parse_deliver(raw: str | None, *, track_only: bool) -> frozenset[str]:
+    """解析 `--deliver`（F12，spec §15.1）。
+
+    - `--track-only` 等价于 `--deliver audio`，与其它 deliver 组合冲突；
+    - 未指定时默认 `audio,video,subtitle`（video 无视频输入时自动省略，
+      与旧行为一致）；report 只在显式选择时才复制进交付目录。
+    """
+    if track_only and raw:
+        _fail("--track-only cannot be combined with --deliver; "
+              "--track-only means --deliver audio")
+    if track_only:
+        return frozenset({"audio"})
+    if not raw:
+        return frozenset({"audio", "video", "subtitle"})
+    items = [item.strip().lower() for item in raw.split(",") if item.strip()]
+    if not items:
+        _fail("--deliver is empty; expected a comma list of "
+              + "/".join(DELIVER_CHOICES))
+    unknown = [item for item in items if item not in DELIVER_CHOICES]
+    if unknown:
+        _fail(f"--deliver has unknown items {unknown}; expected "
+              + "/".join(DELIVER_CHOICES))
+    return frozenset(items)
 
 
 def _require_voice(provider: str, voice_id: str) -> Voice:
@@ -254,11 +322,16 @@ def validate_args(args: argparse.Namespace) -> None:
             "--overflow-policy truncate is not combinable with strict_slot; "
             "strict mode exists to guarantee complete speech within the slot"
         )
+    args.deliver_set = _parse_deliver(args.deliver, track_only=args.track_only)
 
     voice: Voice | None = None
     if args.provider == "local":
-        if args.ref_audio and IS_WINDOWS:
-            _fail("local provider requires Apple Silicon macOS; use --provider online")
+        # 本地路线按平台解析后端（Apple Silicon→mlx / Windows x64→torch，
+        # spec §4.1）；平台能力检测由 launcher（run.py）完成并给出修复步骤。
+        if args.preview_text and not args.design:
+            _fail("--preview-text requires --design (设计后克隆的第一步)")
+        if args.preview_text and (args.voice or args.ref_audio):
+            _fail("--preview-text cannot be combined with --voice/--ref-audio")
         if bool(args.ref_audio) != bool(args.ref_text):
             _fail("--ref-audio and --ref-text must be provided together")
         if args.ref_audio:
@@ -377,7 +450,13 @@ def validate_args(args: argparse.Namespace) -> None:
             )
         args.hotfix = hotfix
 
-    if args.provider == "online" and not args.yes and not args.dry_run:
+    if (
+        args.provider == "online"
+        and not args.yes
+        and not args.dry_run
+        and not args.write_plan
+    ):
+        # --write-plan 只写计划、不合成、不联网（F14）：不触发费用确认。
         _fail(
             "online synthesis is billed; re-run with --yes after confirming cost"
         )
@@ -388,8 +467,9 @@ def validate_args(args: argparse.Namespace) -> None:
         _fail(f"SRT not found: {args.srt}")
     if args.merge_plan and not Path(args.merge_plan).is_file():
         _fail(f"merge plan not found: {args.merge_plan}")
-    if args.resume and not Path(args.resume).is_file():
-        _fail(f"--resume manifest not found: {args.resume}")
+    if args.resume:
+        # 接受 job.json 路径 / 任务目录 / job ID（F12 内部目录布局）。
+        _resolve_manifest_path(args.resume)
 
     if args.video and args.out and not args.track_only:
         video = Path(args.video)
@@ -465,19 +545,72 @@ def _resolve_outputs(
     return base, _with_suffix(base, ".dub.mp4")
 
 
-def _check_overwrite(
-    paths: list[Path], args: argparse.Namespace
-) -> None:
-    """默认拒绝覆盖已有成品；`--overwrite` 显式放行（resume 同任务亦放行）。"""
-    if args.overwrite or args.resume:
-        return
-    existing = [str(p) for p in paths if p.exists()]
-    if existing:
-        _fail(
-            "output already exists (refusing to overwrite): "
-            + "; ".join(existing)
-            + "; pass --overwrite to replace it, or choose another --out"
-        )
+def _resolve_manifest_path(value: str) -> Path:
+    """把 `--resume` 的值解析成 job.json：文件 / 任务目录 / job ID 皆可。"""
+    candidate = Path(value)
+    if candidate.is_file():
+        return candidate
+    if (candidate / "job.json").is_file():
+        return candidate / "job.json"
+    by_id = job_dir(value) / "job.json"
+    if by_id.is_file():
+        return by_id
+    _fail(
+        f"--resume 目标不存在：{value}（期望 job.json 路径、任务目录"
+        "或 job ID）"
+    )
+
+
+def _input_paths(
+    srt: Path, video: Path | None, audio: Path | None, args: argparse.Namespace
+) -> list[Path]:
+    """所有输入素材路径（输出绝不允许覆盖它们）。"""
+    inputs = [srt]
+    inputs.extend(p for p in (video, audio) if p is not None)
+    if args.ref_audio:
+        inputs.append(Path(args.ref_audio))
+    if args.merge_plan:
+        inputs.append(Path(args.merge_plan))
+    return inputs
+
+
+def _protect_inputs(paths: list[Path], inputs: list[Path]) -> None:
+    """输出路径与任何输入撞车（resolve 后同文件）一律拒绝，`--overwrite`
+    也不放行——覆盖输入素材永远需要先换 `--out`。"""
+    for path in paths:
+        for source in inputs:
+            if _same_path(path, source):
+                _fail(
+                    f"输出路径会覆盖输入文件：{path} == {source}；"
+                    "请换一个 --out 前缀"
+                )
+
+
+def _renumber_prefix(
+    out_prefix: Path,
+    build_paths,
+    inputs: list[Path],
+    limit: int = 999,
+) -> tuple[Path, list[Path]]:
+    """同名成品已存在时整组自动编号（`name_2`、`name_3`…），不覆盖（F09）。
+
+    所有交付共用同一编号；编号组内任何一件已存在、或与输入撞车都跳过
+    该编号。`--overwrite` 由调用方先行放行，不走本函数。
+    """
+    for number in range(2, limit + 1):
+        candidate = out_prefix.with_name(f"{out_prefix.name}_{number}")
+        paths = build_paths(candidate)
+        if any(path.exists() for path in paths):
+            continue
+        if any(
+            _same_path(path, source) for path in paths for source in inputs
+        ):
+            continue
+        return candidate, paths
+    _fail(
+        f"could not find a free output number for {out_prefix} "
+        f"(tried _2.._{limit}); choose another --out"
+    )
 
 
 def _print_plan(
@@ -581,6 +714,7 @@ def _result_payload(result: SegmentResult) -> dict:
         "actual_start": result.actual_start,
         "actual_end": result.actual_end,
         "text": cue.text,
+        "text_edited": cue.text_edited,
         "synth_duration": result.synth_duration,
         "trimmed_seconds": result.trimmed_seconds,
         "final_duration": result.final_duration,
@@ -597,6 +731,9 @@ def _result_payload(result: SegmentResult) -> dict:
         "native_sample_rate": result.native_sample_rate,
         "synth_seconds": round(result.synth_seconds, 3),
         "error_kind": result.error_kind,
+        "audio_url": result.audio_url,
+        "request_id": result.request_id,
+        "downloaded": result.downloaded,
     }
 
 
@@ -660,6 +797,8 @@ def _job_status(
     """由逐组结果推导任务终态（spec §14 状态枚举）。"""
     if any(r.status == "submission_unknown" for r in results):
         return "submission_unknown"
+    if any(r.status == "download_failed" for r in results):
+        return "download_failed"
     if any(r.status == "needs_attention" for r in results):
         return "needs_attention"
     if mux_failed:
@@ -684,17 +823,40 @@ def _exit_code(status: str, args: argparse.Namespace) -> int:
 
 
 def _build_provider(args: argparse.Namespace, design: str | None):
-    """按 provider 组装 kwargs 并实例化（实现模块懒导入）。"""
+    """按 provider 组装 kwargs 并实例化（实现模块懒导入）。
+
+    本地路线先解析后端（Apple Silicon→mlx / Windows x64→torch），
+    默认模型 ID 随后端（spec §4.2）——用户不需要理解两套模型 ID。
+    """
     kwargs: dict = {}
     if args.provider == "local":
+        backend = local_backend()
+        defaults = {
+            "mlx": {
+                "preset": LOCAL_MODEL,
+                "design": LOCAL_DESIGN_MODEL,
+                "base": LOCAL_BASE_MODEL,
+            },
+            "torch": {
+                "preset": TORCH_CUSTOM_MODEL,
+                "design": TORCH_DESIGN_MODEL,
+                "base": TORCH_BASE_MODEL,
+            },
+        }.get(backend)
+        if defaults is None:
+            _fail(
+                "当前平台没有默认本地路线（Intel Mac / 未知系统）；"
+                "请使用 --provider online，或参考 references/setup.md"
+            )
         if args.ref_audio:
-            kwargs["model_id"] = args.model or LOCAL_BASE_MODEL
+            kwargs["model_id"] = args.model or defaults["base"]
         elif design:
             kwargs["design"] = design
             # VoiceDesign 模式必须加载 VoiceDesign 模型；未显式覆盖时用默认。
-            kwargs["model_id"] = args.model or LOCAL_DESIGN_MODEL
+            kwargs["model_id"] = args.model or defaults["design"]
         elif args.model:
             kwargs["model_id"] = args.model
+        kwargs["backend"] = backend
     else:
         kwargs["bl_bin"] = args.bl_bin
         if args.tts_endpoint:
@@ -724,6 +886,8 @@ def _report_payload(
     results: list[SegmentResult],
     timings: dict,
     error: str | None,
+    deliver: frozenset[str] | None = None,
+    internal_dir: Path | None = None,
 ) -> dict:
     """组装机器可读报告（spec §14）；产物只在真正写成功后才有值。"""
     truncated = any(r.truncated_seconds > 0 for r in results)
@@ -732,6 +896,8 @@ def _report_payload(
         "job_id": job_id,
         "status": status,
         "error": error,
+        "deliver": sorted(deliver) if deliver is not None else None,
+        "internal_dir": str(internal_dir) if internal_dir else None,
         "inputs": {
             "srt": str(srt),
             "video": str(video) if video is not None else None,
@@ -741,6 +907,11 @@ def _report_payload(
         "provider": args.provider,
         "voice": _voice_payload(voice),
         "design": design,
+        "ref": (
+            {"ref_audio": str(args.ref_audio), "ref_text": args.ref_text}
+            if args.ref_audio
+            else None
+        ),
         "instruct": args.instruct,
         "lang": args.lang,
         "timing": {
@@ -772,6 +943,82 @@ def _report_payload(
     }
 
 
+class _LazyProvider:
+    """把 `prepare()` 延迟到首次真实使用（A12，spec §5.3）。
+
+    `describe()` 直接转发（不触发模型加载 / 登录）；`synthesize()` 首次
+    调用时才 prepare——全片命中原生缓存的任务从不调用 synthesize，
+    模型加载次数为零，重新拼轨不必再等模型。`download()`（收据恢复）
+    不需要模型，同样不触发 prepare。`prepare_seconds` 记录真实耗时
+    （未发生时为 None）。
+    """
+
+    def __init__(self, provider) -> None:
+        self._provider = provider
+        self._prepared = False
+        self.prepare_seconds: float | None = None
+        self.prepare_count = 0
+
+    def _ensure_prepared(self) -> None:
+        if not self._prepared:
+            started = time.monotonic()
+            self._provider.prepare()
+            self.prepare_seconds = time.monotonic() - started
+            self.prepare_count += 1
+            self._prepared = True
+
+    def prepare(self) -> None:
+        self._ensure_prepared()
+
+    def describe(self) -> dict:
+        return self._provider.describe()
+
+    def synthesize(self, *args, **kwargs):
+        self._ensure_prepared()
+        return self._provider.synthesize(*args, **kwargs)
+
+    def download(self, *args, **kwargs):
+        return self._provider.download(*args, **kwargs)
+
+
+def _run_design_preview(
+    args: argparse.Namespace,
+    design: str | None,
+    out_prefix: Path,
+    inputs: list[Path],
+) -> int:
+    """设计后克隆第一步（spec §7.2）：只合成试听，不执行整片。
+
+    预览进程独立于整片任务——用户选定参考后，整片走 Base 克隆
+    （`--ref-audio <试听文件> --ref-text <试听文本>`）。设计模型与
+    Base 模型因此天然不同进程驻留，切换显存由进程退出完整归还
+    （§7.2 切换契约的最强实现；同进程切换见 provider.release_model）。
+    """
+    def _preview_paths(prefix: Path) -> list[Path]:
+        return [_with_suffix(prefix, ".preview.wav")]
+
+    preview_path = _with_suffix(out_prefix, ".preview.wav")
+    _protect_inputs(_preview_paths(out_prefix), inputs)
+    if preview_path.exists() and not args.overwrite:
+        out_prefix, _ = _renumber_prefix(out_prefix, _preview_paths, inputs)
+        preview_path = _with_suffix(out_prefix, ".preview.wav")
+        print(f"同名试听已存在，自动编号: {out_prefix.name}")
+
+    _require_binary("ffmpeg")
+    provider = _LazyProvider(_build_provider(args, design))
+    provider.prepare()  # 预览必须真实加载设计模型
+    result = provider.synthesize(args.preview_text, None)
+    processed = process_result(result, args.master_sample_rate)
+    write_wav(preview_path, processed.pcm, args.master_sample_rate)
+    print(f"试听音频: {preview_path}")
+    print(f"试听文本（选定后原样传给 --ref-text）: {args.preview_text}")
+    print(
+        "试听选定 → 整片克隆：--ref-audio <试听文件> --ref-text <试听文本>；"
+        "调整描述 → 改 --design 重跑本预览（旧试听保留）。"
+    )
+    return 0
+
+
 def _run(args: argparse.Namespace) -> int:
     """执行一次完整流程，返回退出码。"""
     started = time.monotonic()
@@ -795,6 +1042,7 @@ def _run(args: argparse.Namespace) -> int:
         srt,
         video_duration if video_duration is not None else audio_duration,
         skip_bracketed=args.skip_bracketed,
+        lenient=args.lenient_srt,
     )
     for warning in srt_warnings:
         print(f"warning: {warning}", file=sys.stderr)
@@ -805,7 +1053,11 @@ def _run(args: argparse.Namespace) -> int:
     original_count = len(cues)
     if args.merge_plan:
         try:
-            cues = load_merge_plan(Path(args.merge_plan), cues, srt_sha256=srt_sha)
+            cues = load_merge_plan(
+                Path(args.merge_plan), cues,
+                srt_sha256=srt_sha,
+                allow_text_edits=args.allow_text_edits,
+            )
         except ValueError as exc:
             _fail(str(exc))
         print(f"合并: {original_count} 条 → {len(cues)} 组")
@@ -821,20 +1073,33 @@ def _run(args: argparse.Namespace) -> int:
     voice = find_voice(args.provider, args.voice) if args.voice else None
     if voice is not None and args.model:
         voice = replace(voice, model=args.model)
-    if args.provider == "local" and args.ref_audio:
-        # Base 克隆没有预设音色；伪 Voice 只用于报告（缓存身份走内容哈希）。
-        voice = Voice(
-            "Reference",
-            "ref-clone",
-            "",
-            "",
-            args.model or LOCAL_BASE_MODEL,
-            "local",
-        )
+    if (
+        voice is not None
+        and args.provider == "local"
+        and local_backend() == "torch"
+        and voice.model == LOCAL_MODEL
+    ):
+        # torch 后端的预设音色用官方模型 ID（缓存身份 / 报告与实际一致）。
+        voice = replace(voice, model=TORCH_CUSTOM_MODEL)
+    # Base 克隆没有预设音色：voice 保持 None，引擎向 provider 传
+    # ref_audio/ref_text（F01 修复后不再构造 voice_id="ref-clone" 的假音色）。
     design = args.design if args.provider == "local" else None
 
-    out_prefix, video_out = _resolve_outputs(args, video, srt)
-    track_path = _with_suffix(out_prefix, ".dub.wav")
+    out_prefix, _ = _resolve_outputs(args, video, srt)
+    inputs = _input_paths(srt, video, audio, args)
+    deliver: frozenset[str] = args.deliver_set
+    if "video" in deliver and video is None:
+        if args.deliver or args.track_only:
+            _fail("--deliver video 需要 --video 输入（本次未提供视频）")
+        deliver = deliver - {"video"}  # 默认集合无视频输入时自动省略
+
+    def _derive_video_out(prefix: Path) -> Path | None:
+        """按 `--out` 的原始形态从前缀推导成片路径（编号后保持同一规则）。"""
+        if video is None or "video" not in deliver:
+            return None
+        if args.out and Path(args.out).suffix.lower() == ".mp4":
+            return prefix.with_suffix(".mp4")
+        return _with_suffix(prefix, ".dub.mp4")
 
     # --- dry-run：只读、校验、打印；不写任何文件 -----------------------
     if args.dry_run:
@@ -843,84 +1108,210 @@ def _run(args: argparse.Namespace) -> int:
 
     # --- write-plan：只写预览计划，不合成 -------------------------------
     if args.write_plan:
+        def _plan_paths(prefix: Path) -> list[Path]:
+            return [
+                _with_suffix(prefix, ".plan.json"),
+                _with_suffix(prefix, ".plan.srt"),
+            ]
+        _protect_inputs(_plan_paths(out_prefix), inputs)
+        if (
+            not args.overwrite
+            and any(path.exists() for path in _plan_paths(out_prefix))
+        ):
+            out_prefix, _ = _renumber_prefix(out_prefix, _plan_paths, inputs)
+            print(f"同名计划已存在，自动编号: {out_prefix.name}")
         _write_plan_files(out_prefix, cues, srt)
         return 0
 
-    # --- 覆盖保护：成品默认拒绝覆盖（--overwrite / --resume 放行）-------
-    _check_overwrite(
-        [track_path] + ([video_out] if video_out is not None else []),
-        args,
+    # --- design preview：设计后克隆第一步（spec §7.2），不执行整片 ------
+    if args.preview_text:
+        return _run_design_preview(args, design, out_prefix, inputs)
+
+    # --- 交付路径保护：统一编号 / 显式覆盖 / 输入永不覆盖（F09/F12）----
+    # 交付集合只含用户显式选择的成品；job.json / 内部报告在应用任务目录
+    # （jobs/<job_id>/），不进素材目录、不参与编号。
+    if args.json_report:
+        # 自定义报告路径不参与编号，但同样做所有权检查（防止绕过保护）。
+        custom_report = Path(args.json_report)
+        _protect_inputs([custom_report], inputs)
+        if (
+            custom_report.exists()
+            and not args.overwrite
+            and not args.resume
+        ):
+            _fail(
+                f"--json-report 目标已存在：{custom_report}；"
+                "换一个路径或显式 --overwrite"
+            )
+
+    def _build_deliverables(prefix: Path) -> list[Path]:
+        paths: list[Path] = []
+        if "audio" in deliver:
+            paths.append(_with_suffix(prefix, ".dub.wav"))
+        derived = _derive_video_out(prefix)
+        if derived is not None:
+            paths.append(derived)
+        if "subtitle" in deliver:
+            paths.append(_with_suffix(prefix, ".dub.srt"))
+        if "report" in deliver and not args.json_report:
+            paths.append(_with_suffix(prefix, ".report.json"))
+        if args.json_report:
+            paths.append(Path(args.json_report))
+        if args.keep_segments:
+            paths.append(prefix.parent / "segments")
+        return paths
+
+    _protect_inputs(_build_deliverables(out_prefix), inputs)
+    if args.resume:
+        pass  # resume 沿用原任务路径；身份由 reconcile_resume 对账保证
+    elif not args.overwrite:
+        if any(path.exists() for path in _build_deliverables(out_prefix)):
+            out_prefix, _ = _renumber_prefix(
+                out_prefix, _build_deliverables, inputs,
+            )
+            print(
+                f"同名成品已存在，整组自动编号为 {out_prefix.name}"
+                "（不覆盖旧文件；换 --out 可自定义，或 --overwrite 显式替换）"
+            )
+    video_out = _derive_video_out(out_prefix)
+    track_path = (
+        _with_suffix(out_prefix, ".dub.wav") if "audio" in deliver
+        else None  # 稍后指向内部任务目录（用户没选音轨交付）
     )
 
     # --- job manifest：先建（或 resume），失败也有恢复依据 --------------
     plan_sha = file_sha256(Path(args.merge_plan)) if args.merge_plan else None
     ref_sha = file_sha256(Path(args.ref_audio)) if args.ref_audio else None
+    # 实际生效的模型（含克隆 / 设计的默认解析，随后端）：进配置快照供
+    # resume 对账。
+    _torch_local = args.provider == "local" and local_backend() == "torch"
+    resolved_model = args.model or (
+        (TORCH_BASE_MODEL if _torch_local else LOCAL_BASE_MODEL)
+        if (args.provider == "local" and args.ref_audio)
+        else (TORCH_DESIGN_MODEL if _torch_local else LOCAL_DESIGN_MODEL)
+        if (args.provider == "local" and design)
+        else (voice.model if voice else None)
+    )
+    job_config = {
+        "provider": args.provider,
+        "voice": voice.voice_id if voice else None,
+        "design": design,
+        # ref_audio 的身份是 inputs.ref_audio_sha256；ref_text 影响
+        # 合成与缓存身份，必须进配置快照供 resume 对账。
+        "ref_text": args.ref_text,
+        "instruct": args.instruct,
+        "lang": args.lang,
+        "model": resolved_model,
+        "timing_mode": args.timing_mode,
+        "overflow_policy": args.overflow_policy,
+        "master_sample_rate": args.master_sample_rate,
+        "max_speed": args.max_speed,
+        "style": {
+            key: value for key, value in (
+                ("rate", args.rate), ("pitch", args.pitch),
+                ("volume", args.volume), ("seed", args.seed),
+                ("temperature", args.temperature),
+                ("top_p", args.top_p), ("top_k", args.top_k),
+                ("enable_ssml", args.enable_ssml or None),
+            ) if value is not None
+        },
+    }
+    job_groups = [
+        {
+            "source_indices": list(cue.source_indices or (cue.index,)),
+            "text": cue.text,
+            "text_edited": cue.text_edited,
+            "start": cue.start,
+            "end": cue.end,
+            "status": "pending",
+        }
+        for cue in cues
+    ]
+    receipts: dict[int, dict] = {}
     if args.resume:
+        manifest_path = _resolve_manifest_path(args.resume)
+        internal_dir = manifest_path.parent
         try:
-            manifest = JobManifest.load(Path(args.resume))
+            manifest = JobManifest.load(manifest_path)
         except ValueError as exc:
             _fail(str(exc))
-        mismatches = manifest.check_resume_inputs(srt_sha, plan_sha, ref_sha)
-        if mismatches:
-            _fail("cannot resume: " + "; ".join(mismatches))
+        blockers, revisions, plan_changed = manifest.reconcile_resume(
+            srt_sha, plan_sha, ref_sha, job_config,
+        )
+        if blockers:
+            _fail("cannot resume: " + "; ".join(blockers))
+        if revisions:
+            for note in revisions:
+                print(f"resume 修订: {note}")
+            manifest.apply_revision(
+                config=job_config,
+                groups=job_groups if plan_changed else None,
+                notes=revisions,
+            )
         print(f"恢复任务: {manifest.job_id}（原状态 {manifest.status}）")
+        # 上次 download_failed 的组：收据优先，恢复时只下载、不重新提交。
+        # 计划修订时 groups 已重建（文本映射变化，旧收据作废）。
+        receipts = {
+            position: {
+                "audio_url": record.get("audio_url"),
+                "request_id": record.get("request_id"),
+            }
+            for position, record in enumerate(manifest.group_records())
+            if record.get("status") == "download_failed"
+            and record.get("audio_url")
+        }
+        submitting = [
+            position
+            for position, record in enumerate(manifest.group_records())
+            if record.get("status") == "submitting"
+        ]
+        if submitting:
+            print(
+                f"warning: 上次在第 {len(submitting)} 组提交期间中断"
+                f"（组 {submitting}）；无法确认服务端是否已受理，"
+                "本次将重新提交这些组——如担心重复计费请先到控制台核对。",
+                file=sys.stderr,
+            )
     else:
+        # F12：任务状态在应用目录 jobs/<job_id>/，不与用户成品混放。
+        fresh_id = new_job_id()
+        internal_dir = job_dir(fresh_id)
+        internal_dir.mkdir(parents=True, exist_ok=True)
         manifest = JobManifest.create(
-            _with_suffix(out_prefix, ".job.json"),
+            internal_dir / "job.json",
+            job_id=fresh_id,
             inputs={
                 "srt_sha256": srt_sha,
                 "merge_plan_sha256": plan_sha,
                 "ref_audio_sha256": ref_sha,
             },
-            config={
-                "provider": args.provider,
-                "voice": voice.voice_id if voice else None,
-                "design": design,
-                "instruct": args.instruct,
-                "lang": args.lang,
-                "model": voice.model if voice else None,
-                "timing_mode": args.timing_mode,
-                "overflow_policy": args.overflow_policy,
-                "master_sample_rate": args.master_sample_rate,
-                "max_speed": args.max_speed,
-                "style": {
-                    key: value for key, value in (
-                        ("rate", args.rate), ("pitch", args.pitch),
-                        ("volume", args.volume), ("seed", args.seed),
-                        ("temperature", args.temperature),
-                        ("top_p", args.top_p), ("top_k", args.top_k),
-                        ("enable_ssml", args.enable_ssml or None),
-                    ) if value is not None
-                },
-            },
-            groups=[
-                {
-                    "source_indices": list(cue.source_indices or (cue.index,)),
-                    "text": cue.text,
-                    "start": cue.start,
-                    "end": cue.end,
-                    "status": "pending",
-                }
-                for cue in cues
-            ],
+            config=job_config,
+            groups=job_groups,
         )
     manifest.save("preparing")
+    if track_path is None:
+        # 用户未选音轨交付：整轨只作为混流中间产物放内部目录。
+        track_path = internal_dir / "track.dub.wav"
 
     # 真正的合成流程才需要 ffmpeg（重采样 / 变速 / 混流）。
     _require_binary("ffmpeg")
 
-    provider = _build_provider(args, design)
-    prepare_started = time.monotonic()
-    provider.prepare()
-    prepare_seconds = time.monotonic() - prepare_started
+    # A12：prepare 延迟到首次真实合成（懒包装）——全片缓存命中的任务
+    # 模型加载次数为零；describe 仍可用（provider 信息进缓存键 / 报告）。
+    provider = _LazyProvider(_build_provider(args, design))
 
     if voice is not None:
         print(
             f"video-tts: provider={args.provider} voice={voice.voice_id} "
             f"model={voice.model}"
         )
-    else:
+    elif design:
         print(f"video-tts: provider={args.provider} design={design}")
+    else:
+        print(
+            f"video-tts: provider={args.provider} "
+            f"clone ref_audio={args.ref_audio}"
+        )
     if (
         args.provider == "online"
         and args.instruct
@@ -967,6 +1358,31 @@ def _run(args: argparse.Namespace) -> int:
     engine_instruct = args.instruct  # design 不再冒充 instruct 进键
     engine_voice = voice
 
+    def _record_group(position: int, result: SegmentResult) -> None:
+        """逐组原子落盘（spec §13）：不等引擎结束，崩溃也保住最近状态。"""
+        manifest.update_group(
+            position,
+            status=result.status,
+            cache_key=result.cache_key,
+            attempts=result.attempts,
+            error_kind=result.error_kind,
+            actual_start=result.actual_start,
+            actual_end=result.actual_end,
+            final_duration=result.final_duration,
+            truncated_seconds=result.truncated_seconds,
+            overflow_gap=result.overflow_gap,
+            audio_url=result.audio_url,
+            request_id=result.request_id,
+            downloaded=result.downloaded,
+        )
+        manifest.save()
+
+    def _mark_submitting(position: int) -> None:
+        """在线提交前落 submitting 标记（spec §14 / A09）：崩溃后能看出
+        提交是否已发出，恢复时保守处理而不是当作未发生。"""
+        manifest.update_group(position, status="submitting")
+        manifest.save()
+
     results: list[SegmentResult] = []
     aborted: BaseException | None = None
     synth_started = time.monotonic()
@@ -982,25 +1398,14 @@ def _run(args: argparse.Namespace) -> int:
             cache,
             track_path,
             progress=lambda line: print(line, flush=True),
+            receipts=receipts,
+            on_result=_record_group,
+            on_submit=_mark_submitting,
         )
     except EngineAbort as abort:
         results = abort.results
         aborted = abort.error if abort.error is not None else RuntimeError(str(abort))
     synth_seconds = time.monotonic() - synth_started
-
-    for position, result in enumerate(results):
-        manifest.update_group(
-            position,
-            status=result.status,
-            cache_key=result.cache_key,
-            attempts=result.attempts,
-            error_kind=result.error_kind,
-            actual_start=result.actual_start,
-            actual_end=result.actual_end,
-            final_duration=result.final_duration,
-            truncated_seconds=result.truncated_seconds,
-            overflow_gap=result.overflow_gap,
-        )
 
     failures = sum(1 for result in results if result.failed)
     truncated_any = any(result.truncated_seconds > 0 for result in results)
@@ -1011,10 +1416,12 @@ def _run(args: argparse.Namespace) -> int:
         if aborted is None:
             # 正常完成（含 partial）才写块级字幕；中止路径靠 manifest 与
             # 缓存恢复，不产出看起来完整的字幕成品。
-            print(f"配音轨: {track_path}")
-            dub_srt = _write_dub_srt(out_prefix, results)
-            if dub_srt is not None:
-                print(f"块级字幕: {dub_srt}")
+            if "audio" in deliver:
+                print(f"配音轨: {track_path}")
+            if "subtitle" in deliver:
+                dub_srt = _write_dub_srt(out_prefix, results)
+                if dub_srt is not None:
+                    print(f"块级字幕: {dub_srt}")
     else:
         failures = len(cues)
 
@@ -1025,7 +1432,7 @@ def _run(args: argparse.Namespace) -> int:
     if (
         aborted is None
         and video is not None
-        and not args.track_only
+        and "video" in deliver
         and failures == 0
     ):
         manifest.save("exporting")
@@ -1049,9 +1456,13 @@ def _run(args: argparse.Namespace) -> int:
         status = "cancelled"
     elif aborted is not None:
         unknown = any(r.status == "submission_unknown" for r in results)
+        download_failed = any(
+            r.status == "download_failed" for r in results
+        )
         attention = any(r.status == "needs_attention" for r in results)
         status = (
             "submission_unknown" if unknown
+            else "download_failed" if download_failed
             else "needs_attention" if attention
             else "failed"
         )
@@ -1062,7 +1473,12 @@ def _run(args: argparse.Namespace) -> int:
         )
 
     timings = {
-        "prepare_seconds": round(prepare_seconds, 3),
+        # 懒加载下未发生 prepare（全片缓存命中）为 None——如实记录零加载。
+        "prepare_seconds": (
+            round(provider.prepare_seconds, 3)
+            if provider.prepare_seconds is not None else None
+        ),
+        "prepare_count": provider.prepare_count,
         "synthesizing_seconds": round(synth_seconds, 3),
         "mux_seconds": round(timings_mux, 3),
         "total_seconds": round(time.monotonic() - started, 3),
@@ -1072,34 +1488,41 @@ def _run(args: argparse.Namespace) -> int:
     )
 
     manifest.save(status, note=error_text)
-    report_path = Path(args.json_report) if args.json_report else _with_suffix(
-        out_prefix, ".report.json"
+    # F12：内部完整报告始终写应用任务目录；只有用户选择 report 交付
+    # （--deliver report 或 --json-report）才复制进交付目录。
+    report_payload = _report_payload(
+        args,
+        job_id=manifest.job_id,
+        status=status,
+        srt=srt,
+        video=video,
+        voice=voice,
+        design=design,
+        total_duration=total_duration,
+        track_path=track_path if (results and not aborted) else None,
+        final_path=final_path,
+        srt_warnings=srt_warnings,
+        results=results,
+        timings=timings,
+        error=error_text,
+        deliver=deliver,
+        internal_dir=internal_dir,
     )
-    write_json(
-        report_path,
-        _report_payload(
-            args,
-            job_id=manifest.job_id,
-            status=status,
-            srt=srt,
-            video=video,
-            voice=voice,
-            design=design,
-            total_duration=total_duration,
-            track_path=track_path if (results and not aborted) else None,
-            final_path=final_path,
-            srt_warnings=srt_warnings,
-            results=results,
-            timings=timings,
-            error=error_text,
-        ),
-    )
+    write_json(internal_dir / "report.json", report_payload)
+    if args.json_report:
+        report_path = Path(args.json_report)
+        write_json(report_path, report_payload)
+    elif "report" in deliver:
+        report_path = _with_suffix(out_prefix, ".report.json")
+        write_json(report_path, report_payload)
+    else:
+        report_path = internal_dir / "report.json"
     print(f"报告: {report_path}")
     print(f"任务清单: {manifest.path}")
     if status != "complete":
         print(f"状态: {status}", file=sys.stderr)
         print(
-            "恢复：修正输入后用 --resume " f"{manifest.path} 重跑；"
+            f"恢复：修正输入后用 --resume {internal_dir} 重跑；"
             "已完成组会从原生缓存复用。",
             file=sys.stderr,
         )

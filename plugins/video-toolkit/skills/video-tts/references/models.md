@@ -2,11 +2,19 @@
 
 ## 模型表
 
-| 用途 | 默认模型 | 说明 |
+本地默认模型**按平台后端**解析（用户不需要理解两套 ID）：
+
+| 用途 | Mac（mlx-audio） | Windows（官方 qwen-tts） |
 | --- | --- | --- |
-| 本地预设音色 | `mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` | 9 音色 + `--instruct` |
-| 本地自由音色设计 | `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16` | `--design` 描述生成音色 |
-| 本地参考克隆 | `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16` | `--ref-audio` / `--ref-text` |
+| 预设音色 | `mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` |
+| 文字设计音色 | `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16` | `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` |
+| 参考克隆 | `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` |
+
+torch 路线调用官方接口（`speaker`/`language` 参数，不是 MLX 的
+`voice`/`lang_code`）：预设 → `generate_custom_voice`；设计 →
+`generate_voice_design`；克隆 → `create_voice_clone_prompt`（任务内一次、
+复用，默认带准确参考文本）+ `generate_voice_clone`。设计后克隆的模型切换
+走 `release_model` 显存归还契约（或预览/整片分进程）。
 | 在线旗舰 | `qwen-audio-3.1-tts-plus` | 4 个 v3.1 音色，支持 `--instruct` |
 | 在线其他 | `qwen3-tts-flash` | 12 音色，不支持 `--instruct` |
 

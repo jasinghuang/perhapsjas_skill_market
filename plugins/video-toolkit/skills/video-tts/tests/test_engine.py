@@ -5,7 +5,12 @@ from audio_fit import FitAction, split_long_text
 from cache import SegmentCache
 from engine import EngineAbort, EngineOptions, SegmentResult, run_engine
 from providers.base import SynthesisResult, Voice
-from providers.errors import FATAL, RETRYABLE, SUBMISSION_UNKNOWN, SynthesisError
+from providers.errors import (
+    FATAL,
+    RETRYABLE,
+    SUBMISSION_UNKNOWN,
+    SynthesisError,
+)
 from srt_parse import Cue
 from track_build import read_wav
 
@@ -337,6 +342,127 @@ def test_submission_unknown_aborts_without_resubmitting(tmp_path):
     assert excinfo.value.results[0].status == "submission_unknown"
 
 
+class DownloadFailProvider(FakeProvider):
+    """合成提交成功一次，随后下载持续失败（F02 / A06 复现）。"""
+
+    def __init__(self, seconds):
+        super().__init__(seconds)
+        self.submissions = 0
+        self.downloads = 0
+
+    def synthesize(self, text, voice, instruct="", lang="chinese", **style):
+        self.submissions += 1
+        self.calls += 1
+        raise SynthesisError(
+            "failed to download synthesized audio after 3 attempts",
+            kind="download_failed",
+            audio_url="https://example.test/a.wav",
+            request_id="req-42",
+        )
+
+    def download(self, audio_url, voice=None, request_id=None):
+        self.downloads += 1
+        return SynthesisResult(
+            audio=_pcm(self.seconds), sample_rate=24000, channels=1,
+            provider="DownloadFailProvider", model_id="m",
+            request_id=request_id,
+        )
+
+
+def _run_raw(cues, provider, tmp_path, **kwargs):
+    """带 receipts / 回调直接跑引擎（不读回整轨）。"""
+    opts = EngineOptions(master_sample_rate=24000, retry_delays=(0, 0))
+    return run_engine(
+        cues, provider, voice=None, instruct="", lang="chinese",
+        total_duration=max(c.next_start for c in cues), options=opts,
+        cache=SegmentCache(root=tmp_path / "cache"),
+        track_path=tmp_path / "track.wav",
+        progress=lambda _line: None, **kwargs,
+    )
+
+
+def test_download_failure_aborts_after_single_submission(tmp_path):
+    # F02 复现：合成已成功、下载耗尽 → 绝不重新提交合成（原来会被当成
+    # retryable 再 POST 两次，重复计费）。
+    p = DownloadFailProvider(1.0)
+    with pytest.raises(EngineAbort) as excinfo:
+        _run([cue(1, 0.0, 2.0, 3.0)], p, tmp_path)
+    assert p.submissions == 1          # 只提交一次（F02 的核心断言）
+    result = excinfo.value.results[0]
+    assert result.status == "download_failed"
+    assert result.audio_url == "https://example.test/a.wav"
+    assert result.request_id == "req-42"
+
+
+def test_download_receipt_resume_downloads_without_resubmitting(tmp_path):
+    # F02 恢复：带上次收据 → 只下载，不发生新的合成提交；下载成功后
+    # 正常完成整轨，结果标记 downloaded。
+    p = DownloadFailProvider(1.0)
+    cues = [cue(1, 0.0, 2.0, 3.0)]
+    results = _run_raw(
+        cues, p, tmp_path,
+        receipts={0: {
+            "audio_url": "https://example.test/a.wav",
+            "request_id": "req-42",
+        }},
+    )
+    assert p.submissions == 0          # 没有新提交
+    assert p.downloads == 1            # 只按收据下载
+    assert results[0].failed is False
+    assert results[0].downloaded is True
+    assert results[0].attempts == 0
+
+
+def test_download_receipt_failure_keeps_download_failed(tmp_path):
+    # 收据下载再次失败 → 仍是 download_failed（收据保留，可再次恢复），
+    # 不升级成重新合成。
+    class StillFailing(DownloadFailProvider):
+        def download(self, audio_url, voice=None, request_id=None):
+            self.downloads += 1
+            raise SynthesisError(
+                "failed to download synthesized audio after 3 attempts",
+                kind="download_failed",
+                audio_url=audio_url,
+                request_id=request_id,
+            )
+
+    p = StillFailing(1.0)
+    with pytest.raises(EngineAbort) as excinfo:
+        _run_raw(
+            [cue(1, 0.0, 2.0, 3.0)], p, tmp_path,
+            receipts={0: {
+                "audio_url": "https://example.test/a.wav",
+                "request_id": "req-42",
+            }},
+        )
+    assert p.submissions == 0
+    assert p.downloads == 1
+    assert excinfo.value.results[0].status == "download_failed"
+
+
+def test_on_result_callback_fires_per_group(tmp_path):
+    # F04：逐组结果落定立即回调（不等引擎结束），供 manifest 原子落盘。
+    p = FakeProvider(1.0)
+    seen = []
+    _run_raw(
+        [cue(1, 0.0, 2.0, 3.0), cue(2, 3.0, 4.0, 6.0)], p, tmp_path,
+        on_result=lambda pos, result: seen.append((pos, result.status)),
+    )
+    assert seen == [(0, "ok"), (1, "ok")]
+
+
+def test_on_submit_callback_fires_before_first_submission(tmp_path):
+    # A09：提交前落 submitting 标记；缓存命中的组不应触发（没有新提交）。
+    p = FakeProvider(1.0)
+    submitted = []
+    cues = [cue(1, 0.0, 2.0, 3.0)]
+    _run_raw(cues, p, tmp_path, on_submit=submitted.append)
+    assert submitted == [0]
+    # 第二次运行全命中缓存 → 无新提交。
+    _run_raw(cues, p, tmp_path, on_submit=submitted.append)
+    assert submitted == [0]
+
+
 def test_invalid_output_retries_within_budget_then_fails(tmp_path):
     class Nan(FakeProvider):
         def synthesize(self, text, voice, instruct="", lang="chinese", **style):
@@ -438,10 +564,13 @@ def test_chunk_text_does_not_alias_single_chunk_cache(tmp_path):
 
 
 def test_cache_write_failure_does_not_fail_the_cue(tmp_path, monkeypatch):
-    def boom(*args, **kwargs):
+    # 缓存写失败只影响加速（spec §12.1）：已合成的音频不丢、组不失败。
+    # 只打挂 SegmentCache.put——全局打挂 sf.write 会连内部片段落盘
+    # （F07 part 文件）一起破坏，那种磁盘级失败本来就该报错。
+    def boom(self, key, pcm, sample_rate):
         raise OSError("cache directory is read-only")
 
-    monkeypatch.setattr("cache.sf.write", boom)
+    monkeypatch.setattr(SegmentCache, "put", boom)
     master, results = _run([cue(1, 0.0, 2.0, 3.0)], FakeProvider(1.0), tmp_path)
     assert results[0].failed is False
     assert np.any(master != 0.0)

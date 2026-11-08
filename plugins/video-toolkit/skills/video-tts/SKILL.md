@@ -19,11 +19,12 @@ description: >
 | 环境 | 可用路线 |
 | --- | --- |
 | Apple Silicon Mac | 本地 MLX（推荐）或 在线 |
+| Windows x64 + NVIDIA GPU | 本地 torch（官方 qwen-tts + CUDA，run.py 自动准备专用 venv）或 在线 |
 | Intel Mac / Rosetta | 仅在线（本地 MLX 不可用） |
-| Windows | 仅在线（不装 mlx-audio） |
+| Windows 无 NVIDIA GPU | 仅在线（本地 torch 需 CUDA；缺依赖时显示 needs_setup，不隐藏路线） |
 | 其它 / 未知 | 按实际检测能力展示，不按系统名称猜测 |
 
-本地路线由 `run.py` 在专用 venv 里验证 arm64 + Metal + mlx-audio API，缺什么给对应修复步骤（详见 [references/setup.md](references/setup.md)）。**检测通过前不要把「本地 / 原声克隆」作为选项推荐**。
+`--provider local` 由 `run.py` 按平台解析后端：Apple Silicon 在专用 venv 验证 arm64 + Metal + mlx-audio；Windows x64 在 `%LOCALAPPDATA%\video-toolkit\envs\video-tts-torch` 验证 x64 + CUDA 构建 + 真实张量运算 + qwen-tts API，CUDA wheel 按驱动实际版本从官方 cuXXX 索引安装（缺什么给对应修复步骤，详见 [references/setup.md](references/setup.md)）。**检测通过前不要把「本地 / 原声克隆」作为选项推荐**；本地三用途（预设音色 / 文字设计 / 参考克隆）都用 1.7B 官方模型，不自动降 0.6B 或改在线。
 
 ## 入口与调用约定
 
@@ -31,10 +32,13 @@ description: >
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py --srt <字幕> --provider <local|online> [参数]
 ```
 
-- `run.py` 负责隔离环境：复用已装好依赖的解释器，或装入专用 venv（锁定依赖，绝不碰系统 Python）。它打印 `[video-tts] Using <python> (route: …)`，转述给用户即可。
+- `run.py` 负责隔离环境：复用已装好依赖的解释器，或装入专用 venv（锁定依赖，绝不碰系统 Python；安装器优先 uv——多 venv 同 wheel 硬链接共享磁盘）。它打印 `[video-tts] Using <python> (route: …)`，转述给用户即可。
 - CLI 完全非交互：provider、音色、语气、费用确认等选择由宿主在调用前收集，以显式参数传入。
 - `--dry-run` 只解析校验并打印计划——不联网、不合成、**不写任何文件**；保存预览用 `--write-plan`。
-- 默认产物：`<out>.dub.wav`、`<out>.dub.mp4`（有视频且未 `--track-only`）、`<out>.dub.srt`（实际配音时间的块级字幕）、`<out>.report.json`、`<out>.job.json`。已有成品默认**拒绝覆盖**（`--overwrite` 显式放行）。
+- **交付只出用户选择的成品**（`--deliver audio,video,subtitle,report`，多选；默认 audio+video+subtitle，无视频自动省略 video；`--track-only` = `--deliver audio`）。只要成片时整轨是内部中间产物；`report` 只有明确选择才复制到交付目录。内部完整报告与任务清单（`--resume` 入口，支持目录或 job ID）保存在应用任务目录（Windows `%LOCALAPPDATA%\video-toolkit\video-tts\jobs\<job_id>\`，mac `~/Library/Caches/...`），不污染素材目录。
+- 同名成品默认**整组自动编号** `name_2`、`name_3`（不覆盖）；`--overwrite` 显式替换；输出永不覆盖输入素材。
+- SRT 默认**严格解析**：格式坏块在合成前报错阻塞（带块号与原因）；用户确认要跳过坏块时才加 `--lenient-srt`（跳过会记 warning，内容缺失由用户负责）。
+- **设计后克隆（长片设计音色推荐流程）**：① `--design "描述" --preview-text "试听句"` 只生成 `<out>.preview.wav`（不执行整片）；② 用户试听后用控件选定/调整描述重试/换来源；③ 选定后整片用 `--ref-audio <试听文件> --ref-text <试听句>`（Base 模型克隆）——同一声音贯穿全片，设计模型与克隆模型天然分进程，切换显存由进程退出完整归还。
 
 ## 交互原则
 
@@ -54,13 +58,15 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py --srt <字幕> --provider 
 - 组必须在语义完整处结束（句末标点 `。！？；`）；**绝不把半句留在一组末尾**；人物介绍、步骤标题、新话题单独起组。
 - 长停顿（> 0.8s）且语义另起一段时断开；每组建议 3–8 条、约 ≤ 18s；过长在最近句末标点拆开。
 - 计划覆盖全部条目、恰好一次、顺序递增、组内连续（CLI 会校验，非法退出 2）。
-- 无句末标点的拆词条目（「这个模」+「型很好」）直接拼接，**不补标点**；需要分隔符时用该组的 `text` 显式写整句。
-- SRT 改动后旧计划作废：生成时带上 `"srt_sha256"`（读文件算 SHA-256 写入），CLI 校验不一致即拒绝。
+- 无句末标点的拆词条目（「这个模」+「型很好」）直接拼接，**不补标点**。
+- 计划必须绑定源 SRT：`"srt_sha256"` **必填**（读文件算 SHA-256 写入）；缺失或与当前 SRT 不一致时 CLI 拒绝加载，SRT 改动后旧计划作废。
 
 ```json
-{"groups": [[1, 2, 3], [4, 5], {"indices": [6, 7], "text": "精简后的整句。"}],
+{"groups": [[1, 2, 3], [4, 5]],
  "srt_sha256": "<源 SRT 的 SHA-256>"}
 ```
+
+**改写正文（text override）不是默认能力**：默认语音正文必须与源字幕对应。只有用户经 AskUserQuestion 明确授权改文（精简、发音纠正等）后，才在计划顶层加 `"text_edit_authorized": true` 并用组级 `text` 写改后整句，同时 CLI 必须带 `--allow-text-edits`——双层授权缺一不可，被改写的组会记录在报告与任务清单里。与原文拼接一致的 `text` 不算改写。
 
 逐条合成仅当用户明确要求（严格同步场景）才省略 `--merge-plan`。
 
@@ -88,9 +94,12 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py --srt <字幕> --provider 
 | `--max-speed` / `--warn-speed` / `--safety-gap` | 1.30 / 1.15 / 0.10 | 变速上限 / 警告阈值 / natural 安全间隔 |
 | `--master-sample-rate` | 48000 | 制作与导出采样率（24000/44100/48000） |
 | `--max-attempts` | 3 | 每组合成提交总预算（统一重试；429/5xx 退避，401/额度类立即停） |
-| `--resume` / `--overwrite` | 不启用 | 从 job.json 恢复 / 显式覆盖已有成品 |
+| `--resume` / `--overwrite` | 不启用 | 从 job.json 恢复 / 显式覆盖已有成品（默认同名整组自动编号 `name_2`） |
 | `--dry-run` / `--write-plan` | false | 预览（不写文件）/ 保存 plan.json+plan.srt |
-| `--track-only` / `--keep-segments` / `--no-cache` | false | 只出音轨 / 保留逐组 wav / 禁用缓存 |
+| `--lenient-srt` / `--allow-text-edits` | false | 跳过 SRT 坏块（默认严格报错）/ 接受已授权改文 |
+| `--track-only` / `--keep-segments` / `--no-cache` | false | 只出音轨（= `--deliver audio`）/ 保留逐组 wav / 禁用缓存 |
+| `--deliver` | audio,video,subtitle | 交付成品多选（`audio,video,subtitle,report`）；video 需 `--video` |
+| `--preview-text` | 无 | 设计后克隆第一步：配合 `--design` 只出 `<out>.preview.wav` 试听 |
 | `--continue-on-error` | false | 单组失败继续（产物标记 partial，退出码 1） |
 | `--rate/--pitch/--volume/--seed/--enable-ssml/--hotfix-file` | 无 | 仅在线；`--temperature/--top-p/--top-k/--seed` 本地采样稳定 |
 | `--lang` / `--model` / `--tts-endpoint` / `--bl-bin` / `--skip-bracketed` / `--json-report` | — | 语言 / 模型覆盖 / HTTP 兜底 / bl 路径 / 跳过音效条目 / 报告路径 |
@@ -102,17 +111,20 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/video-tts/run.py --srt <字幕> --provider 
 | 退出码 | 含义 |
 | --- | --- |
 | 0 | 完整成功（含无内容裁剪的加速警告） |
-| 1 | 失败 / partial / needs_attention / submission_unknown / cancelled |
-| 2 | 参数、输入或计划错误（含输出已存在且未 `--overwrite`） |
+| 1 | 失败 / partial / needs_attention / submission_unknown / download_failed / cancelled |
+| 2 | 参数、输入或计划错误（含输出会覆盖输入、非法 / 越权计划） |
 | 3 | 显式允许裁剪且实际裁剪了内容（有损成品，**不能当普通成功**） |
 
-报告（`<out>.report.json`，schema v2）包含任务与环境信息、模型与音色、三层采样率、每组计划/实际起止与倍率、重试与缓存命中、异常明细、耗时与已验证产物路径。任务清单（`<out>.job.json`）记录输入指纹与逐组状态，供 `--resume`。提交状态不明（在线超时）不自动重提，等用户核对。
+报告（`<out>.report.json`，schema v2）包含任务与环境信息、模型与音色、三层采样率、每组计划/实际起止与倍率、重试与缓存命中、异常明细、耗时与已验证产物路径。任务清单（`<out>.job.json`）记录输入指纹、配置快照与**逐组原子状态**（每组完成即落盘，崩溃不丢进度），供 `--resume`。
+
+恢复对账规则：SRT 内容、克隆参考（含**移除**参考参数）、音色 / 模型 / 语气 / 语言 / 采样参数任一变化 → 拒绝 resume（开新任务，未变内容仍经缓存复用）；merge plan 修订、时间窗 / 制作采样率 / 倍率变化 → 允许 resume 并记录修订历史。上次 `download_failed` 的组凭收据（audio_url）**只重新下载、不重新提交**；提交状态不明（在线超时 / bl 超时）不自动重提，等用户核对。
 
 ## 错误处理要点
 
 - 在线费用：一次 `--yes` 授权覆盖本次批次；变更 provider 或扩大范围再收集新确认。
 - 登录：未登录时自动展示 `bl auth login` 链接并轮询（见 setup.md 流程）；一看到 URL 立刻转给用户。skill 不接收、不保存、不打印明文 key。
 - 合成失败：统一预算内重试；401/403/额度不足立即停止；提交后超时标记 submission_unknown。
+- **下载失败 ≠ 重新合成**：服务端已生成音频（可能已计费）后下载持续失败 → 任务标记 `download_failed` 并保存收据，`--resume` 只重新下载，绝不重新提交计费。
 - overflow：不截断、不出伪完整成片；按报告提示调整计划 / 上限 / 文本后 `--resume`。
 - 缺 ffmpeg：macOS 提示 `brew install ffmpeg`，Windows 提示 `winget install ffmpeg`。
 

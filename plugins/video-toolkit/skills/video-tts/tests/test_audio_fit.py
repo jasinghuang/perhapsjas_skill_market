@@ -104,6 +104,35 @@ def test_trim_silence_removes_edges_and_keeps_voice():
     assert len(out) >= len(tone) * 0.9
 
 
+def test_trim_silence_keeps_quiet_speech_not_treated_as_silence():
+    # F06 复现：整体 RMS ≈ 0.005 的轻声内容能通过 validate_pcm
+    # （下限 1e-4），却曾被固定 0.01 的裁剪阈值整段判为静音。
+    from audio_checks import validate_pcm
+
+    sr = 24000
+    amplitude = 0.005 * (2 ** 0.5)  # 正弦幅度 → 缓冲 RMS ≈ 0.005
+    silence = np.zeros(sr // 4, dtype=np.float32)
+    tone = (
+        amplitude * np.sin(2 * np.pi * 440 * np.arange(sr) / sr)
+    ).astype(np.float32)
+    pcm = np.concatenate([silence, tone, silence])
+    validate_pcm(pcm, sr)  # 先确认该样本通过有效性检查
+    out = trim_silence(pcm, sr)  # 不得抛「只有静音」
+    # 语音主体保留（允许一窗余量），首尾静音仍被裁掉。
+    assert out.size >= int(sr * 0.9)
+    assert out.size <= int(sr * 1.1) + 2 * int(sr * 0.01) + 2
+
+
+def test_trim_silence_threshold_scales_with_loudness():
+    # 自适应阈值随峰值等比下移；正常响度（峰值 ≫ 0.1）行为与固定
+    # 0.01 一致，不会裁得更深。
+    sr = 24000
+    lead = np.zeros(sr // 2, dtype=np.float32)
+    tone = (0.3 * np.sin(2 * np.pi * 440 * np.arange(sr) / sr)).astype(np.float32)
+    out = trim_silence(np.concatenate([lead, tone]), sr)
+    assert out.size >= int(sr * 0.9)
+
+
 def test_trim_silence_rejects_all_silence():
     with pytest.raises(ValueError):
         trim_silence(np.zeros(24000, dtype=np.float32), 24000)

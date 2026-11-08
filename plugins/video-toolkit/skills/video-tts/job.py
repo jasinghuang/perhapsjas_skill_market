@@ -31,11 +31,23 @@ from pathlib import Path
 
 MANIFEST_SCHEMA = 1
 
+# 影响原生音频身份的配置键：变化意味着旧分块/克隆条件不能再复用，
+# 必须开新任务（未变内容仍经内容寻址缓存命中），不能以 resume 静默改道。
+IDENTITY_CONFIG_KEYS = (
+    "provider", "voice", "design", "ref_text", "instruct", "lang",
+    "model", "style",
+)
+# 只影响加工 / 发布的配置键：变化允许 resume，原生音频全部复用。
+PROCESSING_CONFIG_KEYS = (
+    "timing_mode", "overflow_policy", "master_sample_rate",
+    "max_speed", "warn_speed",
+)
+
 # 报告 / manifest 里记录的状态枚举（spec §14）。
 STATUSES = (
     "planned", "preparing", "synthesizing", "processing", "exporting",
     "complete", "completed_with_warnings", "needs_attention", "partial",
-    "failed", "cancelled", "submission_unknown",
+    "failed", "cancelled", "submission_unknown", "download_failed",
 )
 
 
@@ -152,32 +164,121 @@ class JobManifest:
     def check_resume_inputs(
         self, srt_sha: str, plan_sha: str | None, ref_sha: str | None
     ) -> list[str]:
-        """校验恢复条件，返回不匹配列表（空列表 = 可以安全恢复）。
+        """兼容入口：等价于 `reconcile_resume` 只取阻断项（旧测试用）。"""
+        blockers, _, _ = self.reconcile_resume(
+            srt_sha, plan_sha, ref_sha, {}
+        )
+        # 空 config 会让全部身份键都「变化」；这里只比较输入指纹。
+        return blockers
 
-        SRT 内容变化必须重新生成 merge plan（分组依据已变）；参考音频
-        变化意味着克隆条件已变，旧分块不能复用。
+    def reconcile_resume(
+        self,
+        srt_sha: str,
+        plan_sha: str | None,
+        ref_sha: str | None,
+        config: dict,
+    ) -> tuple[list[str], list[str], bool]:
+        """按 spec §13.1 对账恢复条件。
+
+        返回 `(blockers, revisions, plan_changed)`：
+
+        - blockers 非空 → 不能恢复：SRT 变化、克隆参考身份变化（含
+          「移除参考参数」——新值为空同样是配置变化，不得绕过校验）、
+          影响合成身份的配置（provider / 音色 / design / ref_text /
+          语气 / 语言 / 模型 / 采样参数）变化，或移除了原任务的计划。
+        - revisions 是允许的修订说明：计划修订（F03：修改计划后可以
+          resume，不再「一修改就拒绝」）与加工参数修订。
+        - plan_changed 表示分组结构变化，调用方需重建 groups（收据作废，
+          未变组经内容寻址缓存复用）。
         """
-        mismatches: list[str] = []
+        blockers: list[str] = []
+        revisions: list[str] = []
+        plan_changed = False
+
         old_srt = self.fingerprint("srt_sha256")
-        if old_srt and old_srt != srt_sha:
-            mismatches.append(
-                "SRT 内容与原任务不一致（srt_sha256 变化）；请重新生成"
-                " merge plan 后开新任务，或改回原 SRT 再 resume"
+        if not old_srt:
+            blockers.append(
+                "原任务缺少 srt_sha256 输入指纹（旧版 manifest）；请开新任务"
             )
-        old_plan = self.fingerprint("merge_plan_sha256")
-        new_plan = plan_sha or ""
-        if old_plan and new_plan and old_plan != new_plan:
-            mismatches.append(
-                "merge plan 与原任务不一致；改文本请只改受影响组并同步"
-                " plan，其余组会经缓存复用"
+        elif old_srt != srt_sha:
+            blockers.append(
+                "SRT 内容与原任务不一致（srt_sha256 变化）；请为新 SRT 开"
+                "新任务（未变内容仍会经缓存复用），或改回原 SRT 再 resume"
             )
+
         old_ref = self.fingerprint("ref_audio_sha256")
         new_ref = ref_sha or ""
-        if old_ref and new_ref and old_ref != new_ref:
-            mismatches.append(
-                "克隆参考音频内容与原任务不一致；旧分块不能复用"
+        if bool(old_ref) != bool(new_ref) or (old_ref and old_ref != new_ref):
+            blockers.append(
+                "克隆参考配置与原任务不一致（原任务"
+                f"{'带' if old_ref else '不带'}参考克隆，本次"
+                f"{'带' if new_ref else '不带'}"
+                + (
+                    "，且内容哈希不同"
+                    if old_ref and new_ref and old_ref != new_ref
+                    else ""
+                )
+                + "）；音色身份已变化，请开新任务或改回原参考后 resume"
             )
-        return mismatches
+
+        old_plan = self.fingerprint("merge_plan_sha256")
+        new_plan = plan_sha or ""
+        if old_plan and not new_plan:
+            blockers.append(
+                "原任务带 merge plan 而本次没有；移除计划属于分组结构变化，"
+                "请带修订后的计划 resume，或开新任务"
+            )
+        elif new_plan and old_plan != new_plan:
+            plan_changed = True
+            revisions.append(
+                "merge plan 已修订：按新计划重新验证全量覆盖，未变组的原生"
+                "音频经内容寻址缓存复用，仅重合成变化内容"
+            )
+        elif not old_plan and not new_plan:
+            pass  # 两侧都无计划：逐条结构未变
+
+        old_config = self.payload.get("config") or {}
+        for key in IDENTITY_CONFIG_KEYS:
+            if old_config.get(key) != (config or {}).get(key):
+                blockers.append(
+                    f"合成身份配置变化：{key} 由 {old_config.get(key)!r} 变为 "
+                    f"{(config or {}).get(key)!r}；请开新任务（未变内容经缓存"
+                    "复用）或改回原配置 resume"
+                )
+        for key in PROCESSING_CONFIG_KEYS:
+            if old_config.get(key) != (config or {}).get(key):
+                revisions.append(
+                    f"加工参数修订：{key} {old_config.get(key)!r} → "
+                    f"{(config or {}).get(key)!r}；原生音频复用，仅重做加工"
+                )
+
+        return blockers, revisions, plan_changed
+
+    def apply_revision(
+        self,
+        config: dict | None = None,
+        groups: list[dict] | None = None,
+        notes: list[str] | None = None,
+    ) -> None:
+        """应用允许的修订：更新配置快照与计划组，保留历史关联（F03/F04）。
+
+        旧配置进 `config_history`（可追溯），groups 仅在计划修订时重建
+        （重建后收据与逐组状态作废，靠内容寻址缓存恢复音频）。
+        """
+        old_config = self.payload.get("config")
+        if config is not None and config != old_config:
+            self.payload.setdefault("config_history", []).append(
+                {"at": time.time(), "config": json.loads(
+                    json.dumps(old_config or {}, ensure_ascii=False)
+                )}
+            )
+            self.payload["config"] = config
+        if groups is not None:
+            self.payload["groups"] = groups
+        for note in notes or []:
+            self.payload.setdefault("notes", []).append(
+                {"at": time.time(), "text": note}
+            )
 
     def group_records(self) -> list[dict]:
         """返回逐组记录（计划 + 状态合并视图）。"""

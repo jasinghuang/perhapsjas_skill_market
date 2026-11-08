@@ -109,6 +109,8 @@ Windows 的三种模型及其用途来自官方发布列表；不要把 VoiceDes
 
 环境目录按平台和后端区分；显式自定义解释器仍须验证兼容版本。已有依赖仅可复用，不向其自动安装。只有实际需要的外部二进制才列为前置，不能因 Python 包含 sox 就强制用户安装未被使用的系统 SoX。依赖安装在用户选择本地并执行后进行。
 
+安装器优先 uv（探测逻辑参考 audio-transcribe 的实现），无 uv 再退回 venv + pip。多个 uv 管理的 venv 之间，**byte-identical 的 wheel**（同 Python tag + 同版本 + 同 build）经硬链接缓存只存一份物理文件——「独立 venv、磁盘一份」；但跨 Python 小版本（如 3.12 与 3.14）的 torch 是不同 wheel，各存一份。若实测 qwen-tts 依赖在 Python 3.14 可用，TTS 与 ASR 环境同用 3.14 可共享 torch／CUDA 运行库（约省一份 5GB 级安装）；以最终实测锁定为准，不预设。约束：uv 建的环境只用 uv 安装（pip 的就地改写路径会经硬链接破坏共享 inode）；缓存与 venv 需同卷才命中硬链接，跨卷自动退化为复制（功能无损）。验收证据包含 TTS venv 建成后的实际磁盘增量（对照 `uv cache dir`）。
+
 ## 5.2 CUDA 和注意力
 
 1. 检查 Python 架构、NVIDIA GPU 和驱动，选择官方支持的 PyTorch wheel；不靠 nvidia-smi 单独判定。
@@ -168,7 +170,14 @@ MLX 推理参数以其 API 为准；不能把官方 Torch 的 voice_clone_prompt
 1. 使用 VoiceDesign 生成短参考；若用户只要预览，则仅生成预览，不执行整片。
 2. 展示可播放音频，用 AskUserQuestion 选择“使用此声音／调整描述重试／改用其他音色来源”。选项按实际场景提供，已有明确选择不重复询问。
 3. 用户选定后保存不可变参考音频及其实际朗读文本，生成引用 ID 和内容哈希。
-4. 释放 VoiceDesign 模型，在 Base 中构建参考条件，再按同一声音合成整片。资源足够也不强制同时驻留两份模型。
+4. 释放 VoiceDesign 模型，在 Base 中构建参考条件，再按同一声音合成整片。资源足够也不强制同时驻留两份模型。「释放」必须是**可验证的真实归还**，不能只做 Python 层变量覆盖——PyTorch CUDA Caching Allocator 在张量引用归零后仍把块留在私有池（`memory_reserved` 不降，驱动视角显存仍被占用），`empty_cache()` 也只归还完全空闲的段：
+   - 参考试听音频与其实际朗读文本在卸载前先转成 CPU 数据（numpy 波形 + 真实采样率 + 文本），不保留任何指向 VoiceDesign 的 GPU 张量；
+   - 卸载顺序：删除全部模型引用（含官方 wrapper 内部持有的对象与缓存）→ `gc.collect()`（module 引用环）→ `torch.cuda.synchronize()` → `torch.cuda.empty_cache()`；
+   - 卸载后校验 `memory_allocated()` 与 `memory_reserved()` 已回到基线（reserved ≈ allocated ≈ 近零）才允许加载 Base；校验不过说明存在隐藏引用，禁止带病加载造成双模型峰值；
+   - BF16 1.7B 单模型约 3.5–4.5GB，切换瞬间若未真实释放，双模型驻留可达 8–10GB 以上，12GB 级显卡叠加长参考或 batch>1 极易 OOM；
+   - 设计与合成两阶段峰值分别用 `max_memory_allocated()` 记录（切换处 `reset_peak_memory_stats()`）并写入报告，验收时证明切换峰值 ≈ 单模型峰值而非双模型叠加；
+   - 真实释放后仍显存不足按 §5.2 处理（减小 batch、报告占用请用户清理、AskUserQuestion），不自动降模型；`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` 作为有记录的碎片缓解选项；设计试听放短命子进程（进程退出保证归还）只作为 `empty_cache` 路径实测不干净时的最后退路；
+   - Mac 同流程同理只保留 CPU 参考数据；Metal 缓存释放按当时 MLX 公开 API 实测记录，不虚构能力。
 5. 恢复时复用已选参考，不能重新随机生成；修改描述只触发预览修订，未重新选定前不替换原参考。
 6. Mac 和 Windows 都提供这个产品流程；适配器按各自公开 API 实现复用。跨段一致性仍需试听验证，不承诺消除所有韵律波动。
 

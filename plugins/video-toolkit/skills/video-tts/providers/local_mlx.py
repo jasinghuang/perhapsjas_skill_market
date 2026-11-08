@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from . import LOCAL_MODEL
+from . import LOCAL_MODEL, is_base_model
 from .base import SynthesisResult, Voice
 from .errors import FATAL, INVALID_OUTPUT, SynthesisError
 
@@ -172,6 +172,13 @@ class LocalMLXProvider:
             if self.design is not None:
                 raise SynthesisError(
                     "ref_audio cannot be combined with --design", kind=FATAL
+                )
+            if not is_base_model(self.model_id):
+                # CLI 已拦截，这里再挡直接调用 provider 的路径。
+                raise SynthesisError(
+                    f"voice cloning requires a Base model (got "
+                    f"{self.model_id!r}); use the 1.7B Base model",
+                    kind=FATAL,
                 )
             voice_id = None
             prompt = None

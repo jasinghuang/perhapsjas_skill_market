@@ -117,6 +117,68 @@ def test_T02_same_content_moved_path_reuses_cache(tmp_path):
     assert provider.calls == 1
 
 
+# --- F01：克隆参数必须穿透 engine → provider（不只测缓存键） -------------------
+
+
+def test_F01_clone_params_reach_provider_through_engine(tmp_path):
+    """A01 复现：EngineOptions.ref_audio/ref_text 必须真实传到
+    provider.synthesize，且克隆时 voice 必须是 None——不允许用
+    voice_id="ref-clone" 的假预设音色冒充克隆。"""
+    seen = []
+
+    class SpyProvider(CountingProvider):
+        def synthesize(self, text, voice, instruct="", lang="chinese", **style):
+            seen.append({
+                "voice_id": getattr(voice, "voice_id", None),
+                "ref_audio": style.get("ref_audio"),
+                "ref_text": style.get("ref_text"),
+            })
+            return super().synthesize(text, voice, instruct, lang, **style)
+
+    ref = tmp_path / "ref.wav"
+    _write_ref(ref, b"AAA")
+    provider = SpyProvider(1.0)
+    c = [cue(1, 0.0, 2.0, 3.0)]
+    _run(c, provider, tmp_path, EngineOptions(
+        master_sample_rate=24000, retry_delays=(0, 0),
+        ref_audio=str(ref), ref_text="参考文本",
+        ref_audio_sha256=file_sha256(ref),
+    ))
+    assert seen == [{
+        "voice_id": None,
+        "ref_audio": str(ref),
+        "ref_text": "参考文本",
+    }]
+
+
+def test_F01_clone_cache_identity_carries_call_version(tmp_path):
+    """修复前用假预设音色合成的克隆缓存键与修复后相同，会被伪命中。
+    克隆缓存身份必须带 ref_call 版本标记，使旧克隆缓存全部失效；
+    预设音色身份不带该标记（在线缓存不必陪葬）。"""
+    from engine import _cache_material
+    from providers.base import Voice
+
+    ref = tmp_path / "ref.wav"
+    _write_ref(ref, b"AAA")
+    clone_opts = EngineOptions(
+        master_sample_rate=24000,
+        ref_audio=str(ref), ref_text="参考文本",
+        ref_audio_sha256=file_sha256(ref),
+    )
+    info = {"provider": "p", "model": "m"}
+    material = _cache_material(
+        info, None, clone_opts, "", "chinese", "文本", 0, 1, {}
+    )
+    assert material["ref"]["call_version"] == 2
+
+    voice = Voice("Serena", "Serena", "女", "", "m", "local")
+    plain = _cache_material(
+        info, voice, EngineOptions(master_sample_rate=24000),
+        "", "chinese", "文本", 0, 1, {},
+    )
+    assert "ref" not in plain
+
+
 # --- T03 / T04：缓存失效与复用边界 -------------------------------------------
 
 
@@ -160,42 +222,107 @@ def test_T04_time_window_change_reuses_native_cache(tmp_path):
     assert provider.calls == 1
 
 
-# --- T21：平台与依赖隔离 ------------------------------------------------------
+# --- T21：平台与依赖隔离（mlx / torch 双后端路由） ----------------------------
 
 
-def test_T21_windows_refuses_local(monkeypatch):
-    monkeypatch.setattr(launcher, "IS_WIN", True)
+def test_T21_unsupported_platform_refuses_local(monkeypatch):
+    # 既非 macOS 也非 Windows：本地路线明确不支持，给出在线建议。
+    monkeypatch.setattr(launcher, "IS_MAC", False)
+    monkeypatch.setattr(launcher, "IS_WIN", False)
     with pytest.raises(SystemExit, match="online"):
         launcher.main(["--srt", "a.srt", "--provider", "local",
                        "--voice", "Serena"])
 
 
-def test_T21_non_mac_local_reports_unsupported(monkeypatch):
+def test_T21_windows_local_resolves_to_torch_route(monkeypatch):
+    monkeypatch.setattr(launcher, "IS_WIN", True)
     monkeypatch.setattr(launcher, "IS_MAC", False)
-    problems = launcher.capability_problems(sys_interp := launcher.sys.executable,
-                                            "local")
+    assert launcher.required_route(["--provider", "local"]) == "local_torch"
+
+
+def test_T21_mac_local_resolves_to_mlx_route(monkeypatch):
+    monkeypatch.setattr(launcher, "IS_MAC", True)
+    monkeypatch.setattr(launcher, "IS_WIN", False)
+    assert launcher.required_route(["--provider", "local"]) == "local_mlx"
+
+
+def test_T21_non_mac_mlx_reports_unsupported(monkeypatch):
+    monkeypatch.setattr(launcher, "IS_MAC", False)
+    problems = launcher.capability_problems(launcher.sys.executable, "local_mlx")
     assert problems and "Apple Silicon" in problems[0]
+
+
+def test_T21_non_windows_torch_reports_unsupported(monkeypatch):
+    monkeypatch.setattr(launcher, "IS_WIN", False)
+    problems = launcher.capability_problems(
+        launcher.sys.executable, "local_torch"
+    )
+    assert problems and "Windows" in problems[0]
 
 
 def test_T21_intel_python_gets_repair_steps(monkeypatch):
     monkeypatch.setattr(launcher, "IS_MAC", True)
-    failed = MagicMock(returncode=1, stderr="AssertionError: not arm64: x86_64")
+    failed = MagicMock(
+        returncode=1, stderr=b"AssertionError: not arm64: x86_64"
+    )
     monkeypatch.setattr(launcher, "_run_probe", lambda python, code, timeout=180: failed)
-    problems = launcher.capability_problems(launcher.sys.executable, "local")
+    problems = launcher.capability_problems(launcher.sys.executable, "local_mlx")
     assert problems and "arm64" in problems[0]
     assert "Rosetta" in problems[0] or "Intel" in problems[0]
 
 
-def test_T21_windows_needs_only_online_deps():
+def test_T21_driver_cuda_index_handles_new_windows_header(monkeypatch):
+    # 新版 Windows 驱动的 nvidia-smi 头部是 "CUDA UMD Version: 13.3"，
+    # 且输出编码随区域设置（GBK）——按字节捕获 + 双格式匹配。
+    header = "NVIDIA-SMI 610.88   KMD Version: 610.88   CUDA UMD Version: 13.3"
+    gbk_bytes = ("…中文表头…\n" + header + "\n").encode("gbk")
+    fake = MagicMock(returncode=0, stdout=gbk_bytes)
+    monkeypatch.setattr(
+        launcher.subprocess, "run", lambda *a, **k: fake
+    )
+    assert launcher.driver_cuda_index() == "cu130"
+
+    classic = MagicMock(
+        returncode=0, stdout=b"Driver Version: 550.54  CUDA Version: 12.4"
+    )
+    monkeypatch.setattr(
+        launcher.subprocess, "run", lambda *a, **k: classic
+    )
+    assert launcher.driver_cuda_index() == "cu124"
+
+
+def test_T21_torch_probe_reports_cuda_unavailable(monkeypatch):
+    monkeypatch.setattr(launcher, "IS_WIN", True)
+    failed = MagicMock(
+        returncode=1, stderr=b"AssertionError: CUDA unavailable"
+    )
+    monkeypatch.setattr(
+        launcher, "_run_probe",
+        lambda python, code, timeout=120: failed,
+    )
+    problems = launcher.capability_problems(
+        launcher.sys.executable, "local_torch"
+    )
+    assert problems and "CUDA" in problems[0]
+
+
+def test_T21_route_requirements_are_backend_split():
     online = launcher.requirements_file("online").read_text(encoding="utf-8")
-    local = launcher.requirements_file("local").read_text(encoding="utf-8")
-    assert "mlx-audio" in local
-    assert "mlx-audio" not in online
-    assert "requests" in online
+    mlx = launcher.requirements_file("local_mlx").read_text(encoding="utf-8")
+    torch = launcher.requirements_file("local_torch").read_text(encoding="utf-8")
+    assert "mlx-audio" in mlx and "mlx-audio" not in torch
+    assert "qwen-tts" in torch and "qwen-tts" not in mlx
+    # torch 不在 requirements 里（PyPI 默认源是 CPU wheel，安装器按驱动
+    # 从 cuXXX 索引装）；在线路线不含任何本地依赖。
+    assert "torch==" not in torch
+    assert "requests" in online and "mlx-audio" not in online
 
 
-def test_T21_local_route_imports_include_mlx():
-    assert "mlx_audio" in launcher.route_imports("local")
+def test_T21_route_imports_per_backend():
+    assert "mlx_audio" in launcher.route_imports("local_mlx")
+    assert "torch" in launcher.route_imports("local_torch")
+    assert "qwen_tts" in launcher.route_imports("local_torch")
+    assert "mlx_audio" not in launcher.route_imports("local_torch")
     assert "mlx_audio" not in launcher.route_imports("online")
 
 

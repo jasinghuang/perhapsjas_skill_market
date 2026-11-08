@@ -39,6 +39,16 @@ _CHARS_PER_SECOND = 4.0
 # 自然模式借用的空档与下一组起点之间的安全间隔（秒）。
 DEFAULT_SAFETY_GAP = 0.10
 
+# 首尾裁剪的阈值体系（F06，spec §11.2）：
+# - 绝对下限与 validate_pcm 的 MIN_RMS（1e-4）对齐：低于它的窗能量
+#   视为数字静音，整段如此 → 报「只有静音」；
+# - 自适应阈值 = min(默认 0.01, 峰值窗 RMS × 0.1)：正常响度（峰值
+#   ≫ 0.1）阈值保持 0.01 不变；轻声内容（如整体 RMS 0.005 的气声/
+#   弱辅音）阈值随电平等比下移，不再被整段判为静音。
+DEFAULT_TRIM_RMS = 0.01
+TRIM_QUIET_HEADROOM = 0.10
+ABSOLUTE_SILENCE_RMS = 1e-4
+
 # 加速规划的滤镜余量：atempo 对非整倍率有毫秒级输出偏差，按略小的窗口
 # 计算倍率，保证变换后的真实样本数不越过允许窗口（仍只加速不减速）。
 ACCELERATION_MARGIN = 0.010
@@ -128,14 +138,17 @@ def allowed_window(
 def trim_silence(
     pcm: np.ndarray,
     sample_rate: int,
-    threshold: float = 0.01,
+    threshold: float | None = None,
     window_ms: int = 10,
 ) -> np.ndarray:
     """去掉首尾静音，返回仍带 10 ms 淡入淡出的单声道波形。
 
-    以 `window_ms` 为窗计算 RMS，找到首个 / 最后一个高于 `threshold` 的窗，
+    以 `window_ms` 为窗计算 RMS，找到首个 / 最后一个高于阈值的窗，
     前后各留一窗余量后切片（保守：多留一窗，避免切掉气声与轻辅音起音）。
-    整段都是静音时抛 `ValueError`。
+    `threshold=None`（默认）用自适应阈值：`min(DEFAULT_TRIM_RMS, 峰值窗
+    RMS × TRIM_QUIET_HEADROOM)`，下限 `ABSOLUTE_SILENCE_RMS`——轻声内容
+    （整体 RMS 0.005 一级）不被整段判静音（F06），正常响度行为与固定
+    0.01 完全一致。整段都是静音时抛 `ValueError`。
     """
     samples = np.asarray(pcm, dtype=np.float32)
     if samples.size == 0:
@@ -145,9 +158,18 @@ def trim_silence(
     padded = np.zeros(frame_count * frame, dtype=np.float32)
     padded[: samples.size] = samples
     rms = np.sqrt(np.mean(padded.reshape(frame_count, frame) ** 2, axis=1))
+    if threshold is None:
+        threshold = min(
+            DEFAULT_TRIM_RMS, float(rms.max()) * TRIM_QUIET_HEADROOM
+        )
+        threshold = max(threshold, ABSOLUTE_SILENCE_RMS)
     active = np.flatnonzero(rms > threshold)
     if active.size == 0:
-        raise ValueError("audio buffer contains only silence")
+        raise ValueError(
+            f"audio buffer contains only silence "
+            f"(peak window RMS {float(rms.max()):.2e} <= "
+            f"threshold {threshold:.2e})"
+        )
 
     first, last = int(active[0]), int(active[-1])
     start = max(0, (first - 1) * frame)

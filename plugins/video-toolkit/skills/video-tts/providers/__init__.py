@@ -15,13 +15,35 @@ mlx-audio 或要求 `bl` 可用。
 
 from __future__ import annotations
 
+import platform
+
 from .base import TTSProvider, Voice
 
 LOCAL_MODEL = "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16"
 LOCAL_DESIGN_MODEL = "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
 LOCAL_BASE_MODEL = "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16"
+# Windows 官方 torch 路线的三用途模型（spec §4.2，来自官方发布列表）。
+TORCH_CUSTOM_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+TORCH_DESIGN_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+TORCH_BASE_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
 FLAGSHIP_MODEL = "qwen-audio-3.1-tts-plus"
 QWEN_TTS_MODEL = "qwen3-tts-flash"
+
+
+def local_backend() -> str:
+    """`--provider local` 在当前平台解析到的后端：`mlx` / `torch`。
+
+    Apple Silicon（arm64 原生）→ mlx；Windows x64 → torch；其他平台
+    没有默认本地路线（Intel Mac / Linux / Windows ARM 由 launcher 按
+    能力检测单独报告，不在这里猜）。
+    """
+    system = platform.system()
+    machine = platform.machine().lower()
+    if system == "Darwin" and machine == "arm64":
+        return "mlx"
+    if system == "Windows" and machine in ("amd64", "x86_64"):
+        return "torch"
+    return "unsupported"
 
 # 模型 id 里出现这些标记即可判定模型族；大小写不敏感。
 CUSTOM_VOICE_MARKER = "customvoice"
@@ -114,12 +136,28 @@ def find_voice(provider: str, voice_id: str) -> Voice:
     )
 
 
-def get_provider(name: str, **kwargs) -> TTSProvider:
-    """按名字实例化 provider（实现模块懒导入）。"""
-    if name == "local":
-        from .local_mlx import LocalMLXProvider
+def get_provider(name: str, backend: str | None = None, **kwargs) -> TTSProvider:
+    """按名字实例化 provider（实现模块懒导入）。
 
-        return LocalMLXProvider(**kwargs)
+    `name="local"` 时按 `backend`（默认 `local_backend()` 按平台解析）
+    选择 MLX（Apple Silicon）或官方 torch（Windows x64）实现——业务层
+    不感知两套模型 ID / API。
+    """
+    if name == "local":
+        resolved = backend or local_backend()
+        if resolved == "mlx":
+            from .local_mlx import LocalMLXProvider
+
+            return LocalMLXProvider(**kwargs)
+        if resolved == "torch":
+            from .local_torch import LocalTorchProvider
+
+            return LocalTorchProvider(**kwargs)
+        raise ValueError(
+            f"local provider has no default backend on this platform "
+            f"({platform.system()}/{platform.machine()}); use --provider "
+            "online or see references/setup.md"
+        )
     if name == "online":
         from .online_bailian import OnlineBailianProvider
 

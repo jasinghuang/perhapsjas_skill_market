@@ -135,6 +135,7 @@ def test_put_rejects_multichannel_input(tmp_path):
 
 
 def test_default_root_honors_xdg_cache_home(tmp_path, monkeypatch):
+    monkeypatch.delenv("VIDEO_TTS_CACHE_DIR", raising=False)
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     cache = SegmentCache()
     assert cache.root == tmp_path / "video-tts" / "segments"

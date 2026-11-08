@@ -10,6 +10,7 @@ import pytest
 from providers import FLAGSHIP_MODEL, find_voice
 from providers.base import SynthesisResult
 from providers.errors import (
+    DOWNLOAD_FAILED,
     FATAL,
     RETRYABLE,
     SUBMISSION_UNKNOWN,
@@ -47,12 +48,13 @@ def test_build_bl_command_omits_instruction_for_qwen_tts():
 
 def test_build_bl_command_exact_order_and_audio_options():
     p = OnlineBailianProvider()
-    cmd = p.build_bl_command("你好", QTTS, Path("/tmp/a.wav"))
+    out = Path("/tmp/a.wav")
+    cmd = p.build_bl_command("你好", QTTS, out)
     assert cmd == [
         "bl", "speech", "synthesize", "--text", "你好",
         "--model", "qwen3-tts-flash", "--voice", "Cherry",
         "--format", "wav", "--language", "zh",
-        "--sample-rate", "24000", "--out", "/tmp/a.wav",
+        "--sample-rate", "24000", "--out", str(out),
     ]
 
 
@@ -275,8 +277,44 @@ def test_download_failure_exhausts_budget_and_keeps_url(tmp_path):
             p._synthesize_http("你好", QTTS, "", "chinese", tmp_path / "a.wav")
     assert post.call_count == 1   # 绝不重新提交合成
     assert get.call_count == 3    # 下载预算独立用尽
-    assert excinfo.value.kind == RETRYABLE
+    # F02：合成已成功、只差下载 → download_failed（不是 retryable），
+    # 引擎不得据此重新提交合成。
+    assert excinfo.value.kind == DOWNLOAD_FAILED
     assert excinfo.value.audio_url == "https://example.test/a.wav"
+
+
+def test_download_receipt_redownloads_without_resubmitting(tmp_path):
+    # F02 恢复路径：按收据 URL 只下载，不发生新的合成提交。
+    import numpy as np
+    import soundfile as sf
+
+    wav = tmp_path / "receipt.wav"
+    sf.write(wav, np.full(2400, 0.2, dtype=np.float32), 24000)
+    p = _prepared_http()
+    with patch("requests.post") as post, \
+         patch("requests.get", return_value=MagicMock(content=wav.read_bytes())):
+        result = p.download(
+            "https://example.test/a.wav", voice=QTTS, request_id="req-1"
+        )
+    post.assert_not_called()
+    assert result.sample_rate == 24000
+    assert result.request_id == "req-1"
+
+
+def test_bl_synthesize_timeout_is_submission_unknown(tmp_path):
+    # F02：bl 子进程必须有界；超时无法确认服务端是否受理 → submission_unknown。
+    import subprocess as _sp
+
+    p = OnlineBailianProvider()
+    p._use_http = False
+    out = tmp_path / "a.wav"
+    with patch(
+        "subprocess.run",
+        side_effect=_sp.TimeoutExpired(cmd="bl", timeout=300),
+    ):
+        with pytest.raises(SynthesisError) as excinfo:
+            p._synthesize_bl("你好", QTTS, "", "chinese", out)
+    assert excinfo.value.kind == SUBMISSION_UNKNOWN
 
 
 # --- 其余行为保持 -------------------------------------------------------------

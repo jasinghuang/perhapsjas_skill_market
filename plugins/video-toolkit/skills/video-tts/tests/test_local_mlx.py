@@ -236,12 +236,26 @@ def test_base_clone_forwards_ref_audio_and_ref_text():
         calls.append(kw),
         iter([_result(np.zeros(10))]),
     )[1]
-    p = _prepared(fake)
-    p.synthesize("你好", None, ref_audio="ref.wav", ref_text="参考文本")
+    provider = LocalMLXProvider(
+        model_id="mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16"
+    )
+    with patch("providers.local_mlx.load_model", return_value=fake), \
+         patch("providers.local_mlx.mx") as mx:
+        mx.array.side_effect = lambda x: np.asarray(x)
+        provider.prepare()
+        provider.synthesize("你好", None, ref_audio="ref.wav", ref_text="参考文本")
     assert calls[0]["voice"] is None
     assert calls[0]["instruct"] is None
     assert calls[0]["ref_audio"] == "ref.wav"
     assert calls[0]["ref_text"] == "参考文本"
+
+
+def test_clone_on_non_base_model_is_rejected():
+    # F01 纵深防御：克隆必须配 Base 模型，直接调 provider 也拦。
+    p = _prepared(_fake_model())  # 默认 CustomVoice 模型
+    with pytest.raises(SynthesisError, match="Base model") as excinfo:
+        p.synthesize("你好", None, ref_audio="ref.wav", ref_text="参考文本")
+    assert excinfo.value.kind == FATAL
 
 
 def test_sampling_params_and_seed_are_forwarded():

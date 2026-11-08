@@ -87,8 +87,17 @@ class TTSProvider(Protocol):
         """合成一段文本，返回带真实采样率的原生波形与元数据。
 
         可选 style：rate / pitch / volume / seed / enable_ssml（在线），
-        temperature / top_p / top_k（本地）。失败时抛
-        `providers.errors.SynthesisError`，由统一调度层决定重试。
+        temperature / top_p / top_k（本地），ref_audio / ref_text（本地
+        Base 克隆；克隆调用必须收到真实参考，voice 传 None，绝不伪装预设
+        音色）。失败时抛 `providers.errors.SynthesisError`，由统一调度层
+        决定重试。
+        """
+
+    def download(self, audio_url: str, **kwargs: object) -> SynthesisResult:
+        """按收据重新下载已生成的音频（在线 provider 可选实现）。
+
+        供 `download_failed` 恢复使用：只下载、不重新提交合成。本地
+        provider 无此能力（引擎会自动跳过收据路径）。
         """
 
     def describe(self) -> dict:

@@ -50,6 +50,8 @@ class Cue:
     # 语义合并后：本组覆盖的源 SRT 条目序号（未合并时为 None，报告按
     # [index] 处理）。用于 plan/dub 字幕与报告的源条目映射。
     source_indices: tuple[int, ...] | None = None
+    # 该组正文是否来自用户授权的 text override（F08：改文可追溯）。
+    text_edited: bool = False
 
 
 class SRTError(ValueError):
@@ -112,12 +114,17 @@ def parse_srt(
     *,
     skip_bracketed: bool = False,
     warnings: list[str] | None = None,
+    lenient: bool = False,
 ) -> list[Subtitle]:
     """解析 SRT 为按开始时间排序的 `Subtitle` 列表。
 
-    结构不完整的块（缺序号、缺时间轴、时间戳无法解析）按 malformed 跳过，
-    并在传入 `warnings` 时追加带块号的说明；时间轴语义非法（负时间、
-    零/负时长）或文本归一化后为空则抛 `SRTError`。
+    **默认严格**（F13，spec §9.1）：结构不完整的块（缺序号、缺时间轴、
+    时间戳无法解析）抛 `SRTError`（带块号与原因），在合成前阻塞——不能
+    跳过坏块后报告「完整成功」。`lenient=True` 保留旧行为：坏块跳过并
+    写入 `warnings`（用户显式选择 `--lenient-srt` 时才用）。
+
+    时间轴语义非法（负时间、零/负时长）或文本归一化后为空始终抛
+    `SRTError`，与 lenient 无关。
     """
     subtitles: list[Subtitle] = []
     for block_number, lines in enumerate(_read_blocks(path), start=1):
@@ -142,6 +149,12 @@ def parse_srt(
                         reason = f"时间戳无法解析（{exc}）"
 
         if reason is not None:
+            if not lenient:
+                raise SRTError(
+                    f"SRT 第 {block_number} 块格式不完整（{reason}）；"
+                    "默认严格解析不在合成前跳过坏块——修复该块，或显式"
+                    "使用 --lenient-srt 跳过并确认内容缺失"
+                )
             if warnings is not None:
                 warnings.append(
                     f"SRT 第 {block_number} 块格式不完整（{reason}），已跳过"
@@ -172,16 +185,18 @@ def load_cues(
     path: Path,
     video_duration: float | None = None,
     skip_bracketed: bool = False,
+    lenient: bool = False,
 ) -> tuple[list[Cue], list[str]]:
     """解析 SRT 并计算每条字幕的配音时间窗。
 
-    返回 `(cues, warnings)`。`warnings` 是给用户看的说明，包括 malformed
-    块、结束时间超出视频时长被夹取、与上一条字幕重叠导致 `effective_start`
-    后移。
+    返回 `(cues, warnings)`。`warnings` 是给用户看的说明，包括 lenient
+    模式下跳过的 malformed 块、结束时间超出视频时长被夹取、与上一条字幕
+    重叠导致 `effective_start` 后移。默认严格解析（见 `parse_srt`）。
     """
     warnings: list[str] = []
     subtitles = parse_srt(
-        path, skip_bracketed=skip_bracketed, warnings=warnings
+        path, skip_bracketed=skip_bracketed, warnings=warnings,
+        lenient=lenient,
     )
 
     # 先把结束时间夹进视频时长，并记录 warning。

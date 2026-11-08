@@ -34,6 +34,7 @@ video-tts — 合成引擎：统一重试调度、逐组合成、时间适配与
 
 from __future__ import annotations
 
+import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,17 +55,21 @@ from audio_fit import (
 from audio_pipeline import downmix_to_mono, resample_pcm
 from cache import SegmentCache, stable_cache_key
 from providers.errors import (
+    DOWNLOAD_FAILED,
     FATAL,
     SUBMISSION_UNKNOWN,
     SynthesisError,
 )
 from srt_parse import Cue
-from track_build import write_track, write_wav
+from track_build import write_track_files, write_wav
 
 if TYPE_CHECKING:
     from providers.base import Voice
 
 Progress = Callable[[str], None]
+# 逐组结果回调：`(0 基组序号, SegmentResult)`；每组完成/失败立即触发，
+# 供调用方把逐组状态原子落盘（manifest）——不等引擎全部返回。
+GroupCallback = Callable[[int, "SegmentResult"], None]
 
 _FADE_SECONDS = 0.050
 # 采样点取整只允许 ≤1ms 的边界修正；更长修正按 overflow 处理
@@ -171,7 +176,12 @@ class SegmentResult:
     cache_key: str | None = None     # 单块组的缓存键（多块组为 None）
     error_kind: str | None = None
     synth_seconds: float = 0.0       # 本组合成墙钟耗时（含重试）
-    status: str = "ok"               # ok | failed | needs_attention | submission_unknown
+    # download_failed 收据：服务端已生成（可能已计费）的结果地址。恢复时
+    # 只按 URL 重新下载，绝不重新提交合成。
+    audio_url: str | None = None
+    request_id: str | None = None
+    downloaded: bool = False         # 本组音频来自收据下载而非新合成
+    status: str = "ok"               # ok | failed | needs_attention | submission_unknown | download_failed
 
 
 def _provider_info(provider) -> dict:
@@ -255,6 +265,10 @@ def _cache_material(
         material["ref"] = {
             "audio_sha256": options.ref_audio_sha256 or "",
             "ref_text": options.ref_text or "",
+            # v2：F01 修复前克隆参数从未传到 provider（假预设音色 ref-clone
+            # 合成的音频污染过缓存）。带版本标记使旧克隆缓存全部失效；
+            # 预设音色缓存不受影响。
+            "call_version": 2,
         }
     return material
 
@@ -275,6 +289,18 @@ def _backoff_delay(
     return options.retry_delays[min(attempt - 1, len(options.retry_delays) - 1)]
 
 
+def _put_cached(cache: SegmentCache, key: str, pcm: np.ndarray, rate: int) -> None:
+    """写缓存失败绝不失败本组（cache.put 内部兜底之外的纵深防御）。
+
+    缓存是加速手段而非正确性依赖；`OSError`（磁盘满 / 只读）只影响
+    下次能否命中，已取得的音频照常进入拼轨。
+    """
+    try:
+        cache.put(key, pcm, rate)
+    except OSError:
+        pass
+
+
 def _synthesize_chunk(
     provider,
     voice: Voice | None,
@@ -287,12 +313,18 @@ def _synthesize_chunk(
     cache: SegmentCache,
     provider_info: dict,
     style: dict,
-) -> tuple[np.ndarray, int, str, int, bool]:
+    receipt: dict | None = None,
+    on_submit: Callable[[], None] | None = None,
+) -> tuple[np.ndarray, int, str, int, bool, bool]:
     """取回或合成一个文本块。
 
-    返回 `(原生单声道波形, 真实采样率, 缓存键, 提交次数, 是否缓存命中)`。
-    缓存内容是**原生采样率**的音频：改制作采样率 / 时间窗 / max_speed
-    都能复用，只重做后续加工。重试预算由本函数统一控制（spec §10）。
+    返回 `(原生单声道波形, 真实采样率, 缓存键, 提交次数, 是否缓存命中,
+    是否收据下载)`。缓存内容是**原生采样率**的音频：改制作采样率 / 时间窗 /
+    max_speed 都能复用，只重做后续加工。重试预算由本函数统一控制（spec §10）。
+
+    `receipt` 是上次 ``download_failed`` 落盘的收据（audio_url /
+    request_id）：服务端已生成该文本的音频（可能已计费），本次**只下载、
+    不重新提交**；下载预算在 provider 内独立计。
     """
     key = stable_cache_key(
         _cache_material(
@@ -310,22 +342,51 @@ def _synthesize_chunk(
             except ValueError:
                 pass  # 损坏缓存按未命中处理，重新合成覆盖。
             else:
-                return pcm, rate, key, 0, True
+                return pcm, rate, key, 0, True, False
 
-    attempts = 0
-    while True:
-        attempts += 1
-        try:
-            result = provider.synthesize(
-                chunk, voice, instruct=instruct, lang=lang, **style
+    # 收据优先：恢复时先尝试重新下载上次已生成的结果（F02：绝不重提）。
+    audio_url = (receipt or {}).get("audio_url")
+    if audio_url:
+        downloader = getattr(provider, "download", None)
+        if callable(downloader):
+            result = downloader(
+                audio_url, voice=voice,
+                request_id=(receipt or {}).get("request_id"),
             )
             mono = downmix_to_mono(result.audio)
             validate_pcm(mono, result.sample_rate, min_duration=_min_duration_for(chunk))
             if use_cache:
-                cache.put(key, mono, result.sample_rate)
-            return mono, int(result.sample_rate), key, attempts, False
+                _put_cached(cache, key, mono, result.sample_rate)
+            return mono, int(result.sample_rate), key, 0, False, True
+        # provider 不具备下载能力（换了后端）→ 按正常合成走。
+
+    if on_submit is not None:
+        on_submit()  # 真正要提交了（缓存未命中、无收据）才落 submitting
+
+    attempts = 0
+    # F01：克隆参考必须真实穿透到 provider（voice=None，绝不伪装预设
+    # 音色）；缓存身份走 material["ref"]，不与 style 混淆。
+    synth_voice = None if options.ref_audio else voice
+    ref_kwargs: dict = {}
+    if options.ref_audio:
+        ref_kwargs = {
+            "ref_audio": options.ref_audio,
+            "ref_text": options.ref_text,
+        }
+    while True:
+        attempts += 1
+        try:
+            result = provider.synthesize(
+                chunk, synth_voice, instruct=instruct, lang=lang,
+                **style, **ref_kwargs,
+            )
+            mono = downmix_to_mono(result.audio)
+            validate_pcm(mono, result.sample_rate, min_duration=_min_duration_for(chunk))
+            if use_cache:
+                _put_cached(cache, key, mono, result.sample_rate)
+            return mono, int(result.sample_rate), key, attempts, False, False
         except SynthesisError as exc:
-            if exc.kind in (FATAL, SUBMISSION_UNKNOWN):
+            if exc.kind in (FATAL, SUBMISSION_UNKNOWN, DOWNLOAD_FAILED):
                 exc.attempts = attempts  # 立即停止整个任务，由用户修复后恢复。
                 raise
             if attempts < options.max_attempts:
@@ -425,13 +486,23 @@ def run_engine(
     cache: SegmentCache,
     track_path: Path,
     progress: Progress | None = print,
+    receipts: dict[int, dict] | None = None,
+    on_result: GroupCallback | None = None,
+    on_submit: Callable[[int], None] | None = None,
 ) -> list[SegmentResult]:
     """逐组合成、适配，并把整轨流式写到 `track_path`。
 
     返回与 `cues` 一一对应的 `SegmentResult` 列表（失败的条目也保留）。
     单组失败默认中止；`continue_on_error=True` 时记录失败并继续（产物为
-    partial）。fatal 错误、提交状态不明（submission_unknown）与默认策略
-    下的 overflow 无条件中止，抛 `EngineAbort`（携带已完成的结果）。
+    partial）。fatal 错误、提交状态不明（submission_unknown）、下载收据
+    耗尽（download_failed）与默认策略下的 overflow 无条件中止，抛
+    `EngineAbort`（携带已完成的结果）。
+
+    `receipts` 按 0 基组序号给出上次 ``download_failed`` 的收据；命中收据
+    的组只重新下载、不重新提交。`on_result` 在每组结果落定后立即触发
+    （含失败与 overflow），调用方据此逐组原子保存状态。`on_submit` 在
+    每组首次提交前触发，供调用方落「submitting」标记（A09：崩溃后能看出
+    提交是否已发出）。
     """
     master_rate = options.master_sample_rate
     provider_info = _provider_info(provider)
@@ -445,7 +516,10 @@ def run_engine(
         segments_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[SegmentResult] = []
-    placements: list[tuple[float, np.ndarray]] = []
+    # F07：placements 只保存文件引用（起点, part 路径, 样本数），
+    # 不保存全片 ndarray；内部片段目录在整轨写出成功后清理。
+    parts_dir = track_path.parent / (track_path.name + ".parts")
+    placements: list[tuple[float, Path, int]] = []
     previous_end = 0.0
     total = len(cues)
 
@@ -464,17 +538,23 @@ def run_engine(
                 cue, effective_start, options.timing_mode, options.safety_gap
             )
 
+            def _record(result: SegmentResult, window: float = window) -> None:
+                """记录一组结果：进度 + 逐组回调（manifest 即时落盘）。"""
+                results.append(result)
+                _report_progress(
+                    progress, position, total, cue, window, result,
+                    options.timing_mode,
+                )
+                if on_result is not None:
+                    on_result(position - 1, result)
+
             if window <= 0:
                 result = _fail_result(
                     cue,
                     warning="no usable window before the next cue",
                     status="failed",
                 )
-                results.append(result)
-                _report_progress(
-                    progress, position, total, cue, window, result,
-                    options.timing_mode,
-                )
+                _record(result)
                 if not options.continue_on_error:
                     raise EngineAbort(
                         f"cue {cue.index}: no usable window "
@@ -483,10 +563,21 @@ def run_engine(
                     )
                 continue
 
+            receipt = (receipts or {}).get(position - 1)
+            submit_marked = False
+
+            def _mark_submit() -> None:
+                """每组首次真实提交前触发一次 submitting 标记。"""
+                nonlocal submit_marked
+                if not submit_marked and on_submit is not None:
+                    submit_marked = True
+                    on_submit(position - 1)
+
             chunks = split_long_text(cue.text) or [cue.text]
             pieces: list[tuple[np.ndarray, int]] = []
             group_attempts = 0
             group_hits = 0
+            group_downloaded = False
             native_rate: int | None = None
             single_key: str | None = None
             synth_started = time.monotonic()
@@ -497,12 +588,14 @@ def run_engine(
                         " 当前组生成中…"
                     )
                 for chunk_index, chunk in enumerate(chunks):
-                    mono, rate, key, attempts, hit = _synthesize_chunk(
+                    mono, rate, key, attempts, hit, downloaded = _synthesize_chunk(
                         provider, voice, instruct, lang, chunk, chunk_index,
                         len(chunks), options, cache, provider_info, style,
+                        receipt=receipt, on_submit=_mark_submit,
                     )
                     group_attempts += attempts
                     group_hits += 1 if hit else 0
+                    group_downloaded = group_downloaded or downloaded
                     if native_rate is None:
                         native_rate = rate
                     elif rate != native_rate:
@@ -518,11 +611,12 @@ def run_engine(
             except SynthesisError as exc:
                 synth_seconds = time.monotonic() - synth_started
                 group_attempts += getattr(exc, "attempts", 0) or 0
-                status = (
-                    "submission_unknown"
-                    if exc.kind == SUBMISSION_UNKNOWN
-                    else "failed"
-                )
+                if exc.kind == SUBMISSION_UNKNOWN:
+                    status = "submission_unknown"
+                elif exc.kind == DOWNLOAD_FAILED:
+                    status = "download_failed"
+                else:
+                    status = "failed"
                 result = _fail_result(
                     cue,
                     warning=f"failed: {exc}",
@@ -531,15 +625,16 @@ def run_engine(
                     chunks=len(chunks),
                     error_kind=exc.kind,
                     synth_seconds=synth_seconds,
+                    audio_url=exc.audio_url,
+                    request_id=exc.request_id,
                 )
-                results.append(result)
-                _report_progress(
-                    progress, position, total, cue, window, result,
-                    options.timing_mode,
-                )
-                # fatal / submission_unknown 无论 continue_on_error 都中止；
-                # 重试预算耗尽的暂时性错误按 continue_on_error 决定。
-                if exc.kind in (FATAL, SUBMISSION_UNKNOWN) or not options.continue_on_error:
+                _record(result)
+                # fatal / submission_unknown / download_failed 无论
+                # continue_on_error 都中止；重试预算耗尽的暂时性错误按
+                # continue_on_error 决定。
+                if exc.kind in (
+                    FATAL, SUBMISSION_UNKNOWN, DOWNLOAD_FAILED,
+                ) or not options.continue_on_error:
                     raise EngineAbort(exc, results)
                 continue
 
@@ -564,11 +659,7 @@ def run_engine(
                     error_kind="invalid_output",
                     synth_seconds=synth_seconds,
                 )
-                results.append(result)
-                _report_progress(
-                    progress, position, total, cue, window, result,
-                    options.timing_mode,
-                )
+                _record(result)
                 if not options.continue_on_error:
                     raise EngineAbort(exc, results)
                 continue
@@ -589,11 +680,7 @@ def run_engine(
                     error_kind="invalid_output",
                     synth_seconds=synth_seconds,
                 )
-                results.append(result)
-                _report_progress(
-                    progress, position, total, cue, window, result,
-                    options.timing_mode,
-                )
+                _record(result)
                 if not options.continue_on_error:
                     raise EngineAbort(exc, results)
                 continue
@@ -658,12 +745,9 @@ def run_engine(
                         cache_key=single_key,
                         synth_seconds=synth_seconds,
                         overflow_gap=overflow_gap,
+                        downloaded=group_downloaded,
                     )
-                    results.append(result)
-                    _report_progress(
-                        progress, position, total, cue, window, result,
-                        options.timing_mode,
-                    )
+                    _record(result)
                     raise EngineAbort(
                         SynthesisError(
                             f"cue {cue.index}: overflow — synthesis "
@@ -716,12 +800,9 @@ def run_engine(
                             cache_key=single_key,
                             synth_seconds=synth_seconds,
                             overflow_gap=overrun / master_rate,
+                            downloaded=group_downloaded,
                         )
-                        results.append(result)
-                        _report_progress(
-                            progress, position, total, cue, window, result,
-                            options.timing_mode,
-                        )
+                        _record(result)
                         raise EngineAbort(
                             SynthesisError(
                                 f"cue {cue.index}: overrun "
@@ -736,7 +817,13 @@ def run_engine(
                 write_wav(
                     segments_dir / f"{cue.index}.wav", final, master_rate
                 )
-            placements.append((effective_start, final))
+            # F07：处理完的片段立即落盘，placements 只保留文件引用与样本
+            # 数——内存中不再累积全片 PCM（长片时长线性增长的是任务文件
+            # 里的 part，不是内存）。
+            parts_dir.mkdir(parents=True, exist_ok=True)
+            part_path = parts_dir / f"{position:05d}.wav"
+            write_wav(part_path, final, master_rate)
+            placements.append((effective_start, part_path, final.size))
             previous_end = effective_start + final_duration
             result = SegmentResult(
                 cue=cue,
@@ -756,15 +843,15 @@ def run_engine(
                 trimmed_seconds=trimmed_seconds,
                 cache_key=single_key,
                 synth_seconds=synth_seconds,
+                downloaded=group_downloaded,
                 status="ok",
             )
-            results.append(result)
-            _report_progress(
-                progress, position, total, cue, window, result,
-                options.timing_mode,
-            )
+            _record(result)
     except KeyboardInterrupt:
         raise EngineAbort(KeyboardInterrupt("cancelled by user"), results)
 
-    write_track(track_path, placements, total_duration, master_rate)
+    write_track_files(track_path, placements, total_duration, master_rate)
+    # 整轨写成功后清理内部片段文件（abort 路径保留它们作为内部材料；
+    # 原生音频另有缓存，part 始终可由缓存重加工得到）。
+    shutil.rmtree(parts_dir, ignore_errors=True)
     return results

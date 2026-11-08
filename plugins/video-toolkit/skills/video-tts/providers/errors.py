@@ -8,6 +8,9 @@
   尝试预算内退避重试；`retry_after` 携带服务端要求的等待秒数。
 - ``submission_unknown``：提交后超时等无法确认是否已处理的状态。标记后
   不自动重新合成，等待用户决定（避免重复计费）。
+- ``download_failed``：合成已成功（服务端已生成、可能已计费），但下载
+  结果音频持续失败。**绝不重新提交合成**：`audio_url` 收据随任务清单
+  落盘，恢复时只重试下载。
 - ``invalid_output``：空音频、NaN / Inf、采样率异常等坏结果。按错误类型
   在预算内有限重试，坏结果绝不写缓存。
 
@@ -20,9 +23,12 @@ from __future__ import annotations
 FATAL = "fatal"
 RETRYABLE = "retryable"
 SUBMISSION_UNKNOWN = "submission_unknown"
+DOWNLOAD_FAILED = "download_failed"
 INVALID_OUTPUT = "invalid_output"
 
-_KINDS = frozenset({FATAL, RETRYABLE, SUBMISSION_UNKNOWN, INVALID_OUTPUT})
+_KINDS = frozenset({
+    FATAL, RETRYABLE, SUBMISSION_UNKNOWN, DOWNLOAD_FAILED, INVALID_OUTPUT,
+})
 
 
 class SynthesisError(RuntimeError):

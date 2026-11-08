@@ -1,0 +1,11 @@
+# video-tts Windows 本地 provider 依赖（官方 qwen-tts + PyTorch/CUDA）
+# 测试基线：Python 3.14 + torch 2.10.0 (cu130) + qwen-tts 0.1.1
+# （RTX 4070 Ti / 驱动 610.88 实机；最终锁定以验收记录为准）
+#
+# 注意：torch / torchaudio 不写在本文件里——PyPI 默认源在 Windows 上是
+# CPU wheel。launcher 会按驱动实际支持的 CUDA 版本从
+# https://download.pytorch.org/whl/cuXXX 安装对应构建。
+-r requirements-base.txt
+qwen-tts==0.1.1
+transformers==4.57.3
+accelerate==1.12.0
