@@ -1,342 +1,308 @@
-# CLI 端到端：退出码契约 0/1/2/3/4 与验收用例 A05/A06/A08/A10-A14/A16。
+"""验证真实文件行为；审校 JSON 是结构测试数据，不代表模型质量评测。"""
 import json
 from pathlib import Path
 
+import pytest
+
 from conftest import run_cli
+from srt_struct import parse_srt
+
+SRT = ("1\n00:00:00,000 --> 00:00:02,000\nEven big AI\n\n"
+       "2\n00:00:02,000 --> 00:00:04,000\ncompanies pay creators.\n")
 
 
-def make_srt(n: int = 5, text_fmt="line {i}") -> str:
-    blocks = [
-        f"{i}\n00:00:{i:02d},000 --> 00:00:{i:02d},900\n{text_fmt.format(i=i)}"
-        for i in range(1, n + 1)
-    ]
-    return "\n\n".join(blocks) + "\n"
+@pytest.fixture
+def material(tmp_path, monkeypatch):
+    source_dir = tmp_path / "素材 空格"
+    source_dir.mkdir()
+    internal = tmp_path / "system-temp"
+    internal.mkdir()
+    monkeypatch.setenv("TMPDIR", str(internal))
+    monkeypatch.setenv("TMP", str(internal))
+    monkeypatch.setenv("TEMP", str(internal))
+    source = source_dir / 'input "中文".srt'
+    source.write_text(SRT, encoding="utf-8")
+    return source, internal
 
 
-def write_result(workdir: Path, chunk_id: str, items: list[dict], mode: str | None = None) -> Path:
-    payload: dict = {"chunk_id": chunk_id, "items": items}
-    if mode:
-        payload["mode"] = mode
-    p = workdir / "model.json"
-    p.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    return p
+def prepare(source, *args):
+    code, out, err = run_cli("prepare", str(source), *args)
+    assert code == 0, (out, err)
+    return json.loads(out)
 
 
-def full_flow(src: Path, task: str, *extra: str, transform=lambda ci: ci["items"]):
-    """inspect → init → chunk×N → submit×N → validate → publish，返回关键输出。"""
-    r, out, err = run_cli("inspect", str(src))
-    assert r in (0, 1), err
-    r, out, err = run_cli("init", str(src), "--task", task, *extra)
-    assert r == 0, err
-    wd = Path(json.loads(out)["working_dir"])
-    r, out, err = run_cli("status", wd)
-    assert r == 0, err
-    chunk_ids = [c["chunk_id"] for c in json.loads(out)["chunks"]]
-    for cid in chunk_ids:
-        r, out, err = run_cli("chunk", wd, cid)
-        assert r == 0, err
-        ci = json.loads(out)
-        items = transform(ci)
-        rp = write_result(wd, cid, items)
-        r, out, err = run_cli("submit", wd, cid, str(rp))
-        assert r == 0, err
-    r, out, err = run_cli("validate", wd)
-    assert r == 0, (r, out, err)
-    r, out, err = run_cli("publish", wd)
-    assert r == 0, (r, out, err)
-    return wd, json.loads(out)
+def write_draft(packet, texts=None):
+    texts = texts or ["连大型 AI 公司也开始", "付费邀请创作者合作。"]
+    rows = [{"id": item["id"], "text": text}
+            for item, text in zip(packet["items"], texts)]
+    path = Path(packet["draft_path"])
+    path.write_text(json.dumps({"items": rows}, ensure_ascii=False), encoding="utf-8")
+    return path
 
 
-def test_cli_happy_path_proofread(tmp_path: Path):
-    src = tmp_path / "demo.srt"
-    src.write_text(make_srt(5), encoding="utf-8")
-    wd, pub = full_flow(src, "proofread")
-    final = Path(pub["output"])
-    assert final.name == "demo_refined.srt"
-    assert final.read_text(encoding="utf-8") == src.read_text(encoding="utf-8")  # 恒等回填
-    assert not final.read_bytes().startswith(b"\xef\xbb\xbf")
-    r, out, _ = run_cli("status", wd)
-    assert json.loads(out)["status"] == "completed"
+def review(packet, draft, **changes):
+    code, out, err = run_cli("review-input", packet["working_dir"], "--draft", str(draft))
+    assert code == 0, (out, err)
+    inputs = json.loads(out)
+    data = {"reviewer_id": "test-independent-reviewer",
+            "source_sha256": inputs["source_sha256"], "draft_sha256": inputs["draft_sha256"],
+            "criteria": ["信", "达", "雅"], "coverage": [[1, inputs["source_count"]]],
+            "verdict": "pass", "findings": []}
+    data.update(changes)
+    path = Path(packet["review_path"])
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
 
 
-def test_cli_translate_flow_changes_text_keeps_timeline(tmp_path: Path):
-    src = tmp_path / "zh.srt"
-    src.write_text(make_srt(3, text_fmt="第{i}句"), encoding="utf-8")
-    wd, pub = full_flow(
-        src, "translate", "--target-lang", "en",
-        transform=lambda ci: [{"source_id": i["source_id"], "text": f"sentence {k+1}"}
-                              for k, i in enumerate(ci["items"])],
-    )
-    final = Path(pub["output"])
-    content = final.read_text(encoding="utf-8")
-    assert "sentence 1" in content and "第1句" not in content
-    for i in range(1, 4):
-        assert f"00:00:{i:02d},000 --> 00:00:{i:02d},900" in content  # 时间轴不变
+def finish(packet, draft, report=None, *args):
+    params = ["finish", packet["working_dir"], "--draft", str(draft)]
+    if report:
+        params += ["--review", str(report)]
+    code, out, err = run_cli(*params, *args)
+    return code, json.loads(out)
 
 
-def test_cli_resume_rejects_changed_input(tmp_path: Path):
-    src = tmp_path / "a.srt"
-    src.write_text(make_srt(2), encoding="utf-8")
-    r, out, _ = run_cli("init", str(src), "--task", "proofread")
-    wd = Path(json.loads(out)["working_dir"])
-    src.write_text("内容被换掉了\n", encoding="utf-8")
-    for cmd in (("status", wd), ("chunk", wd, "chunk-0001"), ("publish", wd)):
-        r, out, err = run_cli(*cmd)
-        assert r == 4, (cmd, r, err)
+def test_prepare_whole_document_with_timing_terms_and_no_material_folder(material):
+    source, internal = material
+    terms = internal / "terms.txt"
+    terms.write_text("character sheet = 角色设定图", encoding="utf-8")
+    p = prepare(source, "--task", "translate", "--target-lang", "zh", "--terms", str(terms),
+                "--allow-simplify")
+    assert len(p["items"]) == 2 and p["items"][0]["duration_ms"] == 2000
+    assert p["terms"] == terms.read_text() and p["allow_simplify"] is True
+    assert Path(p["working_dir"]).parent == internal
+    assert list(source.parent.iterdir()) == [source]
 
 
-def test_cli_cjk_space_quote_paths(tmp_path: Path):
-    d = tmp_path / "字幕 文件 (v2)"
-    d.mkdir()
-    src = d / "中文 名.srt"
-    src.write_text(make_srt(2, text_fmt="第{i}句"), encoding="utf-8")
-    wd, pub = full_flow(src, "proofread")
-    assert Path(pub["output"]).name == "中文 名_refined.srt"
+def test_large_input_not_split_by_entry_count(material):
+    source, _ = material
+    source.write_text("\n\n".join(
+        f"{i}\n00:00:00,000 --> 00:00:01,000\nSentence {i}." for i in range(1, 501)))
+    p = prepare(source, "--task", "proofread")
+    assert len(p["items"]) == 500
+    assert "chunks" not in p and "state.json" not in [f.name for f in Path(p["working_dir"]).iterdir()]
 
 
-def test_cli_broken_srt_exit3(tmp_path: Path):
-    src = tmp_path / "bad.srt"
-    src.write_text("1\n00:00:05,000 --> 00:00:01,000\n反向时间\n", encoding="utf-8")
-    r, out, err = run_cli("inspect", str(src))
-    assert r == 3 and "早于" in err + out
+def test_translate_requires_independent_review(material):
+    source, _ = material
+    p = prepare(source, "--task", "translate", "--target-lang", "zh")
+    d = write_draft(p)
+    code, out = finish(p, d)
+    assert code == 3 and "独立" in out["error"]
+    assert Path(p["working_dir"]).exists() and list(source.parent.iterdir()) == [source]
 
 
-def test_cli_inspect_overlap_warnings_exit1(tmp_path: Path):
-    src = tmp_path / "ov.srt"
-    src.write_text(
-        "1\n00:00:01,000 --> 00:00:05,000\n前\n\n2\n00:00:04,000 --> 00:00:06,000\n后\n",
-        encoding="utf-8",
-    )
-    r, out, _ = run_cli("inspect", str(src))
-    assert r == 1
-    assert any(d["code"] == "overlap_existing" for d in json.loads(out)["diagnostics"])
+def test_success_preserves_time_allows_adjacent_redistribution_and_cleans_temp(material):
+    source, internal = material
+    p = prepare(source, "--task", "translate", "--target-lang", "zh")
+    d = write_draft(p)
+    r = review(p, d)
+    code, out = finish(p, d, r)
+    assert code == 0 and out["quality_review"] == "independent"
+    output = Path(out["output"])
+    original, translated = parse_srt(SRT).entries, parse_srt(output.read_text()).entries
+    assert [(e.index_raw, e.timeline_raw) for e in original] == [
+        (e.index_raw, e.timeline_raw) for e in translated]
+    assert translated[0].text == "连大型 AI 公司也开始"
+    assert len(list(source.parent.iterdir())) == 2
+    assert not Path(p["working_dir"]).exists() and list(internal.iterdir()) == []
+    assert source.read_text() == SRT
 
 
-def test_cli_validate_detects_tampered_result(tmp_path: Path):
-    src = tmp_path / "a.srt"
-    src.write_text(make_srt(2), encoding="utf-8")
-    r, out, _ = run_cli("init", str(src), "--task", "proofread")
-    wd = Path(json.loads(out)["working_dir"])
-    r, out, _ = run_cli("chunk", wd, "chunk-0001")
-    items = json.loads(out)["items"]
-    rp = write_result(wd, "chunk-0001", [{"source_id": i["source_id"], "text": i["text"]} for i in items])
-    assert run_cli("submit", wd, "chunk-0001", str(rp))[0] == 0
-    stored = wd / "chunks" / "chunk-0001.result.json"
-    stored.write_text(stored.read_text(encoding="utf-8").replace("line 1", "篡改"), encoding="utf-8")
-    r, out, err = run_cli("validate", wd)
-    assert r == 3 and "sha" in out + err
+@pytest.mark.parametrize("changes", [
+    {"reviewer_id": "main"}, {"reviewer_id": ""}, {"verdict": "revise"},
+    {"coverage": [[1, 1]]}, {"coverage": [[1, 2], [2, 2]]}, {"coverage": [[2, 2]]},
+    {"source_sha256": "stale"}, {"draft_sha256": "stale"}, {"criteria": ["信"]},
+    {"findings": [{"severity": "required", "status": "open"}]},
+    {"findings": [{"severity": "typo", "status": "resolved"}]},
+])
+def test_review_gate_rejects_self_partial_stale_or_unresolved(material, changes):
+    source, _ = material
+    p = prepare(source, "--task", "translate", "--target-lang", "zh")
+    d = write_draft(p)
+    r = review(p, d, **changes)
+    code, out = finish(p, d, r)
+    assert code == 3 and not out["ok"]
+    assert list(source.parent.iterdir()) == [source]
 
 
-def test_cli_existing_output_not_overwritten(tmp_path: Path):
-    src = tmp_path / "a.srt"
-    src.write_text(make_srt(2), encoding="utf-8")
-    pre = tmp_path / "a_refined.srt"
-    pre.write_text("已有成品，不许动\n", encoding="utf-8")
-    wd, pub = full_flow(src, "proofread")
-    assert Path(pub["output"]).name == "a_refined_2.srt"
-    assert pre.read_text(encoding="utf-8") == "已有成品，不许动\n"
+def test_revision_invalidates_review_and_can_be_reviewed_again(material):
+    source, _ = material
+    p = prepare(source, "--task", "translate", "--target-lang", "zh")
+    d = write_draft(p)
+    r = review(p, d)
+    d = write_draft(p, ["大型 AI 公司也开始", "付费请创作者合作。"])
+    assert finish(p, d, r)[0] == 3
+    r = review(p, d)
+    assert finish(p, d, r)[0] == 0
 
 
-def test_cli_md_flow_protects_fence(tmp_path: Path):
-    src = tmp_path / "note.md"
-    src.write_text(
-        "# 标题\n\n一段文字 with [链接](https://a.b/c)。\n\n```bash\nrm -rf $(echo hi)\n```\n\n结尾段。\n",
-        encoding="utf-8",
-    )
-    wd, pub = full_flow(
-        src, "simplify",
-        transform=lambda ci: [
-            {"source_id": i["source_id"],
-             "text": i["text"] + "（润色）" if "链接" in i["text"] or "结尾" in i["text"] else i["text"]}
-            for i in ci["items"]
-        ],
-    )
-    final = Path(pub["output"])
-    content = final.read_text(encoding="utf-8")
-    assert "```bash\nrm -rf $(echo hi)\n```" in content  # 围栏原样
-    assert "[链接](https://a.b/c)" in content
-    assert "结尾段。（润色）" in content
-    assert content.count("（润色）") == 2  # 只有可编辑块被改
+def test_source_change_blocks_old_draft(material):
+    source, _ = material
+    p = prepare(source, "--task", "translate", "--target-lang", "zh")
+    d = write_draft(p)
+    r = review(p, d)
+    source.write_text(SRT.replace("creators", "filmmakers"))
+    code, out = finish(p, d, r)
+    assert code == 3 and "源文件" in out["error"]
 
 
-def test_cli_interrupted_resume_completes(tmp_path: Path):
-    src = tmp_path / "long.srt"
-    src.write_text(make_srt(5), encoding="utf-8")
-    r, out, _ = run_cli("init", str(src), "--task", "proofread", "--chunk-entries", "2")
-    assert r == 0
-    wd = Path(json.loads(out)["working_dir"])
-    r, out, _ = run_cli("status", wd)
-    st = json.loads(out)
-    assert [c["chunk_id"] for c in st["chunks"]] == ["chunk-0001", "chunk-0002", "chunk-0003"]
-    assert st["pending"] == ["chunk-0001", "chunk-0002", "chunk-0003"]
-
-    # 模拟中断：只提交第一块
-    r, out, _ = run_cli("chunk", wd, "chunk-0001")
-    items = json.loads(out)["items"]
-    rp = write_result(wd, "chunk-0001", [{"source_id": i["source_id"], "text": i["text"]} for i in items])
-    assert run_cli("submit", wd, "chunk-0001", str(rp))[0] == 0
-    r, out, _ = run_cli("status", wd)
-    assert json.loads(out)["pending"] == ["chunk-0002", "chunk-0003"]
-    assert run_cli("publish", wd)[0] == 3  # 未全齐不得发布
-
-    # 恢复：补齐剩余块
-    for cid in ["chunk-0002", "chunk-0003"]:
-        r, out, _ = run_cli("chunk", wd, cid)
-        items = json.loads(out)["items"]
-        rp = write_result(wd, cid, [{"source_id": i["source_id"], "text": i["text"]} for i in items])
-        assert run_cli("submit", wd, cid, str(rp))[0] == 0
-    assert run_cli("validate", wd)[0] == 0
-    r, out, _ = run_cli("publish", wd)
-    assert r == 0
-    assert Path(json.loads(out)["output"]).read_text(encoding="utf-8") == src.read_text(encoding="utf-8")
+@pytest.mark.parametrize("mutation", ["missing", "duplicate", "unknown", "empty", "separator", "tags"])
+def test_bad_mapping_rejected_before_review(material, mutation):
+    source, _ = material
+    p = prepare(source, "--task", "translate", "--target-lang", "zh")
+    d = write_draft(p)
+    data = json.loads(d.read_text())
+    if mutation == "missing": data["items"].pop()
+    if mutation == "duplicate": data["items"].append(data["items"][0])
+    if mutation == "unknown": data["items"][0]["id"] = "entry-999999"
+    if mutation == "empty": data["items"][0]["text"] = ""
+    if mutation == "separator": data["items"][0]["text"] = "正文\n\n伪条目"
+    if mutation == "tags": data["items"][0]["text"] = "<i>正文</i>"
+    d.write_text(json.dumps(data))
+    code, out, _ = run_cli("review-input", p["working_dir"], "--draft", str(d))
+    assert code == 3 and not json.loads(out)["ok"]
 
 
-def test_cli_init_requires_target_lang_for_translate(tmp_path: Path):
-    src = tmp_path / "a.srt"
-    src.write_text(make_srt(2), encoding="utf-8")
-    r, out, err = run_cli("init", str(src), "--task", "translate")
-    assert r == 2 and "target-lang" in out + err
+def test_existing_output_not_overwritten_and_no_temporary_residue(material):
+    source, _ = material
+    old = source.with_name(source.stem + "_refined.srt")
+    old.write_text("用户已有结果")
+    p = prepare(source, "--task", "proofread")
+    d = write_draft(p, [i["text"] for i in p["items"]])
+    code, out = finish(p, d)
+    assert code == 0 and Path(out["output"]).stem.endswith("_refined_2")
+    assert old.read_text() == "用户已有结果"
+    assert not list(source.parent.glob(".text-refine-*"))
 
 
-def test_cli_init_refuses_clobber_workdir(tmp_path: Path):
-    src = tmp_path / "a.srt"
-    src.write_text(make_srt(2), encoding="utf-8")
-    assert run_cli("init", str(src), "--task", "proofread")[0] == 0
-    r, out, err = run_cli("init", str(src), "--task", "proofread")
-    assert r == 3 and ("工作目录" in out + err)
+def test_failed_publish_retains_progress_without_partial_output(material):
+    source, _ = material
+    destination = source.parent / "absent" / "output.srt"
+    p = prepare(source, "--task", "proofread", "--output", str(destination))
+    d = write_draft(p, [i["text"] for i in p["items"]])
+    assert finish(p, d)[0] == 3
+    assert Path(p["working_dir"]).exists() and not destination.exists()
 
 
-def test_cli_submit_rejects_bad_result(tmp_path: Path):
-    src = tmp_path / "a.srt"
-    src.write_text(make_srt(2), encoding="utf-8")
-    r, out, _ = run_cli("init", str(src), "--task", "proofread")
-    wd = Path(json.loads(out)["working_dir"])
-    rp = write_result(wd, "chunk-0001", [
-        {"source_id": "entry-000001", "text": "ok"},
-        {"source_id": "entry-000099", "text": "幽灵条目"},
-    ])
-    r, out, err = run_cli("submit", wd, "chunk-0001", str(rp))
-    assert r == 3 and "entry-000099" in out + err
+def test_resegment_can_change_entry_count_with_original_coverage(material):
+    source, _ = material
+    p = prepare(source, "--task", "translate", "--target-lang", "zh", "--timing", "resegment",
+                "--timing-reason", "srt-estimate")
+    d = Path(p["draft_path"])
+    d.write_text(json.dumps({"items": [{"source_ids": [i["id"] for i in p["items"]],
+        "start": "00:00:00,000", "end": "00:00:04,000", "text": "连大型 AI 公司也开始付费邀请创作者合作。"}]}))
+    r = review(p, d)
+    code, out = finish(p, d, r)
+    assert code == 0 and any("估算" in w for w in out["warnings"])
+    assert len(parse_srt(Path(out["output"]).read_text()).entries) == 1
 
 
-def test_cli_unknown_format_exit2(tmp_path: Path):
-    src = tmp_path / "a.docx"
-    src.write_text("x", encoding="utf-8")
-    assert run_cli("inspect", str(src))[0] == 2
+@pytest.mark.parametrize("start,end,ids", [
+    ("00:00:00,000", "00:00:00,000", ["entry-000001", "entry-000002"]),
+    ("00:00:00,000", "00:00:05,000", ["entry-000001", "entry-000002"]),
+    ("00:00:01,000", "00:00:04,000", ["entry-000001", "entry-000002"]),
+    ("00:00:00,000", "00:00:02,000", ["entry-000001"]),
+])
+def test_resegment_rejects_invalid_boundaries_or_missing_sources(material, start, end, ids):
+    source, _ = material
+    p = prepare(source, "--task", "proofread", "--timing", "resegment", "--timing-reason", "srt-estimate")
+    d = Path(p["draft_path"])
+    d.write_text(json.dumps({"items": [{"source_ids": ids, "start": start, "end": end, "text": "正文"}]}))
+    assert finish(p, d)[0] == 3
 
 
-# =====================================================================
-# 评审修复轮：退出码契约 / 参数校验 / 块重做 / 组合意图 / 路径绝对化
-# =====================================================================
-
-def test_cli_text_unknown_id_no_crash(tmp_path: Path):
-    """text 任务 submit 带未知 ID：exit 3 + JSON（不得崩溃 exit 1 无输出）。"""
-    src = tmp_path / "n.md"
-    src.write_text("# T\n\n一段文字。\n", encoding="utf-8")
-    r, out, _ = run_cli("init", str(src), "--task", "simplify")
-    assert r == 0
-    wd = Path(json.loads(out)["working_dir"])
-    r, out, _ = run_cli("chunk", wd, "chunk-0001")
-    ids = [i["source_id"] for i in json.loads(out)["items"]]
-    payload = {
-        "chunk_id": "chunk-0001",
-        "items": [{"source_id": i, "text": "改写"} for i in ids]
-        + [{"source_id": "entry-000099", "text": "幽灵"}],
-    }
-    rp = tmp_path / "m.json"
-    rp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    r, out, err = run_cli("submit", wd, "chunk-0001", str(rp))
-    assert r == 3
-    assert json.loads(out)["ok"] is False and "entry-000099" in out
+def test_markdown_protects_structure_code_and_links(material):
+    source, _ = material
+    source = source.with_suffix(".md")
+    source.write_text('# Heading\n\nSee [guide](https://example.com) and `x = 1`.\n\n```sh\nexit 1\n```\n')
+    p = prepare(source, "--task", "proofread")
+    rows = [{"id": i["id"], "text": i["text"].replace("Heading", "标题")}
+            for i in p["items"] if i["editable"]]
+    d = Path(p["draft_path"])
+    d.write_text(json.dumps({"items": rows}))
+    rows[0]["text"] = "## 标题"
+    d.write_text(json.dumps({"items": rows}))
+    assert finish(p, d)[0] == 3
+    rows[0]["text"] = "# 标题"
+    rows[1]["text"] = "见 [指南](https://example.com) 和 `x = 1`。"
+    d.write_text(json.dumps({"items": rows}))
+    code, out = finish(p, d)
+    assert code == 0 and "```sh\nexit 1\n```" in Path(out["output"]).read_text()
 
 
-def test_cli_gbk_input_exit3(tmp_path: Path):
-    """非 UTF-8 输入：明确 exit 3 + 提示编码，不得 traceback。"""
-    src = tmp_path / "gbk.srt"
-    src.write_bytes("1\n00:00:01,000 --> 00:00:02,000\n中文GBK编码\n".encode("gbk"))
-    r, out, err = run_cli("inspect", str(src))
-    assert r == 3 and json.loads(out)["ok"] is False and "UTF-8" in out + err
-    r, out, err = run_cli("init", str(src), "--task", "proofread")
-    assert r == 3 and "UTF-8" in out + err
+def test_txt_shell_text_remains_data_and_not_markdown(material):
+    source, _ = material
+    source = source.with_suffix(".txt")
+    text = '命令 $(touch SHOULD_NOT_EXIST) 与 `echo hi`、SRT_EOF。\n'
+    source.write_text(text)
+    p = prepare(source, "--task", "proofread")
+    d = write_draft(p, ["## 标题"])
+    assert finish(p, d)[0] == 3
+    d = write_draft(p, [text.strip()])
+    code, out = finish(p, d)
+    assert code == 0 and Path(out["output"]).read_text() == text
+    assert not (source.parent / "SHOULD_NOT_EXIST").exists()
 
 
-def test_cli_txt_resegment_rejected(tmp_path: Path):
-    """文本任务不支持重新分段：init 直接 exit 2，不得等到 submit 才崩。"""
-    src = tmp_path / "a.txt"
-    src.write_text("一些文字\n", encoding="utf-8")
-    r, out, err = run_cli(
-        "init", str(src), "--task", "simplify",
-        "--timing", "resegment", "--timing-reason", "srt-estimate",
-    )
-    assert r == 2 and json.loads(out)["ok"] is False
+@pytest.mark.parametrize("extra", [
+    ["--task", "translate"], ["--task", "proofread", "--target-lang", "zh"],
+    ["--task", "proofread", "--allow-simplify"],
+    ["--task", "proofread", "--timing", "resegment"],
+])
+def test_invalid_configuration_fails_without_creating_work(material, extra):
+    source, internal = material
+    code, out, _ = run_cli("prepare", str(source), *extra)
+    assert code == 3 and not json.loads(out)["ok"] and list(internal.iterdir()) == []
 
 
-def test_cli_chunk_entries_zero_exit2(tmp_path: Path):
-    """--chunk-entries 0：立即 exit 2，不得无限循环挂死。"""
-    src = tmp_path / "a.srt"
-    src.write_text(make_srt(2), encoding="utf-8")
-    r, out, err = run_cli("init", str(src), "--task", "proofread", "--chunk-entries", "0")
-    assert r == 2 and json.loads(out)["ok"] is False
+def test_source_cannot_be_output(material):
+    source, _ = material
+    code, out, _ = run_cli("prepare", str(source), "--task", "proofread", "--output", str(source))
+    assert code == 3 and source.read_text() == SRT
 
 
-def test_main_catchall_returns_3(tmp_path: Path, monkeypatch):
-    """main() 兜底：任何未预期异常 → exit 3 + JSON，不得以 exit 1 裸崩。"""
-    import skill_main
-
-    def boom(path):
-        raise RuntimeError("boom")
-
-    monkeypatch.setattr(skill_main, "read_text", boom)
-    (tmp_path / "a.srt").write_text(make_srt(1), encoding="utf-8")
-    assert skill_main.main(["inspect", str(tmp_path / "a.srt")]) == 3
-
-
-def test_cli_submit_force_redoes_chunk(tmp_path: Path):
-    """篡改检出后 submit --force 重做该块，validate 恢复通过（A12 后半句）。"""
-    src = tmp_path / "a.srt"
-    src.write_text(make_srt(2), encoding="utf-8")
-    r, out, _ = run_cli("init", str(src), "--task", "proofread")
-    wd = Path(json.loads(out)["working_dir"])
-    r, out, _ = run_cli("chunk", wd, "chunk-0001")
-    items = json.loads(out)["items"]
-    rp = tmp_path / "good.json"
-    rp.write_text(json.dumps({"chunk_id": "chunk-0001",
-        "items": [{"source_id": i["source_id"], "text": i["text"]} for i in items]}, ensure_ascii=False), encoding="utf-8")
-    assert run_cli("submit", wd, "chunk-0001", str(rp))[0] == 0
-
-    stored = wd / "chunks" / "chunk-0001.result.json"
-    stored.write_text(stored.read_text(encoding="utf-8").replace("line 1", "篡改"), encoding="utf-8")
-    assert run_cli("validate", wd)[0] == 3
-
-    # 不带 --force 拒绝重做；带 --force 允许
-    assert run_cli("submit", wd, "chunk-0001", str(rp))[0] == 3
-    assert run_cli("submit", wd, "chunk-0001", str(rp), "--force")[0] == 0
-    assert run_cli("validate", wd)[0] == 0
-    assert run_cli("publish", wd)[0] == 0
+def test_parallel_prepares_do_not_require_user_cleanup_or_overwrite(material):
+    source, internal = material
+    first = prepare(source, "--task", "proofread")
+    second = prepare(source, "--task", "proofread")
+    assert first["working_dir"] != second["working_dir"]
+    outputs = []
+    for packet in (first, second):
+        draft = write_draft(packet, [i["text"] for i in packet["items"]])
+        code, out = finish(packet, draft)
+        assert code == 0
+        outputs.append(out["output"])
+    assert outputs[0] != outputs[1] and list(internal.iterdir()) == []
 
 
-def test_cli_translate_allow_simplify(tmp_path: Path):
-    """组合意图（翻译并精简）记入任务配置：--allow-simplify 仅限 translate。"""
-    src = tmp_path / "zh.srt"
-    src.write_text(make_srt(2, text_fmt="第{i}句"), encoding="utf-8")
-    r, out, _ = run_cli("init", str(src), "--task", "translate", "--target-lang", "en", "--allow-simplify")
-    assert r == 0
-    wd = Path(json.loads(out)["working_dir"])
-    state = json.loads((wd / "state.json").read_text(encoding="utf-8"))
-    assert state["task_config"]["extra"].get("allow_simplify") is True
-
-    r, out, err = run_cli("init", str(src), "--task", "proofread", "--allow-simplify",
-                          "--output", str(tmp_path / "zh_refined2.srt"))
-    assert r == 2
+def test_existing_empty_cue_kept_without_inventing_text(material):
+    source, _ = material
+    source.write_text("1\n00:00:00,000 --> 00:00:01,000\n\n2\n00:00:01,000 --> 00:00:02,000\nHello.\n")
+    p = prepare(source, "--task", "proofread")
+    d = write_draft(p, ["", "Hello."])
+    code, out = finish(p, d)
+    assert code == 0
+    assert parse_srt(Path(out["output"]).read_text()).entries[0].text == ""
 
 
-def test_cli_init_paths_absolute(tmp_path: Path, monkeypatch):
-    """相对路径输入：state 中三个路径均为绝对路径，跨 cwd 恢复不漂移。"""
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "rel.srt").write_text(make_srt(2), encoding="utf-8")
-    r, out, _ = run_cli("init", "rel.srt", "--task", "proofread")
-    assert r == 0
-    wd = Path(json.loads(out)["working_dir"])
-    state = json.loads((wd / "state.json").read_text(encoding="utf-8"))
-    for key in ("input_path", "output_path", "working_dir"):
-        assert Path(state[key]).is_absolute(), key
+def test_explicit_overwrite_and_bom_crlf(material):
+    source, _ = material
+    source.write_bytes(b"\xef\xbb\xbf" + SRT.replace("\n", "\r\n").encode())
+    old = source.with_name(source.stem + "_refined.srt")
+    old.write_text("old")
+    p = prepare(source, "--task", "proofread")
+    d = write_draft(p, [i["text"] for i in p["items"]])
+    code, out = finish(p, d, None, "--overwrite")
+    assert code == 0 and Path(out["output"]) == old
+    assert old.read_bytes() == SRT.encode()
+
+
+def test_optional_review_finding_has_real_location_and_description(material):
+    source, _ = material
+    p = prepare(source, "--task", "translate", "--target-lang", "zh")
+    d = write_draft(p)
+    finding = {"source_ids": ["entry-000001"], "dimension": "雅", "message": "风格偏好",
+               "suggestion": "可保持现译", "severity": "optional", "status": "open"}
+    r = review(p, d, findings=[finding])
+    assert finish(p, d, r)[0] == 0

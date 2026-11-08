@@ -79,6 +79,12 @@ def test_garbage_time_raises():
         parse_srt("1\n00:00:0X,000 --> 00:00:04,000\nx\n")
 
 
+@pytest.mark.parametrize("value", ["00:60:00,000", "00:00:60,000", "00:99:99,000"])
+def test_invalid_minute_or_second_raises(value):
+    with pytest.raises(SrtFormatError):
+        parse_timestamp(value)
+
+
 def test_block_without_timeline_raises():
     with pytest.raises(SrtFormatError):
         parse_srt("1\n只有正文没有时间行\n")

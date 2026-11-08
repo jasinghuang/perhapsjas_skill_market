@@ -1,5 +1,7 @@
 # text-refine 改造交付说明
 
+> 历史记录：下文记录此前状态机版本。当前默认入口已简化为 `prepare → 独立 agent 审校 → finish`，内部材料使用系统临时目录；以 skill 当前 SKILL.md 和 references/file-interface.md 为准。旧管线命令、旧测试数量及模拟演示不代表当前接口或翻译质量。
+
 日期：2026-11-08 ｜ 依据：`text-refine_Skill_改进技术需求文档.md`（仓库根）｜ 计划：`docs/superpowers/plans/2026-11-08-text-refine-refactor.md`
 
 ## 改了什么，为什么

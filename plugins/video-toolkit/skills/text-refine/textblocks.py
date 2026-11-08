@@ -2,7 +2,7 @@
 
 原则（需求文档 §8）：采用"保留原文片段"的方式更新——代码围栏、表格、frontmatter
 是受保护的原子块，块内字节原样回填；普通段落才允许校对/翻译/润色。
-链接地址与行内代码属于结构信息，校验时与源文件比对（见 pipeline.submit_chunk_text）。
+链接地址与行内代码属于结构信息，校验时与源文件比对（见 skill_main.preserved_text）。
 
 切分保证字节恒等：split_blocks → assemble_blocks 与原文逐字节相同，
 因此"没动的地方"天然不会被改动。

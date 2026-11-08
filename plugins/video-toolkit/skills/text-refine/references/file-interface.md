@@ -1,68 +1,69 @@
-# 文件接口与恢复说明
+# 全文文件接口
 
-按需读取：执行管线命令、排查退出码或恢复中断任务时读本文。
+普通任务只有主任务的 `prepare`、`finish`，以及独立审校 agent 使用的 `review-input`。旧 init/chunk/submit/validate/publish 状态机已移除，无需逐块协议。Python 3.9 及以上，纯标准库。
 
-## 命令与数据流
+## 准备
 
 ```text
-inspect 输入 → init 输入(--task …) → [ chunk 工作目录 块ID → 宿主模型改写 → submit 工作目录 块ID 结果.json ]×N
-→ validate 工作目录 → publish 工作目录 [--overwrite]
+python3 <skill目录>/skill_main.py prepare <输入> --task translate --target-lang zh
 ```
 
-- 工作目录：`{输出目录}/{源文件名}_refine_work/`，内含 `state.json` 与 `chunks/<块ID>.result.json`；state 中的路径均为绝对路径（跨目录恢复不漂移）。
-- 默认输出：`{源文件名}_refined.{原扩展名}`；已有文件默认不覆盖（自动取 `_2`、`_3`… 序号名），`--overwrite` 需用户显式选择。
-- 「翻译并精简」组合意图：`init --task translate --allow-simplify`，删改授权记入 `task_config.extra.allow_simplify`（中断恢复与逐块审校都能拿到授权依据；仅 translate 可用）。
-- 重做已提交的块（审校返工、结果文件被篡改后的修复）：`submit … --force`，覆盖该块结果文件并重算 sha 与校验。
-- 结果一律走**文件**传递：宿主模型把改写结果写成 JSON 文件再 submit。正文是数据——含引号、反引号、`$()`、heredoc 结束标记也不会被 shell 解释或截断。
+`--task` 支持 proofread／translate／simplify；校对和精简不设 target-lang。可选 `--terms <UTF-8术语文件>`、`--translator-id <当前翻译者标识>`、`--output <同格式输出路径>`。明确“翻译并精简”时加 `--allow-simplify`，正常翻译的自然表达无需此选项。
 
-## 提交格式
+命令返回全文材料、每条时长、实际术语内容、任务配置、内部 working_dir、draft_path 和 review_path。工作目录使用系统临时位置，每次唯一。源文件旁不建任何工作文件夹。失败后直接在临时任务继续，不维护额外状态。
 
-preserve（校对/翻译/精简，SRT 与 TXT/MD 通用）——模型只填新正文，**没有时间字段可填**：
+默认保留时间窗的 draft：
+
+```json
+{"items":[{"id":"entry-000001","text":"译文"},{"id":"entry-000002","text":"下一条"}]}
+```
+
+正文 ID 只用于回填位置，不要求每条孤立翻译。MD／TXT 使用 block-000001。MD 中 editable=false 的块只读，不放入 draft，程序原样回填。所有可编辑 ID 必须恰好覆盖一次。
+
+## 独立审校
+
+独立 agent 执行以下命令，得到原文、候选成品、任务配置、术语和机器计算的 source_sha256／draft_sha256：
+
+```text
+python3 <skill目录>/skill_main.py review-input <working_dir> --draft <draft_path>
+```
+
+独立 agent 对照全部内容后生成 review；哈希复制命令实际值，不靠模型手算。以下为格式示例，不是可直接复用的审校结论：
 
 ```json
 {
-  "chunk_id": "chunk-0002",
-  "items": [
-    {"source_id": "entry-000051", "text": "校对后的正文"},
-    {"source_id": "entry-000052", "text": "下一条正文"}
-  ]
+  "reviewer_id":"实际独立agent标识",
+  "source_sha256":"命令返回值",
+  "draft_sha256":"命令返回值",
+  "criteria":["信","达","雅"],
+  "coverage":[[1,163]],
+  "verdict":"pass",
+  "findings":[]
 }
 ```
 
-- SRT 的 `source_id` 是 `entry-%06d`（按源位置，重复序号也能区分）；TXT/MD 是 `block-%06d`，且 items 里只会出现可编辑文本块（围栏/表格/frontmatter 自动原样回填，不在 items 中）。
-- 校验：ID 未知/重复/遗漏/越界（含只读上下文条目）逐一拒绝；SRT 样式标签多重集合不变；MD 链接地址多重集合不变、行内代码默认不变（用户明确要求翻译代码注释时 `submit --allow-inline-code-edit`，仅校验数量一致）。
+coverage 指原文位置，从 1 到 source_count 全文覆盖；可用连续多个区间，不能重叠或漏查。verdict 为 pass 或 revise。每条 finding 包含 `source_ids`、`dimension`、`message`、`suggestion`，以及 `severity: required/optional`、`status: open/resolved`。未解决的事实错误、不通顺或明显文体错误属于 required；不是仅将事实错误视为必修。
 
-resegment（独立格式，见 timing-policies.md）：`items[].source_ids / start / end / text`，校验映射覆盖、时间边界与不重叠。
+修订 draft 后须独立复核并绑定新的 draft_sha256；不能手动换哈希冒充复核。脚本检查记录完整性与版本，不证明 agent 真的独立，也不能识别全部语义错误。宿主负责实际调度与核对 agent 标识。原语言校对和精简可按需独立审校，翻译必需。
 
-## 状态文件字段（state.json）
+## 一次输出
 
-| 字段 | 用途 |
-| --- | --- |
-| `schema_version` | 状态格式版本（不匹配即拒绝复用） |
-| `input_path`、`input_sha256` | 源文件及其实际内容（路径相同 ≠ 内容相同） |
-| `task_config`、`config_hash` | 任务、语言、时间轴、术语与保护选项（改动即失效） |
-| `skill_revision` | 规则版本，防止规则变动后混用旧结果 |
-| `output_path`、`working_dir` | 正式输出与中间文件位置 |
-| `chunks` | 每块源位置、结果文件、结果 sha256 与状态（pending/validated/failed） |
-| `status` | pending / running / needs_review / validated / completed / failed |
-| `diagnostics` | 输入诊断（既有重叠、断续序号等，恢复时如实继承） |
+```text
+python3 <skill目录>/skill_main.py finish <working_dir> --draft <draft_path> --review <review_path>
+```
 
-恢复时同时校验输入内容、任务配置与规则版本；`status` 子命令列出 pending 块，已验证块直接复用，只补未完成的。
+成功返回 `ok:true`、真实 output、reviewer_id 与 warnings；成功后清理系统临时任务。默认输出 `_refined`，已存在时生成 `_refined_2` 等。只有用户经 AskUserQuestion 明确选择覆盖后使用 `--overwrite`，源文件始终不能覆盖。正文通过数据文件传递，不经过 shell 插值。
 
-## 退出码（单点定义，与 skill_main.py 一致）
+失败返回非零并保留临时任务供重试；不能把 draft 当成完成的译文。退出码 0 表示命令成功；2 为参数用法错误；3 为输入、结构、审校或文件操作失败。prepare/review-input 成功均不代表翻译质量已通过。Windows 文件系统需支持原子硬链接发布；不支持时明确失败，不用可能覆盖已有结果的方式降级。
 
-| 码 | 含义 | 调用方动作 |
-| --- | --- | --- |
-| 0 | 成功 | 继续 |
-| 1 | 成功，带非阻塞警告/疑点 | 继续并把疑点并入报告 |
-| 2 | 用法错误（参数缺失/非法、不支持格式） | 修正参数 |
-| 3 | 阻塞失败（解析失败、块校验不过、有块未提交、未授权覆盖） | 读 stdout JSON 的 issues/blockers 定位修复 |
-| 4 | 状态陈旧或损坏（源内容变化、配置/规则版本不符、state.json 损坏） | 不静默复用；新建任务或重新生成受影响块 |
+## 明确选择重新分段时
 
-stdout 始终有本命令结果的 JSON（失败时含 `ok:false` 与原因），stderr 一行人类摘要；**不得仅凭输出文件存在判断成功**。
+prepare 加 `--timing resegment --timing-reason word-timestamps|audio-align|srt-estimate`。前两项仅在真实提供了对应证据时使用，脚本不自动对齐；只有 SRT 时先用 AskUserQuestion 取得估算授权，再用 srt-estimate。
 
-## 批量与并行注意
+draft 改为以下结构，允许合并或拆分，不固定条目数：
 
-- 多文件批量：每文件独立工作目录，各自 init/submit/validate，主任务统一 publish 并汇总成功/失败/待审校。
-- 并行时不要让多个 agent 写同一个文件或同一个工作目录；资源不足就串行降级，核心功能不依赖并行。
-- 审校（含独立 agent 复检）计入总资源预算。
+```json
+{"items":[{"source_ids":["entry-000001","entry-000002"],"start":"00:00:00,000","end":"00:00:06,000","text":"按中文意群组织的字幕。"}]}
+```
+
+每条必须引用连续、按顺序的源条目，时间落在对应源范围内，覆盖全文，保留首尾范围，无反向、零时长或新重叠。仅覆盖 source_ids 不能证明字词同步，审校还须检查内容出现时机。估算时间在完成摘要中说明，不声称精确。

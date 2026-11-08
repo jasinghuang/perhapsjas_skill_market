@@ -18,7 +18,7 @@ _TIMELINE_RE = re.compile(
     r"^\s*(\d+:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d+:\d{2}:\d{2}[,.]\d{1,3})(.*)$"
 )
 # 条目之间以空行分隔（空行上允许零散空白）
-_BLOCK_SPLIT_RE = re.compile(r"\n[ \t]*\n")
+_BLOCK_SPLIT_RE = re.compile(r"\n(?:[ \t]*\n)+")
 _TIMESTAMP_RE = re.compile(r"^\s*(\d+):(\d{2}):(\d{2})[,.](\d{1,3})\s*$")
 
 
@@ -62,6 +62,8 @@ def parse_timestamp(ts: str) -> int:
     if not m:
         raise SrtFormatError(f"无法解析时间戳: {ts!r}")
     hours, minutes, seconds, frac = m.groups()
+    if int(minutes) > 59 or int(seconds) > 59:
+        raise SrtFormatError(f"分和秒必须在 00～59 范围内: {ts!r}")
     ms = int(frac.ljust(3, "0"))
     return ((int(hours) * 60 + int(minutes)) * 60 + int(seconds)) * 1000 + ms
 
@@ -190,5 +192,5 @@ def render_srt(entries: list[SrtEntry], new_texts: dict[str, str] | None = None)
     for e in entries:
         text = new_texts.get(e.entry_id, e.text)
         head = f"{e.index_raw}\n{e.timeline_raw}\n" if e.index_raw else f"{e.timeline_raw}\n"
-        blocks.append(head + text)
+        blocks.append(head + text if text else head.rstrip("\n"))
     return "\n\n".join(blocks) + "\n"
