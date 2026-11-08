@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>text-refine v2 · 重建蓝图</title>
+<style>
+:root{
+  --bg:#0b0f1a; --bg2:#0e1424; --panel:rgba(255,255,255,.032); --panel2:rgba(255,255,255,.055);
+  --line:rgba(255,255,255,.09); --text:#e7ecf5; --dim:#93a0b4; --faint:#6b768c;
+  --py:#38d9f0; --py-soft:rgba(56,217,240,.12);
+  --llm:#b7a5ff; --llm-soft:rgba(183,165,255,.12);
+  --ok:#3ddc97; --ok-soft:rgba(61,220,151,.12);
+  --info:#fbd449; --info-soft:rgba(251,212,73,.12);
+  --warn:#fb923c; --warn-soft:rgba(251,146,60,.14);
+  --bad:#f87a7a; --bad-soft:rgba(248,122,122,.13);
+  --mono:"Cascadia Code","JetBrains Mono",Consolas,"Courier New",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+  radial-gradient(1100px 500px at 85% -10%, rgba(56,217,240,.08), transparent 60%),
+  radial-gradient(900px 480px at 0% 0%, rgba(183,165,255,.07), transparent 55%),
+  linear-gradient(180deg,var(--bg) 0%, var(--bg2) 100%);
+  color:var(--text);
+  font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  line-height:1.65; -webkit-font-smoothing:antialiased;}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:44px 44px;mask-image:linear-gradient(180deg,transparent 0%,#000 18%,#000 82%,transparent 100%);}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+a{color:var(--py);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* nav */
+nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(11,15,26,.72);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:4px;height:54px;overflow-x:auto;scrollbar-width:none}
+nav .wrap::-webkit-scrollbar{display:none}
+.nav-logo{font-weight:600;letter-spacing:.4px;margin-right:14px;white-space:nowrap}
+.nav-logo b{color:var(--py)}
+nav a{color:var(--dim);font-size:13.5px;padding:6px 11px;border-radius:8px;white-space:nowrap}
+nav a:hover{color:var(--text);background:var(--panel2);text-decoration:none}
+nav a.hot{color:var(--text);background:var(--panel2)}
+
+/* hero */
+header{padding:78px 0 54px;position:relative}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim);
+  border:1px solid var(--line);border-radius:999px;padding:5px 14px;background:var(--panel);letter-spacing:1px}
+.kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok)}
+h1{font-size:clamp(30px,5vw,46px);line-height:1.22;margin:22px 0 10px;font-weight:700;letter-spacing:.5px}
+h1 .grad{background:linear-gradient(92deg,var(--py) 0%,var(--llm) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--dim);font-size:16.5px;max-width:760px;margin:0 0 26px}
+.phil{display:flex;flex-wrap:wrap;gap:12px;margin:26px 0 0}
+.phil .pill{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:14px;padding:12px 18px;background:var(--panel)}
+.phil .pill svg{flex:none}
+.phil .pill .t{font-size:13px;color:var(--dim)}
+.phil .pill .v{font-size:14.5px;font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:30px}
+.stat{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel)}
+.stat .n{font-size:24px;font-weight:700;font-family:var(--mono)}
+.stat .l{font-size:12.5px;color:var(--dim);margin-top:2px}
+
+/* sections */
+section{padding:58px 0 8px}
+.shead{display:flex;align-items:baseline;gap:14px;margin-bottom:26px}
+.shead .no{font-family:var(--mono);font-size:15px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:2px 10px;background:var(--panel)}
+.shead h2{font-size:26px;margin:0;font-weight:700}
+.shead .hint{color:var(--dim);font-size:13.5px;margin-left:auto;text-align:right}
+@media(max-width:720px){.shead{flex-wrap:wrap}.shead .hint{margin-left:0;text-align:left}}
+
+/* stage cards */
+.stages{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media(max-width:920px){.stages{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.stages{grid-template-columns:1fr}}
+.stage{position:relative;border:1px solid var(--line);border-radius:16px;padding:20px 18px;background:var(--panel);transition:transform .25s,border-color .25s}
+.stage:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.2)}
+.stage .tag{display:inline-block;font-size:11.5px;padding:3px 10px;border-radius:999px;letter-spacing:.5px;margin-bottom:12px}
+.stage.py .tag{background:var(--py-soft);color:var(--py)}
+.stage.mix .tag{background:var(--llm-soft);color:var(--llm)}
+.stage h3{margin:0 0 8px;font-size:17px}
+.stage p{margin:0;font-size:13.5px;color:var(--dim)}
+.stage .icon{position:absolute;top:18px;right:16px;opacity:.9}
+.stage .num{position:absolute;bottom:12px;right:16px;font-family:var(--mono);font-size:30px;color:rgba(255,255,255,.06);font-weight:700}
+.arrowline{display:flex;justify-content:center;color:var(--dim);margin:10px 0;font-size:18px}
+@media(min-width:921px){.arrowline{display:none}.stage:not(:last-child)::after{content:"→";position:absolute;right:-13px;top:50%;transform:translateY(-50%);color:var(--dim);z-index:2}}
+
+/* timeline */
+.tl{position:relative;margin-left:8px;padding-left:30px;border-left:2px solid var(--line)}
+.tl .item{position:relative;padding:0 0 26px}
+.tl .item::before{content:"";position:absolute;left:-37px;top:7px;width:12px;height:12px;border-radius:50%;
+  background:var(--bg);border:3px solid var(--py);box-shadow:0 0 0 4px rgba(56,217,240,.12)}
+.tl .item.llm::before{border-color:var(--llm);box-shadow:0 0 0 4px rgba(183,165,255,.12)}
+.tl .cmd{display:inline-block;font-family:var(--mono);font-size:13px;color:var(--py);
+  background:var(--py-soft);border:1px solid rgba(56,217,240,.25);border-radius:8px;padding:4px 10px;margin-bottom:6px}
+.tl .item.llm .cmd{color:var(--llm);background:var(--llm-soft);border-color:rgba(183,165,255,.25)}
+.tl .item h4{margin:2px 0 4px;font-size:15.5px}
+.tl .item p{margin:0;font-size:13.5px;color:var(--dim)}
+
+/* loop */
+.loop{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}
+.loop .box{flex:1 1 170px;border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel)}
+.loop .box .c{font-family:var(--mono);font-size:13px;color:var(--py)}
+.loop .box p{margin:6px 0 0;font-size:13px;color:var(--dim)}
+.loop .arr{align-self:center;color:var(--dim)}
+.loop .box.pass{border-color:rgba(61,220,151,.4)}
+.loop .box.pass .c{color:var(--ok)}
+.ladder{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
+@media(max-width:760px){.ladder{grid-template-columns:1fr}}
+.ladder .rung{border-radius:14px;padding:16px 18px;border:1px solid var(--line)}
+.ladder .rung b{font-size:14.5px}
+.ladder .rung p{margin:6px 0 0;font-size:13px;color:var(--dim)}
+.ladder .r1{background:var(--py-soft);border-color:rgba(56,217,240,.3)}
+.ladder .r2{background:var(--info-soft);border-color:rgba(251,212,73,.3)}
+.ladder .r3{background:var(--warn-soft);border-color:rgba(251,146,60,.35)}
+.note{margin-top:16px;font-size:13px;color:var(--dim);border-left:3px solid var(--bad);padding:8px 14px;background:var(--bad-soft);border-radius:0 10px 10px 0}
+
+/* files */
+.tree{border:1px solid var(--line);border-radius:16px;padding:20px 22px;background:var(--panel);font-family:var(--mono);font-size:13.5px;overflow-x:auto}
+.trow{display:flex;align-items:center;gap:10px;padding:3.5px 0;white-space:nowrap}
+.trow .ind{color:var(--faint,#5b6478);width:20px;flex:none}
+.trow .fname{min-width:250px}
+.trow .role{font-family:"Segoe UI","Microsoft YaHei",sans-serif;color:var(--dim);font-size:12.5px;flex:1}
+.badge{flex:none;font-size:11px;padding:2px 9px;border-radius:999px;letter-spacing:.5px}
+.b-new{background:var(--ok-soft);color:var(--ok)}
+.b-rw{background:var(--py-soft);color:var(--py)}
+.b-keep{background:var(--llm-soft);color:var(--llm)}
+.b-drop{background:var(--bad-soft);color:var(--bad)}
+.b-p1{background:var(--info-soft);color:var(--info)}
+.dropchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.dropchips span{font-size:12.5px;color:var(--dim);border:1px dashed var(--line);border-radius:999px;padding:4px 12px}
+
+/* prompt */
+.cols{display:grid;grid-template-columns:1.25fr 1fr;gap:16px}
+@media(max-width:860px){.cols{grid-template-columns:1fr}}
+.code{border:1px solid var(--line);border-radius:14px;background:#0a0e18;overflow:hidden}
+.code .bar{display:flex;align-items:center;gap:6px;padding:9px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--dim)}
+.code .bar i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.code pre{margin:0;padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:12.8px;line-height:1.75}
+.jk{color:var(--py)} .js{color:#ffd684} .jn{color:#7ce38b} .jb{color:var(--llm)} .jp{color:#5f6b80}
+.anno{display:flex;flex-direction:column;gap:10px}
+.anno .a{border:1px solid var(--line);border-left:3px solid var(--py);border-radius:0 12px 12px 0;background:var(--panel);padding:10px 14px;font-size:13px;color:var(--dim)}
+.anno .a b{color:var(--text)}
+.anno .a.v{border-left-color:var(--llm)}
+.anno .a.g{border-left-color:var(--ok)}
+.contract ul{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.contract li{font-size:13.5px;color:var(--dim);padding-left:24px;position:relative}
+.contract li::before{content:"✓";position:absolute;left:2px;color:var(--ok)}
+.twingrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+@media(max-width:860px){.twingrid{grid-template-columns:1fr}}
+.pcard{border:1px solid var(--line);border-radius:16px;padding:20px;background:var(--panel)}
+.pcard h3{margin:0 0 10px;font-size:16px}
+.pcard .tag2{font-size:11.5px;color:var(--llm);background:var(--llm-soft);border-radius:999px;padding:3px 10px;margin-left:8px;vertical-align:2px}
+.pcard ul{margin:0;padding-left:20px;font-size:13.5px;color:var(--dim)}
+.pcard li{margin:7px 0}
+.pcard li b{color:var(--text)}
+
+/* qc */
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:860px){.metrics{grid-template-columns:1fr}}
+.metric{border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--panel)}
+.metric .mk{font-family:var(--mono);font-size:14px;color:var(--py)}
+.metric .mu{font-size:12px;color:var(--dim);margin-left:8px}
+.metric p{margin:8px 0 0;font-size:13px;color:var(--dim)}
+.metric .ex{margin-top:10px;font-family:var(--mono);font-size:12.3px;color:var(--text);background:#0a0e18;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{color:var(--dim);font-weight:500;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.5px}
+td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+tr.tier-b td{background:linear-gradient(90deg,var(--bad-soft),transparent 70%)}
+tr.tier-m td{background:linear-gradient(90deg,var(--warn-soft),transparent 70%)}
+tr.tier-i td{background:linear-gradient(90deg,var(--info-soft),transparent 70%)}
+.tname{font-weight:600}
+.tier-b .tname{color:var(--bad)} .tier-m .tname{color:var(--warn)} .tier-i .tname{color:var(--info)}
+.tbl{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel)}
+.mono{font-family:var(--mono)}
+td .mono{font-size:12.8px}
+.cpscell{min-width:170px}
+.cpsbar{position:relative;height:8px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden;
+  background-image:linear-gradient(90deg,transparent calc(41.6% - 1px),rgba(255,255,255,.22) 41.6%,transparent calc(41.6% + 1px)),
+                   linear-gradient(90deg,transparent calc(58.3% - 1px),rgba(255,255,255,.22) 58.3%,transparent calc(58.3% + 1px)),
+                   linear-gradient(90deg,transparent calc(83.3% - 1px),rgba(255,255,255,.28) 83.3%,transparent calc(83.3% + 1px))}
+.cpsbar .fill{position:absolute;inset:0 auto 0 0;border-radius:4px}
+.c-ok{background:var(--ok)} .c-info{background:var(--info)} .c-warn{background:var(--warn)}
+.cpsval{font-family:var(--mono);font-size:12.5px;margin-top:5px}
+.v-ok{color:var(--ok)} .v-info{color:var(--info)} .v-warn{color:var(--warn)}
+.chip{display:inline-block;font-size:11.5px;padding:2px 10px;border-radius:999px}
+.ch-ok{background:var(--ok-soft);color:var(--ok)} .ch-info{background:var(--info-soft);color:var(--info)}
+.ch-warn{background:var(--warn-soft);color:var(--warn)} .ch-flash{background:var(--llm-soft);color:var(--llm)}
+.flashnote{margin-top:14px;font-size:13px;color:var(--dim);border:1px solid var(--line);border-radius:12px;padding:12px 16px;background:var(--panel)}
+.flashnote b{color:var(--text)}
+.inv{display:grid;grid-template-columns:1fr 1fr;gap:8px 22px;list-style:none;margin:14px 0 0;padding:0}
+@media(max-width:720px){.inv{grid-template-columns:1fr}}
+.inv li{font-size:13.5px;color:var(--dim);padding-left:26px;position:relative}
+.inv li::before{content:"";position:absolute;left:0;top:4px;width:15px;height:15px;border-radius:5px;border:1.5px solid var(--ok);
+  background:var(--ok-soft)}
+.inv li::after{content:"✓";position:absolute;left:3.5px;top:3px;font-size:10px;color:var(--ok)}
+
+/* decisions */
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:820px){.dgrid{grid-template-columns:1fr}}
+.d{display:flex;gap:14px;border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel)}
+.d .id{font-family:var(--mono);color:var(--py);font-weight:700;flex:none;padding-top:1px}
+.d .bd b{display:block;font-size:14px}
+.d .bd p{margin:3px 0 0;font-size:13px;color:var(--dim)}
+.upending{margin-top:20px}
+.upending h3{font-size:15px;color:var(--info);margin:0 0 10px}
+.upending .u{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0}
+.upending .u span{font-size:12.5px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--panel)}
+.upending .u b{color:var(--info);font-family:var(--mono);font-weight:600}
+
+footer{margin-top:70px;border-top:1px solid var(--line);padding:26px 0 40px;color:var(--dim);font-size:13px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:10px 26px;justify-content:space-between}
+
+/* reveal */
+.rv{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}
+.rv.on{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}.stage:hover{transform:none}}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <span class="nav-logo">text-refine<b>·v2</b></span>
+  <a href="#pipeline">流水线</a><a href="#flow">执行流</a><a href="#batch">批次与重试</a><a href="#files">文件架构</a><a href="#prompt">提示词契约</a><a href="#qc">质量控制</a><a href="#decisions">决策台账</a>
+</div></nav>
+
+<header class="wrap" id="top">
+  <span class="kicker"><span class="dot"></span>需求文档 v0.3 · 推倒重建 · 评审中</span>
+  <h1>把字幕翻译做成<br><span class="grad">工业级流水线</span></h1>
+  <p class="sub">人类语言是连贯的宏观整句，字幕时间轴是微观的物理切片。v2 用四阶段管线化解这个矛盾：时间轴、序号、预算、门禁全部交给 Python 焊死；语境、文采、意群切片交给 LLM。</p>
+  <div class="phil">
+    <div class="pill">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38d9f0" stroke-width="1.8" stroke-linecap="round"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6"/></svg>
+      <div><div class="t">Python 管确定性</div><div class="v">时间轴 · 序号 · 预算 · 门禁 · 装配</div></div>
+    </div>
+    <div class="pill">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#b7a5ff" stroke-width="1.8" stroke-linecap="round"><path d="M12 3a4 4 0 0 1 4 4c0 1.1-.5 2.1-1.2 2.8L16 11l-1.8 4.5L12 21l-2.2-5.5L8 11l1.2-1.2A4 4 0 0 1 12 3z"/><circle cx="12" cy="7" r="1.3"/></svg>
+      <div><div class="t">LLM 管语义</div><div class="v">文采 · 口吻 · 意群切片 · 信达雅</div></div>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="n">482</div><div class="l">K-Pop 实测语料 · 条数严格锁定</div></div>
+    <div class="stat"><div class="n">4 阶段</div><div class="l">解析 → 分组 → 批次翻译 → 审计装配</div></div>
+    <div class="stat"><div class="n">5 / 7 / 10</div><div class="l">CPS 三档分级（提示 / 必修 / 阻塞）</div></div>
+    <div class="stat"><div class="n">D1–D7</div><div class="l">已定决策 · 代码零继承知识全继承</div></div>
+  </div>
+</header>
+
+<section id="pipeline"><div class="wrap">
+  <div class="shead rv"><span class="no">01</span><h2>四阶段流水线</h2><span class="hint">每阶段确定性归属清晰</span></div>
+  <div class="stages rv">
+    <div class="stage py">
+      <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38d9f0" stroke-width="1.7" stroke-linecap="round"><path d="M4 5h16M4 12h10M4 19h16"/><circle cx="18" cy="12" r="1.4"/></svg>
+      <span class="tag">PYTHON · 确定性</span>
+      <h3>解析与断言</h3>
+      <p>容错解析（缺序号 / 重号 / 坐标 / CRLF / BOM）· 锁定基准条数 N · flash 集合（&lt;500ms）· 预算表 max_units</p>
+      <span class="num">01</span>
+    </div>
+    <div class="stage mix">
+      <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#b7a5ff" stroke-width="1.7" stroke-linecap="round"><path d="M7 4v16M7 8h10l3 3-3 3H7"/><circle cx="4.5" cy="5.5" r="1.4"/><circle cx="4.5" cy="12" r="1.4"/><circle cx="4.5" cy="18.5" r="1.4"/></svg>
+      <span class="tag">PYTHON + AGENT</span>
+      <h3>语义分组与术语锁定</h3>
+      <p>句末标点 / 留白 ≥800ms 切语义组 · 术语候选 → 确认 → 锁定 → 合规门禁 · 口吻 style_note</p>
+      <span class="num">02</span>
+    </div>
+    <div class="stage mix">
+      <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#b7a5ff" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="7" width="10" height="10" rx="2"/><rect x="11" y="4" width="10" height="10" rx="2"/></svg>
+      <span class="tag">AGENT · 受控创作</span>
+      <h3>批次化翻译</h3>
+      <p>批界落组界 · 40~60 条/批 · 整句构思 → 按时间槽当量切片回填 · 只输出 {id, 译文}</p>
+      <span class="num">03</span>
+    </div>
+    <div class="stage py">
+      <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38d9f0" stroke-width="1.7" stroke-linecap="round"><path d="M12 3l8 3v6c0 4.5-3.2 7.6-8 9-4.8-1.4-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-4.5"/></svg>
+      <span class="tag">PYTHON · 审计</span>
+      <h3>审计与装配</h3>
+      <p>条数 == N · 时间戳逐字节 · 术语全扫 · CPS / 行长分级 · 原子发布 {原名}.zh.srt</p>
+      <span class="num">04</span>
+    </div>
+  </div>
+</div></section>
+
+<section id="flow"><div class="wrap">
+  <div class="shead rv"><span class="no">02</span><h2>端到端执行流</h2><span class="hint">命令即契约 · 断点可续跑</span></div>
+  <div class="tl rv">
+    <div class="item">
+      <span class="cmd">prepare 输入.srt --task translate --target-lang zh</span>
+      <h4>创建临时任务</h4>
+      <p>系统临时目录产出：诊断 · 语义组 · 术语候选 · flash 集合 · 预算表 · 批次计划；素材目录不落任何中间文件</p>
+    </div>
+    <div class="item llm">
+      <span class="cmd">agent 通读 → AskUserQuestion</span>
+      <h4>术语定表 · 口吻定调</h4>
+      <p>通读全片脉络，产出结构化术语表（K-pop / Suno / Zolly→希区柯克变焦 / Credits→算力点数…）与 style_note，交用户确认</p>
+    </div>
+    <div class="item">
+      <span class="cmd">glossary &lt;workdir&gt; --file terms.json</span>
+      <h4>锁定术语</h4>
+      <p>锁定后进全部批次材料与确定性合规扫描；源条目含锁定术语 → 译文必须含锁定译法</p>
+    </div>
+    <div class="item llm">
+      <span class="cmd">material → 翻译 → check（循环）</span>
+      <h4>批次循环（见 03 节）</h4>
+      <p>串行推进、携带前批译文尾部；已提交批次幂等合并，中断后可续跑</p>
+    </div>
+    <div class="item llm">
+      <span class="cmd">review-input → 独立审校</span>
+      <h4>信达雅 · 四哈希绑定</h4>
+      <p>独立 agent 对照全文审校：信（事实/逻辑/数字/指代）达（意群/断句/阅读负担）雅（文体/口吻）；coverage 顺序全覆盖，findings 分 required / optional</p>
+    </div>
+    <div class="item">
+      <span class="cmd">finish &lt;workdir&gt; --draft --review</span>
+      <h4>全文件审计 · 原子发布</h4>
+      <p>硬不变量逐条断言 → 临时文件 + fsync + 硬链接原子落盘 {原名}.zh.srt，自动编号防覆盖、永不覆盖源文件</p>
+    </div>
+  </div>
+</div></section>
+
+<section id="batch"><div class="wrap">
+  <div class="shead rv"><span class="no">03</span><h2>批次循环与重试阶梯</h2><span class="hint">严禁整篇一次性生成 · 严禁逐条孤立翻译</span></div>
+  <div class="loop rv">
+    <div class="box"><span class="c">material --batch N</span><p>生成材料：源条目 + duration_ms + max_units + sentence_group + flash 标记 + 术语锁 + 邻组上下文</p></div>
+    <span class="arr">→</span>
+    <div class="box"><span class="c" style="color:var(--llm)">agent 翻译</span><p>同组整句构思，按各条时长当量切片回填；只写 {id, 译文}</p></div>
+    <span class="arr">→</span>
+    <div class="box"><span class="c">check --batch N</span><p>ID 恰好覆盖 · 非空（除 flash）· CPS / 行长分级 · 术语合规 · 组连续分区不变量</p></div>
+    <span class="arr">→</span>
+    <div class="box pass"><span class="c">通过 → 合并</span><p>幂等写入 master draft，status.json 记进度</p></div>
+  </div>
+  <div class="ladder rv">
+    <div class="rung r1"><b>① 批级重试 ≤ 2 次</b><p>check 返回逐条错误（id + 违规项 + 实测值），agent 只修复被点名的条目</p></div>
+    <div class="rung r2"><b>② 组级重试</b><p>仍失败的语义组单独重翻，携带更宽上下文</p></div>
+    <div class="rung r3"><b>③ AskUserQuestion 升级</b><p>保留原文 / 人工供稿 / 放宽预算重试</p></div>
+  </div>
+  <div class="note rv">阶梯尽头<b>没有「跳过门禁」选项</b>——质量下限不由模型自觉决定。</div>
+</div></section>
+
+<section id="files"><div class="wrap">
+  <div class="shead rv"><span class="no">04</span><h2>文件架构</h2><span class="hint">代码零继承 · 知识全继承</span></div>
+  <div class="tree rv">
+    <div class="trow"><span class="ind"></span><span class="fname">skills/text-refine/</span><span class="role"></span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">SKILL.md</span><span class="role">交互契约 + 批次流 SOP（替换"单发全文"章节）</span><span class="badge b-rw">重写</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">skill_main.py</span><span class="role">CLI：prepare / glossary / material / check / status / review-input / finish</span><span class="badge b-rw">重写</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">srt_struct.py</span><span class="role">解析容错矩阵 · 规格继承旧 test_srt_struct</span><span class="badge b-rw">重写</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">metrics.py</span><span class="role">effective_units / display_width / CPS 分级</span><span class="badge b-new">新建</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">grouping.py</span><span class="role">语义组划分（标点 + 留白 ≥800ms）· 批次计划</span><span class="badge b-new">新建</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">batchflow.py</span><span class="role">material / check / status · 幂等合并 · 重试错误清单</span><span class="badge b-new">新建</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">glossary.py</span><span class="role">术语候选提取 · 锁定 · 确定性合规扫描</span><span class="badge b-new">新建</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">audit.py</span><span class="role">preserve 阅读诊断 · 术语全扫 · 装配校验</span><span class="badge b-rw">重写</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">publish.py</span><span class="role">原子发布：临时文件 + fsync + 硬链接</span><span class="badge b-rw">重写</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">instructions/batch_template.md</span><span class="role">版本化指令模板 · 哈希进绑定</span><span class="badge b-new">新建</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">references/line-break-cases.md</span><span class="role">质量标准 · 信达雅审校定义</span><span class="badge b-keep">保留原文</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">references/file-interface.md</span><span class="role">新 CLI 文档</span><span class="badge b-rw">重写</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">tests/</span><span class="role">旧 SRT 用例移植为规格 + 批次 / 门禁 / 计量新用例</span><span class="badge b-rw">重写</span></div>
+    <div class="trow"><span class="ind">├─</span><span class="fname">semantic_timing.py</span><span class="role">语义重排引擎（semantic 模式）</span><span class="badge b-p1">P1 重建</span></div>
+    <div class="trow"><span class="ind">└─</span><span class="fname" style="text-decoration:line-through;opacity:.55">textblocks.py</span><span class="role">MD/TXT 支撑</span><span class="badge b-drop">废弃 D7</span></div>
+  </div>
+  <div class="dropchips rv">
+    <span>丢弃：resegment 手填时间兼容</span><span>丢弃："能容纳就单发"路径</span><span>丢弃：--terms 自由文本</span><span>丢弃：MD/TXT 多格式（D7）</span><span>保留：旧测试用例 → 规格输入</span>
+  </div>
+</div></section>
+
+<section id="prompt"><div class="wrap">
+  <div class="shead rv"><span class="no">05</span><h2>提示词与数据契约</h2><span class="hint">模型看得见约束，才谈得上遵守约束</span></div>
+  <div class="cols rv">
+    <div class="code">
+      <div class="bar"><i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#3ddc97"></i><span style="margin-left:8px">batch_material_N.json · 批次材料 Schema</span></div>
+<pre><span class="jk">"instruction"</span>: <span class="js">"&lt;版本化模板渲染，哈希绑定&gt;"</span>,
+<span class="jk">"target_lang"</span>: <span class="js">"zh"</span>,
+<span class="jk">"style_note"</span>: <span class="js">"创作者教程，自豪、利落、极客口语"</span>,
+<span class="jk">"glossary"</span>: [{<span class="jk">"source"</span>: <span class="js">"Character Sheet"</span>, <span class="jk">"target"</span>: <span class="js">"角色设定图"</span>}],
+<span class="jk">"context"</span>: {<span class="jk">"prev_group_source"</span>: <span class="js">"…"</span>, <span class="jk">"next_group_source"</span>: <span class="js">"…"</span>,
+            <span class="jk">"prev_batch_tail_translation"</span>: <span class="js">"…"</span>},
+<span class="jk">"items"</span>: [
+  {<span class="jk">"id"</span>: <span class="js">"entry-000001"</span>, <span class="jk">"text"</span>: <span class="js">"Every single frame … you"</span>,
+   <span class="jk">"duration_ms"</span>: <span class="jn">2240</span>, <span class="jk">"max_units"</span>: <span class="jn">11</span>, <span class="jk">"sentence_group"</span>: <span class="js">"g001"</span>, <span class="jk">"flash"</span>: <span class="jb">false</span>},
+  {<span class="jk">"id"</span>: <span class="js">"entry-000006"</span>, <span class="jk">"text"</span>: <span class="js">"A"</span>,
+   <span class="jk">"duration_ms"</span>: <span class="jn">80</span>, <span class="jk">"max_units"</span>: <span class="jp">null</span>, <span class="jk">"sentence_group"</span>: <span class="js">"g002"</span>, <span class="jk">"flash"</span>: <span class="jb">true</span>}
+]</pre>
+    </div>
+    <div class="anno">
+      <div class="a"><b>max_units = max(2, floor(duration_s × 5))</b><br>软指导预算，单位为语速当量字；门禁只看 CPS 硬算，两层不叠加容差</div>
+      <div class="a v"><b>sentence_group</b><br>Python 按句末标点 / 留白 ≥800ms 切组；同组必须整句构思再切片回填，禁止倒装直译</div>
+      <div class="a"><b>flash: true（&lt;500ms）</b><br>无预算，允许空填、内容并入邻条；旧产物在 80ms 槽强填"如果是"（CPS≈37）即此策略由来</div>
+      <div class="a g"><b>context 上下文携带</b><br>邻组源文静态携带；前批译文尾部动态注入（串行执行，并行批次 P2 且只带源文）</div>
+    </div>
+  </div>
+
+  <div class="cols rv" style="margin-top:16px">
+    <div class="code">
+      <div class="bar"><i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#3ddc97"></i><span style="margin-left:8px">batch_draft_N.json · 输出契约（结构与内容分离）</span></div>
+<pre>{<span class="jk">"items"</span>: [{<span class="jk">"id"</span>: <span class="js">"entry-000001"</span>, <span class="jk">"text"</span>: <span class="js">"你刚刚看到的那支音乐视频里的"</span>}]}</pre>
+    </div>
+    <div class="contract">
+      <ul>
+        <li>只回 id + 译文；时间戳、序号由 Python 独占，模型碰不到</li>
+        <li>数组而非 {id: text} 字典——JSON 对象无序且重复键会静默覆盖</li>
+        <li>单条单行；含空行 / "--&gt;" / NUL 为阻塞错误</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="twingrid rv">
+    <div class="pcard">
+      <h3>指令模板要点<span class="tag2">batch_template.md · 版本化</span></h3>
+      <ul>
+        <li>同组整句语境翻译，按各条时长比例切片，断点落在标点 / 连词</li>
+        <li>遵守 max_units 预算；英文词按当量计（K-pop = 2.0）</li>
+        <li>术语表为锁死映射，不得改译；口吻按 style_note</li>
+        <li>flash 条目可留空，内容并入邻条</li>
+        <li>标点遵循仓库标准：语义需要则保留，不为美观删标点</li>
+      </ul>
+    </div>
+    <div class="pcard">
+      <h3>独立审校指令要点<span class="tag2">另一 agent · 信达雅</span></h3>
+      <ul>
+        <li>先完整读 line-break-cases.md，再 review-input 取原文 + 带时间轴候选 + 阅读诊断 + 术语锁</li>
+        <li><b>信</b>事实 / 逻辑 / 数字 / 指代 · <b>达</b>意群 / 断句 / 阅读负担 · <b>雅</b>文体 / 口吻贴合题材</li>
+        <li>不灌翻译者结论；coverage 顺序全覆盖；findings 带 severity</li>
+        <li>四哈希绑定：源文件 / 稿件 / 最终候选 / 任务+引擎+模板，任一变更须重审</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section id="qc"><div class="wrap">
+  <div class="shead rv"><span class="no">06</span><h2>质量控制</h2><span class="hint">三口径不混用 · 分级不放水</span></div>
+  <div class="metrics rv">
+    <div class="metric">
+      <div><span class="mk">effective_units</span><span class="mu">语速口径</span></div>
+      <p>管 CPS 门禁与 max_units 预算；纯汉字行当量 == 字数，既有阈值无缝沿用</p>
+      <div class="ex">汉字 1.0 · AI=2.0 · LLM=3.0 · K-pop=2.0<br>长词 max(2.5, len/3) · 4153=4.0</div>
+    </div>
+    <div class="metric">
+      <div><span class="mk">display_width</span><span class="mu">排版口径</span></div>
+      <p>管行长门禁；修复 len() 把半角按全角计的口径混乱</p>
+      <div class="ex">全角 1.0 · 半角 0.5 → "K-pop" = 2.5 宽</div>
+    </div>
+    <div class="metric">
+      <div><span class="mk">visible_char_count</span><span class="mu">纯外文行沿用</span></div>
+      <p>无汉字条目按 15~17 字符/秒参考，避免重校英文阈值</p>
+      <div class="ex">仅当 effective_units == 0 时生效</div>
+    </div>
+  </div>
+
+  <h3 class="rv" style="margin:34px 0 12px;font-size:17px">门禁分级</h3>
+  <div class="tbl rv"><table>
+    <thead><tr><th style="width:90px">级别</th><th>触发条件</th><th style="width:34%">处置</th></tr></thead>
+    <tbody>
+      <tr class="tier-b"><td class="tname">阻塞</td><td>条数 / ID / 时间戳变动 · 非 flash 空文本 · 结构泄漏 · 术语违规 · 当量 CPS &gt;10 · 行长 &gt;24</td><td>直接失败进重试阶梯；审校无权放行</td></tr>
+      <tr class="tier-m"><td class="tname">必修</td><td>当量 CPS 7~10 · 行长 18~24 · flash 空填 · 单条 &gt;6s</td><td>required finding，未 resolved 不得 finish</td></tr>
+      <tr class="tier-i"><td class="tname">提示</td><td>当量 CPS 5~7 · 行长 14~18 · 估算时间披露</td><td>进审校视野，不强制</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 class="rv" style="margin:34px 0 12px;font-size:17px">校准实例 · K-Pop 第 1~6 条实测 <span style="color:var(--dim);font-size:12.5px;font-weight:400">（刻度线 = 5 / 7 / 10 CPS）</span></h3>
+  <div class="tbl rv"><table>
+    <thead><tr><th style="width:36px">#</th><th style="width:64px">时长</th><th style="width:52px">预算</th><th>参考译文</th><th style="width:58px">当量</th><th class="cpscell">当量 CPS</th><th style="width:70px">分级</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">1</td><td class="mono">2.24s</td><td class="mono">11</td><td>你刚刚看到的那支音乐视频里的</td><td class="mono">14</td>
+        <td><div class="cpsbar"><div class="fill c-info" style="width:52%"></div></div><div class="cpsval v-info">6.25</div></td><td><span class="chip ch-info">提示</span></td></tr>
+      <tr><td class="mono">2</td><td class="mono">2.08s</td><td class="mono">10</td><td>每一帧画面，包括那首 K-pop 歌曲、</td><td class="mono">13</td>
+        <td><div class="cpsbar"><div class="fill c-info" style="width:52%"></div></div><div class="cpsval v-info">6.25 <span style="color:var(--dim)">（纯汉字口径只有 5.29 → 混排行系统性低估）</span></div></td><td><span class="chip ch-info">提示</span></td></tr>
+      <tr><td class="mono">3</td><td class="mono">1.60s</td><td class="mono">8</td><td>故事情节、对口型，</td><td class="mono">7</td>
+        <td><div class="cpsbar"><div class="fill c-ok" style="width:36.5%"></div></div><div class="cpsval v-ok">4.38</div></td><td><span class="chip ch-ok">通过</span></td></tr>
+      <tr><td class="mono">4</td><td class="mono">1.04s</td><td class="mono">5</td><td>以及打斗场面，</td><td class="mono">6</td>
+        <td><div class="cpsbar"><div class="fill c-info" style="width:48%"></div></div><div class="cpsval v-info">5.77</div></td><td><span class="chip ch-info">提示</span></td></tr>
+      <tr><td class="mono">5</td><td class="mono">2.08s</td><td class="mono">10</td><td>全都是在我的笔记本电脑上生成的。</td><td class="mono">15</td>
+        <td><div class="cpsbar"><div class="fill c-warn" style="width:60%"></div></div><div class="cpsval v-warn">7.21 <span style="color:var(--dim)">（人工认可译文也会落必修带）</span></div></td><td><span class="chip ch-warn">必修</span></td></tr>
+      <tr><td class="mono">6</td><td class="mono">0.08s</td><td class="mono">—</td><td>（空填，内容并入邻条并显式报告）</td><td class="mono">0</td>
+        <td><div class="cpsbar"></div><div class="cpsval" style="color:var(--dim)">源文 "A" · 80ms</div></td><td><span class="chip ch-flash">flash</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="flashnote rv"><b>定标依据：</b>连人工认可的译文都落在 5~7 提示带甚至 7~10 必修带 → 该两档必须"可精简重试 / 审校说明后放行"，只有 &gt;10 才一刀切阻塞；flash 条目绝不强填（旧产物在 80ms 槽填出 CPS≈37 的"如果是"）。</div>
+
+  <h3 class="rv" style="margin:34px 0 6px;font-size:17px">硬不变量（finish 前可断言）</h3>
+  <ul class="inv rv">
+    <li>输出条数 == 输入条数 N</li>
+    <li>preserve：序号行与时间轴行与源逐字节相同</li>
+    <li>非 flash 无空译文；全部空译文进 warnings 显式报告</li>
+    <li>锁定术语合规扫描零违规</li>
+    <li>无当量 CPS &gt;10、无排版宽度 &gt;24 发布</li>
+    <li>独立审校：reviewer 独立 · 四哈希匹配 · coverage 全覆盖 · 必修全 resolved</li>
+  </ul>
+</div></section>
+
+<section id="decisions"><div class="wrap">
+  <div class="shead rv"><span class="no">07</span><h2>决策台账</h2><span class="hint">已定 D1–D7 · 未决 U1–U5</span></div>
+  <div class="dgrid rv">
+    <div class="d"><span class="id">D1</span><div class="bd"><b>推倒重建 text-refine</b><p>同目录、v3 代码全部废弃重写；标准文档与测试用例作为规格继承，不新建 subtitle-translator</p></div></div>
+    <div class="d"><span class="id">D2</span><div class="bd"><b>仅 agent 自译</b><p>宿主 agent / subagent 读批次材料写批次稿；不引入 API provider 层</p></div></div>
+    <div class="d"><span class="id">D3</span><div class="bd"><b>严格 1:1 为默认交付物</b><p>条数、序号、时间轴逐字节保留；semantic 重排保留为显式选择（推荐顺序较 v3 翻转）</p></div></div>
+    <div class="d"><span class="id">D4</span><div class="bd"><b>确定性 / 创造性分治</b><p>时间轴、序号、预算换算、术语合规、CPS、装配归 Python；语义、文采、切片归 LLM</p></div></div>
+    <div class="d"><span class="id">D5</span><div class="bd"><b>约束进输入</b><p>批次材料必须带 duration_ms / max_units / sentence_group——修复"要求时间槽约束却不给时长"的矛盾</p></div></div>
+    <div class="d"><span class="id">D6</span><div class="bd"><b>计量双口径</b><p>display_width 管行长、effective_units 管 CPS 与预算，禁止混用</p></div></div>
+    <div class="d"><span class="id">D7</span><div class="bd"><b>彻底聚焦 SRT</b><p>MD / TXT 能力随重建移除；翻译 / 校对 / 精简任务保留但仅限 SRT</p></div></div>
+  </div>
+  <div class="upending rv">
+    <h3>未决项（不阻塞 P0 开工）</h3>
+    <div class="u"><span><b>U1</b> 目录批量排队 — 建议 P1</span><span><b>U2</b> semantic 批次化 — 建议 P1</span><span><b>U3</b> 双语对照衍生 — 建议 P2</span><span><b>U4</b> 并行批次 — 建议 P2</span><span><b>U5</b> 阈值与当量权重 — 语料校准后定</span></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <span>text-refine v2 重建蓝图 · 需求文档 v0.3（2026-11-08）</span>
+  <span>配套：<a href="text-refine_v2_完整技术需求文档.md">完整技术需求文档</a> · <a href="plugins/video-toolkit/skills/text-refine/references/line-break-cases.md">质量标准 line-break-cases.md</a></span>
+</div></footer>
+
+<script>
+(function(){
+  var els=document.querySelectorAll('.rv');
+  if(!('IntersectionObserver' in window)||window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    els.forEach(function(e){e.classList.add('on')});return;
+  }
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){if(en.isIntersecting){en.target.classList.add('on');io.unobserve(en.target)}});
+  },{threshold:.08});
+  els.forEach(function(e){io.observe(e)});
+  var links=document.querySelectorAll('nav a');
+  links.forEach(function(a){a.addEventListener('click',function(){
+    links.forEach(function(x){x.classList.remove('hot')});a.classList.add('hot');
+  })});
+})();
+</script>
+</body>
+</html>
