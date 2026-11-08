@@ -58,10 +58,10 @@
 
 ## 交互菜单脚本（Claude / AskUserQuestion 适配）
 
-宿主提供结构化选择工具时使用（Claude 环境为 `AskUserQuestion`：每次最多 4 题、
-每题最多 4 个选项、`header` ≤ 12 字符、`multiSelect: false`；超过 4 个选项拆页，
-页间放「下一页 / 返回」）。宿主没有结构化工具时，用简短文本提问即可，不要硬编码
-某个工具名。菜单脚本示例（音色来源 → provider → 音色 → 语气）：
+所有用户选择必须使用 AskUserQuestion；其他宿主映射到等价的结构化用户输入控件，
+按实际工具限制分页，不用普通文本菜单或回复编号替代。没有可用控件时说明能力缺失，
+等待用户明确指令。下面是 Claude 的菜单示例，其他宿主使用自身工具 schema；
+实际顺序先检测能力、选择 provider，再选择音色来源／音色／语气，已明确的选择跳过：
 
 ```text
 AskUserQuestion({ questions: [{
