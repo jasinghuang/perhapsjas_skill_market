@@ -7,6 +7,25 @@ from . import TranscriptionBackend
 SUPPORTED_MODELS = ["small", "medium", "large-v3"]
 
 
+def _nvidia_smi_gpu_name() -> str:
+    """GPU name via nvidia-smi, or "" if unavailable (no driver / not on PATH)."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception:
+        return ""
+    if result.returncode != 0:
+        return ""
+    lines = result.stdout.strip().splitlines()
+    return lines[0].strip() if lines else ""
+
+
 class FasterWhisperBackend(TranscriptionBackend):
     def __init__(self):
         self._model = None
@@ -40,7 +59,9 @@ class FasterWhisperBackend(TranscriptionBackend):
         try:
             name = ctranslate2.get_device_property(0).get("name", "CUDA GPU")
         except Exception:
-            name = "CUDA GPU"
+            # ctranslate2 4.7.x has no get_device_property; nvidia-smi ships
+            # with every NVIDIA driver, so use it for the display name.
+            name = _nvidia_smi_gpu_name() or "CUDA GPU"
         return True, f"found {count} CUDA device(s), primary: {name}"
 
     def load_model(self, model_name: str) -> None:

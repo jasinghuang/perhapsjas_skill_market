@@ -16,6 +16,13 @@ class FakeCtranslate2:
         return {"name": self.device_name}
 
 
+class Ctranslate2WithoutDeviceProperty:
+    """Mirrors ctranslate2 4.7.x, which ships no get_device_property."""
+
+    def get_cuda_device_count(self):
+        return 1
+
+
 class RecordingWhisperModel:
     instances = []
 
@@ -58,6 +65,43 @@ def test_cuda_device_uses_float16(monkeypatch, capsys):
     assert backend._model.args == {"model_name": "medium", "device": "cuda", "compute_type": "float16"}
     out = capsys.readouterr().out
     assert "RTX 4070" in out
+    assert "CUDA GPU acceleration" in out
+
+
+def test_gpu_name_via_nvidia_smi_when_api_missing(monkeypatch, capsys):
+    _install(monkeypatch, Ctranslate2WithoutDeviceProperty(), RecordingWhisperModel)
+
+    def fake_run(cmd, **kwargs):
+        return SimpleNamespace(returncode=0, stdout="NVIDIA GeForce RTX 4070 Ti\n")
+
+    monkeypatch.setitem(sys.modules, "subprocess", SimpleNamespace(run=fake_run))
+
+    backend = FasterWhisperBackend()
+    backend.load_model("medium")
+
+    assert backend._model.args["device"] == "cuda"
+    out = capsys.readouterr().out
+    assert "RTX 4070 Ti" in out
+
+
+def test_generic_gpu_name_when_nvidia_smi_also_fails(monkeypatch, capsys):
+    _install(monkeypatch, Ctranslate2WithoutDeviceProperty(), RecordingWhisperModel)
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return SimpleNamespace(returncode=1, stdout="")
+
+    monkeypatch.setitem(sys.modules, "subprocess", SimpleNamespace(run=fake_run))
+
+    backend = FasterWhisperBackend()
+    backend.load_model("medium")
+
+    assert backend._model.args["device"] == "cuda"
+    assert calls, "nvidia-smi should have been consulted before falling back to a generic name"
+    out = capsys.readouterr().out
+    assert "CUDA GPU" in out
     assert "CUDA GPU acceleration" in out
 
 
