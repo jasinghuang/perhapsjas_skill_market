@@ -20,6 +20,15 @@ def audio_file(tmp_path):
     return f
 
 
+@pytest.fixture(autouse=True)
+def fake_audio_extraction(monkeypatch):
+    import media
+    def extract(src, dst, stream_index=None):
+        dst.write_bytes(b"audio-only")
+        return dst
+    monkeypatch.setattr(media, "to_upload_audio", extract)
+
+
 class FakeResponse:
     def __init__(self, payload):
         self._payload = payload
@@ -81,7 +90,7 @@ def test_request_params_and_auth_header(audio_file, monkeypatch):
     monkeypatch.setattr(media, "probe_media", lambda p: {"duration": 2.5, "audio_streams": []})
     result = backend.transcribe(str(audio_file), language="zh")
     req = spy.requests[0]
-    body = req.data
+    body = b"".join(req.data)
     assert b'name="model_id"\r\n\r\nscribe_v2' in body
     assert b'name="timestamps_granularity"\r\n\r\nword' in body
     assert b'name="diarize"\r\n\r\nfalse' in body
@@ -97,7 +106,7 @@ def test_auto_language_omits_language_code(audio_file, monkeypatch):
     import media
     monkeypatch.setattr(media, "probe_media", lambda p: {"duration": 2.5, "audio_streams": []})
     backend.transcribe(str(audio_file), language="auto")
-    assert b'language_code' not in spy.requests[0].data
+    assert b'language_code' not in b''.join(spy.requests[0].data)
 
 
 def test_spacing_and_audio_event_words_dropped(audio_file, monkeypatch):
@@ -146,18 +155,12 @@ def test_422_param_error_stops(audio_file, monkeypatch):
     assert len(spy.requests) == 1
 
 
-def test_5xx_retries_then_succeeds(audio_file, monkeypatch):
-    backend, spy, sleeps = make_backend(monkeypatch, [
-        HTTPError("u", 500, "Server Error", None, None),
-        HTTPError("u", 503, "Busy", None, None),
-        ok_payload(),
-    ])
-    import media
-    monkeypatch.setattr(media, "probe_media", lambda p: {"duration": 2.5, "audio_streams": []})
-    result = backend.transcribe(str(audio_file))
-    assert result["status"] == "complete"
-    assert len(spy.requests) == 3
-    assert sleeps == [2.0, 4.0]  # backoff before retries 2 and 3
+def test_5xx_unknown_state_not_reuploaded(audio_file, monkeypatch):
+    backend, spy, sleeps = make_backend(monkeypatch, [HTTPError("u", 500, "error", None, None)])
+    with pytest.raises(ScribeError) as caught:
+        backend._post(audio_file, {}, lambda _: None)
+    assert caught.value.kind == "submission_unknown"
+    assert len(spy.requests) == 1 and not sleeps
 
 
 def test_429_gives_up_after_three_attempts(audio_file, monkeypatch):
@@ -167,7 +170,7 @@ def test_429_gives_up_after_three_attempts(audio_file, monkeypatch):
     monkeypatch.setattr(media, "probe_media", lambda p: {"duration": 2.5, "audio_streams": []})
     with pytest.raises(ScribeError) as excinfo:
         backend.transcribe(str(audio_file))
-    assert excinfo.value.kind == "server"
+    assert excinfo.value.kind == "rate_limit"
     assert len(spy.requests) == 3  # max 3 attempts (doc §7)
 
 
@@ -183,19 +186,13 @@ def test_timeout_is_submission_unknown_no_reupload(audio_file, monkeypatch):
     assert sleeps == []
 
 
-def test_network_error_retries(audio_file, monkeypatch):
-    backend, spy, _ = make_backend(monkeypatch, [
-        URLError(OSError("connection reset")),
-        ok_payload(),
-    ])
-    import media
-    monkeypatch.setattr(media, "probe_media", lambda p: {"duration": 2.5, "audio_streams": []})
-    result = backend.transcribe(str(audio_file))
-    assert result["status"] == "complete"
-    assert len(spy.requests) == 2
+def test_connection_reset_not_reuploaded(audio_file, monkeypatch):
+    backend, spy, sleeps = make_backend(monkeypatch, [URLError(OSError("reset"))])
+    with pytest.raises(ScribeError) as caught:
+        backend._post(audio_file, {}, lambda _: None)
+    assert caught.value.kind == "submission_unknown"
+    assert len(spy.requests) == 1 and not sleeps
 
-
-# --- result mapping --------------------------------------------------------------
 
 def test_no_speech_returns_empty_transcription(audio_file, monkeypatch):
     payload = ok_payload()
@@ -226,16 +223,58 @@ def test_diarize_flag_forwarded(audio_file, monkeypatch):
     import media
     monkeypatch.setattr(media, "probe_media", lambda p: {"duration": 2.5, "audio_streams": []})
     backend.transcribe(str(audio_file), options={"diarize": True})
-    assert b'name="diarize"\r\n\r\ntrue' in spy.requests[0].data
+    assert b'name="diarize"\r\n\r\ntrue' in b''.join(spy.requests[0].data)
 
 
-def test_multipart_sanitizes_filename():
-    """Quotes in filenames must not break the multipart header (tested via a
-    stub because NTFS forbids '"' in real file names)."""
+def test_multipart_sanitizes_filename(tmp_path):
     from backends.scribe_backend import _multipart
+    path = tmp_path / 'weird "name".mp3'
+    path.write_bytes(b"12345678")
+    body = _multipart({"model_id": "scribe_v2"}, "file", path, "bound123")
+    data = b"".join(body)
+    assert b'filename="weird _name_.mp3"' in data
+    assert body.length == len(data)
 
-    stub = SimpleNamespace(suffix=".mp3", name='weird "name".mp3', read_bytes=lambda: b"\x00" * 8)
-    body = _multipart({"model_id": "scribe_v2"}, "file", stub, "bound123")
-    assert b'filename="weird _name_.mp3"' in body
-    # the boundary line after the sanitized filename still parses
-    assert b"\r\nContent-Type: audio/mpeg\r\n\r\n" in body
+
+
+@pytest.mark.parametrize('outcome', [TimeoutError('timed out'), HTTPError('u',404,'not found',None,None)])
+def test_bare_timeout_or_404_never_retries(audio_file, monkeypatch, outcome):
+    backend, spy, sleeps = make_backend(monkeypatch, [outcome])
+    with pytest.raises(ScribeError):
+        backend._post(audio_file, {}, lambda _: None)
+    assert len(spy.requests) == 1 and not sleeps
+
+
+def test_streaming_body_real_local_http_roundtrip(tmp_path, monkeypatch):
+    import threading
+    import socket
+    monkeypatch.setattr(socket, "getfqdn", lambda name="": "localhost")
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    received = {}
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            received['length'] = int(self.headers['Content-Length'])
+            received['body'] = self.rfile.read(received['length'])
+            body = json.dumps(ok_payload()).encode()
+            self.send_response(200)
+            self.send_header('Content-Length',str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        def log_message(self,*args): pass
+    import backends.scribe_backend as sb
+    monkeypatch.setattr(sb, 'REQUEST_TIMEOUT', 3)
+    server = HTTPServer(('127.0.0.1',0),Handler)
+    server.timeout = 3
+    thread = threading.Thread(target=server.handle_request,daemon=True); thread.start()
+    f = tmp_path/'audio.m4a'; f.write_bytes(b'abcde'*200000)
+    monkeypatch.setenv('ELEVENLABS_API_KEY', API_KEY)
+    try:
+        backend = ScribeBackend(api_url=f'http://127.0.0.1:{server.server_port}/')
+        result = backend._post(f, {'model_id':'scribe_v2'},lambda _:None)
+        thread.join(timeout=3)
+        assert not thread.is_alive()
+        assert result['text'] == ok_payload()['text']
+        assert len(received['body']) == received['length']
+        assert f.read_bytes() in received['body']
+    finally:
+        server.server_close()

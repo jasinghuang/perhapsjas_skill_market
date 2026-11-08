@@ -67,6 +67,8 @@ def get_provider_backend(provider: str, options: Optional[dict] = None) -> Provi
     provider = normalize_provider(provider)
     options = options or {}
     if provider == "qwen":
+        if platform.system() == "Darwin" and platform.machine() != "arm64":
+            raise RuntimeError("本地 MLX 需要 Apple Silicon 和原生 ARM64 Python；Intel / Rosetta 不自动改走其他后端")
         if platform.system() == "Darwin" and platform.machine() == "arm64":
             from .qwen_mlx_backend import QwenMLXBackend
             return QwenMLXBackend(precision=options.get("precision", "8bit"))

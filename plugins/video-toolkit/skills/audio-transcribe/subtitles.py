@@ -2,7 +2,7 @@
 
 Rules implemented here:
 - split at punctuation / pause / semantic boundaries; never inside an English word
-- at most 2 lines; unified display width (CJK=2, others=1) targets 20 CJK chars
+- single line by default; unified display width (CJK=2, others=1) targets 20 CJK chars
   or 42 ASCII chars per line
 - target max display duration 6s (configurable); overlong captions are split at
   real word-time units — never by proportional padding, never fabricating
@@ -12,18 +12,19 @@ Rules implemented here:
 """
 
 import re
+import math
 import unicodedata
 from typing import List, Optional, Tuple
 
 DEFAULT_CONFIG = {
-    "max_lines": 2,
+    "max_lines": 1,
     "line_width": 42,        # display-width units: ~20 CJK or ~42 ASCII chars
     "max_duration": 6.0,
     "sentence_gap": 0.8,     # pause (s) that ends a caption group
     "paragraph_gap": 2.0,    # pause (s) that starts a new TXT paragraph
 }
 
-STRONG_PUNCT = "。！？!?…"
+STRONG_PUNCT = "。！？!?…."
 WEAK_PUNCT = "，、；：,;:"
 # Characters that may trail a word unit as punctuation (never '-' — it lives
 # inside English words).
@@ -48,7 +49,7 @@ def _is_unit_char(ch: str) -> bool:
 
 def split_word_punct(word: dict) -> dict:
     """Normalize a word unit: core text + trailing punctuation in `tail`."""
-    if word.get("tail"):
+    if word.get("verbatim") or word.get("tail"):
         return word  # already normalized (e.g. attach_punctuation output)
     text = word["text"].rstrip()
     tail = _tail_punct(text)
@@ -66,32 +67,24 @@ def attach_punctuation(words: List[dict], text: str) -> Optional[List[dict]]:
     """
     if not words or not text:
         return None
-    if any(_tail_punct(w["text"]) for w in words):
-        return None  # units already carry punctuation (e.g. Scribe)
-
-    units = []
-    pos = 0
-    pending = ""
-    for word in words:
-        core = "".join(ch for ch in word["text"] if _is_unit_char(ch))
-        if not core:
-            continue
-        while pos < len(text) and not _is_unit_char(text[pos]):
-            pending += text[pos]
-            pos += 1
-        if text[pos: pos + len(core)] != core:
-            return None
-        pos += len(core)
-        tail = ""
-        while pos < len(text) and not _is_unit_char(text[pos]):
-            tail += text[pos]
-            pos += 1
-        units.append({**word, "text": core, "tail": (pending + tail).rstrip()})
-        pending = ""
-    # Anything left over must be punctuation only — real content means mismatch.
-    if any(_is_unit_char(ch) for ch in text[pos:]):
+    positions, folded = [], []
+    for i, ch in enumerate(text):
+        if ch.isalnum():
+            folded.append(ch.casefold())
+            positions.extend([i] * len(ch.casefold()))
+    source = "".join(folded)
+    cores = ["".join(ch.casefold() for ch in w["text"] if ch.isalnum()) for w in words]
+    if not all(cores) or "".join(cores) != source:
         return None
-    return units or None
+    # Retain raw punctuation, quotes, hyphens and spaces exactly; only the
+    # placement of cue boundaries changes. Never rewrite the recognized text.
+    units, cursor, offset = [], 0, 0
+    for i, (word, core) in enumerate(zip(words, cores)):
+        cursor += len(core)
+        stop = positions[cursor] if cursor < len(positions) else len(text)
+        units.append({**word, "text": text[offset:stop], "tail": "", "verbatim": True})
+        offset = stop
+    return units
 
 
 def display_width(text: str) -> int:
@@ -109,24 +102,26 @@ def join_word_texts(word_texts: List[str]) -> str:
         piece = piece.strip()
         if not piece:
             continue
-        if out and _is_ascii_word_char(out[-1]) and _is_ascii_word_char(piece[0]):
+        if out and (_is_ascii_word_char(out[-1]) or out[-1] in ".,!?;:\"')]") and _is_ascii_word_char(piece[0]):
             out += " "
         out += piece
     return out
 
 
 def _unit_ends_sentence(unit: dict) -> bool:
-    tail = (unit.get("tail") or unit["text"][-1:] or "").rstrip()
+    tail = (unit.get("tail") or unit["text"]).rstrip().rstrip('"”’』」）)》')
     return bool(tail) and tail[-1] in STRONG_PUNCT
 
 
 def _unit_ends_clause(unit: dict) -> bool:
-    tail = (unit.get("tail") or unit["text"][-1:] or "").rstrip()
+    tail = (unit.get("tail") or unit["text"].rstrip()[-1:] or "").rstrip()
     return bool(tail) and tail[-1] in WEAK_PUNCT
 
 
 def units_to_text(units: List[dict]) -> str:
     """Rebuild display text from units (core + punctuation tail)."""
+    if units and all(u.get("verbatim") for u in units):
+        return "".join(u["text"] for u in units).strip()
     out = ""
     prev_core_ascii = False
     for unit in units:
@@ -152,7 +147,7 @@ def group_sentences(words: List[dict], sentence_gap: float) -> List[List[dict]]:
             continue
         nxt = words[i + 1]
         gap = nxt["start"] - word["end"]
-        if gap >= sentence_gap:
+        if gap >= sentence_gap or nxt.get("speaker_id") != word.get("speaker_id"):
             sentences.append(current)
             current = []
     if current:
@@ -166,87 +161,47 @@ def _split_oversized(sentence: List[dict], config: dict) -> List[List[dict]]:
     Cut points are, in order of preference: clause punctuation, then the
     largest word gaps. Times always come from actual word units.
     """
-    max_width = config["max_lines"] * config["line_width"]
-    max_duration = config["max_duration"]
-
-    text_width = display_width(units_to_text(sentence))
-    duration = sentence[-1]["end"] - sentence[0]["start"]
-    if text_width <= max_width and duration <= max_duration:
-        return [sentence]
-
-    pieces: List[List[dict]] = []
-    current: List[dict] = []
-    current_width = 0
-    last_clause_cut = -1  # index in `current` after which a weak-punct cut is allowed
-
-    for i, word in enumerate(sentence):
-        piece_width = display_width(word["text"]) or 1
-        prospective = current_width + piece_width
-        cur_duration = word["end"] - current[0]["start"] if current else 0
-        over = current and (
-            prospective > max_width or cur_duration > max_duration
-        )
-        if over:
-            # Prefer cutting after the last clause punctuation inside `current`.
-            if last_clause_cut >= 0:
-                head, current_tail = current[: last_clause_cut + 1], current[last_clause_cut + 1 :]
-                pieces.append(head)
-                current = current_tail
-                current_width = display_width(units_to_text(current))
-                last_clause_cut = -1
-            else:
-                # No punctuation: cut before this word, i.e. `current` is a piece.
-                pieces.append(current)
-                current = []
-                current_width = 0
-                last_clause_cut = -1
-        current.append(word)
-        current_width += piece_width
-        if _unit_ends_clause(word):
-            last_clause_cut = len(current) - 1
-
-    if current:
-        pieces.append(current)
-
-    # A piece may still be oversized if a single word is huge or one clause
-    # runs past max_duration with no punctuation at all. Split those at their
-    # largest word gap so no piece wildly exceeds the budget.
-    final: List[List[dict]] = []
-    for piece in pieces:
-        duration = piece[-1]["end"] - piece[0]["start"]
-        width = display_width(units_to_text(piece))
-        if duration <= max_duration and width <= max_width:
-            final.append(piece)
-            continue
-        final.extend(_split_at_largest_gaps(piece, config))
-    return final
+    return _balanced_pieces(sentence, config)
 
 
-def _split_at_largest_gaps(piece: List[dict], config: dict) -> List[List[dict]]:
-    max_width = config["max_lines"] * config["line_width"]
-    if len(piece) <= 1:
-        return [piece]
-    gaps = sorted(
-        range(len(piece) - 1),
-        key=lambda i: piece[i + 1]["start"] - piece[i]["end"],
-        reverse=True,
-    )
-    for cut in gaps:
-        head, tail = piece[: cut + 1], piece[cut + 1 :]
-        head_ok = (
-            head[-1]["end"] - head[0]["start"] <= config["max_duration"]
-            and display_width(units_to_text(head)) <= max_width
-        )
-        tail_ok = (
-            len(tail) == 1
-            or (
-                tail[-1]["end"] - tail[0]["start"] <= config["max_duration"]
-                and display_width(units_to_text(tail)) <= max_width
-            )
-        )
-        if head_ok:
-            return [head] + (_split_at_largest_gaps(tail, config) if not tail_ok else [tail])
-    return [piece]
+def _balanced_pieces(sentence: List[dict], config: dict) -> List[List[dict]]:
+    """Choose word boundaries globally within a sentence, avoiding orphan tails.
+
+    Width/duration remain budgets, never a reason to discard a word. Function
+    words, small gaps and very short final cues make worse cut candidates.
+    """
+    limit = config["max_lines"] * config["line_width"]
+    n = len(sentence)
+    costs, choices = [float("inf")] * (n + 1), [None] * n
+    costs[n] = 0
+    hanging = {"a", "an", "the", "of", "to", "with", "and", "or", "for", "in", "on", "by", "from", "ai"}
+    for i in range(n - 1, -1, -1):
+        for j in range(i + 1, n + 1):
+            piece = sentence[i:j]
+            width = display_width(units_to_text(piece))
+            duration = max(w["end"] for w in piece) - piece[0]["start"]
+            if j > i + 1 and (width > limit + 8 or duration > config["max_duration"]):
+                break
+            score = (1.0 + max(0, 0.8 - duration) * 3 + max(0, 0.35 * limit - width) / limit
+                     + 8 * (max(0, width - limit) / limit) ** 2)
+            if j < n:
+                last = piece[-1]["text"].strip().lower().strip(".,;:!?，。！？")
+                if last in hanging or (last and last[-1] in "的地得把被与及"):
+                    score += 3
+                first_next = sentence[j]["text"].strip().lower().strip(".,;:!?，。！？")
+                if first_next == "of" or (last in {"break", "breaking", "broke"} and first_next == "down"):
+                    score += 3
+                if _unit_ends_clause(piece[-1]):
+                    score -= 0.6
+                score -= min(0.3, max(0, sentence[j]["start"] - piece[-1]["end"]))
+            if score + costs[j] < costs[i]:
+                costs[i], choices[i] = score + costs[j], j
+    out, cursor = [], 0
+    while cursor < n:
+        nxt = choices[cursor]
+        out.append(sentence[cursor:nxt])
+        cursor = nxt
+    return out
 
 
 def wrap_text(text: str, line_width: int) -> List[str]:
@@ -288,6 +243,8 @@ def normalize_word_spans(words: List[dict]) -> List[dict]:
     them are never dropped as degenerate."""
     fixed = []
     for word in words:
+        if not math.isfinite(word["start"]) or not math.isfinite(word["end"]) or word["end"] < word["start"]:
+            raise ValueError("Invalid word timestamps")
         if word["end"] <= word["start"]:
             fixed.append({**word, "end": word["start"] + MIN_WORD_DURATION})
         else:
@@ -312,49 +269,44 @@ def build_entries(words: List[dict], config: Optional[dict] = None) -> List[dict
                 continue
             entries.append({
                 "start": piece[0]["start"],
-                "end": piece[-1]["end"],
+                "end": max(w["end"] for w in piece),
                 "text": text,
-                "lines": wrap_text(text, cfg["line_width"])[: cfg["max_lines"]],
+                "lines": [" ".join(text.split())] if cfg["max_lines"] == 1 else wrap_text(text, cfg["line_width"]),
+                "speaker_id": piece[0].get("speaker_id"),
             })
     return entries
 
 
 def finalize_entries(entries: List[dict], duration: Optional[float]) -> Tuple[List[dict], List[str]]:
-    """Sort, drop empties, clamp to media duration, resolve overlaps.
+    """Resolve minor boundary errors without dropping/reordering any content.
 
-    Returns (entries, warnings). Small float-boundary errors are corrected and
-    recorded; structurally broken entries are dropped, never silently kept.
+    Invalid spans fail before publication. Coincident/contained cue spans are
+    merged, rather than assigning invented within-word timestamps.
     """
     warnings: List[str] = []
     cleaned = [e for e in entries if str(e.get("text", "")).strip()]
-    cleaned.sort(key=lambda e: (e["start"], e["end"]))
 
     result: List[dict] = []
     for entry in cleaned:
         start, end = float(entry["start"]), float(entry["end"])
-        if end <= start:
-            warnings.append(f"dropped zero-length caption '{entry['text'][:20]}' ({start:.3f})")
-            continue
+        if not math.isfinite(start) or not math.isfinite(end) or end <= start:
+            raise ValueError("Invalid caption span; content retained in inference cache")
         if duration is not None:
             if start >= duration:
-                warnings.append(f"dropped caption past media end '{entry['text'][:20]}'")
-                continue
+                raise ValueError("Caption starts beyond media duration")
             if end > duration:
                 if end - duration <= 0.06:
                     end = duration  # float boundary error at the media tail
                 else:
-                    warnings.append(
-                        f"clamped caption end {end:.3f} -> {duration:.3f} '{entry['text'][:20]}'"
-                    )
-                    end = duration
+                    raise ValueError("Caption ends beyond media duration by more than 60ms")
             start = max(0.0, min(start, duration))
         if result and start < result[-1]["end"]:
             prev = result[-1]
             overlap = prev["end"] - start
-            if overlap <= 0.5 and end > prev["end"]:
+            if overlap <= 0.08 and end > prev["end"]:
                 start = prev["end"]
                 warnings.append(f"shifted overlapping caption start by {overlap:.3f}s")
-            elif start > prev["start"]:
+            elif start > prev["start"] and overlap <= 0.08:
                 # The aligner stretched the previous entry (observed on
                 # English words inside Chinese speech) — truncate it instead
                 # of dropping this caption's content.
@@ -363,10 +315,16 @@ def finalize_entries(entries: List[dict], duration: Optional[float]) -> Tuple[Li
                     f"truncated previous caption end by {overlap:.3f}s to resolve overlap"
                 )
             else:
-                warnings.append(f"dropped overlapping caption '{entry['text'][:20]}'")
+                if overlap > 0.5:
+                    raise ValueError("Severe caption overlap; alignment must be checked")
+                if start < prev["start"] - 0.08:
+                    raise ValueError("Caption time order contradicts source text order")
+                merged = join_word_texts([prev["text"], entry["text"]])
+                result[-1] = {**prev, "end": max(prev["end"], end), "text": merged, "lines": [merged]}
+                warnings.append(f"merged overlapping captions ({overlap:.3f}s); no text dropped")
                 continue
         if end <= start:
-            continue
+            raise ValueError("Caption has no remaining display duration")
         entry = {**entry, "start": start, "end": end}
         result.append(entry)
     return result, warnings
@@ -396,7 +354,7 @@ def parse_timestamp(stamp: str) -> float:
 def entries_to_srt(entries: List[dict]) -> str:
     blocks = []
     for i, entry in enumerate(entries, 1):
-        lines = entry.get("lines") or wrap_text(entry["text"], DEFAULT_CONFIG["line_width"])
+        lines = entry.get("lines") or [" ".join(entry["text"].split())]
         blocks.append("\n".join([
             str(i),
             f"{format_timestamp(entry['start'])} --> {format_timestamp(entry['end'])}",
@@ -427,6 +385,8 @@ def validate_srt(text: str, duration: Optional[float] = None) -> List[str]:
     entries = parse_srt(text)
     if not entries:
         return ["SRT contains no parseable entries"]
+    if len(re.split(r"\n\s*\n", text.strip())) != len(entries):
+        issues.append("SRT contains malformed blocks")
     for expected, (index, start, end, body) in zip(range(1, len(entries) + 1), entries):
         if index != expected:
             issues.append(f"index {index} out of order (expected {expected})")

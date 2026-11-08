@@ -109,7 +109,7 @@ def to_wav16k_mono(src, dst, stream_index: Optional[int] = None) -> Path:
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(src)]
     if stream_index is not None:
         cmd += ["-map", f"0:{stream_index}"]
-    cmd += ["-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(dst)]
+    cmd += ["-vn", "-af", "aresample=async=1:first_pts=0", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(dst)]
     result = _run(cmd, timeout=1800)
     if result.returncode != 0 or not dst.is_file():
         raise MediaError(f"ffmpeg audio extraction failed: {result.stderr.strip()[:500]}")
@@ -198,3 +198,15 @@ def plan_chunks(
 
 def has_ffmpeg() -> bool:
     return shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
+
+
+def to_upload_audio(src, dst, stream_index=None):
+    """Audio-only AAC upload; preserve original timeline, select explicit stream."""
+    cmd = ["ffmpeg", "-v", "error", "-y", "-i", str(src)]
+    if stream_index is not None:
+        cmd += ["-map", f"0:{stream_index}"]
+    cmd += ["-vn", "-af", "aresample=async=1:first_pts=0", "-ac", "1", "-ar", "16000", "-c:a", "aac", "-b:a", "64k", str(dst)]
+    result = _run(cmd, timeout=1800)
+    if result.returncode:
+        raise MediaError("Audio extraction for upload failed: " + result.stderr[-500:])
+    return Path(dst)

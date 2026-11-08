@@ -53,6 +53,27 @@ def mlx_fakes(monkeypatch, tmp_path):
     return media_file
 
 
+@pytest.fixture(autouse=True)
+def session_contract(monkeypatch, tmp_path):
+    def session_factory(model):
+        module = sys.modules["mlx_qwen3_asr"]
+        class Session:
+            def transcribe(self, **kwargs):
+                kwargs.pop("forced_aligner", None)
+                return module.transcribe(model=model, **kwargs)
+        return Session()
+    original = QwenMLXBackend.transcribe
+    def transcribe(self, *args, **kwargs):
+        module = sys.modules["mlx_qwen3_asr"]
+        module.Session = session_factory
+        return original(self, *args, **kwargs)
+    monkeypatch.setattr(QwenMLXBackend, "transcribe", transcribe)
+    aligner = types.ModuleType("mlx_qwen3_asr.forced_aligner")
+    aligner.ForcedAligner = lambda: object()
+    monkeypatch.setitem(sys.modules, "mlx_qwen3_asr.forced_aligner", aligner)
+    monkeypatch.setattr(media, "to_wav16k_mono", lambda src, dst, stream_index=None: dst)
+
+
 def test_default_is_8bit_repo_never_tool_default(mlx_fakes):
     backend = QwenMLXBackend()
     result = backend.transcribe(str(mlx_fakes), language="auto")
@@ -130,7 +151,7 @@ def test_progress_passthrough(monkeypatch, mlx_fakes):
     def transcribe(audio, model=None, language=None, return_timestamps=False,
                    return_chunks=False, on_progress=None, verbose=False, **extra):
         if on_progress:
-            on_progress(0.5, 6.2, 12.4)
+            on_progress({"event": "chunk_completed", "progress": 0.5, "processed_audio_sec": 6.2})
         return SimpleNamespace(text="ok", language="Chinese",
                                words=[SimpleNamespace(text="ok", start=0.0, end=1.0)])
 

@@ -1,131 +1,86 @@
 ---
 name: audio-transcribe
 description: >
-  音频/视频转写工具：先检测环境，再由用户选择 Qwen3-ASR-1.7B 本地转写（推荐，Mac 用 MLX /
-  Windows 用 PyTorch CUDA）或 ElevenLabs Scribe V2 在线转写，统一输出 TXT / JSON / SRT。
-  当用户要转录、转文字、提取字幕、语音识别、音频转文字、视频转字幕、录音转文字、
-  语音转文字、转写、听写、把视频变成文字稿、transcribe、speech to text 时触发。
-  支持单个或批量文件（WAV/MP3/M4A/FLAC/MP4/MOV），Qwen 路线用 ForcedAligner
-  获得真实词级时间戳，SRT 分句符合字幕规范（≤2 行、中文 ≤20 字/行、单条 ≤6 秒）。
-
+  将音频或视频忠实转录为原语言字幕或文字稿。用户选择 Qwen3-ASR-1.7B 本地
+  （Apple Silicon 用 MLX、Windows 用官方 PyTorch）或 ElevenLabs Scribe V2 在线，
+  支持标准单行 SRT、带时间码 Markdown、无时间码且分段的 Markdown。适用于转录、
+  提取字幕、录音转文字、视频转字幕及 speech to text；不负责翻译或配音。
 ---
 
 # Audio Transcribe
 
-两条路线，一次选择，统一产物（TXT + JSON + SRT）：
+忠于原声，不翻译、不摘要、不补写、不根据常识修正专有名词，不默认转换繁简。
+时间戳来自模型对齐估计；格式校验通过不代表已逐句听辨或逐帧核实。
 
-| 路线 | 模型 | 运行方式 |
-| --- | --- | --- |
-| **qwen（本地，推荐）** | Qwen3-ASR-1.7B + ForcedAligner-0.6B | Mac: mlx-qwen3-asr / Windows: 官方 qwen-asr + PyTorch CUDA |
-| **scribe（在线）** | ElevenLabs scribe_v2 | 上传音频，需 `ELEVENLABS_API_KEY`，按量计费 |
+## 交互与执行
 
-## Agent 使用流程
+**每次需要用户作选择，都必须使用 AskUserQuestion 控件**（Codex 中用等价的用户输入控件），
+包括路线、交付格式、切换后端、音轨歧义和失败后的替代方案。不能在普通消息里列选项代替控件。
+已明确的偏好和本次授权继续生效，不重复询问。没有控件时说明能力缺失，等待用户明确指令。
 
-### 1. 检测环境（只读，不安装）
-
-```bash
-python ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/run.py --detect-env
-# Windows 写法：python ${CLAUDE_PLUGIN_ROOT}\skills\audio-transcribe\run.py --detect-env
-```
-
-向用户转述第一行（如"检测到当前环境为 Windows，AMD64，本地 Qwen 路线状态：ready"）。
-带 `--provider qwen|scribe` 会追加该路线的深度探测。
-
-### 2. 询问转写方式（用户未明确指定时）
-
-**必须先问，不得默认采用"推荐"，也不得自动走在线上传。** 用 AskUserQuestion：
-
-```text
-AskUserQuestion({
-  questions: [{
-    question: "请选择转写方式：",
-    header: "转写方式",
-    multiSelect: false,
-    options: [
-      {"label": "Qwen3-ASR-1.7B（推荐）", "description": "本地转写。<按环境填一句：Mac 用 MLX 8bit / Windows 检测到 CUDA 加速 / 无 CUDA 时注明 CPU 慢速>。首次使用需下载模型（约 2.5-4GB）"},
-      {"label": "Scribe V2（在线）", "description": "将音频上传至 ElevenLabs 转写，需要 API 凭证，按用量计费"}
-    ]
-  }]
-})
-```
-
-规则（务必遵守）：
-
-- 用户已明确指定方式（如"用本地"/"用 scribe 转录"）→ 不再询问
-- 本地路线不受支持（Intel Mac / Windows ARM）→ 在选项 description 中注明限制，不能标为可用
-- 同一批任务复用本次选择；用户选择本地失败后**不自动切在线**，切换需用户重新明确选择
-- 只准备所选路线的依赖：选 scribe 不安装/检查 PyTorch、MLX；选本地不要求 ElevenLabs 凭证
-- 询问只有上面两个选项，不把 8bit/bf16/6bit 作为普通用户选项
-
-### 3. 执行转写
+1. 只读检测系统和媒体，不安装未选后端的依赖：
+   `python <skill目录>/run.py --detect-env`。
+   告知检测到的系统；Apple Silicon 推荐 MLX，Windows 推荐实际可用的 CUDA。
+   Intel Mac / Rosetta 不支持 MLX；Windows ARM、WSL 属于待验证环境。
+2. 路线未明确时，用 AskUserQuestion 选择：
+   - **Qwen3-ASR-1.7B 本地（推荐）**：Mac 用 MLX／Metal，Windows 用官方 qwen-asr／PyTorch；首次准备独立环境并下载模型。无 CUDA 时注明 CPU 会慢。
+   - **Scribe V2 在线**：上传音频至 ElevenLabs，需 API key，按账号费率计费。
+   选择本地不授权在线上传，失败不得自动换后端；普通选择不展开量化精度。
+3. 格式未明确时，用 AskUserQuestion 多选：
+   - **标准 SRT（推荐）**：每条正文一行。
+   - **带时间码 Markdown**：按段落标记真实起止时间。
+   - **无时间码 Markdown**：保留原文，按标点、停顿和合理段长分段。
+   用户明确“只要 SRT”后直接执行，不能默认多交付 TXT／JSON。
+4. 执行所选路线和格式，同批任务复用选择：
 
 ```bash
-# Mac
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/run.py <输入...> --provider qwen
-# Windows
-python ${CLAUDE_PLUGIN_ROOT}\skills\audio-transcribe\run.py <输入...> --provider scribe --language zh
+python <skill目录>/run.py "输入视频.mp4" --provider qwen --formats srt
+python <skill目录>/run.py "录音.m4a" --provider scribe --formats md-timed,md --language zh
+python <skill目录>/run.py "a.mp4" "b.mp4" --provider qwen --formats srt --output "输出目录"
 ```
 
-`run.py` 按所选路线寻找/准备解释器（首次会安装依赖，打印实际使用的 Python），
-然后调用 `skill_main.py`。阶段输出：`[环境检查] [准备] [转写] [对齐] [导出] [校验]`。
+5. 汇报实际产物链接、模型／后端、媒体时长、总耗时和影响结果的警告。区分完整成功、
+   部分交付、无语音与失败；未生成所选格式不能描述为全部完成。
+   不把程序结构检查说成识别准确率或翻译质量审核。
 
-### 4. 汇报
+## 参数与交付
 
-最终输出包含每个文件的：产物路径、provider/模型/后端、媒体时长与总耗时、
-警告（如对齐失败 → partial，SRT 未产出）。把这些转述给用户；
-部分失败时明确哪些产物可用。
+| 参数 | 约定 |
+| --- | --- |
+| `--provider` | 必填：`qwen` 或 `scribe`；不自动选择在线 |
+| `--formats` | `srt,md-timed,md` 可组合；CLI 默认仅 `srt`。`txt,json` 仅兼容高级显式请求 |
+| `--language / -l` | 默认 `auto`，可 `en/zh/ja/...`；混合语音用 auto，不翻译 |
+| `--output / -o` | 输出目录，默认素材同目录；只写所选成品 |
+| `--audio-track` | ffprobe 的实际 stream index；默认第一条音轨。用户语种/声道意图有歧义时用控件选 |
+| `--device` | Windows/Torch：auto、cpu、cuda:0；无 CUDA 为 FP32 慢速兼容路线 |
+| `--precision` | Mac 高级选项 8bit（默认）、bf16、6bit；识别模型始终 1.7B |
+| `--diarize` | Scribe 可选说话人分离，不默认开启；可能影响费用 |
+| `--detect-env` | 只读检测，不安装；指定 qwen 时优先检查已有专属解释器 |
+| `--no-progress` | 关闭动态进度行，仍报告阶段 |
 
-## 参数
+- `<stem>.srt`：UTF-8 无 BOM，序号连续，`HH:MM:SS,mmm`，正文单行，时间合法且不重叠。
+- `<stem>.timed.md`：每个自然段带开始／结束时间。
+- `<stem>.md`：无时间码文字稿，不增加总结或小标题。
+- 同名任一相关产物已存在时，整组递增为 `<stem>_2`、`<stem>_3`；不会覆盖已有文件。
+- 单行字幕按标点、词组、停顿与实际时间单位拆分，目标显示宽度 42（约 21 汉字）、时长 6 秒。
+  缺少更细时间依据时允许超宽并告警，不能截字或按字数伪造词级时间。
+- 候选在发布前校验时序、毫秒舍入和原始转写的文字覆盖。严重对齐冲突拒绝发布时间格式；
+  无时间 MD 仍可交付。仅交付用户所选格式，不自动追加其他文件。
+- 退出码：0 完成（无语音会明确报告）、1 执行失败、2 参数错误、3 部分交付、130 用户取消。
 
-| 参数 | 说明 | 默认值 |
-| --- | --- | --- |
-| `input` | 一个或多个音视频文件（wav/mp3/m4a/flac/mp4/mov…） | 必需 |
-| `--provider` | `qwen`（别名 local/qwen-local）或 `scribe`（别名 elevenlabs/online） | **必填**；缺失时退出码 2 |
-| `--language, -l` | auto / zh / en / ja / ko 等；中英混合用 auto | auto |
-| `--formats` | 逗号分隔：txt,json,srt | 三件套全出 |
-| `--output, -o` | 输出目录 | 与输入同目录 |
-| `--device` | auto / cpu / cuda:0（qwen Windows 路线） | auto |
-| `--precision` | 8bit / bf16 / 6bit（**仅 Mac**，高级选项） | 8bit |
-| `--diarize` | 说话人分离（仅 scribe，可能计费上浮） | 关 |
-| `--audio-track` | 多音轨时指定音轨序号 | 主音轨 |
-| `--no-progress` | 关闭进度行 | 进度开启 |
+## 环境、缓存与排障
 
-## 输出
+`run.py` 仅在应用缓存中的专属 venv 安装固定版本；不修改系统 Python，不自动安装驱动。
+Scribe 使用标准库，不安装 MLX／Torch。首次下载耗时应与常规推理耗时区分。
+素材目录不创建工作文件夹；成功清理临时音频，原始结果缓存供重新导出复用。
+缓存包含源内容摘要、音轨、模型版本、语言及推理参数。失败保留内部进度：
+Torch 可恢复已完成分块；MLX 仅完整结果可复用，中断的推理需重跑，不能承诺分块续传。
 
-每个输入在同目录产出同名三件套（原子写入，UTF-8 无 BOM）：
+按实际路线读取，勿一次加载全部：
 
-- `<stem>.txt` — 纯文本，按停顿分段
-- `<stem>.json` — 统一 schema（provider/model/revision/dtype/language/words/segments/warnings）
-- `<stem>.srt` — 标准 SRT：1..N 序号、`HH:MM:SS,mmm`、≤2 行、中文 ≤20 字/行（英文 ≤42 字符）、单条 ≤6 秒、时间轴以媒体 0 秒为原点、不重叠
+- [Mac MLX](references/mac-mlx.md)：环境、模型和真实 API 契约。
+- [Windows Torch](references/windows-torch.md)：CUDA／CPU、版本与恢复边界。
+- [Scribe V2](references/scribe.md)：凭证、音频上传和避免重复计费。
 
-对齐失败时状态为 **partial**：TXT/JSON 保留，SRT 不产出（绝不伪造时间轴）。
-无语音时返回 no_speech + 空转写。长音频自动静音吸附分块（≤290s/块，低于对齐器 5 分钟上限），
-中断后重新运行会复用已完成分块缓存。
-
-## 行为变化（相对旧版）
-
-- **Whisper 后端已移除**（MLX-Whisper / Faster-Whisper 及 `--model/--format/--keep-timestamps/--keep-context`、MD 输出不再存在）。需要 Whisper 时请显式说明，本 skill 不再提供。
-- `--provider` 必填；产物从单文件变为 TXT+JSON+SRT 三件套；SRT 分句显著变细。
-- 下游 `video-tts` 兼容性不变（仍消费标准 SRT）；
-  但 SRT 分句已较细，配音前通常**不再需要** text-refine 断句（校准错别字仍可用）。
-
-## 平台细节与排障（按需读取，勿在对话中展开）
-
-- Mac / Apple Silicon：安装、8bit/bf16/6bit 权重表、dtype 说明 → [references/mac-mlx.md](references/mac-mlx.md)
-- Windows / CUDA / CPU 模式 / WSL → [references/windows-torch.md](references/windows-torch.md)
-- Scribe 凭证、参数、重试与计费 → [references/scribe.md](references/scribe.md)
-
-## 与其它 skill 串联
-
-```text
-video-downloader → audio-transcribe → text-refine（可选校对/翻译）→ video-tts
-```
-
-## 示例
-
-```text
-用户: 转录这个视频 video.mp4
-用户: 把这三个视频都转成字幕（本地）
-用户: 用 scribe 在线转写 meeting.m4a，中文
-用户: --detect-env 看下我这台机器能不能跑本地
-```
+本 skill 不提供时间范围转录，不向 text-refine 增加词级时间接口。
+需要翻译、润色时另行调用 text-refine；本阶段保留原声表达。

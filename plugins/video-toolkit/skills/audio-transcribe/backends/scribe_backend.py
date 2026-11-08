@@ -15,6 +15,7 @@ import json
 import os
 import time
 import uuid
+from http.client import HTTPException
 from pathlib import Path
 from typing import Callable, Optional
 from urllib import request as urlrequest
@@ -38,7 +39,21 @@ class ScribeError(Exception):
         self.kind = kind  # auth | param | network | rate_limit | server | submission_unknown
 
 
-def _multipart(fields: dict, file_field: str, file_path: Path, boundary: str) -> bytes:
+class MultipartBody:
+    """Replayable, bounded-memory HTTP iterable with an explicit Content-Length."""
+    def __init__(self, prefix, file_path, suffix):
+        self.prefix, self.path, self.suffix = prefix, file_path, suffix
+        self.length = len(prefix) + file_path.stat().st_size + len(suffix)
+
+    def __iter__(self):
+        yield self.prefix
+        with self.path.open("rb") as f:
+            for block in iter(lambda: f.read(256 * 1024), b""):
+                yield block
+        yield self.suffix
+
+
+def _multipart(fields: dict, file_field: str, file_path: Path, boundary: str):
     parts = []
     for name, value in fields.items():
         parts.append(
@@ -57,14 +72,13 @@ def _multipart(fields: dict, file_field: str, file_path: Path, boundary: str) ->
         f"--{boundary}\r\nContent-Disposition: form-data; name=\"{file_field}\"; filename=\"{filename}\"\r\n"
         f"Content-Type: {mime}\r\n\r\n".encode("utf-8")
     )
-    parts.append(file_path.read_bytes())
-    parts.append(f"\r\n--{boundary}--\r\n".encode("utf-8"))
-    return b"".join(parts)
+    return MultipartBody(b"".join(parts), file_path, f"\r\n--{boundary}--\r\n".encode("utf-8"))
 
 
 class ScribeBackend:
     provider = "scribe"
     backend = "http"
+    model_id = MODEL_ID
 
     def __init__(self, api_url: str = API_URL, sleeper=time.sleep):
         self._api_url = api_url
@@ -87,6 +101,7 @@ class ScribeBackend:
         body = _multipart(fields, "file", file_path, boundary)
         req = urlrequest.Request(self._api_url, data=body, method="POST")
         req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+        req.add_header("Content-Length", str(body.length))
         req.add_header("xi-api-key", os.environ["ELEVENLABS_API_KEY"])
         return req
 
@@ -100,7 +115,11 @@ class ScribeBackend:
             req = self._build_request(file_path, fields)
             try:
                 with urlrequest.urlopen(req, timeout=REQUEST_TIMEOUT) as response:
-                    return json.loads(response.read().decode("utf-8"))
+                    data = json.loads(response.read().decode("utf-8"))
+                    if not isinstance(data, dict) or not isinstance(data.get("text"), str):
+                        raise ScribeError("Invalid successful response; processing state unknown; not re-uploading automatically",
+                                          kind="submission_unknown")
+                    return data
             except HTTPError as exc:
                 # The key must never leak into messages/logs.
                 if exc.code in (401, 403):
@@ -109,15 +128,13 @@ class ScribeBackend:
                         "Check ELEVENLABS_API_KEY — the key itself is not printed here.",
                         kind="auth",
                     ) from exc
-                if exc.code in (400, 422):
-                    detail = ""
-                    try:
-                        detail = exc.read().decode("utf-8", errors="replace")[:300]
-                    except Exception:
-                        pass
-                    raise ScribeError(f"ElevenLabs rejected the request (HTTP {exc.code}): {detail}", kind="param") from exc
+                if 400 <= exc.code < 500 and exc.code != 429:
+                    raise ScribeError(f"ElevenLabs rejected the request (HTTP {exc.code})", kind="param") from exc
+                if exc.code != 429:
+                    raise ScribeError(f"HTTP {exc.code}: processing state unknown; not re-uploading automatically",
+                                      kind="submission_unknown") from exc
                 last_error = ScribeError(
-                    f"ElevenLabs server error (HTTP {exc.code}), attempt {attempt}/{MAX_ATTEMPTS}", kind="server"
+                    f"ElevenLabs rate limit (HTTP {exc.code}), attempt {attempt}/{MAX_ATTEMPTS}", kind="rate_limit"
                 )
             except URLError as exc:
                 if isinstance(getattr(exc, "reason", None), TimeoutError) or "timed out" in str(exc).lower():
@@ -127,12 +144,11 @@ class ScribeBackend:
                         "before retrying (a retried upload bills again).",
                         kind="submission_unknown",
                     ) from exc
-                last_error = ScribeError(
-                    f"Connection to ElevenLabs failed ({exc.reason}), attempt {attempt}/{MAX_ATTEMPTS}",
-                    kind="network",
-                )
-            except json.JSONDecodeError as exc:
-                last_error = ScribeError(f"ElevenLabs returned unparsable JSON: {exc}", kind="server")
+                raise ScribeError("Connection interrupted; processing state unknown; not re-uploading automatically",
+                                  kind="submission_unknown") from exc
+            except (TimeoutError, ConnectionError, OSError, HTTPException, json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise ScribeError("Response unavailable or invalid; processing state unknown; not re-uploading automatically",
+                                  kind="submission_unknown") from exc
 
             if attempt < MAX_ATTEMPTS:
                 on_stage(f"请求失败，{BACKOFF_SECONDS[attempt - 1]:.0f}s 后重试（{attempt}/{MAX_ATTEMPTS}）")
@@ -161,6 +177,10 @@ class ScribeBackend:
 
         import media as media_mod
         info = options.get("media_info") or media_mod.probe_media(media_path)
+        from job_cache import job_directory
+        work_dir = Path(options["work_dir"]) if options.get("work_dir") else job_directory(media_path, self, language, options) / "work"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        upload = media_mod.to_upload_audio(media_path, work_dir / "selected.m4a", options.get("audio_track"))
 
         fields = {
             "model_id": MODEL_ID,                      # scribe_v2 only, no realtime
@@ -174,7 +194,7 @@ class ScribeBackend:
 
         on_stage(f"上传并转写（Scribe V2 在线，{media_path.name}）")
         t0 = time.monotonic()
-        data = self._post(media_path, fields, on_stage)
+        data = self._post(upload, fields, on_stage)
         elapsed = time.monotonic() - t0
         on_stage(f"在线转写完成（{elapsed:.1f}s）")
 

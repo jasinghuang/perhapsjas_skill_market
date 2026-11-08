@@ -40,7 +40,7 @@ class FakeBackend:
 
 @pytest.fixture
 def fast_env(monkeypatch):
-    monkeypatch.setattr(env_check, "detect_environment", lambda python=None: {
+    monkeypatch.setattr(env_check, "detect_environment", lambda python=None, check_local=False: {
         "os": "Windows", "architecture": "AMD64", "python_version": "3.14.0",
         "python_architecture": "64bit", "is_wsl": False, "is_rosetta": False,
         "ffmpeg_available": True, "ffprobe_available": True,
@@ -109,7 +109,7 @@ def test_detect_env_with_provider_probes(monkeypatch, fast_env, capsys):
 
 def test_trio_outputs_written_and_valid(monkeypatch, fast_env, media_file, tmp_path, capsys):
     patch_backend(monkeypatch, FakeBackend())
-    code = skill_main.main([str(media_file), "--provider", "scribe", "--output", str(tmp_path)])
+    code = skill_main.main([str(media_file), "--provider", "scribe", "--formats", "txt,json,srt", "--output", str(tmp_path)])
     assert code == 0
     txt = tmp_path / "视频 sample.txt"
     jsn = tmp_path / "视频 sample.json"
@@ -139,7 +139,7 @@ def test_formats_subset_srt_only(monkeypatch, fast_env, media_file, tmp_path):
 
 
 def test_invalid_format_rejected(capsys):
-    assert skill_main.main(["x.wav", "--provider", "qwen", "--formats", "md"]) == 2
+    assert skill_main.main(["x.wav", "--provider", "qwen", "--formats", "docx"]) == 2
 
 
 def test_partial_alignment_skips_srt(monkeypatch, fast_env, media_file, tmp_path, capsys):
@@ -156,8 +156,8 @@ def test_partial_alignment_skips_srt(monkeypatch, fast_env, media_file, tmp_path
 
     backend.transcribe = transcribe
     patch_backend(monkeypatch, backend)
-    code = skill_main.main([str(media_file), "--provider", "scribe", "--output", str(tmp_path)])
-    assert code == 0  # partial is a recognizable outcome, not a crash
+    code = skill_main.main([str(media_file), "--provider", "scribe", "--formats", "txt,json,srt", "--output", str(tmp_path)])
+    assert code == 3  # incomplete requested deliverables have a distinct exit status
     assert (tmp_path / "视频 sample.txt").is_file()
     assert (tmp_path / "视频 sample.json").is_file()
     assert not (tmp_path / "视频 sample.srt").exists()
@@ -177,7 +177,7 @@ def test_no_speech_keeps_txt_json_without_fake_srt(monkeypatch, fast_env, media_
 
     backend.transcribe = transcribe
     patch_backend(monkeypatch, backend)
-    code = skill_main.main([str(media_file), "--provider", "scribe", "--output", str(tmp_path)])
+    code = skill_main.main([str(media_file), "--provider", "scribe", "--formats", "txt,json,srt", "--output", str(tmp_path)])
     assert code == 0
     assert (tmp_path / "视频 sample.txt").read_text(encoding="utf-8") == ""
     assert not (tmp_path / "视频 sample.srt").exists()
@@ -272,4 +272,4 @@ def test_same_stem_inputs_do_not_overwrite(monkeypatch, fast_env, tmp_path):
     code = skill_main.main([str(f1), str(f2), "--provider", "scribe", "--output", str(out)])
     assert code == 0
     assert (out / "sample.srt").is_file()
-    assert (out / "sample-2.srt").is_file()  # second same-stem input gets a suffix
+    assert (out / "sample_2.srt").is_file()  # second same-stem input gets a suffix

@@ -39,8 +39,10 @@ def _torch_cuda_ok(python: Optional[str] = None) -> Optional[bool]:
     """None = torch not importable; True/False = CUDA usable or not."""
     exe = python or sys.executable
     code = (
-        "import torch;"
-        "print('1' if torch.cuda.is_available() and torch.version.cuda else '0')"
+        "import torch\n"
+        "ok = bool(torch.version.cuda and torch.cuda.is_available())\n"
+        "if ok: (torch.ones(8, device='cuda') * 2).sum().item()\n"
+        "print('1' if ok else '0')"
     )
     try:
         result = subprocess.run(
@@ -145,7 +147,7 @@ def _local_support_status(system: str, machine: str, python: Optional[str] = Non
     return "unverified"
 
 
-def detect_environment(python: Optional[str] = None) -> dict:
+def detect_environment(python: Optional[str] = None, check_local: bool = False) -> dict:
     system = platform.system()
     machine = platform.machine()
     memory = _available_memory()
@@ -153,6 +155,7 @@ def detect_environment(python: Optional[str] = None) -> dict:
         "os": system,
         "architecture": machine,
         "python_version": platform.python_version(),
+        "python_executable": python or sys.executable,
         "python_architecture": platform.architecture()[0],
         "is_wsl": _is_wsl(),
         "is_rosetta": _is_rosetta(),
@@ -160,7 +163,8 @@ def detect_environment(python: Optional[str] = None) -> dict:
         "ffprobe_available": shutil.which("ffprobe") is not None,
         "available_memory_gb": memory if memory is not None else "unknown",
         "free_disk_gb": _free_disk_gb(),
-        "local_support_status": _local_support_status(system, machine, python),
+        "local_support_status": _local_support_status(system, machine, python) if check_local else (
+            "unsupported" if system == "Darwin" and machine != "arm64" else "not_checked"),
     }
 
 

@@ -6,6 +6,7 @@ we never fabricate confidence, speakers or timestamps.
 """
 
 import uuid
+import math
 from typing import List, Optional
 
 SCHEMA_VERSION = 1
@@ -63,11 +64,14 @@ def _check_time_units(units: List[dict], label: str, issues: List[str]) -> None:
     previous_end = None
     for i, unit in enumerate(units):
         start, end = unit.get("start"), unit.get("end")
-        if not isinstance(start, (int, float)) or not isinstance(end, (int, float)):
+        if (not isinstance(start, (int, float)) or not isinstance(end, (int, float))
+                or not math.isfinite(start) or not math.isfinite(end)):
             issues.append(f"{label}[{i}] has non-numeric times")
             continue
         if end < start:
             issues.append(f"{label}[{i}] ends before it starts ({start:.3f} > {end:.3f})")
+        if start < 0:
+            issues.append(f"{label}[{i}] starts before media begins")
         if previous_end is not None and start < previous_end - 1e-6:
             issues.append(f"{label}[{i}] starts before the previous unit ends")
         previous_end = end

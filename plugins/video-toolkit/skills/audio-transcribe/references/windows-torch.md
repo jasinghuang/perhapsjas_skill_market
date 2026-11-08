@@ -1,73 +1,32 @@
-# Windows / Linux — PyTorch 本地路线（官方 qwen-asr）
+# Windows：官方 qwen-asr／PyTorch
 
-识别模型固定 `Qwen/Qwen3-ASR-1.7B`，对齐模型 `Qwen/Qwen3-ForcedAligner-0.6B`
-（词级时间戳，单次 ≤ 约 5 分钟 → 适配器按 ≤290s 静音吸附分块）。
-首版不依赖 vLLM、FlashAttention、torch.compile。官方未明示 Windows 支持承诺，
-因此本路线以实机验收为准。
+识别固定 `Qwen/Qwen3-ASR-1.7B`，对齐固定 `Qwen/Qwen3-ForcedAligner-0.6B`。
+使用 Transformers 路线，不需要 vLLM、FlashAttention 或完整 CUDA Toolkit。
 
-## CUDA 检查（选定本地后自动执行）
+## 独立环境
 
-1. 锁定版本 PyTorch 可导入
-2. PyTorch 是否 CUDA 构建（`torch.version.cuda`）
-3. `torch.cuda.is_available()`
-4. GPU 型号 / 计算能力 / 显存
-5. 小型 GPU 张量运算冒烟
-6. 识别 + 对齐模型加载与短音频冒烟（首次真实转写时）
+`run.py` 创建应用缓存下 `video-toolkit/envs/audio-transcribe-torch-v2`，
+通过 uv 优先使用 Python 3.12；没有 uv 时选兼容的 Python 创建标准 venv。
+本轮直接依赖固定 `qwen-asr==0.0.6`、`torch==2.10.0`、`torchaudio==2.10.0`。
+这是新启动器的安装组合；本轮在 Mac 修改并做离线逻辑回归，**尚未在原生 Windows 重做实机验收**。
+仓库此前 Windows 测试属于历史不同环境记录，不能等同本轮新安装组合已验证。
 
-nvidia-smi 只是诊断信息，不单独作为成功条件。计算精度：CUDA + 算力 ≥8 → BF16；
-CUDA + 老卡 → FP16；无 CUDA → FP32（慢速兼容模式）。
+有 NVIDIA GPU 时默认从 `https://download.pytorch.org/whl/cu130` 安装，
+可用 `AUDIO_TRANSCRIBE_TORCH_INDEX` 指定兼容索引；无 NVIDIA 时用 CPU 索引。
+若驱动不支持所选构建，明确报告，由用户选继续兼容路线或调整环境，不自动修改驱动。
+安装失败不修改全局 Python，可在专属环境重试；需要 uv 或已有兼容 Python。
 
-## 安装
+## CUDA、CPU 与时间轴
 
-通过 `run.py` 自动进行；手动等价命令：
+nvidia-smi 仅用于安装候选选择；实际就绪需检查 torch 导入、CUDA 构建、
+`torch.cuda.is_available()`、GPU 属性和小型 CUDA 张量运算，模型加载仍可能显存不足。
+GPU 算力 >=8 使用 BF16，否则 FP16；`--device cpu` 使用 FP32，显著较慢。
+不要把仅有 CPU wheel 当成 CUDA 可用，也不因 qwen_asr 可导入就跳过 CUDA 构建检查。
 
-```powershell
-# 有 NVIDIA GPU（驱动 ≥ 580，CUDA 13 路线）：
-python -m pip install torch --index-url https://download.pytorch.org/whl/cu130
-python -m pip install qwen-asr zhconv
+长音频先提取指定音轨为 16kHz 单声道 WAV，按静音切成目标 240 秒、上限 290 秒的块，
+调用官方 `return_time_stamps=True`，实际对齐单位转换为原媒体时间。
+对齐失败保留原始识别文字，返回 partial；时间格式不伪造时间轴，无时间 MD 可交付。
 
-# 老驱动可换索引：set AUDIO_TRANSCRIBE_TORCH_INDEX=cu128 （或 cu126）
-# 无 NVIDIA GPU：
-python -m pip install qwen-asr zhconv   # 带入 CPU 版 torch
-```
-
-PyPI 默认的 Windows torch wheel 是 CPU 构建，有 NVIDIA GPU 必须显式用 CUDA 索引。
-本项目默认 cu130，可用环境变量 `AUDIO_TRANSCRIBE_TORCH_INDEX` 覆盖。
-不需要完整 CUDA Toolkit，除非自行编译。应用不安装/修改显卡驱动——缺驱动时按
-[NVIDIA 官网](https://www.nvidia.com/drivers) 更新后重试。
-
-## CPU 模式（无 CUDA）
-
-FP32 慢速兼容路径。**已于 2026-11-08 通过中文+英文短样本（各 10s）端到端验证**
-（识别→对齐→TXT/JSON/SRT 全链路，RTF ≈ 2-4x，即比 CUDA 慢一个数量级）。
-长音频（>30 分钟）在 CPU 上可能需要数小时，建议改用 Scribe。
-用户选择本地但探测到无 CUDA 时，应提示"CPU 可能显著较慢"，由用户决定
-继续 `--device cpu` 还是改选 Scribe。显存/内存不足时先降块长，仍失败则报告
-具体错误与替代方案——不自动换模型、不自动换 provider。
-
-## WSL
-
-WSL 被单独识别为 Linux 环境（`--detect-env` 标 `is_wsl: true`），可复用 PyTorch
-路线，但属于扩展验证：WSL 下的通过结果不能当作原生 Windows 验收。
-
-## Python 版本注意
-
-torch 的 Windows wheel 对最新 Python 版本支持有滞后。若 `run.py` 报"装完仍 import
-失败"，安装一个已受支持的 Python（如 3.12/3.13）后重试——`run.py` 会扫描本机全部
-解释器。本机验证环境：Windows 11 + RTX 4070 Ti + 驱动 610.88 + Python 3.14 + torch cu130。
-
-## 排障
-
-- **`Could not locate cudnn` / CUDA 加载失败**：升级 NVIDIA 驱动；确认装的是 CUDA 索引
-  的 torch（`python -c "import torch;print(torch.version.cuda)"` 应输出如 `13.0`）。
-- **显存不足（12GB 卡同时跑其他 GPU 应用）**：关闭其他 GPU 程序；适配器已按需顺序
-  加载识别与对齐模型。
-- **长音频中断**：直接重跑同一命令，已完成分块缓存（`<输出目录>/.<stem>.chunks/`）
-  会按"输入+模型+语言+参数指纹"匹配复用，不重复计算。
-
-## 验收状态
-
-| 场景 | 状态 |
-| --- | --- |
-| P04 原生 NVIDIA：CUDA 实际执行 + 识别/对齐/导出 | **已实机验收**（RTX 4070 Ti / 驱动 610.88 / torch 2.14.1+cu130 / BF16；中/英/混合/32.5min 长样本全通过，见交付说明） |
-| P05 无 CUDA：正确报告状态；CPU 全链路 | **短样本已验证**（zh+en 各 10s 全链路）；长音频 CPU 未实测 |
+工作目录在应用缓存，不在素材旁；已完成块使用源内容／音轨／模型／语言等指纹和原子 JSON 写入。
+重跑可复用已完成块，但预处理和模型加载仍可能需要时间。完整结果可直接重新导出。
+WSL 标识为 Linux 扩展路线，其成功不代表原生 Windows 成功；Windows ARM 仍需实机验证。

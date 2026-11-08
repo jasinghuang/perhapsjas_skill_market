@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 from results import build_result, make_word
-from subtitles import attach_punctuation, join_word_texts
+from subtitles import join_word_texts
 
 ASR_MODEL_ID = "Qwen/Qwen3-ASR-1.7B"
 ALIGNER_MODEL_ID = "Qwen/Qwen3-ForcedAligner-0.6B"
@@ -44,17 +44,16 @@ def _field(obj, *names, default=None):
 
 def cached_revision(model_id: str) -> Optional[str]:
     """Resolve the model revision from the local HF cache (no network)."""
-    repo_dir = Path.home() / ".cache" / "huggingface" / "hub" / f"models--{model_id.replace('/', '--')}"
-    snapshots = repo_dir / "snapshots"
-    if not snapshots.is_dir():
-        return None
-    entries = [p for p in snapshots.iterdir() if p.is_dir()]
-    return entries[0].name if entries else None
+    import os
+    hub = Path(os.environ.get("HF_HUB_CACHE", Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface")) / "hub"))
+    ref = hub / f"models--{model_id.replace('/', '--')}" / "refs" / "main"
+    return ref.read_text().strip() if ref.is_file() else None
 
 
 class QwenTorchBackend:
     provider = "qwen"
     backend = "torch"
+    model_id = ASR_MODEL_ID
 
     def __init__(self, device: str = "auto", chunk_target: float = CHUNK_TARGET):
         self._requested_device = device
@@ -81,6 +80,10 @@ class QwenTorchBackend:
             return {"provider": "qwen", "route": "torch", "status": "needs_setup",
                     "checks": checks + [f"import qwen_asr failed: {exc}"]}
 
+        if self._requested_device == "cpu":
+            return {"provider": "qwen", "route": "torch", "status": "ready",
+                    "checks": checks + ["CPU FP32 explicitly selected; slow compatibility mode"]}
+
         cuda_build = bool(getattr(torch.version, "cuda", None))  # step 2
         available = False
         if cuda_build:
@@ -90,14 +93,15 @@ class QwenTorchBackend:
         )
 
         if cuda_build and available:
-            props = torch.cuda.get_device_properties(0)  # step 4
+            selected_device = self._requested_device if self._requested_device.startswith("cuda") else "cuda:0"
+            props = torch.cuda.get_device_properties(torch.device(selected_device))  # step 4
             vram_gb = props.total_memory / 1024 ** 3
             checks.append(
                 f"GPU: {props.name}, compute capability {props.major}.{props.minor}, "
                 f"VRAM {vram_gb:.1f} GB"
             )
             try:
-                (torch.ones(8, device="cuda") * 2).sum().item()  # step 5: tiny op
+                (torch.ones(8, device=selected_device) * 2).sum().item()  # step 5: tiny op
                 checks.append("GPU smoke tensor op: ok")
             except Exception as exc:
                 return {"provider": "qwen", "route": "torch", "status": "needs_setup",
@@ -105,11 +109,11 @@ class QwenTorchBackend:
             return {"provider": "qwen", "route": "torch", "status": "ready",
                     "device": f"{props.name} (CUDA)", "checks": checks}
 
-        checks.append(
-            "CUDA unavailable — CPU FP32 mode is a slow compatibility path and is "
-            "only opened after end-to-end validation (currently unverified)"
-        )
-        return {"provider": "qwen", "route": "torch", "status": "unverified", "checks": checks}
+        if self._requested_device.startswith("cuda"):
+            return {"provider": "qwen", "route": "torch", "status": "needs_setup",
+                    "checks": checks + ["Explicit CUDA device unavailable; no silent CPU fallback"]}
+        checks.append("CUDA unavailable — CPU FP32 is a slow compatibility path")
+        return {"provider": "qwen", "route": "torch", "status": "ready", "checks": checks}
 
     # --- model loading ------------------------------------------------------
 
@@ -168,10 +172,13 @@ class QwenTorchBackend:
     def _fingerprint(self, media_path: Path, language: Optional[str], index: int, start: float, end: float) -> str:
         try:
             stat = media_path.stat()
+            from job_cache import content_hash
             payload = json.dumps([
-                str(media_path.resolve()), stat.st_size, int(stat.st_mtime),
+                content_hash(media_path),
                 ASR_MODEL_ID, ALIGNER_MODEL_ID, language, index,
                 round(start, 3), round(end, 3), self._dtype_name,
+                cached_revision(ASR_MODEL_ID), cached_revision(ALIGNER_MODEL_ID),
+                getattr(self, "_audio_track", None),
             ], ensure_ascii=False)
         except OSError:
             payload = json.dumps([str(media_path), ASR_MODEL_ID, language, index, round(start, 3), round(end, 3)])
@@ -207,8 +214,10 @@ class QwenTorchBackend:
         info = options.get("media_info") or media_mod.probe_media(media_path)
         duration = info["duration"]
 
-        work_dir = Path(options.get("work_dir") or (media_path.parent / f".{media_path.stem}.chunks"))
+        from job_cache import job_directory
+        work_dir = Path(options["work_dir"]) if options.get("work_dir") else job_directory(media_path, self, language, options) / "work"
         work_dir.mkdir(parents=True, exist_ok=True)
+        self._audio_track = options.get("audio_track")
 
         self._load_models(on_stage)
 
@@ -276,22 +285,17 @@ class QwenTorchBackend:
                             words.append(make_word(s + start, e + start, unit_text))
                     if not words:
                         align_error = "aligner returned no time units"
-                    else:
-                        # The aligner strips punctuation; map it back from the
-                        # raw chunk text so sentence grouping can use it.
-                        attached = attach_punctuation(words, text)
-                        if attached:
-                            words = attached
 
                 try:
-                    cache_file.write_text(json.dumps({
+                    from job_cache import write_json
+                    write_json(cache_file, {
                         "fingerprint": fingerprint,
                         "status": "ok" if (words or not text) else "partial",
                         "index": index, "start": start, "end": end,
                         "text": text, "language": chunk_lang,
                         "align_error": align_error,
                         "words": words,
-                    }, ensure_ascii=False), encoding="utf-8")
+                    })
                 except OSError:
                     pass
 
@@ -329,7 +333,7 @@ class QwenTorchBackend:
             language=detected_language,
             duration=duration,
             text=merged_text,
-            words=sorted(all_words, key=lambda w: w["start"]) if all_words else [],
+            words=all_words,
             status=status,
             warnings=warnings,
         )

@@ -42,6 +42,9 @@ class QwenMLXBackend:
             )
         self.precision = precision
         self.model_id = MLX_MODELS[precision]
+        self._session = None
+        self._aligner = None
+        self._model_revision = None
 
     def probe(self) -> dict:
         import platform
@@ -85,19 +88,31 @@ class QwenMLXBackend:
         on_stage(f"本地转写（MLX，{self.model_id}）")
         t0 = __import__("time").monotonic()
 
-        def _progress(*args):
-            if on_progress and len(args) >= 3:
-                try:
-                    on_progress(args[0], args[1], args[2])
-                except Exception:
-                    pass
+        def _progress(event):
+            if on_progress and isinstance(event, dict) and "progress" in event:
+                on_progress(float(event["progress"]), float(event.get("processed_audio_sec", 0)), duration)
+            if event.get("event") == "chunk_completed":
+                on_stage(f"MLX 转写+对齐 {event.get('chunk_index')}/{event.get('total_chunks')}")
 
-        result = mlx_qwen.transcribe(
-            audio=str(media_path),
-            model=self.model_id,          # never rely on the 0.6B default
+        # Pinned 0.4.4 contract: segments are ForcedAligner word units;
+        # chunks are ASR windows and must NEVER be treated as word timestamps.
+        from job_cache import job_directory
+        work_dir = Path(options["work_dir"]) if options.get("work_dir") else job_directory(media_path, self, language, options) / "work"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        audio = media_mod.to_wav16k_mono(media_path, work_dir / "selected16k.wav",
+                                        stream_index=options.get("audio_track"))
+        if self._session is None:
+            self._session = mlx_qwen.Session(model=self.model_id)
+            resolved = getattr(getattr(self._session, "model", None), "_resolved_model_path", None)
+            self._model_revision = Path(resolved).name if resolved and Path(resolved).parent.name == "snapshots" else None
+            from mlx_qwen3_asr.forced_aligner import ForcedAligner
+            self._aligner = ForcedAligner()
+        result = self._session.transcribe(
+            audio=str(audio),
             language=qwen_language,
             return_timestamps=True,
             return_chunks=True,
+            forced_aligner=self._aligner,
             on_progress=_progress,
             verbose=False,
         )
@@ -113,14 +128,11 @@ class QwenMLXBackend:
             end = self._field(unit, "end", "end_time")
             if unit_text and isinstance(start, (int, float)) and isinstance(end, (int, float)) and end >= start:
                 words.append(make_word(start, end, unit_text))
-        if words and text:
-            from subtitles import attach_punctuation
-            attached = attach_punctuation(words, text)
-            if attached:
-                words = attached
-
         warnings = []
         status = "complete"
+        if self._field(result, "truncated", default=False):
+            status = "partial"
+            warnings.append("recognition hit token limit; complete subtitles unavailable")
         if text and not words:
             status = "partial"
             warnings.append("alignment produced no time units; text kept, SRT unavailable")
@@ -131,7 +143,7 @@ class QwenMLXBackend:
             provider=self.provider,
             backend=self.backend,
             model_id=self.model_id,
-            model_revision=self._cached_revision(self.model_id),
+            model_revision=self._model_revision or self._cached_revision(self.model_id),
             weight_precision=self.precision,
             compute_dtype=COMPUTE_DTYPE,
             language=language_code,
@@ -163,12 +175,12 @@ class QwenMLXBackend:
             units = self._field(result, name)
             if isinstance(units, list) and units:
                 return units
-        for name in ("segments", "chunks"):
+        for name in ("segments",):
             units = self._field(result, name)
             if isinstance(units, list):
                 flat = []
                 for seg in units:
-                    inner = self._field(seg, "words", "tokens", default=seg)
+                    inner = self._field(seg, "words", default=seg)
                     if isinstance(inner, list):
                         flat.extend(inner)
                     else:
@@ -188,9 +200,5 @@ class QwenMLXBackend:
 
     @staticmethod
     def _cached_revision(model_id: str) -> Optional[str]:
-        repo_dir = Path.home() / ".cache" / "huggingface" / "hub" / f"models--{model_id.replace('/', '--')}"
-        snapshots = repo_dir / "snapshots"
-        if not snapshots.is_dir():
-            return None
-        entries = [p for p in snapshots.iterdir() if p.is_dir()]
-        return entries[0].name if entries else None
+        from .qwen_torch_backend import cached_revision
+        return cached_revision(model_id)

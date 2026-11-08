@@ -142,7 +142,7 @@ def test_detect_environment_shape(monkeypatch):
     monkeypatch.setattr(env_check, "_available_memory", lambda: 16.0)
     monkeypatch.setattr(env_check, "_free_disk_gb", lambda: 512.0)
     monkeypatch.setattr(env_check, "has_ffmpeg", lambda: True)
-    env = env_check.detect_environment()
+    env = env_check.detect_environment(check_local=True)
     assert env["os"] == "Windows"
     assert env["architecture"] == "AMD64"
     assert env["local_support_status"] == "ready"
@@ -166,3 +166,9 @@ def test_format_env_line_wsl():
     env = {"os": "Linux", "architecture": "x86_64", "is_wsl": True, "is_rosetta": False,
            "local_support_status": "ready"}
     assert "WSL" in env_check.format_env_line(env)
+
+
+def test_generic_detection_never_imports_local_packages(monkeypatch):
+    monkeypatch.setattr(env_check, "_import_ok", lambda *a: pytest.fail("no backend selected"))
+    monkeypatch.setattr(env_check, "_torch_cuda_ok", lambda *a: pytest.fail("no backend selected"))
+    assert env_check.detect_environment()["local_support_status"] in ("not_checked", "unsupported")

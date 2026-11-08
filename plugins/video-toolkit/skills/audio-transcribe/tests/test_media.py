@@ -149,3 +149,20 @@ def test_extract_chunk_and_wav_use_argument_arrays(monkeypatch, tmp_path):
     wav_cmd = seen[0]
     assert wav_cmd[0] == "ffmpeg"
     assert any(part == "-ar" for part in wav_cmd) and any(part == "16000" for part in wav_cmd)
+
+
+def test_real_extraction_preserves_delayed_audio_origin(tmp_path):
+    import shutil, subprocess, wave, array
+    import media
+    import pytest
+    if not shutil.which('ffmpeg'):
+        pytest.skip('ffmpeg unavailable')
+    src = tmp_path/'delayed.mkv'
+    subprocess.run(['ffmpeg','-v','error','-y','-f','lavfi','-i','color=c=black:s=64x64:r=5:d=5',
+                    '-itsoffset','2','-f','lavfi','-i','sine=frequency=440:sample_rate=16000:duration=3',
+                    '-map','0:v','-map','1:a','-c:v','libx264','-c:a','pcm_s16le',str(src)],check=True,timeout=15)
+    wav = media.to_wav16k_mono(src,tmp_path/'selected.wav',stream_index=1)
+    with wave.open(str(wav)) as f:
+        samples = array.array('h',f.readframes(f.getnframes()))
+        first = next(i for i,x in enumerate(samples) if abs(x)>100)/f.getframerate()
+    assert 1.99 <= first <= 2.01  # Must not shift the selected audio to video zero.

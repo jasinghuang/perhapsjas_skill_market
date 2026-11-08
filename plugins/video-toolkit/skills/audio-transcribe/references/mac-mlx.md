@@ -1,49 +1,39 @@
-# Mac (Apple Silicon) — MLX 本地路线
+# Apple Silicon：MLX／Metal
 
-主后端：[moona3k/mlx-qwen3-asr](https://github.com/moona3k/mlx-qwen3-asr/)（安装包 `mlx-qwen3-asr`，
-Python 模块 `mlx_qwen3_asr`）。它内建长音频分块（30 秒低能量切点）、原生 MLX 对齐器和 SRT 导出，
-核心转写无需 PyTorch。注意不要与另一套包 `qwen3-asr-mlx`（模块 `qwen3_asr_mlx`）混淆，本项目不用后者。
+本路线使用 [moona3k/mlx-qwen3-asr](https://github.com/moona3k/mlx-qwen3-asr/)，
+包固定 `mlx-qwen3-asr==0.4.4`，模块 `mlx_qwen3_asr`。不要混装另一项目 `qwen3-asr-mlx`。
+识别和强制对齐均采用 MLX，不需要安装 PyTorch。
 
-## 权重配置
+| 权重配置 | 识别模型 | 用途 |
+| --- | --- | --- |
+| 8bit | mlx-community/Qwen3-ASR-1.7B-8bit | 默认，已在本机完整视频实测 |
+| bf16 | mlx-community/Qwen3-ASR-1.7B-bf16 | 高级质量对照，未在本轮验收 |
+| 6bit | mlx-community/Qwen3-ASR-1.7B-6bit | 高级低资源选项，未在本轮验收 |
 
-| 配置 | 仓库 | 体积 | 策略 |
-| --- | --- | --- | --- |
-| 8bit | `mlx-community/Qwen3-ASR-1.7B-8bit` | ~2.46 GB | **默认** |
-| bf16 | `mlx-community/Qwen3-ASR-1.7B-bf16` | ~4.08 GB | 质量对照，`--precision bf16` |
-| 6bit | `mlx-community/Qwen3-ASR-1.7B-6bit` | ~2.03 GB | 较低资源，`--precision 6bit`（未经本项目实机验证） |
+对齐模型为 `Qwen/Qwen3-ForcedAligner-0.6B`，由原生 MLX 对齐器加载。
+识别始终显式指定 1.7B；上游默认 0.6B 不可依赖。权重量化位数与计算 dtype 分开记录，
+Session 默认 float16。仓库名 bf16 不等于实际全程 BF16。
 
-要点：
+## 环境与 API 契约
 
-- 文件体积 ≠ 内存门槛；运行峰值还含缓存、激活、音频和对齐。
-- 适配器**每次显式传模型名**——该工具自身默认是 `Qwen/Qwen3-ASR-0.6B`，本项目固定 1.7B。
-- moona3k 加载器会把浮点参数转成 FP16 推理，因此 bf16 仓库名不代表全程 BF16 计算；
-  结果 JSON 中 `weight_precision`（权重）与 `compute_dtype`（推理）分开记录。
-- 8bit 为默认配置；6bit 的速度/质量需同设备同音频实测后才能对用户开放承诺。
+- 只支持 Apple Silicon + 原生 ARM64 Python，Intel／Rosetta 不自动改用 Torch。
+- `run.py` 创建 `~/Library/Caches/video-toolkit/envs/audio-transcribe-mlx-v2`，
+  仅在该 venv 安装依赖；可用 uv 或标准库 venv，不修改 Homebrew／系统包。
+- 需 ffmpeg／ffprobe。预先提取明确音轨为 16kHz 单声道 WAV，保留原媒体零点。
+- 复用 `Session(model=明确的1.7B模型)` 和 `ForcedAligner()`，调用
+  `Session.transcribe(audio=..., return_timestamps=True, return_chunks=True, forced_aligner=...)`。
+- **0.4.4 的 `segments` 是强制对齐词单位，`chunks` 是识别窗口。** 适配器只接受前者为词级时间；
+  不能因字段名相似把 chunks 当词级时间戳。内层 words 可展平，但不猜其他未知版本结构。
+- `on_progress` 收到事件字典，使用 `event/progress/processed_audio_sec/chunk_index/total_chunks`。
+- `truncated=True` 表示触及生成长度上限，不能当完整转写发布 SRT。
+- 上游自行在低能量处切识别窗口；本层不再二次切整部音频、不重复增加全局偏移。
 
-## 安装
+## 缓存与验收
 
-```bash
-python3 -m pip install --break-system-packages mlx-qwen3-asr zhconv
-brew install ffmpeg   # 非 WAV 输入需要
-```
+模型走 Hugging Face 缓存（尊重 HF_HOME／HF_HUB_CACHE）；音频和工作材料走应用缓存。
+完整推理结果可用于重新导出；中断中的 MLX 推理不承诺分块恢复。成功后清理临时音频。
 
-通过 `run.py` 调用时自动完成：优先复用已装好依赖的解释器（缓存于
-`~/.cache/video-toolkit/audio-transcribe-env-qwen.json`），全都没有才安装。
-
-## 排障
-
-- **`mlx` 导入失败 / 提示架构不符**：确认是 Apple Silicon + 原生 ARM64 Python
-  （Intel Python / Rosetta 下 MLX 不可用，`--detect-env` 会标 unsupported 并建议
-  切原生 Python 或改用 Scribe）。
-- **Homebrew 升级 Python 后提示依赖缺失**：旧包在新解释器里。`run.py` 会扫描
-  Homebrew/pyenv 各版本解释器并复用，不要手动重复安装几 GB 依赖。
-- **首次运行慢**：在下载权重（~2.5-4GB），缓存于 `~/.cache/huggingface/hub/`，跨次复用。
-
-## 验收状态
-
-| 场景 | 状态 |
-| --- | --- |
-| P01 Apple Silicon 8bit（中/英 TXT+JSON+SRT） | 待实机验收 |
-| P02 BF16 加载/对齐、记录实际 dtype | 待实机验收 |
-| P03 6bit 全链路 | 待实机验收（未开放承诺） |
-| P06 Intel Mac 拒绝 MLX 并给出选项 | 逻辑已实现（单测覆盖），待实机抽查 |
+本轮在 Apple Silicon、Python 3.14.3、mlx-qwen3-asr 0.4.4、MLX 0.32.4 下，
+对用户指定 997.2 秒英文视频完成真实识别、对齐及单行 SRT 导出。
+首次任务共约 151.4 秒，包含首次权重下载／加载；不能把该数字当纯推理基准或其他设备承诺。
+没有做逐句人工听辨，结构和覆盖校验不等于零识别错误。

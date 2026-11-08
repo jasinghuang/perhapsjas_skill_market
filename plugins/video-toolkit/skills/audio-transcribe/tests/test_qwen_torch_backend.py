@@ -194,3 +194,12 @@ def test_probe_needs_setup_without_torch(monkeypatch):
     backend = QwenTorchBackend()
     report = backend.probe()
     assert report["status"] == "needs_setup"
+
+
+def test_explicit_cpu_does_not_require_gpu_smoke(torch_env, monkeypatch):
+    import torch
+    torch.__version__='test'
+    def no_gpu(*a,**k): raise AssertionError('CPU should not probe CUDA')
+    monkeypatch.setattr(torch.cuda,'is_available',no_gpu)
+    report=QwenTorchBackend(device='cpu').probe()
+    assert report['status']=='ready'

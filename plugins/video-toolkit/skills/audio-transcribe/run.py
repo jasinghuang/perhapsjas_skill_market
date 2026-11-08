@@ -1,23 +1,10 @@
 #!/usr/bin/env python3
-"""audio-transcribe launcher — pick the interpreter for the CHOSEN provider.
+"""Provider-aware launcher with a dedicated, pinned local inference venv.
 
-Provider rules (doc §3/§4):
-- --detect-env        passthrough, read-only, never installs anything
-- provider missing    exec skill_main in the current interpreter; it exits with
-                      code 2 and a choose-provider message (no default, no auto online)
-- scribe              stdlib only — current interpreter, zero installs
-- qwen (Apple Silicon) probe/import mlx_qwen3_asr, else install mlx-qwen3-asr
-- qwen (Windows/Linux) probe/import qwen_asr, else install qwen-asr; with an
-                      NVIDIA GPU the CUDA PyTorch build is installed first
-                      (override the index with AUDIO_TRANSCRIBE_TORCH_INDEX)
-
-Interpreter discovery is kept from the previous version: a cached
-interpreter is tried first, then the current one, PATH, Homebrew/pyenv
-versions, and per-user Python installs. Packages are installed only when no
-candidate has the dependency.
+Read-only detection/help never installs. Scribe uses stdlib only. Qwen
+installs into the application cache, never a global/Homebrew Python.
 """
 
-import json
 import os
 import platform
 import re
@@ -54,21 +41,6 @@ def parse_provider(argv):
     return None
 
 
-def route_for(provider):
-    """(import_name, pip_specs) for the local qwen route on this platform."""
-    if IS_MAC:
-        return "mlx_qwen3_asr", (["mlx-qwen3-asr", "zhconv"], ["--break-system-packages"])
-    return "qwen_asr", (["qwen-asr", "zhconv"], [])
-
-
-def cache_path(provider):
-    if IS_WIN:
-        base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
-    else:
-        base = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache"))
-    return base / "video-toolkit" / f"audio-transcribe-env-{provider or 'default'}.json"
-
-
 def _add(out, seen, path):
     if not path:
         return
@@ -86,11 +58,6 @@ def _version_key(path):
 
 def candidates():
     out, seen = [], set()
-    try:
-        cached = json.loads(cache_path(parse_provider(sys.argv[1:])).read_text(encoding="utf-8"))
-        _add(out, seen, cached.get("interpreter"))
-    except Exception:
-        pass
     _add(out, seen, sys.executable)
     if IS_WIN:
         for name in ("python", "python3"):
@@ -150,68 +117,69 @@ def nvidia_gpu_present():
         return False
 
 
-def save_cache(python, provider):
+def managed_interpreter():
+    from job_cache import cache_root
+    route = "mlx" if IS_MAC else "torch"
+    env = cache_root().parent / "envs" / f"audio-transcribe-{route}-v2"
+    return env / ("Scripts/python.exe" if IS_WIN else "bin/python")
+
+
+def prepare_venv(found):
+    python = managed_interpreter()
+    if python.is_file():
+        return str(python)
+    python.parent.parent.mkdir(parents=True, exist_ok=True)
+    uv = shutil.which("uv")
+    if uv:
+        # Windows dependency wheels target Python 3.12. uv obtains that runtime
+        # if absent; this never installs packages into a global interpreter.
+        version = "3.12" if not IS_MAC else (found[0] if found else "3.12")
+        subprocess.run([uv, "venv", "--python", version, str(python.parent.parent)], check=True)
+    else:
+        usable = [p for p in found if supported_python(p)]
+        if not usable:
+            sys.exit("Install Python 3.12 or uv, then rerun; global environments will not be modified.")
+        subprocess.run([usable[0], "-m", "venv", str(python.parent.parent)], check=True)
+    return str(python)
+
+
+def supported_python(python):
     try:
-        path = cache_path(provider)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps({"interpreter": python}, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        result = subprocess.run([python, "-c", "import sys; print(int((3,10) <= sys.version_info[:2] <= (3,12)))"],
+                                capture_output=True, text=True, timeout=10)
+        return result.stdout.strip() == "1"
     except Exception:
-        pass
-
-
-def pip_install(python, packages, flags=()):
-    subprocess.run([python, "-m", "pip", "install", *flags, *packages], check=True)
+        return False
 
 
 def ensure_qwen_interpreter(found):
-    """Find or build an interpreter that can import the local qwen stack."""
-    import_name, (pip_specs, flags) = route_for("qwen")
-    chosen = next((python for python in found if has_module(python, import_name)), None)
-    if chosen:
-        print(f"[audio-transcribe] Using {chosen} (qwen route already installed)", flush=True)
-        return chosen
-
-    # Pick an installable interpreter (never /usr/bin — needs sudo).
-    installable = [p for p in found if not p.startswith("/usr/bin/")] or found
-    if not installable:
-        sys.exit("No usable Python interpreter found. Install Python 3 first, then rerun.")
-    python = installable[0]
-    print(f"[audio-transcribe] {import_name} not found in any interpreter. Preparing {python} ...", flush=True)
-
-    if not IS_MAC and nvidia_gpu_present():
-        index = os.environ.get("AUDIO_TRANSCRIBE_TORCH_INDEX", DEFAULT_TORCH_INDEX)
-        cuda_build = torch_cuda_build(python)
-        if not cuda_build:
-            print(f"[audio-transcribe] Installing CUDA PyTorch ({index}) into {python} ...", flush=True)
-            # --force-reinstall: a CPU-only torch already satisfies plain `torch`,
-            # and pip would silently keep it instead of pulling the CUDA wheel.
-            subprocess.run(
-                [python, "-m", "pip", "install", "--force-reinstall", "--no-deps",
-                 "torch", "--index-url", f"https://download.pytorch.org/whl/{index}"],
-                check=True,
-            )
-    elif not IS_MAC:
-        print("[audio-transcribe] No NVIDIA GPU detected — installing CPU PyTorch (slow, unverified mode).", flush=True)
-
-    try:
-        pip_install(python, pip_specs, flags)
-    except Exception as exc:
-        manual = (
-            f"python3 -m pip install --break-system-packages {' '.join(pip_specs)}"
-            if IS_MAC else f"python -m pip install {' '.join(pip_specs)}"
-        )
-        sys.exit(
-            f"Could not install {' '.join(pip_specs)} into {python}:\n  {exc}\n"
-            f"Manual install: {manual}\nSee references/ for platform details."
-        )
-    if not has_module(python, import_name):
-        sys.exit(
-            f"Install finished but `import {import_name}` still fails in {python}.\n"
-            "See references/windows-torch.md (or mac-mlx.md) for troubleshooting."
-        )
+    """Only install into the skill-owned venv; do not mutate discovered Pythons."""
+    if IS_MAC and platform.machine() != "arm64":
+        sys.exit("Qwen MLX requires Apple Silicon with native ARM64 Python.")
+    python = prepare_venv(found)
+    module = "mlx_qwen3_asr" if IS_MAC else "qwen_asr"
+    requirement = "mlx-qwen3-asr==0.4.4" if IS_MAC else "qwen-asr==0.0.6"
+    uv = shutil.which("uv")
+    installer = [uv, "pip", "install", "--python", python] if uv else [python, "-m", "pip", "install"]
+    if not IS_MAC:
+        index = os.environ.get("AUDIO_TRANSCRIBE_TORCH_INDEX", "cu130" if nvidia_gpu_present() else "cpu")
+        torch_version = subprocess.run(
+            [python, "-c", "import importlib.metadata as m; print(m.version('torch').split('+')[0]); print(m.version('torchaudio').split('+')[0])"],
+            capture_output=True, text=True,
+        ).stdout.strip().splitlines()
+        cpu_to_cuda = index != "cpu" and not torch_cuda_build(python)
+        # Do not accept an importable CPU-only torch as a CUDA installation.
+        if torch_version != ["2.10.0", "2.10.0"] or not has_module(python, "torch") or cpu_to_cuda:
+            reinstall = (["--reinstall-package", "torch", "--reinstall-package", "torchaudio"] if uv else ["--force-reinstall"]) if cpu_to_cuda else []
+            subprocess.run(installer + reinstall + ["torch==2.10.0", "torchaudio==2.10.0", "--index-url",
+                                        f"https://download.pytorch.org/whl/{index}"], check=True)
+    version_code = f"import importlib.metadata as m; print(m.version({requirement.split('==')[0]!r}))"
+    installed = subprocess.run([python, "-c", version_code], capture_output=True, text=True).stdout.strip()
+    if installed != requirement.split("==")[1] or not has_module(python, module):
+        subprocess.run(installer + [requirement], check=True)
+    if not has_module(python, module):
+        sys.exit(f"Managed environment import failed: {module}. See references/ for troubleshooting.")
+    print(f"[audio-transcribe] Managed runtime: {python}", flush=True)
     return python
 
 
@@ -223,10 +191,11 @@ def main(argv=None):
     provider = parse_provider(args)
 
     # Read-only detection or a missing provider: current interpreter, no installs.
-    if "--detect-env" in args or provider is None:
+    if "--detect-env" in args or "--help" in args or "-h" in args or provider is None:
         if provider is None and "--detect-env" not in args:
             print("[audio-transcribe] no --provider given; skill_main will ask for one", flush=True)
-        return subprocess.call([sys.executable, str(MAIN_SCRIPT)] + args)
+        runtime = managed_interpreter() if provider == "qwen" else Path(sys.executable)
+        return subprocess.call([str(runtime) if runtime.is_file() else sys.executable, str(MAIN_SCRIPT)] + args)
 
     if provider == "scribe":
         # stdlib-only route — any Python works, nothing to install (doc §4).
@@ -238,7 +207,6 @@ def main(argv=None):
         return subprocess.call([sys.executable, str(MAIN_SCRIPT)] + args)
 
     chosen = ensure_qwen_interpreter(candidates())
-    save_cache(chosen, provider)
     sys.stdout.flush()
     return subprocess.call([chosen, str(MAIN_SCRIPT)] + args)
 

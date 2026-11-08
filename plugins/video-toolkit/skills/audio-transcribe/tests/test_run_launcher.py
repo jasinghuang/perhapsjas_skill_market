@@ -1,175 +1,79 @@
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 import run
 
+PY = '/isolated/bin/python'
 
-PY = r"C:\Python314\python.exe" if sys.platform == "win32" else "/usr/local/bin/python3.14"
-
-
-# --- provider parsing ----------------------------------------------------------
 
 def test_parse_provider_forms():
-    assert run.parse_provider(["a.mp4", "--provider", "qwen"]) == "qwen"
-    assert run.parse_provider(["a.mp4", "--provider=scribe"]) == "scribe"
-    assert run.parse_provider(["a.mp4", "--provider", "qwen-local"]) == "qwen"
-    assert run.parse_provider(["a.mp4", "--provider", "elevenlabs"]) == "scribe"
-    assert run.parse_provider(["a.mp4", "--provider", "whisper"]) == "whisper"  # unknown passthrough
-    assert run.parse_provider(["a.mp4"]) is None
+    assert run.parse_provider(['a.mp4', '--provider', 'qwen-local']) == 'qwen'
+    assert run.parse_provider(['--provider=elevenlabs']) == 'scribe'
+    assert run.parse_provider(['a.mp4']) is None
 
 
-# --- main routing ----------------------------------------------------------------
-
-def test_detect_env_uses_current_interpreter_and_never_installs(monkeypatch):
+@pytest.mark.parametrize('args', [['--detect-env', '--provider', 'qwen'], ['--help', '--provider', 'qwen'], ['video.mp4'], ['video.mp4', '--provider', 'scribe']])
+def test_readonly_or_online_never_installs(monkeypatch, tmp_path, args):
     calls = []
-
-    def fake_call(cmd):
-        calls.append(cmd)
-        return 0
-
-    def explode():
-        raise AssertionError("must not install in detect-env mode")
-
-    monkeypatch.setattr(run.subprocess, "call", fake_call)
-    monkeypatch.setattr(run, "ensure_qwen_interpreter", explode)
-    assert run.main(["--detect-env", "--provider", "qwen"]) == 0
-    assert calls[0][0] == sys.executable
-    assert "--detect-env" in calls[0]
-
-
-def test_missing_provider_passes_through_for_skill_main_error(monkeypatch):
-    calls = []
-    monkeypatch.setattr(run.subprocess, "call", lambda cmd: calls.append(cmd) or 2)
-    monkeypatch.setattr(run, "ensure_qwen_interpreter", lambda found: pytest.fail("no install"))
-    assert run.main(["video.mp4"]) == 2
+    monkeypatch.setattr(run, 'managed_interpreter', lambda: tmp_path / 'missing')
+    monkeypatch.setattr(run, 'ensure_qwen_interpreter', lambda *a: pytest.fail('must not install'))
+    monkeypatch.setattr(run.subprocess, 'call', lambda cmd: calls.append(cmd) or 0)
+    assert run.main(args) == 0
     assert calls[0][0] == sys.executable
 
 
-def test_scribe_route_never_installs_anything(monkeypatch):
+def test_detection_uses_existing_managed_runtime(monkeypatch, tmp_path):
+    py = tmp_path / 'python'; py.touch()
+    monkeypatch.setattr(run, 'managed_interpreter', lambda: py)
     calls = []
-    monkeypatch.setattr(run.subprocess, "call", lambda cmd: calls.append(cmd) or 0)
-    monkeypatch.setattr(run, "ensure_qwen_interpreter", lambda found: pytest.fail("scribe must not install"))
-    assert run.main(["video.mp4", "--provider", "scribe"]) == 0
-    assert calls[0][0] == sys.executable
+    monkeypatch.setattr(run.subprocess, 'call', lambda cmd: calls.append(cmd) or 0)
+    run.main(['--detect-env', '--provider', 'qwen'])
+    assert calls[0][0] == str(py)
 
 
-def test_qwen_route_uses_discovered_interpreter(monkeypatch):
+def test_qwen_launches_in_managed_runtime(monkeypatch):
     calls = []
-    monkeypatch.setattr(run, "candidates", lambda: [PY])
-    monkeypatch.setattr(run, "ensure_qwen_interpreter", lambda found: PY)
-    monkeypatch.setattr(run.subprocess, "call", lambda cmd: calls.append(cmd) or 0)
-    monkeypatch.setattr(run, "save_cache", lambda python, provider: None)
-    assert run.main(["video.mp4", "--provider", "qwen"]) == 0
+    monkeypatch.setattr(run, 'candidates', lambda: ['/global/python'])
+    monkeypatch.setattr(run, 'ensure_qwen_interpreter', lambda found: PY)
+    monkeypatch.setattr(run.subprocess, 'call', lambda cmd: calls.append(cmd) or 0)
+    assert run.main(['video.mp4', '--provider', 'qwen']) == 0
     assert calls[0][0] == PY
 
 
-# --- ensure_qwen_interpreter ---------------------------------------------------------
-
-@pytest.fixture
-def win_route(monkeypatch):
-    monkeypatch.setattr(run, "IS_MAC", False)
-
-
-def test_already_installed_reuses_interpreter(monkeypatch, win_route):
-    monkeypatch.setattr(run, "has_module", lambda python, module: module == "qwen_asr")
-    monkeypatch.setattr(run, "pip_install", lambda *a, **k: pytest.fail("must not install"))
-    assert run.ensure_qwen_interpreter([PY]) == PY
-
-
-def test_gpu_missing_deps_installs_cuda_torch_then_qwen(monkeypatch, win_route, tmp_path):
-    installed = {"torch": False, "qwen_asr": False}
+@pytest.mark.parametrize('gpu,cuda_build', [(True, ''), (True, '13.0'), (False, '')])
+def test_windows_installs_only_managed_and_checks_cuda_even_if_qwen_present(monkeypatch, gpu, cuda_build):
     installs = []
-    torch_installs = []
-
-    def has_module(python, module):
-        return installed.get(module, False)
-
-    def pip_install(python, packages, flags=()):
-        installs.append(list(packages))
-        if "qwen-asr" in packages:
-            installed["qwen_asr"] = True
-
-    def fake_torch_install(cmd, check=True):
-        torch_installs.append(cmd)
-        installed["torch"] = True
-
-    monkeypatch.setattr(run, "has_module", has_module)
-    monkeypatch.setattr(run, "pip_install", pip_install)
-    monkeypatch.setattr(run.subprocess, "run", fake_torch_install)
-    monkeypatch.setattr(run, "nvidia_gpu_present", lambda: True)
-    monkeypatch.setattr(run, "torch_cuda_build", lambda python: "")
-
-    chosen = run.ensure_qwen_interpreter([PY])
-    assert chosen == PY
-    # CUDA torch install is forced (a CPU build already satisfies plain `torch`)
-    assert torch_installs[0][1:] == [
-        "-m", "pip", "install", "--force-reinstall", "--no-deps",
-        "torch", "--index-url", "https://download.pytorch.org/whl/cu130",
-    ]
-    assert installs == [["qwen-asr", "zhconv"]]
+    monkeypatch.setattr(run, 'IS_MAC', False)
+    monkeypatch.setattr(run, 'prepare_venv', lambda found: PY)
+    monkeypatch.setattr(run, 'has_module', lambda *a: True)
+    monkeypatch.setattr(run, 'nvidia_gpu_present', lambda: gpu)
+    monkeypatch.setattr(run, 'torch_cuda_build', lambda p: cuda_build)
+    monkeypatch.setattr(run.shutil, 'which', lambda _: None)
+    def execute(cmd, **kwargs):
+        if 'install' in cmd: installs.append(cmd)
+        return SimpleNamespace(stdout='2.10.0\n2.10.0\n' if 'torchaudio' in str(cmd) and 'install' not in cmd else '0.0.6\n', returncode=0)
+    monkeypatch.setattr(run.subprocess, 'run', execute)
+    assert run.ensure_qwen_interpreter(['/global/python']) == PY
+    assert all(cmd[0] == PY for cmd in installs)
+    if gpu and not cuda_build:
+        assert installs and installs[0][-1].endswith('/cu130')
+        assert '--force-reinstall' in installs[0]
+    else:
+        assert not installs
 
 
-def test_torch_index_env_override(monkeypatch, win_route):
-    installed = {"qwen_asr": False}
-    torch_installs = []
-    monkeypatch.setenv("AUDIO_TRANSCRIBE_TORCH_INDEX", "cu126")
-    monkeypatch.setattr(run, "has_module", lambda p, m: installed.get(m, False))
-    monkeypatch.setattr(run, "pip_install",
-                        lambda python, packages, flags=(): installed.update({"qwen_asr": True}))
-    monkeypatch.setattr(run.subprocess, "run", lambda cmd, check=True: torch_installs.append(cmd))
-    monkeypatch.setattr(run, "nvidia_gpu_present", lambda: True)
-    monkeypatch.setattr(run, "torch_cuda_build", lambda python: "")
-    run.ensure_qwen_interpreter([PY])
-    assert torch_installs[0][-1] == "https://download.pytorch.org/whl/cu126"
-
-
-def test_no_gpu_skips_cuda_torch(monkeypatch, win_route):
-    installed = {"qwen_asr": False}
+def test_mac_pins_package_in_venv_without_global_flags(monkeypatch):
     installs = []
-    monkeypatch.setattr(run, "has_module", lambda p, m: installed.get(m, False))
-    monkeypatch.setattr(run, "pip_install",
-                        lambda python, packages, flags=(): installs.append(list(packages)) or installed.update({"qwen_asr": True}))
-    monkeypatch.setattr(run, "nvidia_gpu_present", lambda: False)
-    chosen = run.ensure_qwen_interpreter([PY])
-    assert installs == [["qwen-asr", "zhconv"]]
-
-
-def test_cuda_torch_already_present_not_reinstalled(monkeypatch, win_route):
-    installed = {"torch": True, "qwen_asr": False}
-    installs = []
-    monkeypatch.setattr(run, "has_module", lambda p, m: installed.get(m, False))
-    monkeypatch.setattr(run, "pip_install",
-                        lambda python, packages, flags=(): installs.append(list(packages)) or installed.update({"qwen_asr": True}))
-    monkeypatch.setattr(run, "nvidia_gpu_present", lambda: True)
-    monkeypatch.setattr(run, "torch_cuda_build", lambda python: "13.0")
-    run.ensure_qwen_interpreter([PY])
-    assert installs == [["qwen-asr", "zhconv"]]
-
-
-def test_mac_route_installs_mlx_package(monkeypatch):
-    monkeypatch.setattr(run, "IS_MAC", True)
-    installed = {"mlx_qwen3_asr": False}
-    installs = []
-    monkeypatch.setattr(run, "has_module", lambda p, m: installed.get(m, False))
-    monkeypatch.setattr(run, "pip_install",
-                        lambda python, packages, flags=(): installs.append((list(packages), list(flags))) or installed.update({"mlx_qwen3_asr": True}))
-    monkeypatch.setattr(run, "nvidia_gpu_present", lambda: False)  # must not be consulted on mac
-    run.ensure_qwen_interpreter([PY])
-    assert installs[0][0] == ["mlx-qwen3-asr", "zhconv"]
-    assert installs[0][1] == ["--break-system-packages"]
-
-
-def test_install_failure_exits_with_manual_hint(monkeypatch, win_route, capsys):
-    def pip_install(python, packages, flags=()):
-        raise RuntimeError("no network")
-
-    monkeypatch.setattr(run, "has_module", lambda p, m: False)
-    monkeypatch.setattr(run, "pip_install", pip_install)
-    monkeypatch.setattr(run, "nvidia_gpu_present", lambda: False)
-    with pytest.raises(SystemExit) as excinfo:
-        run.ensure_qwen_interpreter([PY])
-    assert "Manual install" in str(excinfo.value.code)
+    monkeypatch.setattr(run, 'IS_MAC', True)
+    monkeypatch.setattr(run.platform, 'machine', lambda: 'arm64')
+    monkeypatch.setattr(run, 'prepare_venv', lambda found: PY)
+    monkeypatch.setattr(run, 'has_module', lambda *a: True)
+    monkeypatch.setattr(run.shutil, 'which', lambda _: None)
+    def execute(cmd, **kwargs):
+        if 'install' in cmd: installs.append(cmd)
+        return SimpleNamespace(stdout='0.1.0', returncode=0)
+    monkeypatch.setattr(run.subprocess, 'run', execute)
+    run.ensure_qwen_interpreter(['/global/python'])
+    assert installs == [[PY, '-m', 'pip', 'install', 'mlx-qwen3-asr==0.4.4']]

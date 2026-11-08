@@ -5,12 +5,11 @@ Audio Transcriber — unified file transcription.
 Provider choice is explicit (doc §3): `--provider qwen` (local Qwen3-ASR-1.7B,
 recommended) or `--provider scribe` (Elevenabs Scribe V2 online). Missing
 provider is an error, never a silent default — and never an automatic online
-upload. Every job produces TXT + JSON + SRT (SRT only with real alignment).
+upload. Only explicitly selected deliverables are published after validation.
 """
 
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -22,7 +21,7 @@ sys.path.insert(0, str(SKILL_DIR))
 from backends import get_provider_backend, normalize_provider  # noqa: E402
 from backends.scribe_backend import ScribeError  # noqa: E402
 from progress import ProgressReporter  # noqa: E402
-from results import build_result, validate_result  # noqa: E402
+from results import validate_result  # noqa: E402
 from subtitles import (  # noqa: E402
     build_entries,
     entries_to_srt,
@@ -31,7 +30,7 @@ from subtitles import (  # noqa: E402
     DEFAULT_CONFIG as SUBTITLE_DEFAULTS,
 )
 
-FORMATS = ("txt", "json", "srt")
+FORMATS = ("srt", "md-timed", "md", "txt", "json")
 STAGES = ("环境检查", "准备", "转写", "对齐", "导出", "校验")
 
 
@@ -49,56 +48,6 @@ def load_config() -> dict:
     return {}
 
 
-def convert_to_simplified_chinese(text: str) -> str:
-    try:
-        import zhconv
-        return zhconv.convert(text, "zh-cn")
-    except ImportError:
-        return text
-
-
-def _apply_zhconv(result: dict) -> None:
-    if (result.get("language") or "").lower() not in ("zh", "chinese"):
-        return
-    if result.get("text"):
-        result["text"] = convert_to_simplified_chinese(result["text"])
-    for unit in result.get("words") or []:
-        if unit.get("text"):
-            unit["text"] = convert_to_simplified_chinese(unit["text"])
-    for seg in result.get("segments") or []:
-        if seg.get("text"):
-            seg["text"] = convert_to_simplified_chinese(seg["text"])
-
-
-def _paragraph_text(result: dict, paragraph_gap: float = 2.0) -> str:
-    """TXT body: the raw transcription verbatim (doc §9 — no rewriting, no
-    summarizing); falls back to joined segments only when raw text is absent."""
-    raw = result.get("text") or ""
-    if raw.strip():
-        return raw.strip()
-    segments = result.get("segments") or []
-    if not segments:
-        return raw
-    paragraphs = []
-    current: List[str] = []
-    last_end = None
-    for seg in segments:
-        if last_end is not None and seg["start"] - last_end >= paragraph_gap:
-            paragraphs.append("".join(current))
-            current = []
-        current.append(seg["text"])
-        last_end = seg["end"]
-    if current:
-        paragraphs.append("".join(current))
-    return "\n\n".join(paragraphs)
-
-
-def atomic_write(path: Path, content: str) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    os.replace(tmp, path)
-
-
 def transcribe_one(
     backend,
     input_path: Path,
@@ -109,7 +58,7 @@ def transcribe_one(
     show_progress: bool,
     output_stem: Optional[str] = None,
 ) -> dict:
-    """Run one file through probe→transcribe→export→validate. Returns summary."""
+    """Probe → transcribe/cache → validate → publish. Returns summary."""
     started = time.monotonic()
 
     import media as media_mod
@@ -133,71 +82,126 @@ def transcribe_one(
     media_info = media_mod.probe_media(input_path)
     print(f"  媒体时长 {media_info['duration']:.1f}s，音轨 {len(media_info['audio_streams'])} 条")
 
-    work_dir = output_dir / f".{input_path.stem}.chunks"
+    from job_cache import job_directory, write_json, JobLock
+    from delivery import content_key, markdown, paragraphs, publish
+    import shutil
+    from subtitles import attach_punctuation, units_to_text
 
-    reporter = ProgressReporter() if show_progress else None
-    result = backend.transcribe(
-        str(input_path),
-        language=language,
-        options={**options, "media_info": media_info, "work_dir": work_dir},
-        on_stage=stage,
-        on_progress=reporter.update if reporter else None,
-    )
-    if reporter:
-        reporter.finish()
+    tracks = [stream["index"] for stream in media_info["audio_streams"]]
+    track = options.get("audio_track")
+    if track is not None and track not in tracks:
+        raise ValueError(f"音轨索引 {track} 无效，可用索引: {tracks}")
+    # Resolve the default explicitly, consistently for all three backends.
+    options = {**options, "audio_track": tracks[0] if track is None else track}
+    job_dir = job_directory(input_path, backend, language, options)
+    work_dir = job_dir / "work"
+    cache_file = job_dir / "result.json"
+    with JobLock(job_dir):
+        work_dir.mkdir(exist_ok=True)
+        result = None
+        if cache_file.is_file():
+            try:
+                candidate = json.loads(cache_file.read_text(encoding="utf-8"))
+                if candidate.get("status") == "complete" and isinstance(candidate.get("text"), str):
+                    result = candidate
+                    stage("命中完整转写缓存（仅重新导出）")
+            except (OSError, ValueError):
+                pass
+        if result is None:
+            reporter = ProgressReporter() if show_progress else None
+            try:
+                result = backend.transcribe(
+                    str(input_path), language=language,
+                    options={**options, "media_info": media_info, "work_dir": work_dir},
+                    on_stage=stage, on_progress=reporter.update if reporter else None,
+                )
+            finally:
+                if reporter:
+                    reporter.finish()
+            # Store recognition before rendering; export failures never require
+            # a new paid upload or local inference. Partial chunks stay resumable.
+            if result.get("status") == "complete":
+                write_json(cache_file, result)
+                # First use may download model refs. Publish the same raw
+                # result under the now-resolved identity, so the next export
+                # does not need to infer again solely because refs appeared.
+                resolved_dir = job_directory(input_path, backend, language, options)
+                from backends.qwen_torch_backend import cached_revision
+                if (resolved_dir != job_dir and result.get("model_revision")
+                        and result["model_revision"] == cached_revision(result["model_id"])):
+                    try:
+                        with JobLock(resolved_dir):
+                            write_json(resolved_dir / "result.json", result)
+                    except BlockingIOError:
+                        pass  # Another invocation owns the new identity; original cache is safe.
 
-    stage("导出")
-    _apply_zhconv(result)
-
-    words = result.get("words") or []
-    can_srt = result.get("status") == "complete" and bool(words)
-    if can_srt:
-        subtitle_cfg = {**SUBTITLE_DEFAULTS, **(options.get("subtitles") or {})}
-        entries = build_entries(words, subtitle_cfg)
-        entries, timeline_warnings = finalize_entries(entries, result.get("duration_seconds"))
-        result["warnings"].extend(timeline_warnings)
-        srt_text = entries_to_srt(entries)
-        result["segments"] = [
-            {"start": e["start"], "end": e["end"], "text": e["text"], "speaker_id": None}
-            for e in entries
-        ]
-    else:
-        srt_text = None
-        if result.get("status") == "partial":
-            result["warnings"].append("SRT 未导出：对齐未完成（partial）")
-
-    stem = output_stem or input_path.stem
-    products = {}
-    if "txt" in formats:
-        path = output_dir / f"{stem}.txt"
-        atomic_write(path, _paragraph_text(result))
-        products["txt"] = path
-    if "json" in formats:
-        path = output_dir / f"{stem}.json"
-        atomic_write(path, json.dumps(result, ensure_ascii=False, indent=2))
-        products["json"] = path
-    if "srt" in formats and srt_text is not None:
-        path = output_dir / f"{stem}.srt"
-        atomic_write(path, srt_text)
-        products["srt"] = path
-
-    stage("校验")
-    issues = validate_result(result)
-    if "json" in products:
+        stage("校验")
+        result.setdefault("warnings", [])
+        result["duration_seconds"] = media_info["duration"]
+        words = result.get("words") or []
+        raw_text = result.get("text") or ""
+        can_time = result.get("status") == "complete" and bool(words)
+        entries, srt_text = [], None
+        if can_time:
+            try:
+                for i, word in enumerate(words):
+                    if i and (word["start"] < words[i-1]["start"] - 0.08
+                              or words[i-1]["end"] - word["start"] > 0.5):
+                        raise ValueError("词级对齐存在严重时序冲突，需要检查对齐")
+                attached = attach_punctuation(words, raw_text)
+                if attached:
+                    words = attached
+                if content_key(raw_text) != content_key(units_to_text(words)):
+                    raise ValueError("对齐文本与原始转写内容不一致，拒绝发布缺字字幕")
+                zero_spans = sum(1 for w in words if w["end"] == w["start"])
+                if zero_spans:
+                    result["warnings"].append(f"{zero_spans} 个零时长对齐单位按最小 80ms 修复；字幕边界已重新校验")
+                subtitle_cfg = {**SUBTITLE_DEFAULTS, **(options.get("subtitles") or {}), "max_lines": 1}
+                entries = build_entries(words, subtitle_cfg)
+                entries, timeline_warnings = finalize_entries(entries, media_info["duration"])
+                result["warnings"].extend(timeline_warnings)
+                srt_text = entries_to_srt(entries)
+                issues = validate_srt(srt_text, media_info["duration"])
+                if issues:
+                    raise ValueError("; ".join(issues))
+                if content_key("".join(e["text"] for e in entries)) != content_key(raw_text):
+                    raise ValueError("字幕导出内容覆盖校验失败")
+                result["segments"] = [{"start": e["start"], "end": e["end"], "text": e["text"],
+                                       "speaker_id": e.get("speaker_id")} for e in entries]
+                wide = sum(1 for e in entries if __import__("subtitles").display_width(e["text"]) > subtitle_cfg["line_width"])
+                if wide:
+                    result["warnings"].append(f"{wide} 条字幕超过建议行宽；保留全文及真实时间单位，未截字")
+            except ValueError as exc:
+                can_time, srt_text = False, None
+                result["status"] = "partial"
+                result["segments"] = []
+                result["warnings"].append(f"时间轴/SRT 校验未通过: {exc}")
+        if raw_text.strip() and not can_time and any(f in formats for f in ("srt", "md-timed")):
+            result["status"] = "partial"
+            result["warnings"].append("SRT / 带时间码 MD 未导出：对齐未完成或校验失败")
+        # Validate schema/numeric values separately. Model word spans can overlap;
+        # final cue spans are checked strictly above without discarding words.
+        all_issues = [i for i in validate_result(result) if "previous unit ends" not in i]
+        issues = [i for i in all_issues if not (result.get("status") == "partial" and i.startswith(("words[", "segments[")))]
         if issues:
-            result["warnings"].extend(issues)
-            atomic_write(products["json"], json.dumps(result, ensure_ascii=False, indent=2))
-    if "srt" in products:
-        srt_issues = validate_srt(products["srt"].read_text(encoding="utf-8"), result.get("duration_seconds"))
-        if srt_issues:
-            result["warnings"].extend(srt_issues)
-            print("  SRT 校验问题: " + "; ".join(srt_issues))
+            raise ValueError("转写结构校验失败: " + "; ".join(issues))
 
-    if result.get("status") == "complete" and work_dir.exists():
-        # Success: drop work/cache files; failures keep them for resume (doc §12).
-        import shutil
-        shutil.rmtree(work_dir, ignore_errors=True)
-
+        stage("导出")
+        contents = {}
+        for kind in dict.fromkeys(formats):
+            if kind == "srt" and srt_text is not None:
+                contents[kind] = srt_text
+            elif kind == "md-timed" and can_time:
+                contents[kind] = markdown(result, timed=True)
+            elif kind == "md":
+                contents[kind] = markdown(result)
+            elif kind == "txt":
+                contents[kind] = "\n\n".join(p["text"] for p in paragraphs(result))
+            elif kind == "json":
+                contents[kind] = json.dumps(result, ensure_ascii=False, indent=2)
+        products = publish(output_dir, output_stem or input_path.stem, contents) if contents else {}
+        if result.get("status") == "complete":
+            shutil.rmtree(work_dir, ignore_errors=True)
     elapsed = time.monotonic() - started
     return {
         "input": str(input_path),
@@ -215,7 +219,7 @@ def transcribe_one(
 def run_detect_env(provider: Optional[str]) -> int:
     import env_check
 
-    env = env_check.detect_environment()
+    env = env_check.detect_environment(check_local=provider is not None and provider.lower() in ("qwen", "local", "qwen-local", "qwen_local", "qwen3"))
     print(env_check.format_env_line(env))
     print(json.dumps(env, ensure_ascii=False, indent=2))
     if provider:
@@ -245,8 +249,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--provider", help="qwen (local, recommended) or scribe (online). Required.")
     parser.add_argument("--language", "-l", default=config.get("language", "auto"),
                         help="Language code: auto/zh/en/ja/ko/... (default: auto)")
-    parser.add_argument("--formats", default=",".join(config.get("formats", FORMATS)),
-                        help=f"Comma-separated outputs among {FORMATS} (default: all three)")
+    parser.add_argument("--formats", default=",".join(config.get("formats", ["srt"])),
+                        help=f"Comma-separated outputs among {FORMATS} (default: srt only)")
     parser.add_argument("--output", "-o", help="Output directory (default: alongside each input)")
     parser.add_argument("--device", default="auto", help="auto / cpu / cuda:0 (qwen torch route)")
     parser.add_argument("--precision", default="8bit", choices=["8bit", "bf16", "6bit"],
@@ -300,7 +304,7 @@ def main(argv=None) -> int:
 
     output_dir = Path(args.output).expanduser() if args.output else None
     if output_dir is not None and output_dir.is_file():
-        print(f"Error: --output 现在是输出目录（产物为 <stem>.txt/.json/.srt 三件套），"
+        print(f"Error: --output 现在是输出目录（按 --formats 导出所选文件），"
               f"但给定路径已是文件: {output_dir}")
         return 2
 
@@ -333,17 +337,6 @@ def main(argv=None) -> int:
 
     summaries = []
     failures = []
-    # Same-stem inputs (a.mp4 + a.mp3) would overwrite each other's trio —
-    # deduplicate output stems up front (doc §10).
-    claimed: dict = {}
-    stem_overrides: dict = {}
-    for path in inputs:
-        base_dir = output_dir if output_dir is not None else path.parent
-        key = (str(base_dir).lower(), path.stem.lower())
-        claimed[key] = claimed.get(key, 0) + 1
-        if claimed[key] > 1:
-            stem_overrides[str(path)] = f"{path.stem}-{claimed[key]}"
-
     try:
         for index, path in enumerate(inputs, 1):
             if len(inputs) > 1:
@@ -354,7 +347,7 @@ def main(argv=None) -> int:
                 summary = transcribe_one(
                     backend, path, per_output, formats, args.language, options,
                     show_progress=not args.no_progress,
-                    output_stem=stem_overrides.get(str(path)),
+
                 )
                 summaries.append(summary)
                 print(f"  Done: {summary['status']} in {summary['elapsed']:.1f}s")
@@ -363,7 +356,7 @@ def main(argv=None) -> int:
                 for warning in summary["warnings"]:
                     print(f"    warning: {warning}")
             except KeyboardInterrupt:
-                print("\n已取消：停止后续任务；已完成分块缓存已保留，可重新运行续传。")
+                print("\n已取消：停止后续任务；已完成缓存保留在应用缓存目录；Torch 可复用分块，MLX 中断需重跑当前推理。")
                 return 130
             except ScribeError as exc:
                 failures.append((str(path), f"[{exc.kind}] {exc}"))
@@ -387,6 +380,9 @@ def main(argv=None) -> int:
         for item, message in failures:
             print(f"  - {item}: {message}")
         return 1
+    if any(s["status"] != "complete" for s in summaries):
+        print("存在 partial 结果，所选交付未全部完成。")
+        return 3
     print(f"All done! {len(summaries)} file(s) transcribed.")
     print(f"{'=' * 60}\n")
     return 0

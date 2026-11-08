@@ -114,29 +114,19 @@ def test_wrap_two_lines_max_for_subtitle():
 
 # --- finalize -----------------------------------------------------------------
 
-def test_finalize_sorts_and_fixes_small_overlap():
-    entries = [
-        {"start": 5.0, "end": 8.0, "text": "B"},
-        {"start": 0.0, "end": 5.2, "text": "A"},  # 0.2s overlap with B
-    ]
-    fixed, warnings = finalize_entries(entries, 100.0)
-    assert fixed[0]["text"] == "A"
-    assert fixed[1]["start"] == pytest.approx(5.2)
-    assert any("overlap" in warn for warn in warnings)
+def test_finalize_fixes_small_overlap_without_sorting_text():
+    entries = [{"start": 0., "end": 5.02, "text": "A"}, {"start": 5., "end": 8., "text": "B"}]
+    fixed, warnings = finalize_entries(entries, 100.)
+    assert [e["text"] for e in fixed] == ["A", "B"]
+    assert fixed[1]["start"] == pytest.approx(5.02)
+    assert warnings
 
 
-def test_finalize_truncates_stretched_previous_instead_of_dropping():
-    # aligner stretched the English word inside previous caption by 2s
-    entries = [
-        {"start": 10.0, "end": 13.0, "text": "the 拉伸"},
-        {"start": 11.0, "end": 14.0, "text": "后续字幕"},
-    ]
-    fixed, warnings = finalize_entries(entries, 100.0)
-    texts = [e["text"] for e in fixed]
-    assert texts == ["the 拉伸", "后续字幕"]  # content kept, not dropped
-    assert fixed[0]["end"] == pytest.approx(11.0)  # previous truncated
-    assert fixed[1]["start"] == pytest.approx(11.0)
-    assert any("truncated" in w for w in warnings)
+def test_finalize_merges_contained_spans_without_losing_content():
+    fixed, warnings = finalize_entries([{"start": 1., "end": 2., "text": "A"},
+                                       {"start": 1.8, "end": 1.9, "text": "B"}], 10.)
+    assert len(fixed) == 1 and fixed[0]["text"] == "A B"
+    assert warnings
 
 
 def test_finalize_clamps_end_to_duration():
@@ -145,21 +135,15 @@ def test_finalize_clamps_end_to_duration():
     assert fixed[0]["end"] == pytest.approx(10.0)
 
 
-def test_finalize_drops_zero_length():
-    entries = [{"start": 3.0, "end": 3.0, "text": "bad"}]
-    fixed, warnings = finalize_entries(entries, 10.0)
-    assert fixed == []
-    assert any("zero-length" in warn for warn in warnings)
+def test_finalize_rejects_degenerate_without_dropping():
+    with pytest.raises(ValueError):
+        finalize_entries([{"start": 3., "end": 3., "text": "bad"}], 10.)
 
 
-def test_finalize_drops_entry_past_media_end():
-    entries = [{"start": 12.0, "end": 13.0, "text": "ghost"}]
-    fixed, warnings = finalize_entries(entries, 10.0)
-    assert fixed == []
-    assert any("past media end" in warn for warn in warnings)
+def test_finalize_rejects_past_end_without_dropping():
+    with pytest.raises(ValueError):
+        finalize_entries([{"start": 12., "end": 13., "text": "ghost"}], 10.)
 
-
-# --- punctuation mapping (Qwen aligner strips it; raw text keeps it) -------------
 
 def test_attach_punctuation_maps_tails():
     from subtitles import attach_punctuation
@@ -167,8 +151,8 @@ def test_attach_punctuation_maps_tails():
              w(1.0, 1.2, "你"), w(1.2, 1.5, "好")]
     units = attach_punctuation(words, "大家好，你好。")
     assert units is not None
-    assert units[2]["tail"] == "，"
-    assert units[4]["tail"] == "。"
+    assert units[2]["text"] == "好，"
+    assert units[4]["text"] == "好。"
     assert all(u["text"] not in ("，", "。") for u in units)
 
 
@@ -177,8 +161,8 @@ def test_attach_punctuation_english_words_stay_whole():
     words = [w(0.0, 0.4, "Hello"), w(0.5, 0.9, "world")]
     units = attach_punctuation(words, "Hello, world!")
     assert units is not None
-    assert units[0]["tail"] == ","
-    assert units[1]["tail"] == "!"
+    assert units[0]["text"] == "Hello, "
+    assert units[1]["text"] == "world!"
 
 
 def test_attach_punctuation_extra_content_is_mismatch():
@@ -196,7 +180,7 @@ def test_attach_punctuation_mismatch_returns_none():
 def test_attach_punctuation_skips_when_words_carry_punct():
     from subtitles import attach_punctuation
     words = [w(0.0, 0.3, "好。")]
-    assert attach_punctuation(words, "好。") is None
+    assert attach_punctuation(words, "好。")[0]["text"] == "好。"
 
 
 def test_build_entries_uses_attached_punctuation_for_grouping():
