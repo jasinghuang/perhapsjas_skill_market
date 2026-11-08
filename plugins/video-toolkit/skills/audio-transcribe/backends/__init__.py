@@ -17,6 +17,7 @@ class TranscriptionBackend(ABC):
         audio_path: str,
         language: Optional[str] = None,
         on_progress: Optional[Callable[[float, float, float], None]] = None,
+        condition_on_previous_text: bool = False,
     ) -> Dict:
         """Transcribe audio and return unified result.
 
@@ -27,6 +28,10 @@ class TranscriptionBackend(ABC):
                 ``(fraction, elapsed_seconds, total_seconds)`` with
                 ``fraction`` in [0, 1]. Implementations must swallow
                 callback errors so progress can never abort transcription.
+            condition_on_previous_text: Whether each 30s window conditions on
+                the previous window's text. Defaults to False — context from a
+                hallucination over music/silence otherwise cascades into later
+                windows (repetition loops, degrading quality).
 
         Returns:
             {"segments": [{"start": float, "end": float, "text": str}],

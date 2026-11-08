@@ -8,7 +8,8 @@ class FakeBackend:
     def load_model(self, model_name):
         pass
 
-    def transcribe(self, audio_path, language=None, on_progress=None):
+    def transcribe(self, audio_path, language=None, on_progress=None,
+                   condition_on_previous_text=False):
         self.on_progress = on_progress
         if on_progress:
             on_progress(0.5, 5.0, 10.0)

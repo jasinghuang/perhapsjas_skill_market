@@ -130,6 +130,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/audio-transcribe/run.py video.mp4 --format 
 | `--language, -l` | 语言代码（auto/zh/en/ko/ja 等） | auto |
 | `--format, -f` | 输出格式（srt/md/json） | md，或由 `-o` 后缀推断 |
 | `--keep-timestamps, -t` | Markdown 保留时间码 | false |
+| `--keep-context` | 让每个 30s 窗口参考上一窗口的文本（见下方常见问题） | false（不参考上文） |
 | `--no-progress` | 关闭实时转录进度输出 | 进度开启 |
 
 模型名写错时 Mac 后端会直接报错并列出可用模型，不会静默回退到别的模型。
@@ -164,6 +165,10 @@ Homebrew Python 有 PEP 668 保护，安装时必须加 `--break-system-packages
 **模型会重复下载吗**：不会。模型缓存在 `~/.cache/huggingface/hub/models--mlx-community--whisper-*`，脚本会打印 `Cached: yes/no`。缓存跨 Python 版本共享，只要解释器选对就不会重下。
 
 **确认当前用的是哪个 Python**：`run.py` 第一行会打印解释器路径；也可以手动 `python3.14 -c "import mlx_whisper"` 验证。
+
+**音乐开头字幕提前/时间戳钉在 0:00**：Whisper 段级时间戳在窗口以非语音开头时会把首条 segment 起点钉在窗口起点。后端已默认开启 `word_timestamps` 并用词边界校正 segment 起止，无需额外操作。
+
+**为什么默认不参考上文（condition_on_previous_text=False）**：Whisper 默认把上一窗口的解码文本喂回下一窗口当上下文；一旦音乐/静音段产生幻觉文本，会连锁污染后面所有窗口，表现为"复读机"循环或越转越差。默认关闭后每个窗口独立解码，幻觉不会扩散；代价是跨窗口边界的句子衔接和稀有术语一致性略降，正常语音内容差异极小（实测 11 分钟视频 ±8/1960 词）。确有需要（术语密集的长讲座）时加 `--keep-context` 打开。
 
 ## 与其它 skill 串联
 
