@@ -8,8 +8,16 @@ import numpy as np
 import pytest
 
 from providers import FLAGSHIP_MODEL, find_voice
+from providers.base import SynthesisResult
+from providers.errors import (
+    FATAL,
+    RETRYABLE,
+    SUBMISSION_UNKNOWN,
+    SynthesisError,
+)
 from providers.online_bailian import (
     BAILIAN_CONSOLE_URL,
+    DOWNLOAD_RETRY_DELAYS,
     OnlineBailianProvider,
     ProviderError,
     _readline_with_timeout,
@@ -63,32 +71,215 @@ def test_build_bl_command_maps_language_code(lang, code):
     assert cmd[cmd.index("--language") + 1] == code
 
 
-def test_http_payload_maps_language_type(tmp_path):
-    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
-    response = MagicMock(
+def _http_response(url="https://example.test/a.wav", request_id=None):
+    body = {"output": {"audio": {"url": url}}}
+    if request_id:
+        body["request_id"] = request_id
+    return MagicMock(
         raise_for_status=MagicMock(),
-        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
+        json=lambda: body,
+        headers={},
     )
-    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
-    with patch("requests.post", return_value=response) as post, \
-         patch("requests.get", return_value=download):
+
+
+def _http_download(content=b"RIFF"):
+    return MagicMock(raise_for_status=MagicMock(), content=content)
+
+
+# --- bl 路径：单次提交 + 错误分类（重试交给统一调度层） ---------------------
+
+
+def test_synthesize_returns_synthesis_result_with_real_rate():
+    p = OnlineBailianProvider()
+    mono = np.full((100, 1), 0.2, dtype=np.float32)
+    with patch("subprocess.run") as run, \
+         patch("providers.online_bailian.sf.read", return_value=(mono, 24000)):
+        out = p.synthesize("你好", QTTS)
+    assert isinstance(out, SynthesisResult)
+    assert out.sample_rate == 24000
+    assert out.audio.shape == (100,)
+    assert out.provider == "online"
+    assert out.model_id == "qwen3-tts-flash"
+
+
+def test_synthesize_accepts_non_24k_result_metadata():
+    # 实际 WAV 元数据是 48k 时照常通过（T14 的在线侧）。
+    p = OnlineBailianProvider()
+    mono = np.full((100, 1), 0.2, dtype=np.float32)
+    with patch("subprocess.run"), \
+         patch("providers.online_bailian.sf.read", return_value=(mono, 48000)):
+        out = p.synthesize("你好", QTTS)
+    assert out.sample_rate == 48000
+
+
+def test_http_500_is_retryable_single_attempt():
+    # 429/5xx 只抛 retryable，不做内部重试（T05 的 provider 侧）。
+    p = OnlineBailianProvider()
+    error = subprocess.CalledProcessError(1, ["bl"], stderr="500 Internal Server Error")
+    with patch("subprocess.run", side_effect=error) as run, \
+         patch("providers.online_bailian.time.sleep") as sleep:
+        with pytest.raises(SynthesisError) as excinfo:
+            p.synthesize("你好", QTTS)
+    assert excinfo.value.kind == RETRYABLE
+    assert run.call_count == 1
+    sleep.assert_not_called()
+
+
+def test_429_is_retryable_and_parses_retry_after():
+    p = OnlineBailianProvider()
+    error = subprocess.CalledProcessError(
+        1, ["bl"], stderr="429 Too Many Requests; Retry-After: 7"
+    )
+    with patch("subprocess.run", side_effect=error):
+        with pytest.raises(SynthesisError) as excinfo:
+            p.synthesize("你好", QTTS)
+    assert excinfo.value.kind == RETRYABLE
+    assert excinfo.value.retry_after == 7.0
+
+
+def test_timeout_is_submission_unknown_not_auto_resubmit():
+    # CLI 只给非零退出码时，timeout 不能当作安全重提信号（spec §10）。
+    p = OnlineBailianProvider()
+    error = subprocess.CalledProcessError(1, ["bl"], stderr="request timed out")
+    with patch("subprocess.run", side_effect=error) as run:
+        with pytest.raises(SynthesisError) as excinfo:
+            p.synthesize("你好", QTTS)
+    assert excinfo.value.kind == SUBMISSION_UNKNOWN
+    assert run.call_count == 1
+
+
+def test_401_fails_immediately_with_login_hint():
+    p = OnlineBailianProvider()
+    unauthorized = subprocess.CalledProcessError(
+        1, ["bl"], stderr="401 Unauthorized"
+    )
+    with patch("subprocess.run", side_effect=unauthorized) as run:
+        with pytest.raises(SynthesisError, match="bl auth login") as excinfo:
+            p.synthesize("你好", QTTS)
+    assert run.call_count == 1
+    assert excinfo.value.kind == FATAL
+
+
+def test_quota_error_is_fatal_with_console_link():
+    p = OnlineBailianProvider()
+    quota = subprocess.CalledProcessError(
+        1, ["bl"], stderr="Throttling.User: 额度不足"
+    )
+    with patch("subprocess.run", side_effect=quota) as run:
+        with pytest.raises(SynthesisError, match="bailian.console.aliyun.com") as excinfo:
+            p.synthesize("你好", QTTS)
+    assert run.call_count == 1
+    assert excinfo.value.kind == FATAL
+
+
+def test_plain_bl_failure_is_retryable():
+    p = OnlineBailianProvider()
+    error = subprocess.CalledProcessError(1, ["bl"], stderr="boom")
+    with patch("subprocess.run", side_effect=error):
+        with pytest.raises(SynthesisError) as excinfo:
+            p.synthesize("你好", QTTS)
+    assert excinfo.value.kind == RETRYABLE
+
+
+# --- HTTP 兜底：提交一次 + 下载独立预算 -------------------------------------
+
+
+def _prepared_http(tmp_path=None):
+    return OnlineBailianProvider(
+        api_key="sk-test", endpoint="https://example.test/tts"
+    )
+
+
+def test_http_payload_maps_language_type(tmp_path):
+    p = _prepared_http()
+    with patch("requests.post", return_value=_http_response()) as post, \
+         patch("requests.get", return_value=_http_download()):
         p._synthesize_http("hello", QTTS, "", "english", tmp_path / "a.wav")
     assert post.call_args.kwargs["json"]["input"]["language_type"] == "English"
 
 
 def test_http_payload_uses_language_hints_for_flagship(tmp_path):
-    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
-    response = MagicMock(
-        raise_for_status=MagicMock(),
-        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
-    )
-    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
-    with patch("requests.post", return_value=response) as post, \
-         patch("requests.get", return_value=download):
+    p = _prepared_http()
+    with patch("requests.post", return_value=_http_response()) as post, \
+         patch("requests.get", return_value=_http_download()):
         p._synthesize_http("你好", FLAG, "", "chinese", tmp_path / "a.wav")
     payload = post.call_args.kwargs["json"]["input"]
     assert payload["language_hints"] == ["zh"]
     assert "language_type" not in payload
+
+
+def test_http_timeout_is_submission_unknown(tmp_path):
+    p = _prepared_http()
+    import requests as _requests
+
+    with patch("requests.post", side_effect=_requests.Timeout("t")):
+        with pytest.raises(SynthesisError) as excinfo:
+            p._synthesize_http("你好", QTTS, "", "chinese", tmp_path / "a.wav")
+    assert excinfo.value.kind == SUBMISSION_UNKNOWN
+
+
+def test_http_connection_error_before_submit_is_retryable(tmp_path):
+    p = _prepared_http()
+    import requests as _requests
+
+    with patch("requests.post", side_effect=_requests.ConnectionError("refused")):
+        with pytest.raises(SynthesisError) as excinfo:
+            p._synthesize_http("你好", QTTS, "", "chinese", tmp_path / "a.wav")
+    assert excinfo.value.kind == RETRYABLE
+
+
+def test_http_4xx_is_fatal_no_retry(tmp_path):
+    p = _prepared_http()
+    response = MagicMock(
+        raise_for_status=MagicMock(
+            side_effect=Exception("400 Bad Request invalid voice")
+        ),
+        status_code=400,
+        headers={},
+    )
+    with patch("requests.post", return_value=response) as post:
+        with pytest.raises(SynthesisError) as excinfo:
+            p._synthesize_http("你好", QTTS, "", "chinese", tmp_path / "a.wav")
+    assert excinfo.value.kind == FATAL
+    assert post.call_count == 1
+
+
+def test_download_failure_retries_without_resubmitting_synthesis(tmp_path):
+    # T06：合成成功、下载失败 → 只重试下载，合成请求仍为 1 次。
+    p = _prepared_http()
+    out = tmp_path / "a.wav"
+    bad = MagicMock(
+        raise_for_status=MagicMock(side_effect=Exception("502")),
+        status_code=502, headers={},
+    )
+    with patch("requests.post", return_value=_http_response()) as post, \
+         patch("requests.get", side_effect=[bad, _http_download(b"RIFF")]) as get, \
+         patch("providers.online_bailian.time.sleep") as sleep:
+        p._synthesize_http("你好", QTTS, "", "chinese", out)
+    assert post.call_count == 1
+    assert get.call_count == 2
+    sleep.assert_called_once_with(DOWNLOAD_RETRY_DELAYS[0])
+    assert out.read_bytes() == b"RIFF"
+
+
+def test_download_failure_exhausts_budget_and_keeps_url(tmp_path):
+    p = _prepared_http()
+    bad = MagicMock(
+        raise_for_status=MagicMock(side_effect=Exception("502")),
+        status_code=502, headers={},
+    )
+    with patch("requests.post", return_value=_http_response()) as post, \
+         patch("requests.get", side_effect=[bad, bad, bad]) as get, \
+         patch("providers.online_bailian.time.sleep"):
+        with pytest.raises(SynthesisError) as excinfo:
+            p._synthesize_http("你好", QTTS, "", "chinese", tmp_path / "a.wav")
+    assert post.call_count == 1   # 绝不重新提交合成
+    assert get.call_count == 3    # 下载预算独立用尽
+    assert excinfo.value.kind == RETRYABLE
+    assert excinfo.value.audio_url == "https://example.test/a.wav"
+
+
+# --- 其余行为保持 -------------------------------------------------------------
 
 
 def test_cantonese_voice_omits_language_and_carries_style():
@@ -115,20 +306,15 @@ def test_ssml_text_is_wrapped_once():
     assert "--enable-ssml" in cmd
 
     wrapped = p.build_bl_command(
-        "<speak>你好</speak>", FLAG, Path("/tmp/a.wav"), enable_ssml=True
+        "<speak>你好</speak>", FLAG, Path("/tmp/a.wav"), enable_ssml=True,
     )
     assert wrapped[wrapped.index("--text") + 1] == "<speak>你好</speak>"
 
 
 def test_http_payload_wraps_ssml_once(tmp_path):
-    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
-    response = MagicMock(
-        raise_for_status=MagicMock(),
-        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
-    )
-    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
-    with patch("requests.post", return_value=response) as post, \
-         patch("requests.get", return_value=download):
+    p = _prepared_http()
+    with patch("requests.post", return_value=_http_response()) as post, \
+         patch("requests.get", return_value=_http_download()):
         p._synthesize_http(
             "你好<break time=\"300ms\"/>", FLAG, "", "chinese",
             tmp_path / "a.wav", enable_ssml=True,
@@ -149,15 +335,10 @@ def test_force_http_prepare_for_hotfix():
 
 
 def test_http_payload_includes_hot_fix(tmp_path):
-    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
-    response = MagicMock(
-        raise_for_status=MagicMock(),
-        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
-    )
-    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
+    p = _prepared_http()
     hotfix = {"replace": [{"今天": "金天"}]}
-    with patch("requests.post", return_value=response) as post, \
-         patch("requests.get", return_value=download):
+    with patch("requests.post", return_value=_http_response()) as post, \
+         patch("requests.get", return_value=_http_download()):
         p._synthesize_http(
             "今天", FLAG, "", "chinese", tmp_path / "a.wav", hot_fix=hotfix
         )
@@ -165,11 +346,11 @@ def test_http_payload_includes_hot_fix(tmp_path):
 
 
 def test_synthesize_routes_hotfix_to_http_even_with_bl(tmp_path):
-    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    p = _prepared_http()
     p._use_http = False
     with patch.object(p, "_synthesize_http") as http, \
          patch.object(p, "_synthesize_bl") as bl, \
-         patch("soundfile.read") as read:
+         patch("providers.online_bailian.sf.read") as read:
         read.return_value = (np.zeros((24000, 1), dtype=np.float32), 24000)
         p.synthesize("今天", FLAG, hot_fix={"replace": [{"今天": "金天"}]})
     http.assert_called_once()
@@ -177,14 +358,9 @@ def test_synthesize_routes_hotfix_to_http_even_with_bl(tmp_path):
 
 
 def test_http_payload_cantonese_omits_language_and_carries_style(tmp_path):
-    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
-    response = MagicMock(
-        raise_for_status=MagicMock(),
-        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
-    )
-    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
-    with patch("requests.post", return_value=response) as post, \
-         patch("requests.get", return_value=download):
+    p = _prepared_http()
+    with patch("requests.post", return_value=_http_response()) as post, \
+         patch("requests.get", return_value=_http_download()):
         p._synthesize_http(
             "你好", CANTONESE, "", "chinese", tmp_path / "a.wav",
             rate=1.1, pitch=1.0, volume=80, seed=42,
@@ -195,6 +371,18 @@ def test_http_payload_cantonese_omits_language_and_carries_style(tmp_path):
     assert payload["pitch"] == 1.0
     assert payload["volume"] == 80
     assert payload["seed"] == 42
+
+
+def test_http_payload_includes_instruction_only_for_flagship(tmp_path):
+    p = _prepared_http()
+    with patch("requests.post", return_value=_http_response()) as post, \
+         patch("requests.get", return_value=_http_download()):
+        p._synthesize_http("你好", FLAG, "平稳解说", "chinese", tmp_path / "a.wav")
+        flag_body = post.call_args.kwargs["json"]
+        p._synthesize_http("你好", QTTS, "平稳解说", "chinese", tmp_path / "b.wav")
+        qwen_body = post.call_args.kwargs["json"]
+    assert flag_body["input"]["instruction"] == "平稳解说"
+    assert "instruction" not in qwen_body["input"]
 
 
 def test_describe_reports_online_and_shared_flagship_constant():
@@ -303,125 +491,8 @@ def test_readline_with_timeout_does_not_hang_without_newline():
         unblock.set()
 
 
-def test_synthesize_returns_mono_float32_at_24k():
-    p = OnlineBailianProvider()
-    stereo = np.ones((100, 2), dtype=np.float32)
-    with patch("subprocess.run") as run, \
-         patch("providers.online_bailian.sf.read", return_value=(stereo, 24000)):
-        out = p.synthesize("你好", QTTS)
-    cmd = run.call_args.args[0]
-    assert cmd[:5] == ["bl", "speech", "synthesize", "--text", "你好"]
-    assert run.call_args.kwargs == {"check": True, "capture_output": True, "text": True}
-    assert out.dtype == np.float32
-    assert out.shape == (100,)
-
-
-def test_synthesize_raises_provider_error_with_stderr():
-    p = OnlineBailianProvider()
-    error = subprocess.CalledProcessError(1, ["bl"], stderr="boom")
-    with patch("subprocess.run", side_effect=error):
-        with pytest.raises(ProviderError, match="boom"):
-            p.synthesize("你好", QTTS)
-
-
-def test_429_is_retried_then_succeeds():
-    p = OnlineBailianProvider()
-    rate_limited = subprocess.CalledProcessError(
-        1, ["bl"], stderr="429 Too Many Requests"
-    )
-    mono = np.full((100, 1), 0.2, dtype=np.float32)
-    with patch(
-        "subprocess.run",
-        side_effect=[rate_limited, rate_limited, MagicMock(returncode=0)],
-    ) as run, \
-         patch("providers.online_bailian.time.sleep") as sleep, \
-         patch("providers.online_bailian.sf.read", return_value=(mono, 24000)):
-        out = p.synthesize("你好", QTTS)
-    assert out.shape == (100,)
-    assert run.call_count == 3
-    assert [call.args[0] for call in sleep.call_args_list] == [1.0, 2.0]
-
-
-def test_401_fails_immediately_with_login_hint():
-    p = OnlineBailianProvider()
-    unauthorized = subprocess.CalledProcessError(
-        1, ["bl"], stderr="401 Unauthorized"
-    )
-    with patch("subprocess.run", side_effect=unauthorized) as run, \
-         patch("providers.online_bailian.time.sleep") as sleep:
-        with pytest.raises(ProviderError, match="bl auth login"):
-            p.synthesize("你好", QTTS)
-    assert run.call_count == 1
-    sleep.assert_not_called()
-
-
-def test_quota_error_mentions_console_link():
-    p = OnlineBailianProvider()
-    quota = subprocess.CalledProcessError(
-        1, ["bl"], stderr="Throttling.User: 额度不足"
-    )
-    with patch("subprocess.run", side_effect=quota) as run:
-        with pytest.raises(ProviderError, match="bailian.console.aliyun.com"):
-            p.synthesize("你好", QTTS)
-    assert run.call_count == 1
-
-
-def test_console_url_constant_is_the_shared_link():
-    assert BAILIAN_CONSOLE_URL == "https://bailian.console.aliyun.com/"
-
-
-def test_synthesize_rejects_non_24k_audio():
-    p = OnlineBailianProvider()
-    mono = np.zeros((100, 1), dtype=np.float32)
-    with patch("subprocess.run"), \
-         patch("providers.online_bailian.sf.read", return_value=(mono, 48000)):
-        with pytest.raises(ProviderError, match="24000"):
-            p.synthesize("你好", QTTS)
-
-
-def test_http_fallback_downloads_audio_url(tmp_path):
-    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
-    with patch("requests.post") as post, patch("requests.get") as get, \
-         patch("soundfile.write") as write:
-        post.return_value = MagicMock(raise_for_status=MagicMock(), json=lambda: {
-            "output": {"audio": {"url": "https://example.test/a.wav"}}
-        })
-        get.return_value = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
-        p._synthesize_http("你好", QTTS, "", "chinese", tmp_path / "a.wav")
-    body = post.call_args.kwargs["json"]
-    assert body["model"] == "qwen3-tts-flash"
-    assert body["input"]["voice"] == "Cherry"
-    assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer sk-test"
-    get.assert_called_once()
-
-
-def test_http_fallback_requires_endpoint(tmp_path):
-    p = OnlineBailianProvider(api_key="sk-test")
-    with patch("requests.post") as post:
-        with pytest.raises(ProviderError, match="--tts-endpoint"):
-            p._synthesize_http("你好", QTTS, "", "chinese", tmp_path / "a.wav")
-    post.assert_not_called()
-
-
-def test_http_payload_includes_instruction_only_for_flagship(tmp_path):
-    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
-    response = MagicMock(
-        raise_for_status=MagicMock(),
-        json=lambda: {"output": {"audio": {"url": "https://example.test/a.wav"}}},
-    )
-    download = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
-    with patch("requests.post", return_value=response) as post, \
-         patch("requests.get", return_value=download):
-        p._synthesize_http("你好", FLAG, "平稳解说", "chinese", tmp_path / "a.wav")
-        flag_body = post.call_args.kwargs["json"]
-        p._synthesize_http("你好", QTTS, "平稳解说", "chinese", tmp_path / "b.wav")
-        qwen_body = post.call_args.kwargs["json"]
-    assert flag_body["input"]["instruction"] == "平稳解说"
-    assert "instruction" not in qwen_body["input"]
-
-
 def test_prepare_switches_to_http_when_bl_missing():
-    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    p = _prepared_http()
     with patch("shutil.which", return_value=None), \
          patch.object(p, "ensure_authenticated") as ensure:
         p.prepare()
@@ -437,7 +508,7 @@ def test_prepare_http_mode_requires_endpoint():
 
 
 def test_synthesize_uses_http_after_prepare_without_bl():
-    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
+    p = _prepared_http()
     with patch("shutil.which", return_value=None), \
          patch.object(p, "_synthesize_http", side_effect=ProviderError("stop")) as http, \
          patch("subprocess.run") as run:
@@ -449,17 +520,5 @@ def test_synthesize_uses_http_after_prepare_without_bl():
     run.assert_not_called()
 
 
-def test_synthesize_http_returns_mono_float32_at_24k():
-    p = OnlineBailianProvider(api_key="sk-test", endpoint="https://example.test/tts")
-    stereo = np.ones((100, 2), dtype=np.float32)
-    with patch("shutil.which", return_value=None), \
-         patch("requests.post") as post, patch("requests.get") as get, \
-         patch("providers.online_bailian.sf.read", return_value=(stereo, 24000)):
-        post.return_value = MagicMock(raise_for_status=MagicMock(), json=lambda: {
-            "output": {"audio": {"url": "https://example.test/a.wav"}}
-        })
-        get.return_value = MagicMock(raise_for_status=MagicMock(), content=b"RIFF")
-        p.prepare()
-        out = p.synthesize("你好", QTTS)
-    assert out.dtype == np.float32
-    assert out.shape == (100,)
+def test_console_url_constant_is_the_shared_link():
+    assert BAILIAN_CONSOLE_URL == "https://bailian.console.aliyun.com/"

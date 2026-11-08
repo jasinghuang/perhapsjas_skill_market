@@ -6,20 +6,23 @@ video-tts — 视频探测、混流与成片校验。
 CLI 决定主音轨长度与是否重编码。MKV / WebM 的视频流条目常常没有
 `duration`，此时回退到同一次 ffprobe 输出里的容器级 `format.duration`。
 `needs_reencode()` 只放行 mp4 可直接复制的 H.264 / HEVC；VP9 / AV1 及
-未知编码一律重编码为 H.264（AV1 虽然理论上可装进 mp4，但兼容性差，按
-spec §9 统一重编码）。
+未知编码一律重编码为 H.264。
 
 `mux_video()` 用一条 ffmpeg 把配音轨替换进视频（不映射原音轨、不用
-`-shortest`），失败或产出校验不过时删除半成品，避免留下音画不同步的
-文件。`verify_output()` 要求成片恰好一条视频流 + 一条音频流，且视频时长
-与输入视频相差不超过 `tolerance` 秒。
+`-shortest`），AAC 显式采用与音轨相同的采样率（默认 48kHz）。成品先写
+临时文件，**校验通过后原子替换**——失败不覆盖、不删除用户已有成品。
+`verify_output()` 要求成片恰好一条视频流 + 一条 AAC 音频流，且视频与
+音频流时长都与输入视频相差不超过 `tolerance` 秒（只验视频时长会漏掉
+末段音频缺失）。
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -107,22 +110,30 @@ def needs_reencode(codec_name: str) -> bool:
     return codec_name not in COPY_CODECS
 
 
-def _remove_quietly(path: Path) -> None:
-    """删除半成品；文件不存在或删除失败都不再抛错。"""
-    try:
-        path.unlink(missing_ok=True)
-    except OSError:
-        pass
-
-
-def mux_video(video: Path, track: Path, out: Path, codec_name: str) -> None:
-    """把 `track` 作为唯一音轨混进 `video`，写出 `out` 并校验。
+def mux_video(
+    video: Path,
+    track: Path,
+    out: Path,
+    codec_name: str,
+    sample_rate: int = 48000,
+) -> None:
+    """把 `track` 作为唯一音轨混进 `video`，原子写出 `out` 并校验。
 
     先探测输入视频时长作为校验基准；视频编码可直接复制时用 `-c:v copy`，
-    否则用 `-c:v libx264 -crf 18 -preset medium` 重编码。ffmpeg 失败、或
-    混流后校验不通过（缺流、时长漂移）都会删除 `out` 再抛 `RuntimeError`。
+    否则用 `-c:v libx264 -crf 18 -preset medium` 重编码。AAC 显式 `-ar
+    sample_rate` 与音轨一致。ffmpeg 先写临时文件，混流 + `verify_output`
+    都通过后才 `os.replace` 成 `out`；任何失败只清理临时文件，不触碰
+    `out` 已有的内容。
     """
     expected = probe_video(video).duration
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=out.parent, prefix=f".{out.name}.", suffix=".tmp.mp4"
+    )
+    os.close(fd)
+    Path(tmp_name).unlink()  # ffmpeg 需要按后缀推断格式，不留空文件。
+
     command = [
         "ffmpeg", "-y",
         "-i", str(video),
@@ -143,20 +154,23 @@ def mux_video(video: Path, track: Path, out: Path, codec_name: str) -> None:
     command += [
         "-c:a", "aac",
         "-b:a", "192k",
+        "-ar", str(sample_rate),
         "-movflags", "+faststart",
-        str(out),
+        tmp_name,
     ]
 
-    result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode != 0:
-        _remove_quietly(out)
-        stderr = (result.stderr or "").strip()
-        raise RuntimeError(f"ffmpeg mux failed for {out}: {stderr}")
-
     try:
-        verify_output(out, expected)
-    except Exception:
-        _remove_quietly(out)
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()
+            raise RuntimeError(f"ffmpeg mux failed for {out}: {stderr}")
+        verify_output(Path(tmp_name), expected)
+        os.replace(tmp_name, out)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
         raise
 
 
@@ -165,7 +179,7 @@ def verify_output(
     expected_duration: float,
     tolerance: float = 0.2,
 ) -> None:
-    """校验成片：恰好一条视频流 + 一条 AAC 音频流，时长与期望相差 ≤ `tolerance`。"""
+    """校验成片：一条视频流 + 一条 AAC 音频流，两条流时长都 ≤ `tolerance`。"""
     probe = _ffprobe(VERIFY_ENTRIES, path)
     streams = probe.get("streams", [])
     videos = [stream for stream in streams if stream.get("codec_type") == "video"]
@@ -183,11 +197,23 @@ def verify_output(
         raise RuntimeError(
             f"expected AAC audio stream in {path}, found {audio_codec!r}"
         )
-    duration = _duration(videos[0], probe, path)
-    drift = abs(duration - expected_duration)
+    video_duration = _duration(videos[0], probe, path)
+    drift = abs(video_duration - expected_duration)
     if drift > tolerance:
         raise RuntimeError(
-            f"output duration {duration:.3f}s differs from expected "
-            f"{expected_duration:.3f}s by {drift:.3f}s "
+            f"output video duration {video_duration:.3f}s differs from "
+            f"expected {expected_duration:.3f}s by {drift:.3f}s "
             f"(tolerance {tolerance:.3f}s)"
+        )
+    # 音频流时长单独校验：只看视频时长会漏掉「末段音频缺失」的坏成品。
+    try:
+        audio_duration = _duration(audios[0], probe, path)
+    except RuntimeError:
+        return  # 容器与流都没给音频时长时跳过（部分封装不记录）。
+    audio_drift = abs(audio_duration - expected_duration)
+    if audio_drift > tolerance:
+        raise RuntimeError(
+            f"output audio duration {audio_duration:.3f}s differs from "
+            f"expected {expected_duration:.3f}s by {audio_drift:.3f}s "
+            f"(tolerance {tolerance:.3f}s); trailing audio may be missing"
         )

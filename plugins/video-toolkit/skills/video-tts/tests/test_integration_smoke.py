@@ -16,8 +16,9 @@ import pytest
 from cache import SegmentCache
 from engine import EngineOptions, run_engine
 from mux import _ffprobe, mux_video, verify_output
+from providers.base import SynthesisResult
 from srt_parse import load_cues
-from track_build import write_wav
+from track_build import read_wav
 
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
@@ -32,11 +33,18 @@ requires_ffmpeg = pytest.mark.skipif(
 
 
 class _SineProvider:
-    """返回 0.8 s、24 kHz、非静音的正弦波。"""
+    """返回 0.8 s、24 kHz、非静音的正弦波（原生采样率）。"""
+
+    def describe(self):
+        return {"provider": "sine", "model": "sine-1"}
 
     def synthesize(self, text, voice, instruct="", lang="chinese"):
         t = np.arange(int(24000 * 0.8), dtype=np.float32) / 24000.0
-        return (0.2 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+        audio = (0.2 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+        return SynthesisResult(
+            audio=audio, sample_rate=24000, channels=1,
+            provider="sine", model_id="sine-1",
+        )
 
 
 @requires_integration
@@ -61,30 +69,36 @@ def test_engine_mux_smoke(tmp_path):
     )
 
     cues, _warnings = load_cues(srt, video_duration=5.0)
-    master, results = run_engine(
+    track = tmp_path / "out.dub.wav"
+    results = run_engine(
         cues,
         _SineProvider(),
         voice=None,
         instruct="",
         lang="chinese",
         total_duration=5.0,
-        options=EngineOptions(),
+        options=EngineOptions(),  # master 48k：走真实 24k→48k 重采样
         cache=SegmentCache(enabled=False),
+        track_path=track,
         progress=lambda _line: None,
     )
     assert all(not result.failed for result in results)
+    master, rate = read_wav(track)
+    assert rate == 48000
+    assert master.size == 48000 * 5
 
-    track = tmp_path / "out.dub.wav"
-    write_wav(track, master)
     out = tmp_path / "out.dub.mp4"
-    mux_video(video, track, out, "h264")
+    mux_video(video, track, out, "h264", sample_rate=48000)
     verify_output(out, 5.0)
 
-    probe = _ffprobe("stream=codec_type,codec_name:format=duration", out)
+    probe = _ffprobe(
+        "stream=codec_type,codec_name,sample_rate:format=duration", out
+    )
     streams = probe["streams"]
     videos = [s for s in streams if s.get("codec_type") == "video"]
     audios = [s for s in streams if s.get("codec_type") == "audio"]
     assert len(videos) == 1
     assert len(audios) == 1
     assert audios[0]["codec_name"] == "aac"
+    assert int(audios[0]["sample_rate"]) == 48000
     assert abs(float(probe["format"]["duration"]) - 5.0) <= 0.2

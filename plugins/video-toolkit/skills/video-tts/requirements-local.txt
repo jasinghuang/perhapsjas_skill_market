@@ -1,0 +1,5 @@
+# video-tts 本地 provider 依赖（仅 Apple Silicon macOS）
+# 测试基线：Python 3.14 + mlx-audio 0.6.4（Qwen3-TTS CustomVoice /
+# VoiceDesign / Base，BF16 权重）
+-r requirements-base.txt
+mlx-audio>=0.6.4,<0.7

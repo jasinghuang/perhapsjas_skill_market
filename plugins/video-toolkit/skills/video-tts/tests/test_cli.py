@@ -8,7 +8,8 @@ import skill_main
 from engine import FitAction, SegmentResult
 from mux import VideoInfo
 from providers import LOCAL_DESIGN_MODEL, LOCAL_MODEL
-from run import required_imports
+from providers.base import SynthesisResult
+from run import required_route, route_imports
 from skill_main import (
     _build_provider,
     _print_report,
@@ -17,7 +18,7 @@ from skill_main import (
     build_parser,
     validate_args,
 )
-from srt_parse import Cue
+from srt_parse import Cue, parse_srt
 
 BASE_IMPORTS = ["soundfile", "numpy"]
 
@@ -31,6 +32,9 @@ def _write_srt(tmp_path, name="a.srt", body=None):
         encoding="utf-8",
     )
     return path
+
+
+# --- 参数校验 -------------------------------------------------------------
 
 
 def test_online_requires_yes(tmp_path, capsys):
@@ -64,14 +68,41 @@ def test_defaults():
                                       "--voice", "Serena"])
     assert args.lang == "chinese"
     assert args.max_speed == 1.30
-    assert not hasattr(args, "sample_rate")
+    assert args.warn_speed == 1.15
+    assert args.timing_mode == "natural"
+    assert args.overflow_policy == "error"
+    assert args.master_sample_rate == 48000
+    assert args.max_attempts == 3
+    assert not args.overwrite
+    assert not args.write_plan
 
 
 def test_sample_rate_flag_was_removed(tmp_path):
-    # 输出固定 24 kHz；旧的 --sample-rate 不再接受，避免静默变调。
+    # 旧的 --sample-rate 不再接受；采样率由 --master-sample-rate 控制。
     with pytest.raises(SystemExit):
         build_parser().parse_args(["--srt", "a.srt", "--provider", "local",
                                    "--voice", "Serena", "--sample-rate", "16000"])
+
+
+def test_master_sample_rate_restricted_to_tested_values(tmp_path, capsys):
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "local",
+        "--voice", "Serena", "--master-sample-rate", "16000",
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "--master-sample-rate" in capsys.readouterr().err
+
+
+def test_truncate_rejected_with_strict_slot(tmp_path, capsys):
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "local",
+        "--voice", "Serena", "--timing-mode", "strict_slot",
+        "--overflow-policy", "truncate",
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "strict_slot" in capsys.readouterr().err
 
 
 def test_abbreviated_flags_are_not_accepted():
@@ -87,37 +118,33 @@ def test_yes_help_notes_dry_run_exemption():
     assert "--dry-run" in help_text
 
 
-def test_required_imports_local_vs_online():
-    assert "mlx_audio" in required_imports(["--provider", "local"])
-    assert "mlx_audio" not in required_imports(["--provider", "online"])
+def test_required_route_local_vs_online():
+    assert route_imports("local") == BASE_IMPORTS + ["mlx_audio"]
+    assert route_imports("online") == BASE_IMPORTS + ["requests"]
+    assert route_imports("base") == BASE_IMPORTS
+    assert required_route(["--provider", "local"]) == "local"
+    assert required_route(["--provider=online"]) == "online"
 
 
 # --- supplementary coverage -------------------------------------------------
 
 
-def test_required_imports_preview_is_base_only():
-    # dry-run / help 只解析、不创建 provider：绝不触发 mlx_audio / requests。
-    assert required_imports(["--provider", "local", "--dry-run"]) == BASE_IMPORTS
-    assert required_imports(["--provider", "online", "--dry-run"]) == BASE_IMPORTS
-    assert required_imports(["--provider", "local", "--help"]) == BASE_IMPORTS
-    assert required_imports(["--provider=local", "-h"]) == BASE_IMPORTS
+def test_preview_routes_are_base_only():
+    # dry-run / help / write-plan 只解析：绝不触发 mlx_audio / requests。
+    assert required_route(["--provider", "local", "--dry-run"]) == "base"
+    assert required_route(["--provider", "online", "--dry-run"]) == "base"
+    assert required_route(["--provider", "local", "--help"]) == "base"
+    assert required_route(["--provider=local", "-h"]) == "base"
+    assert required_route(["--provider", "local", "--write-plan"]) == "base"
 
 
-def test_required_imports_preview_prefixes_stay_base_only():
+def test_preview_prefixes_stay_base_only():
     # 缩写前缀在 argparse 里会被拒绝，但预检阶段也不该先装模型依赖。
-    assert required_imports(["--provider", "local", "--dry"]) == BASE_IMPORTS
-    assert required_imports(["--provider", "online", "--hel"]) == BASE_IMPORTS
-    assert required_imports(["--provider", "local", "--h"]) == BASE_IMPORTS
-    assert required_imports(["--provider", "local", "--dry-run=1"]) == BASE_IMPORTS
+    assert required_route(["--provider", "local", "--dry"]) == "base"
+    assert required_route(["--provider", "online", "--hel"]) == "base"
+    assert required_route(["--provider", "local", "--write"]) == "base"
     # `--` 是选项终止符，不是预览。
-    assert "mlx_audio" in required_imports(["--", "--provider", "local"])
-
-
-def test_required_imports_supports_equals_form():
-    assert "mlx_audio" in required_imports(["--provider=local"])
-    assert "mlx_audio" not in required_imports(["--provider=online"])
-    assert "requests" in required_imports(["--provider", "online"])
-    assert "requests" not in required_imports(["--provider", "local"])
+    assert required_route(["--", "--provider", "local"]) == "local"
 
 
 def test_local_requires_voice_or_design(tmp_path, capsys):
@@ -144,6 +171,16 @@ def test_max_speed_below_one_is_rejected(tmp_path, capsys):
     with pytest.raises(SystemExit):
         validate_args(args)
     assert "--max-speed" in capsys.readouterr().err
+
+
+def test_warn_speed_above_max_is_rejected(tmp_path, capsys):
+    args = build_parser().parse_args([
+        "--srt", str(_write_srt(tmp_path)), "--provider", "local",
+        "--voice", "Serena", "--warn-speed", "1.4",
+    ])
+    with pytest.raises(SystemExit):
+        validate_args(args)
+    assert "--warn-speed" in capsys.readouterr().err
 
 
 def test_missing_srt_is_rejected_after_structural_checks(capsys):
@@ -189,7 +226,7 @@ def test_out_equal_to_video_is_allowed_with_track_only(tmp_path):
     validate_args(args)
 
 
-def test_dry_run_prints_plan_without_preparing_or_synthesizing(tmp_path, capsys):
+def test_dry_run_prints_plan_without_preparing_or_writing(tmp_path, capsys):
     srt = _write_srt(
         tmp_path,
         body=(
@@ -201,8 +238,6 @@ def test_dry_run_prints_plan_without_preparing_or_synthesizing(tmp_path, capsys)
     def _explode(*args, **kwargs):
         raise AssertionError("dry-run must not create or prepare a provider")
 
-    import skill_main
-
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(skill_main, "get_provider", _explode)
         code = skill_main.main(
@@ -212,13 +247,16 @@ def test_dry_run_prints_plan_without_preparing_or_synthesizing(tmp_path, capsys)
 
     assert code == 0
     out = capsys.readouterr().out
-    assert "条目: 2 条" in out
+    assert "条目: 2 组" in out
     assert "总字数: 7 字" in out
     assert "00:00:02.000" in out
     assert "第二句" in out
+    # dry-run 不写任何文件（含 report / job / dub.srt）。
+    assert list(tmp_path.glob("*.json")) == []
+    assert list(tmp_path.glob("*.srt")) == [srt]
 
 
-# --- I2: VoiceDesign model selection and coherence --------------------------
+# --- VoiceDesign / 模型匹配（行为保持） ------------------------------------
 
 
 def _local_args(tmp_path, *extra):
@@ -277,9 +315,6 @@ def test_design_rejects_custom_voice_model(tmp_path, capsys):
     assert "--design requires a VoiceDesign model" in capsys.readouterr().err
 
 
-# --- I6 / M18: voice and model validation exits 2 ---------------------------
-
-
 def test_invalid_local_voice_exits_2(tmp_path, capsys):
     args = _local_args(tmp_path, "--voice", "NoSuchVoice")
     with pytest.raises(SystemExit) as excinfo:
@@ -317,7 +352,7 @@ def test_online_model_matching_voice_group_is_allowed(tmp_path):
     validate_args(args)
 
 
-# --- M12: --out semantics ---------------------------------------------------
+# --- --out 语义 ------------------------------------------------------------
 
 
 def test_only_mp4_suffix_is_an_explicit_video_path():
@@ -339,8 +374,7 @@ def test_non_mp4_out_is_treated_as_prefix(tmp_path):
     assert video_out == tmp_path / "foo.mkv.dub.mp4"
 
 
-# --- M17 / M20: reports survive mux failure and show character counts -------
-
+# --- 完整运行（mock provider；24k master 避免 ffmpeg） ---------------------
 
 class _FakeProvider:
     model_id = LOCAL_MODEL
@@ -348,36 +382,78 @@ class _FakeProvider:
     def prepare(self):
         pass
 
+    def describe(self):
+        return {"provider": "local", "model": LOCAL_MODEL}
+
     def synthesize(self, text, voice, instruct="", lang="chinese"):
-        return np.full(24000, 0.2, dtype=np.float32)
+        return SynthesisResult(
+            audio=np.full(24000, 0.2, dtype=np.float32),  # 1s @24k
+            sample_rate=24000, channels=1,
+            provider="local", model_id=LOCAL_MODEL,
+        )
 
 
-def _patch_run(monkeypatch, mux):
+class _LongProvider(_FakeProvider):
+    """返回 5s 音频：2s 窗口放不下（natural window 1.9s）。"""
+
+    def synthesize(self, text, voice, instruct="", lang="chinese"):
+        return SynthesisResult(
+            audio=np.full(24000 * 5, 0.2, dtype=np.float32),
+            sample_rate=24000, channels=1,
+            provider="local", model_id=LOCAL_MODEL,
+        )
+
+
+def _patch_run(monkeypatch, provider=None, mux=None):
     monkeypatch.setattr(
         skill_main, "probe_video",
         lambda path: VideoInfo(2.0, "h264", 320, 240, "24/1"),
     )
     monkeypatch.setattr(skill_main, "_require_binary", lambda name: None)
     monkeypatch.setattr(
-        skill_main, "get_provider", lambda *args, **kwargs: _FakeProvider()
+        skill_main, "get_provider",
+        lambda *args, **kwargs: provider or _FakeProvider(),
     )
-    monkeypatch.setattr(skill_main, "mux_video", mux)
+    if mux is not None:
+        monkeypatch.setattr(skill_main, "mux_video", mux)
 
 
-def test_track_and_json_report_survive_mux_failure(tmp_path, capsys, monkeypatch):
+def test_successful_run_writes_track_report_and_job(tmp_path, capsys, monkeypatch):
+    srt = _write_srt(tmp_path)
+    _patch_run(monkeypatch)
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--no-cache",
+        "--master-sample-rate", "24000",
+    ])
+    assert code == 0
+    assert (tmp_path / "out.dub.wav").is_file()
+    report = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
+    assert report["schema_version"] == 2
+    assert report["status"] == "complete"
+    assert report["audio"]["master_sample_rate"] == 24000
+    assert report["cues"][0]["actual_start"] == 0.0
+    job = json.loads((tmp_path / "out.job.json").read_text(encoding="utf-8"))
+    assert job["status"] == "complete"
+    assert job["groups"][0]["status"] == "ok"
+    assert (tmp_path / "out.dub.srt").is_file()  # 实际时间的块级字幕
+    parsed = parse_srt(tmp_path / "out.dub.srt")
+    assert parsed[0].end == pytest.approx(1.0, abs=0.02)
+
+
+def test_track_and_report_survive_mux_failure(tmp_path, capsys, monkeypatch):
     srt = _write_srt(tmp_path)
     video = tmp_path / "in.mp4"
     video.write_bytes(b"")
-    report = tmp_path / "report.json"
 
     def boom(*args, **kwargs):
         raise RuntimeError("mux boom")
 
-    _patch_run(monkeypatch, boom)
+    _patch_run(monkeypatch, mux=boom)
     code = skill_main.main([
         "--srt", str(srt), "--video", str(video), "--provider", "local",
         "--voice", "Serena", "--out", str(tmp_path / "out"),
-        "--no-cache", "--json-report", str(report),
+        "--no-cache", "--master-sample-rate", "24000",
     ])
     captured = capsys.readouterr()
     assert code == 1
@@ -385,36 +461,284 @@ def test_track_and_json_report_survive_mux_failure(tmp_path, capsys, monkeypatch
     assert "4 字" in captured.out
     assert "mux boom" in captured.err
 
-    payload = json.loads(report.read_text(encoding="utf-8"))
+    payload = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
     assert payload["track"].endswith("out.dub.wav")
     assert payload["output"] is None
+    assert payload["status"] == "failed"
     assert len(payload["cues"]) == 1
 
 
-def test_json_report_records_output_after_successful_mux(
-    tmp_path, capsys, monkeypatch
-):
+def test_mux_success_records_output(tmp_path, capsys, monkeypatch):
     srt = _write_srt(tmp_path)
     video = tmp_path / "in.mp4"
     video.write_bytes(b"")
-    report = tmp_path / "report.json"
-    _patch_run(monkeypatch, lambda *args, **kwargs: None)
-    monkeypatch.setattr(skill_main, "verify_output", lambda *a, **k: None)
+    mux_calls = {}
 
+    def fake_mux(video_in, track, out, codec, sample_rate=48000):
+        mux_calls["sample_rate"] = sample_rate
+        out.write_bytes(b"mp4")
+        return out
+
+    _patch_run(monkeypatch, mux=fake_mux)
+    monkeypatch.setattr(skill_main, "verify_output", lambda *a, **k: None)
     code = skill_main.main([
         "--srt", str(srt), "--video", str(video), "--provider", "local",
         "--voice", "Serena", "--out", str(tmp_path / "out"),
-        "--no-cache", "--json-report", str(report),
+        "--no-cache", "--master-sample-rate", "24000",
     ])
     assert code == 0
     assert "成片:" in capsys.readouterr().out
-    payload = json.loads(report.read_text(encoding="utf-8"))
+    payload = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
     assert payload["output"].endswith("out.dub.mp4")
+    assert mux_calls["sample_rate"] == 24000  # AAC 采样率与音轨一致
+
+
+# --- 退出码与状态 -----------------------------------------------------------
+
+
+def test_overflow_default_exits_1_needs_attention(tmp_path, capsys, monkeypatch):
+    srt = _write_srt(tmp_path)
+    _patch_run(monkeypatch, provider=_LongProvider())
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--no-cache",
+        "--master-sample-rate", "24000",
+    ])
+    assert code == 1
+    report = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
+    assert report["status"] == "needs_attention"
+    assert not (tmp_path / "out.dub.wav").exists()  # 不出伪完整音轨
+    job = json.loads((tmp_path / "out.job.json").read_text(encoding="utf-8"))
+    assert job["status"] == "needs_attention"
+    assert job["groups"][0]["overflow_gap"] > 1.0
+
+
+def test_overflow_truncate_exits_3_with_warnings(tmp_path, capsys, monkeypatch):
+    import shutil
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg required")
+    srt = _write_srt(tmp_path)
+    _patch_run(monkeypatch, provider=_LongProvider())
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--no-cache",
+        "--master-sample-rate", "24000", "--overflow-policy", "truncate",
+    ])
+    assert code == 3
+    report = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
+    assert report["status"] == "completed_with_warnings"
+    assert report["content_truncated"] is True
+    assert report["cues"][0]["truncated_seconds"] > 0.5
+
+
+def test_continue_on_error_yields_partial_exit_1(tmp_path, capsys, monkeypatch):
+    class Broken(_FakeProvider):
+        def prepare(self):
+            pass
+
+        def synthesize(self, text, voice, instruct="", lang="chinese"):
+            from providers.errors import RETRYABLE, SynthesisError
+            raise SynthesisError("boom", kind=RETRYABLE)
+
+    srt = _write_srt(tmp_path)
+    _patch_run(monkeypatch, provider=Broken())
+    monkeypatch.setattr("engine.time.sleep", lambda _s: None)  # 不真实退避
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--no-cache",
+        "--master-sample-rate", "24000", "--max-attempts", "2",
+        "--continue-on-error",
+    ])
+    assert code == 1
+    report = json.loads((tmp_path / "out.report.json").read_text(encoding="utf-8"))
+    assert report["status"] == "partial"
+    assert report["cues"][0]["attempts"] == 2  # 统一预算：2 次提交
+
+
+# --- 覆盖保护（T20） --------------------------------------------------------
+
+
+def test_existing_output_refuses_without_overwrite(tmp_path, capsys, monkeypatch):
+    srt = _write_srt(tmp_path)
+    existing = tmp_path / "out.dub.wav"
+    existing.write_bytes(b"previous")
+    _patch_run(monkeypatch)
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--no-cache",
+        "--master-sample-rate", "24000",
+    ])
+    assert code == 2
+    assert "refusing to overwrite" in capsys.readouterr().err
+    assert existing.read_bytes() == b"previous"
+
+
+def test_failing_overwrite_run_keeps_existing_output(tmp_path, capsys, monkeypatch):
+    srt = _write_srt(tmp_path)
+    existing = tmp_path / "out.dub.wav"
+    existing.write_bytes(b"previous")
+    _patch_run(monkeypatch, provider=_LongProvider())  # overflow 失败
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--no-cache",
+        "--master-sample-rate", "24000", "--overwrite",
+    ])
+    assert code == 1
+    assert existing.read_bytes() == b"previous"  # 失败不覆盖用户已有成品
+
+
+# --- dry-run / write-plan（F08 修正） --------------------------------------
+
+
+_DUB_BODY = (
+    "1\n00:00:00,000 --> 00:00:01,000\n你好，\n\n"
+    "2\n00:00:01,100 --> 00:00:02,000\n世界。\n\n"
+    "3\n00:00:02,100 --> 00:00:03,000\n新段落。\n\n"
+    "4\n00:00:05,000 --> 00:00:06,000\n长停顿后。\n\n"
+)
+
+
+def _write_plan_groups(tmp_path, groups):
+    plan = tmp_path / "plan.json"
+    plan.write_text(json.dumps({"groups": groups}), encoding="utf-8")
+    return plan
+
+
+def test_merge_plan_run_writes_actual_dub_srt(tmp_path, capsys, monkeypatch):
+    srt = _write_srt(tmp_path, body=_DUB_BODY)
+    plan = _write_plan_groups(tmp_path, [[1, 2, 3], [4]])
+    _patch_run(monkeypatch)
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--merge-plan", str(plan),
+        "--out", str(tmp_path / "out"), "--no-cache",
+        "--master-sample-rate", "24000",
+    ])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "合并: 4 条 → 2 组" in captured.out
+    assert "块级字幕:" in captured.out
+    parsed = parse_srt(tmp_path / "out.dub.srt")
+    assert len(parsed) == 2
+    assert parsed[0].text == "你好，世界。新段落。"
+    # 实际结束时间：3.0s 窗口、1s 音频 → 1.0s 结束（不是计划窗口的复制）。
+    assert parsed[0].end == pytest.approx(1.0, abs=0.02)
+    assert (tmp_path / "out.dub.wav").is_file()
+
+
+def test_dry_run_with_merge_plan_writes_nothing(tmp_path, capsys):
+    # F08：dry-run 不再隐式写 dub.srt。
+    srt = _write_srt(tmp_path, body=_DUB_BODY)
+    plan = _write_plan_groups(tmp_path, [[1, 2, 3], [4]])
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--merge-plan", str(plan),
+        "--out", str(tmp_path / "out"), "--dry-run",
+    ])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "合并: 4 条 → 2 组" in captured.out
+    assert "块级字幕:" not in captured.out
+    assert not (tmp_path / "out.dub.srt").exists()
+    assert list(tmp_path.glob("*.json")) == [plan]
+
+
+def test_write_plan_saves_plan_json_and_srt(tmp_path, capsys):
+    srt = _write_srt(tmp_path, body=_DUB_BODY)
+    plan = _write_plan_groups(tmp_path, [[1, 2, 3], [4]])
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--merge-plan", str(plan),
+        "--out", str(tmp_path / "out"), "--write-plan",
+    ])
+    assert code == 0
+    payload = json.loads((tmp_path / "out.plan.json").read_text(encoding="utf-8"))
+    assert payload["groups"][0]["source_indices"] == [1, 2, 3]
+    assert payload["srt_sha256"]
+    parsed = parse_srt(tmp_path / "out.plan.srt")
+    assert len(parsed) == 2
+    # 只写计划，不合成、不出成品。
+    assert not (tmp_path / "out.dub.wav").exists()
+    assert not (tmp_path / "out.dub.srt").exists()
+
+
+# --- resume（T22 的 CLI 侧） ------------------------------------------------
+
+
+def test_resume_reuses_job_and_completes(tmp_path, capsys, monkeypatch):
+    import shutil
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg required")
+
+    class Switchable:
+        broken = True
+
+        def prepare(self):
+            pass
+
+        def describe(self):
+            return {"provider": "local", "model": LOCAL_MODEL}
+
+        def synthesize(self, text, voice, instruct="", lang="chinese"):
+            from providers.errors import RETRYABLE, SynthesisError
+            if self.broken:
+                raise SynthesisError("transient", kind=RETRYABLE)
+            return SynthesisResult(
+                audio=np.full(48000, 0.2, dtype=np.float32),  # 1s @48k
+                sample_rate=48000, channels=1,
+                provider="local", model_id=LOCAL_MODEL,
+            )
+
+    provider = Switchable()
+    srt = _write_srt(tmp_path)
+    _patch_run(monkeypatch, provider=provider)
+
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--no-cache", "--max-attempts", "1",
+    ])
+    assert code == 1  # 单次提交失败 → failed；报告与 job 已落盘
+    job_path = tmp_path / "out.job.json"
+    first_job = json.loads(job_path.read_text(encoding="utf-8"))
+    assert first_job["status"] == "failed"
+    # 失败后允许同任务继续（resume 放行覆盖保护）。
+    provider.broken = False
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"),
+        "--resume", str(job_path),
+    ])
+    assert code == 0
+    resumed = json.loads(job_path.read_text(encoding="utf-8"))
+    assert resumed["status"] == "complete"
+    assert resumed["job_id"] == first_job["job_id"]  # 同一任务延续
+
+
+def test_resume_rejects_changed_srt(tmp_path, capsys, monkeypatch):
+    srt = _write_srt(tmp_path)
+    _patch_run(monkeypatch)
+    skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--no-cache",
+        "--master-sample-rate", "24000",
+    ])
+    job_path = tmp_path / "out.job.json"
+    _write_srt(tmp_path, body="1\n00:00:00,000 --> 00:00:02,000\n完全不同的内容\n")
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--resume", str(job_path),
+        "--master-sample-rate", "24000",
+    ])
+    assert code == 2
+    assert "srt_sha256" in capsys.readouterr().err
+
+
+# --- 杂项：打印报告 / 风格参数（行为保持） ----------------------------------
 
 
 def test_print_report_includes_total_chars(capsys):
-    cue = Cue(1, 0.0, 1.0, "你好世界", 0.0, 1.0)
-    result = SegmentResult(cue, 1.0, 1.0, 1.0, FitAction.FIT, None, False)
+    cue_ = Cue(1, 0.0, 1.0, "你好世界", 0.0, 1.0)
+    result = SegmentResult(cue_, 1.0, 1.0, 1.0, FitAction.FIT, None, False)
     warnings, failures = _print_report([result], 0)
     assert (warnings, failures) == (0, 0)
     assert "4 字" in capsys.readouterr().out
@@ -588,77 +912,3 @@ def test_hotfix_rejects_local_and_qwen_tts(tmp_path, capsys):
         with pytest.raises(SystemExit):
             validate_args(args)
         assert "hotfix" in capsys.readouterr().err.lower()
-
-
-# --- M21: 语义合并的块级字幕（.dub.srt）落盘 ---
-
-from srt_parse import parse_srt
-
-
-def _patch_dub_run(monkeypatch):
-    monkeypatch.setattr(skill_main, "_require_binary", lambda name: None)
-    monkeypatch.setattr(
-        skill_main, "get_provider", lambda *args, **kwargs: _FakeProvider()
-    )
-
-
-_DUB_BODY = (
-    "1\n00:00:00,000 --> 00:00:01,000\n你好，\n\n"
-    "2\n00:00:01,100 --> 00:00:02,000\n世界。\n\n"
-    "3\n00:00:02,100 --> 00:00:03,000\n新段落。\n\n"
-    "4\n00:00:05,000 --> 00:00:06,000\n长停顿后。\n\n"
-)
-
-
-def _write_plan(tmp_path, groups):
-    plan = tmp_path / "plan.json"
-    plan.write_text(json.dumps({"groups": groups}), encoding="utf-8")
-    return plan
-
-
-def test_merge_plan_writes_dub_srt(tmp_path, capsys, monkeypatch):
-    srt = _write_srt(tmp_path, body=_DUB_BODY)
-    plan = _write_plan(tmp_path, [[1, 2, 3], [4]])
-    _patch_dub_run(monkeypatch)
-    code = skill_main.main([
-        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
-        "--merge-plan", str(plan),
-        "--out", str(tmp_path / "out"), "--no-cache",
-    ])
-    captured = capsys.readouterr()
-    assert code == 0
-    assert "合并: 4 条 → 2 组" in captured.out
-    assert "块级字幕:" in captured.out
-    parsed = parse_srt(tmp_path / "out.dub.srt")
-    assert len(parsed) == 2
-    assert parsed[0].text == "你好，世界。新段落。"
-    assert parsed[0].start == 0.0 and parsed[0].end == 3.0
-    assert parsed[1].text == "长停顿后。"
-    assert (tmp_path / "out.dub.wav").is_file()
-
-
-def test_merge_plan_dry_run_writes_dub_srt(tmp_path, capsys):
-    srt = _write_srt(tmp_path, body=_DUB_BODY)
-    plan = _write_plan(tmp_path, [[1, 2, 3], [4]])
-    code = skill_main.main([
-        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
-        "--merge-plan", str(plan),
-        "--out", str(tmp_path / "out"), "--dry-run",
-    ])
-    captured = capsys.readouterr()
-    assert code == 0
-    assert "合并: 4 条 → 2 组" in captured.out
-    assert "块级字幕:" in captured.out
-    assert (tmp_path / "out.dub.srt").is_file()
-
-
-def test_without_merge_plan_no_dub_srt(tmp_path, capsys, monkeypatch):
-    srt = _write_srt(tmp_path)
-    _patch_dub_run(monkeypatch)
-    code = skill_main.main([
-        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
-        "--out", str(tmp_path / "out"), "--no-cache",
-    ])
-    assert code == 0
-    assert "块级字幕:" not in capsys.readouterr().out
-    assert not (tmp_path / "out.dub.srt").exists()

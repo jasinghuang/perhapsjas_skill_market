@@ -5,58 +5,94 @@ import numpy as np
 import pytest
 
 from audio_fit import (
+    DEFAULT_SAFETY_GAP,
     FitAction,
+    allowed_window,
     apply_atempo,
     plan_fit,
     split_long_text,
     trim_silence,
 )
+from srt_parse import Cue
 
 
-def test_fit_inside_slot():
-    p = plan_fit(2.0, slot=3.0, available=5.0)
+def cue(i, start, end, nxt):
+    return Cue(i, start, end, f"第{i}句", start, nxt)
+
+
+# --- plan_fit：单一 window 阶梯（自然 / 严格模式共用） ----------------------
+
+
+def test_fit_at_original_speed_when_window_is_enough():
+    p = plan_fit(2.0, 3.0)
     assert p.speed == 1.0 and p.action is FitAction.FIT and p.warning is None
 
 
-def test_compress_within_15_percent():
-    p = plan_fit(3.3, slot=3.0, available=5.0)
-    assert p.speed == pytest.approx(1.1)
-    assert p.action is FitAction.FIT_COMPRESS and p.warning is None
+def test_accelerate_when_needed_within_max():
+    p = plan_fit(3.3, 3.0)
+    # 倍率按扣除 atempo 滤镜余量的窗口计算（略高于 1.1）。
+    assert p.speed == pytest.approx(1.1, abs=0.02)
+    assert p.action is FitAction.ACCELERATED and p.warning is None
 
 
-def test_spill_into_gap_at_cap():
-    p = plan_fit(3.5, slot=3.0, available=4.0)  # 3.5/1.15 = 3.04 <= 4.0
-    assert p.speed == pytest.approx(1.15)
-    assert p.action is FitAction.SPILL and p.warning
+def test_accelerate_past_warn_speed_records_warning():
+    p = plan_fit(3.6, 3.0)  # ~1.2x > warn 1.15, <= max 1.30
+    assert p.speed == pytest.approx(1.2, abs=0.02)
+    assert p.action is FitAction.ACCELERATED and p.warning
 
 
-def test_compress_to_max_when_gap_short():
-    p = plan_fit(5.0, slot=3.0, available=4.0)  # needed 1.25
-    assert p.speed == pytest.approx(1.25)
-    assert p.action is FitAction.COMPRESS_MAX and p.warning
-
-
-def test_truncate_when_even_max_does_not_fit():
-    p = plan_fit(6.0, slot=3.0, available=4.0)  # needed 1.5
+def test_overflow_when_even_max_does_not_fit():
+    p = plan_fit(6.0, 3.0)  # needs 2.0x > max 1.30
     assert p.speed == pytest.approx(1.30)
-    assert p.action is FitAction.TRUNCATED and p.warning
+    assert p.action is FitAction.OVERFLOW
+    assert p.overflow_ratio == pytest.approx(2.0, abs=0.02)
+    assert p.warning  # 调用方不得据此放置
 
 
-def test_max_speed_below_warn_changes_cap():
-    p = plan_fit(3.3, slot=3.0, available=5.0, max_speed=1.10)
-    assert p.speed == pytest.approx(1.10)
-    assert p.action is FitAction.FIT_COMPRESS
+def test_max_speed_changes_cap():
+    p = plan_fit(3.3, 3.0, max_speed=1.10)  # raw 1.1x == max → 仍可加速
+    assert p.speed == pytest.approx(1.10, abs=0.005)
+    assert p.action is FitAction.ACCELERATED
 
 
 def test_no_window():
-    p = plan_fit(2.0, slot=1.0, available=0.0)
-    assert p.action is FitAction.NO_WINDOW
-
-
-def test_non_positive_slot_is_no_window():
-    for slot in (0.0, -1.0):
-        p = plan_fit(2.0, slot=slot, available=5.0)
+    for window in (0.0, -1.0):
+        p = plan_fit(2.0, window)
         assert p.action is FitAction.NO_WINDOW and p.speed == 1.0
+
+
+# --- allowed_window：natural / strict_slot 边界 -----------------------------
+
+
+def test_natural_window_spans_gap_minus_safety():
+    c = cue(1, 0.0, 1.0, 10.0)
+    window = allowed_window(c, 0.0, "natural", safety_gap=0.1)
+    assert window == pytest.approx(10.0 - 0.1 - 0.0)
+
+
+def test_natural_window_uses_effective_start():
+    c = cue(1, 2.0, 10.0, 12.0)
+    window = allowed_window(c, 5.0, "natural")  # 起点被推迟到 5.0
+    assert window == pytest.approx(12.0 - DEFAULT_SAFETY_GAP - 5.0)
+
+
+def test_strict_window_stops_at_cue_end():
+    c = cue(1, 0.0, 3.0, 10.0)
+    window = allowed_window(c, 0.0, "strict_slot")
+    assert window == pytest.approx(3.0)  # 不借用之后 7s 空档
+
+
+def test_strict_window_negative_when_start_pushed_past_end():
+    c = cue(1, 2.0, 3.0, 10.0)
+    assert allowed_window(c, 4.0, "strict_slot") < 0
+
+
+def test_unknown_timing_mode_rejected():
+    with pytest.raises(ValueError, match="timing_mode"):
+        allowed_window(cue(1, 0.0, 1.0, 2.0), 0.0, "loose")
+
+
+# --- trim_silence / atempo / split（行为保持） -------------------------------
 
 
 def test_trim_silence_removes_edges_and_keeps_voice():

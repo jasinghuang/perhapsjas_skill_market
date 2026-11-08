@@ -47,6 +47,9 @@ class Cue:
     text: str
     effective_start: float
     next_start: float
+    # 语义合并后：本组覆盖的源 SRT 条目序号（未合并时为 None，报告按
+    # [index] 处理）。用于 plan/dub 字幕与报告的源条目映射。
+    source_indices: tuple[int, ...] | None = None
 
 
 class SRTError(ValueError):

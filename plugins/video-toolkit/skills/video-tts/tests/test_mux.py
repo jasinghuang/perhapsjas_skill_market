@@ -85,18 +85,110 @@ def test_needs_reencode():
     assert needs_reencode("av1")
 
 
-def test_mux_copy_command_and_delete_on_failure(tmp_path):
+# --- mux：临时文件 + 原子替换 ------------------------------------------------
+
+
+def test_mux_failure_keeps_existing_output_and_leaves_no_tmp(tmp_path):
     out = tmp_path / "out.mp4"
-    with patch("subprocess.run") as run, patch.object(Path, "unlink") as unlink:
+    out.write_bytes(b"previous")
+    with patch("subprocess.run") as run, patch("mux.verify_output") as verify:
+        run.side_effect = [
+            MagicMock(returncode=0, stdout=json.dumps(_probe_payload())),
+            MagicMock(returncode=0),  # ffmpeg “成功”
+        ]
+        verify.side_effect = RuntimeError("bad")
+        with pytest.raises(RuntimeError):
+            mux_video(tmp_path / "in.mp4", tmp_path / "t.wav", out, "h264")
+    assert out.read_bytes() == b"previous"      # 校验失败不覆盖已有成品
+    assert list(tmp_path.glob(".out.mp4.*")) == []  # 临时文件已清理
+
+
+def test_mux_ffmpeg_failure_raises_and_cleans_tmp(tmp_path):
+    out = tmp_path / "out.mp4"
+    with patch("subprocess.run") as run:
+        run.side_effect = [
+            MagicMock(returncode=0, stdout=json.dumps(_probe_payload())),
+            MagicMock(returncode=1, stderr="ffmpeg boom"),
+        ]
+        with pytest.raises(RuntimeError, match="ffmpeg boom"):
+            mux_video(tmp_path / "in.mp4", tmp_path / "t.wav", out, "h264")
+    assert list(tmp_path.glob(".out.mp4.*")) == []
+
+
+def test_mux_success_replaces_atomically_at_master_rate(tmp_path):
+    out = tmp_path / "out.mp4"
+    replaced = {}
+
+    def fake_replace(src, dst):
+        replaced["src"], replaced["dst"] = src, dst
+
+    with patch("subprocess.run") as run, \
+         patch("mux.verify_output", return_value=None) as verify, \
+         patch("mux.os.replace", side_effect=fake_replace):
         run.side_effect = [
             MagicMock(returncode=0, stdout=json.dumps(_probe_payload())),
             MagicMock(returncode=0),
         ]
-        with patch("mux.verify_output", side_effect=RuntimeError("bad")) as verify:
-            with pytest.raises(RuntimeError):
-                mux_video(tmp_path / "in.mp4", tmp_path / "t.wav", out, "h264")
-        verify.assert_called_once()
-        unlink.assert_called_once()
+        mux_video(tmp_path / "in.mp4", tmp_path / "t.wav", out, "h264",
+                  sample_rate=48000)
+    # 校验发生在临时文件上；成功后才原子替换到最终路径。
+    assert str(verify.call_args.args[0]).startswith(str(tmp_path / ".out.mp4."))
+    assert replaced["dst"] == out
+    cmd = [c.args[0] for c in run.call_args_list if c.args[0][0] == "ffmpeg"][0]
+    assert cmd[cmd.index("-ar") + 1] == "48000"  # AAC 显式采用音轨采样率
+    assert cmd[cmd.index("-c:a") + 1] == "aac"
+    assert cmd[cmd.index("-c:v") + 1] == "copy"
+    assert "-shortest" not in cmd
+
+
+def test_mux_reencode_command_shape(tmp_path):
+    replaced = {}
+    with patch("subprocess.run") as run, \
+         patch("mux.verify_output", return_value=None), \
+         patch("mux.os.replace", side_effect=lambda s, d: replaced.update(src=s, dst=d)):
+        run.side_effect = [
+            MagicMock(returncode=0, stdout=json.dumps(_probe_payload("vp9"))),
+            MagicMock(returncode=0),
+        ]
+        mux_video(tmp_path / "in.webm", tmp_path / "t.wav", tmp_path / "out.mp4",
+                  "vp9")
+    cmd = [c.args[0] for c in run.call_args_list if c.args[0][0] == "ffmpeg"][0]
+    assert cmd[cmd.index("-c:v") + 1] == "libx264"
+    assert cmd[cmd.index("-crf") + 1] == "18"
+    assert cmd[cmd.index("-preset") + 1] == "medium"
+    assert cmd[cmd.index("-movflags") + 1] == "+faststart"
+    assert [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-map"] == \
+        ["0:v:0", "1:a:0"]
+    assert "-shortest" not in cmd
+
+
+def test_mux_warns_when_reencoding(tmp_path, capsys):
+    with patch("subprocess.run") as run, \
+         patch("mux.verify_output"), \
+         patch("mux.os.replace"):
+        run.side_effect = [
+            MagicMock(returncode=0, stdout=json.dumps(_probe_payload("vp9"))),
+            MagicMock(returncode=0),
+        ]
+        mux_video(tmp_path / "in.webm", tmp_path / "t.wav", tmp_path / "out.mp4",
+                  "vp9")
+    assert "重编码" in capsys.readouterr().err
+
+
+def test_mux_does_not_warn_when_copying(tmp_path, capsys):
+    with patch("subprocess.run") as run, \
+         patch("mux.verify_output"), \
+         patch("mux.os.replace"):
+        run.side_effect = [
+            MagicMock(returncode=0, stdout=json.dumps(_probe_payload())),
+            MagicMock(returncode=0),
+        ]
+        mux_video(tmp_path / "in.mp4", tmp_path / "t.wav", tmp_path / "out.mp4",
+                  "h264")
+    assert "重编码" not in capsys.readouterr().err
+
+
+# --- verify：视频与音频双时长校验 -------------------------------------------
 
 
 def test_verify_rejects_missing_audio_or_duration_drift(tmp_path):
@@ -105,9 +197,6 @@ def test_verify_rejects_missing_audio_or_duration_drift(tmp_path):
         run.return_value = MagicMock(returncode=0, stdout=json.dumps(payload))
         with pytest.raises(RuntimeError):
             verify_output(tmp_path / "out.mp4", 10.0)
-
-
-# --- supplementary coverage: tolerance, stream counts, and command shape ---
 
 
 def test_verify_accepts_one_video_and_one_audio_within_tolerance(tmp_path):
@@ -120,14 +209,26 @@ def test_verify_accepts_one_video_and_one_audio_within_tolerance(tmp_path):
         verify_output(tmp_path / "out.mp4", 10.0)
 
 
-def test_verify_rejects_duration_drift(tmp_path):
+def test_verify_rejects_video_duration_drift(tmp_path):
     payload = _streams_payload(
         {"codec_type": "video", "duration": "11.0"},
-        {"codec_type": "audio", "codec_name": "aac", "duration": "11.0"},
+        {"codec_type": "audio", "codec_name": "aac", "duration": "10.0"},
     )
     with patch("subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout=json.dumps(payload))
-        with pytest.raises(RuntimeError, match="duration"):
+        with pytest.raises(RuntimeError, match="video duration"):
+            verify_output(tmp_path / "out.mp4", 10.0)
+
+
+def test_verify_rejects_audio_duration_drift(tmp_path):
+    # 只验视频时长会漏掉「末段音频缺失」；音频流时长单独校验。
+    payload = _streams_payload(
+        {"codec_type": "video", "duration": "10.0"},
+        {"codec_type": "audio", "codec_name": "aac", "duration": "8.0"},
+    )
+    with patch("subprocess.run") as run:
+        run.return_value = MagicMock(returncode=0, stdout=json.dumps(payload))
+        with pytest.raises(RuntimeError, match="audio duration"):
             verify_output(tmp_path / "out.mp4", 10.0)
 
 
@@ -163,7 +264,7 @@ def test_verify_rejects_non_aac_audio(tmp_path):
     with patch("subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout=json.dumps(payload))
         with pytest.raises(RuntimeError, match="AAC"):
-            verify_output(tmp_path / "out.mp4", 10.0)
+                    verify_output(tmp_path / "out.mp4", 10.0)
 
 
 def test_verify_falls_back_to_format_duration(tmp_path):
@@ -177,99 +278,3 @@ def test_verify_falls_back_to_format_duration(tmp_path):
     with patch("subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout=json.dumps(payload))
         verify_output(tmp_path / "out.mp4", 10.0)
-
-
-def _mux_command(run):
-    """Return the ffmpeg argv (the probe call comes first)."""
-    for call in run.call_args_list:
-        if call.args[0][0] == "ffmpeg":
-            return call.args[0]
-    raise AssertionError("ffmpeg was never invoked")
-
-
-def test_mux_copy_command_shape(tmp_path):
-    out = tmp_path / "out.mp4"
-    with patch("subprocess.run") as run, patch("mux.verify_output") as verify:
-        run.side_effect = [
-            MagicMock(returncode=0, stdout=json.dumps(_probe_payload())),
-            MagicMock(returncode=0),
-        ]
-        mux_video(tmp_path / "in.mp4", tmp_path / "t.wav", out, "h264")
-    cmd = _mux_command(run)
-    assert cmd[cmd.index("-c:v") + 1] == "copy"
-    assert [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-map"] == \
-        ["0:v:0", "1:a:0"]
-    assert cmd[cmd.index("-map_metadata") + 1] == "0"
-    assert cmd[cmd.index("-c:a") + 1] == "aac"
-    assert cmd[cmd.index("-b:a") + 1] == "192k"
-    assert cmd[cmd.index("-movflags") + 1] == "+faststart"
-    assert "-shortest" not in cmd
-    verify.assert_called_once_with(out, 10.0)
-
-
-def test_mux_reencode_command_shape(tmp_path):
-    out = tmp_path / "out.mp4"
-    with patch("subprocess.run") as run, patch("mux.verify_output") as verify:
-        run.side_effect = [
-            MagicMock(returncode=0, stdout=json.dumps(_probe_payload("vp9"))),
-            MagicMock(returncode=0),
-        ]
-        mux_video(tmp_path / "in.webm", tmp_path / "t.wav", out, "vp9")
-    cmd = _mux_command(run)
-    assert cmd[cmd.index("-c:v") + 1] == "libx264"
-    assert cmd[cmd.index("-crf") + 1] == "18"
-    assert cmd[cmd.index("-preset") + 1] == "medium"
-    assert [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-map"] == \
-        ["0:v:0", "1:a:0"]
-    assert cmd[cmd.index("-map_metadata") + 1] == "0"
-    assert "-shortest" not in cmd
-    verify.assert_called_once_with(out, 10.0)
-
-
-def test_mux_warns_when_reencoding(tmp_path, capsys):
-    out = tmp_path / "out.mp4"
-    with patch("subprocess.run") as run, patch("mux.verify_output"):
-        run.side_effect = [
-            MagicMock(returncode=0, stdout=json.dumps(_probe_payload("vp9"))),
-            MagicMock(returncode=0),
-        ]
-        mux_video(tmp_path / "in.webm", tmp_path / "t.wav", out, "vp9")
-    assert "重编码" in capsys.readouterr().err
-
-
-def test_mux_does_not_warn_when_copying(tmp_path, capsys):
-    out = tmp_path / "out.mp4"
-    with patch("subprocess.run") as run, patch("mux.verify_output"):
-        run.side_effect = [
-            MagicMock(returncode=0, stdout=json.dumps(_probe_payload())),
-            MagicMock(returncode=0),
-        ]
-        mux_video(tmp_path / "in.mp4", tmp_path / "t.wav", out, "h264")
-    assert "重编码" not in capsys.readouterr().err
-
-
-def test_mux_deletes_output_when_ffmpeg_fails(tmp_path):
-    out = tmp_path / "out.mp4"
-    with patch("subprocess.run") as run, patch.object(Path, "unlink") as unlink:
-        run.side_effect = [
-            MagicMock(returncode=0, stdout=json.dumps(_probe_payload())),
-            MagicMock(returncode=1, stderr="ffmpeg boom"),
-        ]
-        with patch("mux.verify_output") as verify:
-            with pytest.raises(RuntimeError, match="ffmpeg boom"):
-                mux_video(tmp_path / "in.mp4", tmp_path / "t.wav", out, "h264")
-        verify.assert_not_called()
-        unlink.assert_called_once()
-
-
-def test_mux_deletes_output_when_verify_fails(tmp_path):
-    out = tmp_path / "out.mp4"
-    with patch("subprocess.run") as run, patch.object(Path, "unlink") as unlink:
-        run.side_effect = [
-            MagicMock(returncode=0, stdout=json.dumps(_probe_payload())),
-            MagicMock(returncode=0),
-        ]
-        with patch("mux.verify_output", side_effect=RuntimeError("bad")):
-            with pytest.raises(RuntimeError, match="bad"):
-                mux_video(tmp_path / "in.mp4", tmp_path / "t.wav", out, "h264")
-        unlink.assert_called_once()

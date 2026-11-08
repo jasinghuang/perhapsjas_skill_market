@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
-"""video-tts launcher — reuse an existing Python environment.
+"""video-tts launcher — 隔离环境、锁定依赖、能力检测后交接 skill_main.py。
 
-Why this exists: Homebrew and pyenv can move the `python3` symlink to a
-newer minor version while the TTS packages stay installed under the older
-version's site-packages. Running skill_main.py with the new interpreter then
-looks like "dependencies are missing" and triggers a reinstall that may not
-even provide the Apple Silicon MLX build. This launcher scans for an
-interpreter that already imports the imports needed by the chosen provider,
-and installs only when none does.
+环境策略（spec §11）：
 
-`required_imports()` is pure and import-safe so tests can call it; interpreter
-selection, dependency installation and the subprocess hand-off only run under
-`if __name__ == "__main__"`.
+1. `VIDEO_TTS_PYTHON` 显式指定的解释器（用户对兼容环境负责）；
+2. 本 skill 的专用 venv（`<cache>/video-tts/venv`，缺依赖时只往这个 venv
+   里补装，绝不碰系统 / Homebrew / 其他 skill 的解释器，也不用
+   `--break-system-packages`）；
+3. 任何**已经**能 import 所需依赖的现有解释器（只复用、不安装）；
+4. 都不行才创建专用 venv 并按锁定文件（`requirements-local.txt` /
+   `requirements-online.txt`）安装。
 
-Usage is identical to skill_main.py:
+能力检测不止 `import mlx_audio`：本地路线还要求解释器是 Apple Silicon
+原生（arm64，排除 Rosetta / Intel Python）且 Metal 运算可用；Windows 一律
+拒绝本地路线（本期只支持在线），也不安装 mlx-audio。安装 / 登录 / 下载 /
+加载分别提示，不把全部初始化都表现成「卡住」。
+
+`--dry-run` / `--help` 只需要基础依赖，绝不触发模型依赖安装。
+
+用法与 skill_main.py 一致：
 
     python3 run.py --srt a.srt --provider local --voice Serena --video a.mp4
     python3 run.py --srt a.srt --provider online --voice Cherry --yes
@@ -37,17 +42,22 @@ SYSTEM = platform.system()
 IS_MAC = SYSTEM == "Darwin"
 IS_WIN = SYSTEM == "Windows"
 
-BASE_IMPORTS = ["soundfile", "numpy"]
-LOCAL_IMPORTS = ["mlx_audio"]
-ONLINE_IMPORTS = ["requests"]
+# 每条路线一个锁定文件；base 由 -r 引入。
+REQUIREMENTS = {
+    "local": SKILL_DIR / "requirements-local.txt",
+    "online": SKILL_DIR / "requirements-online.txt",
+    "base": SKILL_DIR / "requirements-base.txt",
+}
 
-# 顶层 import 名与 pip 包名不一致的映射。
-PIP_NAMES = {"mlx_audio": "mlx-audio"}
-
-PIP_FLAGS = ["--break-system-packages"] if IS_MAC else []
-
-# Newest first. Keep in sync with the Python versions Homebrew ships.
-PYTHON_VERSIONS = ["3.16", "3.15", "3.14", "3.13", "3.12", "3.11", "3.10", "3.9"]
+# 本地能力检测片段：解释器架构 + Metal + TTS API 一次查完。
+LOCAL_CAPABILITY_PROBE = (
+    "import platform,sys;"
+    "assert platform.machine()=='arm64', 'not arm64: '+platform.machine();"
+    "import mlx.core as mx;"
+    "assert mx.metal.is_available(), 'Metal unavailable';"
+    "from mlx_audio.tts.utils import load_model;"
+    "print('ok')"
+)
 
 
 def _provider_from_argv(argv: list[str]) -> str | None:
@@ -63,11 +73,11 @@ def _provider_from_argv(argv: list[str]) -> str | None:
 
 
 # `--help` 的任意非空前缀（argparse 允许时）与短选项 `-h`。
-PREVIEW_FLAGS = ("--dry-run", "--help")
+PREVIEW_FLAGS = ("--dry-run", "--help", "--write-plan")
 
 
 def _is_preview(argv: list[str]) -> bool:
-    """`--dry-run` / `--help` 只需要解析，不需要 provider 依赖。
+    """`--dry-run` / `--help` / `--write-plan` 只需要解析与基础依赖。
 
     认 `--dry` / `--hel` 这类前缀：即使 argparse 因 `allow_abbrev=False`
     最终拒绝该参数，也不应在解析前先触发模型依赖安装。
@@ -85,28 +95,26 @@ def _is_preview(argv: list[str]) -> bool:
     return False
 
 
-def required_imports(argv: list[str]) -> list[str]:
-    """返回本次运行需要的顶层 import 名。
-
-    `soundfile` / `numpy` 永远需要；本地 provider 额外需要 `mlx_audio`，
-    在线 provider 的 HTTP 兜底额外需要 `requests`。`--dry-run` 与
-    `--help` 不创建 provider、不发起请求，因此永远只要求基础依赖——
-    预览绝不应触发模型依赖的安装。
-    """
-    imports = list(BASE_IMPORTS)
+def required_route(argv: list[str]) -> str:
+    """返回本次运行的依赖路线：`base` / `local` / `online`。"""
     if _is_preview(argv):
-        return imports
+        return "base"
     provider = _provider_from_argv(argv)
     if provider == "local":
-        imports.extend(LOCAL_IMPORTS)
-    elif provider == "online":
-        imports.extend(ONLINE_IMPORTS)
-    return imports
+        return "local"
+    if provider == "online":
+        return "online"
+    return "base"
 
 
-def pip_packages(imports: list[str]) -> list[str]:
-    """把 import 名映射成 pip 包名。"""
-    return [PIP_NAMES.get(name, name) for name in imports]
+def route_imports(route: str) -> list[str]:
+    """返回路线所需的顶层 import 名（能力探测用）。"""
+    base = ["soundfile", "numpy"]
+    if route == "local":
+        return base + ["mlx_audio"]
+    if route == "online":
+        return base + ["requests"]
+    return base
 
 
 def cache_path() -> Path:
@@ -116,6 +124,20 @@ def cache_path() -> Path:
     else:
         base = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache"))
     return base / "video-tts" / "env.json"
+
+
+def venv_python() -> Path:
+    """本 skill 专用 venv 的解释器路径。"""
+    if IS_WIN:
+        base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+        return base / "video-tts" / "venv" / "Scripts" / "python.exe"
+    base = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache"))
+    return base / "video-tts" / "venv" / "bin" / "python"
+
+
+def requirements_file(route: str) -> Path:
+    """路线对应的锁定依赖文件。"""
+    return REQUIREMENTS.get(route) or REQUIREMENTS["base"]
 
 
 def _add(found: list[str], seen: set[str], path) -> None:
@@ -135,7 +157,7 @@ def _version_key(path) -> tuple:
 
 
 def candidates() -> list[str]:
-    """返回待尝试的解释器路径，最可能 / 最新在前。"""
+    """返回待复用的解释器路径（只复用、不安装），最可能在前。"""
     found: list[str] = []
     seen: set[str] = set()
 
@@ -147,6 +169,7 @@ def candidates() -> list[str]:
         pass
 
     _add(found, seen, sys.executable)
+    _add(found, seen, venv_python())
 
     if IS_WIN:
         for name in ("python", "python3"):
@@ -162,8 +185,8 @@ def candidates() -> list[str]:
     else:
         _add(found, seen, shutil.which("python3"))
         for base in ("/opt/homebrew/bin", "/usr/local/bin"):
-            for version in PYTHON_VERSIONS:
-                _add(found, seen, os.path.join(base, "python" + version))
+            for match in sorted(Path(base).glob("python3.*"), key=_version_key, reverse=True):
+                _add(found, seen, match)
         pyenv = Path.home() / ".pyenv" / "versions"
         if pyenv.is_dir():
             for version_dir in sorted(pyenv.iterdir(), key=_version_key, reverse=True):
@@ -174,71 +197,172 @@ def candidates() -> list[str]:
     return found
 
 
+def _run_probe(python: str, code: str, timeout: int = 180) -> subprocess.CompletedProcess | None:
+    """跑一次 `python -c`；超时 / 无法启动返回 None。"""
+    try:
+        return subprocess.run(
+            [python, "-c", code],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except Exception:
+        return None
+
+
 def has_imports(python: str, imports: list[str]) -> bool:
     """检查解释器能否 import 全部依赖。"""
-    code = "import " + ", ".join(imports)
-    try:
-        result = subprocess.run(
-            [python, "-c", code],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=120,
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
+    result = _run_probe(python, "import " + ", ".join(imports))
+    return result is not None and result.returncode == 0
 
 
-def save_cache(python: str, imports: list[str]) -> None:
+def capability_problems(python: str, route: str) -> list[str]:
+    """返回该解释器在本路线上的能力问题（空列表 = 可用）。
+
+    本地路线不止 import：还要 arm64 原生（排除 Rosetta 里的 Intel
+    Python）+ Metal 可用 + mlx_audio 的 TTS API 存在。
+    """
+    if route != "local":
+        return []
+    if not IS_MAC:
+        return [
+            "本地 MLX 路线仅支持 Apple Silicon macOS；当前系统 "
+            f"{SYSTEM or 'unknown'}，请使用 --provider online"
+        ]
+    result = _run_probe(python, LOCAL_CAPABILITY_PROBE)
+    if result is None:
+        return [f"无法在 {python} 上运行本地能力检测（启动 / 超时）"]
+    if result.returncode == 0:
+        return []
+    detail = (result.stderr or "").strip().splitlines()
+    last = detail[-1] if detail else f"exit {result.returncode}"
+    if "not arm64" in last:
+        return [
+            f"{python} 不是 Apple Silicon 原生解释器（{last}）；"
+            "Rosetta / Intel Python 无法运行 MLX。请安装 arm64 版 Python "
+            "（如 `brew install python@3.14`）或改用 --provider online"
+        ]
+    if "Metal unavailable" in last:
+        return [
+            f"{python} 上 Metal 不可用（{last}）；MLX 需要 Metal。"
+            "请检查是否运行在虚拟机 / 远程会话，或改用 --provider online"
+        ]
+    return [
+        f"{python} 本地能力检测未通过：{last}；"
+        "请确认 mlx-audio 已正确安装，或改用 --provider online"
+    ]
+
+
+def save_cache(python: str, route: str) -> None:
     """缓存选中的解释器；缓存失败不影响主流程。"""
     try:
         path = cache_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(
-                {"interpreter": python, "imports": imports},
-                ensure_ascii=False,
-                indent=2,
-            )
-            + "\n",
+                {"interpreter": python, "route": route},
+                ensure_ascii=False, indent=2,
+            ) + "\n",
             encoding="utf-8",
         )
     except Exception:
         pass
 
 
-def install_dependencies(found: list[str], imports: list[str]) -> str:
-    """把缺失依赖装进第一个接受它们的解释器并返回该解释器。"""
-    installable = [python for python in found if not python.startswith("/usr/bin/")] or found
-    if not installable:
-        sys.exit(
-            "No usable Python interpreter found.\n"
-            "Install Python 3 first, then run this skill again."
-        )
-
-    packages = pip_packages(imports)
-    last_error = None
-    for python in installable:
-        print(f"[video-tts] dependencies missing; trying {python} ...", flush=True)
-        try:
-            subprocess.run(
-                [python, "-m", "pip", "install", *PIP_FLAGS, *packages],
-                check=True,
+def _ensure_venv() -> str:
+    """创建（如需）专用 venv，返回其解释器路径。"""
+    python = venv_python()
+    if not python.is_file():
+        base = shutil.which("python3") or shutil.which("python")
+        if not base:
+            sys.exit(
+                "No Python 3 found to create the video-tts venv.\n"
+                "Install Python 3 first (macOS: brew install python; "
+                "Windows: winget install Python.Python.3), then retry."
             )
-        except Exception as exc:
-            last_error = exc
-            print(f"  install failed: {exc}")
-            continue
-        if has_imports(python, imports):
-            return python
+        print(f"[video-tts] creating dedicated venv at {python.parent.parent} …", flush=True)
+        subprocess.run([base, "-m", "venv", str(python.parent.parent)], check=True)
+    return str(python)
 
-    manual = " ".join(packages)
-    sys.exit(
-        "Could not find or install video-tts dependencies.\n"
-        "Install them manually, then run this skill again:\n"
-        f"  {sys.executable} -m pip install {manual}\n"
-        f"Last error: {last_error}"
+
+def install_into_venv(route: str) -> str:
+    """把锁定依赖装进专用 venv（只装这一处，绝不装进全局解释器）。"""
+    python = _ensure_venv()
+    requirements = requirements_file(route)
+    print(
+        f"[video-tts] installing locked dependencies into the skill venv "
+        f"({requirements.name}) …",
+        flush=True,
     )
+    try:
+        subprocess.run(
+            [python, "-m", "pip", "install", "-r", str(requirements)],
+            check=True,
+        )
+    except Exception as exc:
+        sys.exit(
+            "Could not install video-tts dependencies into the dedicated "
+            f"venv.\nManual fallback:\n  {python} -m pip install -r "
+            f"{requirements}\nLast error: {exc}"
+        )
+    return python
+
+
+def resolve_interpreter(route: str) -> str:
+    """选出可复用 / 可创建的解释器；路线不可用时给出修复步骤退出。"""
+    imports = route_imports(route)
+
+    # 显式指定的环境优先（用户对它负责，仍做能力检测给出准确报错）。
+    explicit = os.environ.get("VIDEO_TTS_PYTHON")
+    if explicit:
+        found: list[str] = []
+        _add(found, set(), explicit)
+        if not found:
+            sys.exit(
+                f"VIDEO_TTS_PYTHON is set but not an executable file: "
+                f"{explicit!r}; fix the path or unset the variable."
+            )
+        problems = capability_problems(found[0], route)
+        if problems:
+            sys.exit("VIDEO_TTS_PYTHON unusable:\n  " + "\n  ".join(problems))
+        if not has_imports(found[0], imports):
+            sys.exit(
+                f"VIDEO_TTS_PYTHON ({found[0]}) lacks required imports "
+                f"({', '.join(imports)}); install them into that "
+                "environment or unset the variable."
+            )
+        return found[0]
+
+    # 本地路线在非 Apple Silicon 上先给出明确结论，不做无谓尝试。
+    if route == "local":
+        problems = capability_problems(sys.executable, route)
+        if problems and not IS_MAC:
+            sys.exit("\n".join(problems))
+
+    # 只复用「已经能跑」的解释器；不在多个全局解释器间循环安装。
+    for python in candidates():
+        if not has_imports(python, imports):
+            continue
+        problems = capability_problems(python, route)
+        if problems:
+            continue
+        return python
+
+    # 都不行：创建 / 补装专用 venv（隔离且锁定，不用 break-system-packages）。
+    python = venv_python()
+    if python.is_file():
+        target = str(python)
+        problems = capability_problems(target, route)
+        if problems and route == "local" and not IS_MAC:
+            sys.exit("\n".join(problems))
+    python = install_into_venv(route)
+    problems = capability_problems(python, route)
+    if problems:
+        sys.exit("\n".join(problems))
+    if not has_imports(python, imports):
+        sys.exit(
+            f"dependency installation into the venv succeeded but imports "
+            f"still fail ({', '.join(imports)}); see messages above"
+        )
+    return python
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -247,15 +371,16 @@ def main(argv: list[str] | None = None) -> int:
     if not MAIN_SCRIPT.is_file():
         sys.exit(f"skill_main.py not found next to run.py: {MAIN_SCRIPT}")
 
-    imports = required_imports(argv)
-    found = candidates()
-    chosen = next((python for python in found if has_imports(python, imports)), None)
-    if chosen:
-        print(f"[video-tts] Using {chosen}", flush=True)
-    else:
-        chosen = install_dependencies(found, imports)
+    route = required_route(argv)
+    if route == "local" and IS_WIN:
+        sys.exit(
+            "本地 MLX 配音仅支持 Apple Silicon macOS；Windows 请使用 "
+            "--provider online（百炼在线路线）。"
+        )
 
-    save_cache(chosen, imports)
+    chosen = resolve_interpreter(route)
+    print(f"[video-tts] Using {chosen} (route: {route})", flush=True)
+    save_cache(chosen, route)
     sys.stdout.flush()
     return subprocess.call([chosen, str(MAIN_SCRIPT), *argv])
 

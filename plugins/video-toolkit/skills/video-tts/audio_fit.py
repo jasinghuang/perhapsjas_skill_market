@@ -2,14 +2,21 @@
 """
 video-tts — 配音时间窗规划与音频辅助工具。
 
-- `plan_fit()` 根据合成音频时长、字幕槽位与到下一句的可用时间，决定是直接
-  使用、轻微压缩（≤15%）、溢入字幕后的空档、压到上限，还是会在下一句开始前
-  被截断。
-- `trim_silence()` 用逐窗 RMS 去掉首尾静音，避免 TTS 输出两端的空白把槽位
-  撑满。
-- `apply_atempo()` 通过 ffmpeg 的 `atempo` 滤镜改变语速；超过 2x 的倍率会
-  拆成多个 `atempo` 串联（单个滤镜只支持 0.5–2.0）。
-- `split_long_text()` 按句末标点切分过长文本，避免单次 TTS 请求过长。
+时间适配（spec §7）按 `timing_mode` 分两种：
+
+- `natural`（默认，自然解说）：优先原速。窗口 = 到下一组实际边界之前的
+  全部可用空档（减去可配置的安全间隔）；合成 5 s、字幕槽位 3 s、下一句
+  前可用 10 s 时必须用 1.0 倍速原速放入，不得为对齐槽位先加速。
+- `strict_slot`（严格同步）：窗口 = 本组自身有效结束时间减有效起点，
+  不借用之后的空档；放不下就在 `max_speed` 内变速，仍放不下进入 overflow。
+
+两种模式的规划阶梯一致：原速放得下 → 1.0；按实际窗口算出的倍率 ≤
+`max_speed` → 变速（超过 `warn_speed` 记 accelerated 警告）；否则
+**overflow——不直接截断**（截断必须由 `overflow_policy=truncate` 显式
+启用）。默认 `max_speed=1.30`、`warn_speed=1.15`，只加速不减速。
+
+其余工具：`trim_silence()`（保守去首尾静音）、`apply_atempo()`（ffmpeg
+变速，>2x 拆链）、`split_long_text()`（长文本按句切块）。
 """
 
 from __future__ import annotations
@@ -29,16 +36,22 @@ _FADE_SECONDS = 0.010
 # 60 秒」时切块；把 max_seconds 按该速率换算成字符预算。
 _CHARS_PER_SECOND = 4.0
 
+# 自然模式借用的空档与下一组起点之间的安全间隔（秒）。
+DEFAULT_SAFETY_GAP = 0.10
+
+# 加速规划的滤镜余量：atempo 对非整倍率有毫秒级输出偏差，按略小的窗口
+# 计算倍率，保证变换后的真实样本数不越过允许窗口（仍只加速不减速）。
+ACCELERATION_MARGIN = 0.010
+
 
 class FitAction(str, Enum):
-    """配音时长相对字幕窗口的落点。"""
+    """配音时长相对允许窗口的落点。"""
 
-    FIT = "fit"
-    FIT_COMPRESS = "fit_compress"
-    SPILL = "spill"
-    COMPRESS_MAX = "compress_max"
-    TRUNCATED = "truncated"
-    NO_WINDOW = "no_window"
+    FIT = "fit"                    # 原速放入（允许借用到字幕后的空档）
+    ACCELERATED = "accelerated"    # 变速放入（> warn_speed 时带警告）
+    OVERFLOW = "overflow"          # 超过 max_speed 也放不下 → 需要处理
+    TRUNCATED = "truncated"        # 显式 truncate 策略下裁剪了内容
+    NO_WINDOW = "no_window"        # 窗口已退化（≤ 0）
 
 
 @dataclass(frozen=True)
@@ -48,50 +61,68 @@ class FitPlan:
     speed: float
     action: FitAction
     warning: str | None = None
+    overflow_ratio: float = 0.0    # overflow 时：synth/max_speed 超出窗口的比例
 
 
 def plan_fit(
     synth_duration: float,
-    slot: float,
-    available: float,
+    window: float,
     warn_speed: float = 1.15,
     max_speed: float = 1.30,
 ) -> FitPlan:
-    """决定合成音频如何放进字幕窗口。
+    """决定合成音频如何放进允许窗口（`window` 已由模式算好）。
 
-    `slot` 是字幕自身时长，`available` 是从字幕起点到下一句开始的时间
-    （含字幕后的空档）。`slot <= 0`（字幕窗口已退化）与 `available <= 0`
-    都返回 `NO_WINDOW`。分支顺序固定：无窗口 → 直接放入 → 轻微压缩 →
-    以警告上限溢入空档 → 压到上限 → 截断。
+    分支顺序固定：窗口退化 → 原速放入 → 计算所需倍率并变速 → overflow。
+    overflow 时返回 `speed=max_speed` 仅供报告参考，调用方不得据此放置。
     """
-    if available <= 0 or slot <= 0:
+    if window <= 0:
         return FitPlan(1.0, FitAction.NO_WINDOW, None)
-    if synth_duration <= slot:
+    if synth_duration <= window:
         return FitPlan(1.0, FitAction.FIT, None)
 
-    cap = min(warn_speed, max_speed)
-    ratio = synth_duration / slot
-    if ratio <= cap:
-        return FitPlan(ratio, FitAction.FIT_COMPRESS, None)
-    if synth_duration / cap <= available:
+    raw_needed = synth_duration / window
+    if raw_needed > max_speed:
         return FitPlan(
-            cap,
-            FitAction.SPILL,
-            "spills past subtitle end but stays before next cue",
+            max_speed,
+            FitAction.OVERFLOW,
+            f"needs {raw_needed:.2f}x > max {max_speed:.2f}x to fit "
+            f"{synth_duration:.2f}s into {window:.2f}s",
+            overflow_ratio=raw_needed,
         )
 
-    needed = synth_duration / available
-    if needed <= max_speed:
-        return FitPlan(
-            needed,
-            FitAction.COMPRESS_MAX,
-            "compressed past warning speed to stay before next cue",
+    # 变速按扣除滤镜余量的窗口计算，让 atempo 的真实输出不越界；
+    # 余量不得把倍率推过用户上限（边界情形按上限执行，交给引擎的
+    # 取整检查兜底）。
+    effective = max(window - ACCELERATION_MARGIN, window * 0.99, 1e-6)
+    needed = min(synth_duration / effective, max_speed)
+    warning = None
+    if needed > warn_speed:
+        warning = (
+            f"accelerated to {needed:.2f}x (> warn {warn_speed:.2f}x) "
+            "to stay within the allowed window"
         )
-    return FitPlan(
-        max_speed,
-        FitAction.TRUNCATED,
-        "truncated at next cue start",
-    )
+    return FitPlan(needed, FitAction.ACCELERATED, warning)
+
+
+def allowed_window(
+    cue,
+    effective_start: float,
+    timing_mode: str,
+    safety_gap: float = DEFAULT_SAFETY_GAP,
+) -> float:
+    """按 timing_mode 计算本组允许的窗口秒数。
+
+    natural：到下一组实际边界（`next_start`，即下一组名义起点；下一组
+    的 effective_start 只会 ≥ 该值，因此借满空档也不会与下一组重叠）减
+    安全间隔。strict_slot：本组自身有效结束时间（`cue.end`）为硬边界，
+    不借用之后空档。所有窗口都以 `effective_start`（被前一组推迟后的
+    实际起点）为基准。
+    """
+    if timing_mode == "strict_slot":
+        return cue.end - effective_start
+    if timing_mode != "natural":
+        raise ValueError(f"unknown timing_mode: {timing_mode!r}")
+    return (cue.next_start - safety_gap) - effective_start
 
 
 def trim_silence(
@@ -103,7 +134,8 @@ def trim_silence(
     """去掉首尾静音，返回仍带 10 ms 淡入淡出的单声道波形。
 
     以 `window_ms` 为窗计算 RMS，找到首个 / 最后一个高于 `threshold` 的窗，
-    前后各留一窗余量后切片。整段都是静音时抛 `ValueError`。
+    前后各留一窗余量后切片（保守：多留一窗，避免切掉气声与轻辅音起音）。
+    整段都是静音时抛 `ValueError`。
     """
     samples = np.asarray(pcm, dtype=np.float32)
     if samples.size == 0:
