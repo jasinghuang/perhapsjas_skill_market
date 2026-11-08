@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>text-refine ①代 · 单 SKILL.md 纯提示词技能</title>
+<style>
+:root{
+  --bg:#0b0f1a; --bg2:#0e1424; --panel:rgba(255,255,255,.032); --panel2:rgba(255,255,255,.055);
+  --line:rgba(255,255,255,.09); --text:#e7ecf5; --dim:#93a0b4; --faint:#6b768c;
+  --py:#38d9f0; --py-soft:rgba(56,217,240,.12);
+  --llm:#b7a5ff; --llm-soft:rgba(183,165,255,.12);
+  --ok:#3ddc97; --ok-soft:rgba(61,220,151,.12);
+  --gold:#fbd449; --gold-soft:rgba(251,212,73,.12);
+  --amber:#fb923c; --amber-soft:rgba(251,146,60,.14);
+  --bad:#f87a7a; --bad-soft:rgba(248,122,122,.13);
+  --mono:"Cascadia Code","JetBrains Mono",Consolas,"Courier New",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+  radial-gradient(1100px 500px at 85% -10%, rgba(251,212,73,.07), transparent 60%),
+  radial-gradient(900px 480px at 0% 0%, rgba(251,146,60,.06), transparent 55%),
+  linear-gradient(180deg,var(--bg) 0%, var(--bg2) 100%);
+  color:var(--text);
+  font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  line-height:1.65; -webkit-font-smoothing:antialiased;}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:44px 44px;mask-image:linear-gradient(180deg,transparent 0%,#000 18%,#000 82%,transparent 100%);}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+a{color:var(--py);text-decoration:none}
+a:hover{text-decoration:underline}
+
+nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(11,15,26,.72);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:4px;height:54px;overflow-x:auto;scrollbar-width:none}
+nav .wrap::-webkit-scrollbar{display:none}
+.nav-logo{font-weight:600;letter-spacing:.4px;margin-right:14px;white-space:nowrap}
+.nav-logo b{color:var(--gold)}
+nav a{color:var(--dim);font-size:13.5px;padding:6px 11px;border-radius:8px;white-space:nowrap}
+nav a:hover{color:var(--text);background:var(--panel2);text-decoration:none}
+
+header{padding:78px 0 54px;position:relative}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim);
+  border:1px solid var(--line);border-radius:999px;padding:5px 14px;background:var(--panel);letter-spacing:1px}
+.kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 10px var(--gold)}
+h1{font-size:clamp(30px,5vw,46px);line-height:1.22;margin:22px 0 10px;font-weight:700;letter-spacing:.5px}
+h1 .grad{background:linear-gradient(92deg,var(--gold) 0%,var(--amber) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--dim);font-size:16.5px;max-width:800px;margin:0 0 10px}
+.phil{display:flex;flex-wrap:wrap;gap:12px;margin:26px 0 0}
+.phil .pill{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:14px;padding:12px 18px;background:var(--panel)}
+.phil .pill .t{font-size:13px;color:var(--dim)}
+.phil .pill .v{font-size:14.5px;font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:30px}
+.stat{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel)}
+.stat .n{font-size:24px;font-weight:700;font-family:var(--mono)}
+.stat .l{font-size:12.5px;color:var(--dim);margin-top:2px}
+
+section{padding:58px 0 8px}
+.shead{display:flex;align-items:baseline;gap:14px;margin-bottom:26px}
+.shead .no{font-family:var(--mono);font-size:15px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:2px 10px;background:var(--panel)}
+.shead h2{font-size:26px;margin:0;font-weight:700}
+.shead .hint{color:var(--dim);font-size:13.5px;margin-left:auto;text-align:right}
+@media(max-width:720px){.shead{flex-wrap:wrap}.shead .hint{margin-left:0;text-align:left}}
+
+/* flow */
+.flow5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+@media(max-width:920px){.flow5{grid-template-columns:repeat(2,1fr)}.flow5 .arr{display:none}}
+@media(max-width:520px){.flow5{grid-template-columns:1fr}}
+.fbox{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);font-size:12.8px;position:relative}
+.fbox b{display:block;font-size:13.5px}
+.fbox span{color:var(--dim)}
+.fbox .fn{position:absolute;top:10px;right:12px;font-family:var(--mono);font-size:11px;color:var(--gold)}
+.flow5 .arr{align-self:center;color:var(--dim);text-align:center}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.chips span{font-size:12.3px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--panel)}
+.chips b{color:var(--text);font-weight:600}
+
+/* rule cards */
+.rules{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:920px){.rules{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.rules{grid-template-columns:1fr}}
+.rule{border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--panel);display:flex;flex-direction:column;transition:transform .25s,border-color .25s}
+.rule:hover{transform:translateY(-3px);border-color:rgba(251,212,73,.35)}
+.rule .rn{font-family:var(--mono);font-size:11.5px;color:var(--gold);background:var(--gold-soft);align-self:flex-start;border-radius:999px;padding:2px 10px;letter-spacing:.5px;margin-bottom:10px}
+.rule h3{margin:0 0 8px;font-size:15.5px}
+.rule p{margin:0 0 10px;font-size:13px;color:var(--dim)}
+.ba{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;background:#0a0e18;border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:5px 0}
+.ba .from{color:var(--bad);text-decoration:line-through;text-decoration-color:rgba(248,122,122,.6)}
+.ba .arr{color:var(--faint)}
+.ba .to{color:var(--ok)}
+.ba .raw{color:var(--dim)}
+.rule .principle{margin-top:auto;padding-top:10px;font-size:12.3px;color:var(--gold);border-top:1px dashed var(--line)}
+.principle::before{content:"原则 · ";font-weight:600}
+
+/* tables */
+.tbl{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{color:var(--dim);font-weight:500;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.5px}
+td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+td.mono{font-family:var(--mono);font-size:12.6px}
+.dname{font-weight:600;color:var(--gold)}
+
+/* code */
+.code{border:1px solid var(--line);border-radius:14px;background:#0a0e18;overflow:hidden}
+.code .bar{display:flex;align-items:center;gap:6px;padding:9px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--dim)}
+.code .bar i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.code pre{margin:0;padding:16px 18px;overflow-x:auto;font-size:12.8px;line-height:1.75;font-family:var(--mono)}
+.jc{color:var(--gold)} .jm{color:var(--dim)} .jk{color:var(--py)} .js{color:#ffd684}
+
+/* io demo */
+.io{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:860px){.io{grid-template-columns:1fr}}
+.gcard{border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--panel)}
+.gcard h3{margin:0 0 10px;font-size:15.5px}
+.gcard ul{margin:0;padding-left:18px;font-size:13px;color:var(--dim)}
+.gcard li{margin:5px 0}
+.gcard li b{color:var(--text)}
+
+/* legacy / limits */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:860px){.g2{grid-template-columns:1fr}}
+.legacy li::marker{color:var(--ok)}
+.limits li::marker{color:var(--bad)}
+
+/* era strip */
+.eras{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin-top:6px}
+.era{flex:1 1 140px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);font-size:12.3px;position:relative}
+.era b{display:block;font-size:13px}
+.era span{color:var(--dim)}
+.era .ec{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.era.now{border-color:rgba(251,212,73,.5);background:var(--gold-soft)}
+.era.now b{color:var(--gold)}
+.eras .arr{align-self:center;color:var(--dim)}
+.hand{border:1px solid rgba(251,212,73,.3);border-radius:18px;padding:26px;background:linear-gradient(135deg,var(--gold-soft),var(--amber-soft));margin-top:26px}
+.hand h3{margin:0 0 8px;font-size:19px}
+.hand p{margin:0 0 14px;font-size:14px;color:var(--dim)}
+.hand a.btn{display:inline-block;margin-right:10px;background:var(--gold);color:#33230a;font-weight:600;font-size:14px;border-radius:10px;padding:10px 20px}
+.hand a.btn:hover{text-decoration:none;filter:brightness(1.08)}
+
+footer{margin-top:70px;border-top:1px solid var(--line);padding:26px 0 40px;color:var(--dim);font-size:13px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:10px 26px;justify-content:space-between}
+
+.rv{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}
+.rv.on{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}.rule:hover{transform:none}}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <span class="nav-logo">text-refine<b>·①代</b></span>
+  <a href="#pos">定位与流程</a><a href="#contract">格式铁律</a><a href="#rules">六类校准规则</a><a href="#domain">领域检测</a><a href="#seg">分段处理</a><a href="#output">输出规范</a><a href="#legacy">遗产与局限</a><a href="#eras">演化之路</a>
+</div></nav>
+
+<header class="wrap" id="top">
+  <span class="kicker"><span class="dot"></span>①代 · 单 SKILL.md · 终版 commit b810216 · 2026-11-02（周一）· 周末 Python 化之前的最后形态</span>
+  <h1>周末之前的世界<br><span class="grad">纯提示词技能解剖</span></h1>
+  <p class="sub">整个 skill 只有一份 SKILL.md——没有 Python、没有校验脚本、没有临时目录协议，纯提示词形态存活了整整六个月（4/30 → 11/2）。终版最关键的进化是一条铁律：<b style="color:var(--text)">输出格式必须与输入一致，SRT 进 SRT 出、时间轴一个字都不改</b>——契约思想在没有任何代码守护的年代，全靠写给模型的话。</p>
+  <div class="phil">
+    <div class="pill"><div><div class="t">依赖策略</div><div class="v">无需额外依赖 · 首次检查：跳过</div></div></div>
+    <div class="pill"><div><div class="t">输入 / 输出</div><div class="v">格式与输入一致 → {原名}_refined.{原扩展名}</div></div></div>
+    <div class="pill"><div><div class="t">管线位置</div><div class="v">video-downloader → audio-transcribe → text-refine → add-subtitle</div></div></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="n">199 行</div><div class="l">一份 SKILL.md 就是全部（六个月终版）</div></div>
+    <div class="stat"><div class="n">0 个</div><div class="l">Python 文件 · 零脚本零守护</div></div>
+    <div class="stat"><div class="n">6 类</div><div class="l">Whisper 校准规则</div></div>
+    <div class="stat"><div class="n">4+1</div><div class="l">领域自动检测（影视/医疗/科技/财经/通用）</div></div>
+    <div class="stat"><div class="n">>200 段</div><div class="l">分段处理 · 携带前段末 5 句衔接</div></div>
+  </div>
+</header>
+
+<section id="pos"><div class="wrap">
+  <div class="shead rv"><span class="no">01</span><h2>定位与工作流程</h2><span class="hint">frontmatter 路由 + 五步流程</span></div>
+  <div class="flow5 rv" style="grid-template-columns:repeat(4,1fr)">
+    <div class="fbox"><span class="fn">S1</span><b>读取文件</b><span>SRT / MD / TXT · 记住输入格式</span></div>
+    <span class="arr">→</span>
+    <div class="fbox"><span class="fn">S2</span><b>语言检测</b><span>自动判断输入语言</span></div>
+    <span class="arr">→</span>
+    <div class="fbox"><span class="fn">S3</span><b>翻译 / 校准</b><span>非中文先翻再校 · 中文直接校</span></div>
+    <span class="arr">→</span>
+    <div class="fbox"><span class="fn">S4</span><b>按原格式写回</b><span>{原文件名}_refined.{原扩展名}</span></div>
+  </div>
+  <div class="chips rv">
+    <span>触发词路由（16 个）：<b>校准 · 校对 · 修正字幕 · 翻译字幕 · 精炼文本 · refine · 字幕纠错 · 文本润色 · 错别字修正 · 校对ASR · 修正转录 · 整理字幕 · 字幕美化 · 转录校准 · 字幕翻译 · 文本纠错</b></span>
+    <span>核心原则：<b>基于全文主题和语义校准</b>，不孤立校对单句——同音字与术语的取舍都看上下文</span>
+  </div>
+</div></section>
+
+<section id="contract"><div class="wrap">
+  <div class="shead rv"><span class="no">02</span><h2>铁律：输出格式 = 输入格式</h2><span class="hint">11/2 终版最重要的一次自我修正</span></div>
+  <div class="tbl rv"><table>
+    <thead><tr><th style="width:90px">输入</th><th>输出</th><th>文件名</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">.srt</td><td class="mono">.srt（完整保留时间轴）</td><td class="mono">{原文件名}_refined.srt</td></tr>
+      <tr><td class="mono">.md</td><td class="mono">.md</td><td class="mono">{原文件名}_refined.md</td></tr>
+      <tr><td class="mono">.txt</td><td class="mono">.txt</td><td class="mono">{原文件名}_refined.txt</td></tr>
+    </tbody>
+  </table></div>
+  <div class="chips rv">
+    <span>理由原文：<b>SRT 是带时间轴的字幕交换格式，播放器、剪辑软件与 add-subtitle 等下游 skill 都按 SRT 解析。格式不是"展示样式"，是契约——只改文字，不动结构</b></span>
+    <span>三不：<b>不给 SRT 加 Markdown 标记</b> · <b>不改扩展名</b> · <b>只有用户明确要求才转格式</b></span>
+  </div>
+  <div class="g2 rv" style="margin-top:16px">
+    <div class="gcard">
+      <h3>SRT 逐条写回规范（prompt 原文要点）</h3>
+      <ul>
+        <li>序号、时间轴 <b>"一个字都不改"</b>，只替换每条正文</li>
+        <li>每条 ≤ 2 行、每行约 <b>20 个中文字符</b>以内</li>
+        <li>原文一条过长可拆多条，<b>按文字长度比例切分时间段</b>，总时长与前后衔接不变</li>
+        <li>多条短句保持原样，不为"排版好看"合并；跨条断句连读通顺</li>
+        <li>UTF-8 无 BOM · 条间空一行 · 不加任何 Markdown 标记</li>
+      </ul>
+    </div>
+    <div class="gcard">
+      <h3>惊人的祖先条款 —— 写在提示词里的后世机制</h3>
+      <ul class="legacy">
+        <li><b>"一个字都不改"</b> → ④代 render_srt 逐字保留 → v2 硬不变量"时间戳逐字节相同"</li>
+        <li><b>"按文字长度比例切分时间段"</b> → ⑤代 schedule() 字符范围线性插值</li>
+        <li><b>"每行约 20 字"</b> → DEFAULTS line_chars = 18</li>
+        <li><b>"多条短句保持原样不合并"</b> → v2 "条数 == N" 断言</li>
+        <li><b>"格式是契约"</b> → 整个结构守护体系的世界观起点</li>
+      </ul>
+    </div>
+  </div>
+  <div class="chips rv"><span>管线因此延长一格：<b>video-downloader → audio-transcribe → text-refine → add-subtitle</b>——格式契约保住了，输出才能直连下游叠加字幕</span></div>
+</div></section>
+
+<section id="rules"><div class="wrap">
+  <div class="shead rv"><span class="no">03</span><h2>六类校准规则</h2><span class="hint">全部是写给 Claude 的话，不是代码</span></div>
+  <div class="rules rv">
+    <div class="rule">
+      <span class="rn">RULE 01</span><h3>删除 Whisper 冗余词</h3>
+      <p> Whisper 常误添加无意义虚词</p>
+      <div class="ba"><span class="from">叫做被抑制</span><span class="arr">→</span><span class="to">被抑制</span></div>
+      <div class="ba"><span class="from">所谓叫做这个功能</span><span class="arr">→</span><span class="to">这个功能</span></div>
+      <div class="principle">删除后句子仍通顺，就不要加回任何词</div>
+    </div>
+    <div class="rule">
+      <span class="rn">RULE 02</span><h3>清理重复伪影</h3>
+      <p>段落末尾或段落间产生整句重复</p>
+      <div class="ba"><span class="raw">"我增加了一对新婚夫妇" × 5</span><span class="arr">→</span><span class="to">保留 1 次</span></div>
+      <div class="ba"><span class="from">观看观看观看观看观看</span><span class="arr">→</span><span class="to">观看</span></div>
+      <div class="principle">同一短语连续重复 3 次以上保留 1 次，保留后查语义通顺</div>
+    </div>
+    <div class="rule">
+      <span class="rn">RULE 03</span><h3>清理水印与广告</h3>
+      <p>平台水印被 ASR 识别进字幕</p>
+      <div class="ba"><span class="from">优优独播剧场</span><span class="arr">→</span><span class="to">整段删除</span></div>
+      <div class="ba"><span class="from">YoYo Television Series Exclusive</span><span class="arr">→</span><span class="to">整段删除</span></div>
+      <div class="principle">非视频内容的广告、水印、平台提示语一律删除</div>
+    </div>
+    <div class="rule">
+      <span class="rn">RULE 04</span><h3>清理幻觉内容</h3>
+      <p>中文音频里幻觉出英文或无意义内容，常在段落边界</p>
+      <div class="ba"><span class="raw">中文视频突现无关英文短句</span><span class="arr">→</span><span class="to">删除</span></div>
+      <div class="ba"><span class="from">stylestyle · yeah yeah yeah</span><span class="arr">→</span><span class="to">删除</span></div>
+      <div class="principle">与上下文语义无关且无法合理解释的，视为幻觉并删除</div>
+    </div>
+    <div class="rule">
+      <span class="rn">RULE 05</span><h3>添加标点符号</h3>
+      <p>原始 ASR 输出通常无标点</p>
+      <div class="ba"><span class="raw">句读全套</span><span class="arr">→</span><span class="to">。 ， ？ ！ ： ；</span></div>
+      <div class="ba"><span class="raw">作品 / 人名 / 省略</span><span class="arr">→</span><span class="to">《》 · 马丁·斯科塞斯 · ……</span></div>
+      <div class="principle">标点服务于可读性，不改变语义和节奏</div>
+    </div>
+    <div class="rule">
+      <span class="rn">RULE 06</span><h3>同音字 / 错别字纠正</h3>
+      <p>按领域分组硬编码在提示词里</p>
+      <div class="ba"><span class="from">地域</span><span class="arr">→</span><span class="to">阈值</span><span class="raw">通用</span></div>
+      <div class="ba"><span class="from">试点</span><span class="arr">→</span><span class="to">视点</span><span class="raw">影视</span></div>
+      <div class="ba"><span class="from">Crawl</span><span class="arr">→</span><span class="to">Cursor</span><span class="raw">科技</span></div>
+      <div class="ba"><span class="from">肃部</span><span class="arr">→</span><span class="to">腹部</span><span class="raw">医疗</span></div>
+      <div class="principle">不改变原意：不添加内容、专名必须准确、不随意改句式</div>
+    </div>
+  </div>
+</div></section>
+
+<section id="domain"><div class="wrap">
+  <div class="shead rv"><span class="no">04</span><h2>视频类型自动检测</h2><span class="hint">读前 30 段采样 · 按领域切换术语策略</span></div>
+  <div class="tbl rv"><table>
+    <thead><tr><th style="width:90px">类型</th><th>关键词示例</th><th>校准重点</th></tr></thead>
+    <tbody>
+      <tr><td class="dname">影视</td><td class="mono">镜头 · 导演 · 摄影 · 景别 · 分镜 · 推拉摇移 · 视点 · 调度</td><td>人名片名准确 · 影视术语准确 · 外文片名翻译</td></tr>
+      <tr><td class="dname">医疗</td><td class="mono">膈肌 · 骨盆 · 康复 · 腹内压 · 骶骨</td><td>解剖学与医学术语准确</td></tr>
+      <tr><td class="dname">科技</td><td class="mono">代码 · API · Cursor · Python · React</td><td>产品名称与技术术语准确</td></tr>
+      <tr><td class="dname">财经</td><td class="mono">股票 · 基金 · K线 · 涨停板</td><td>财经术语与公司名称准确</td></tr>
+      <tr><td class="dname">通用</td><td class="mono">其他</td><td>常见 ASR 错误纠正</td></tr>
+    </tbody>
+  </table></div>
+  <div class="chips rv"><span>这是后来 <b>v2 术语探测 + style_note 口吻定调</b> 的最早祖先——领域自适应思想从第一代就存在</span></div>
+</div></section>
+
+<section id="seg"><div class="wrap">
+  <div class="shead rv"><span class="no">05</span><h2>分段处理</h2><span class="hint">长文件上下文衔接的雏形</span></div>
+  <div class="g2 rv">
+    <div class="gcard"><h3>≤ 200 段</h3><ul><li>一次读取，整体校准——全文语义优先的最简实现</li></ul></div>
+    <div class="gcard"><h3>> 200 段</h3><ul><li>分段处理，每段保留<b>前段最后 5 句</b>作为上下文衔接，确保跨段语义连贯</li><li>没有批次文件、没有逐段校验、没有断点——上下文携带全凭模型自觉</li></ul></div>
+  </div>
+  <div class="chips rv"><span>→ 演化对照：这个"前段尾巴做衔接"的思想，四代之后变成了 v2 批次材料里的 <b>prev_batch_tail_translation</b> 字段</span></div>
+</div></section>
+
+<section id="output"><div class="wrap">
+  <div class="shead rv"><span class="no">06</span><h2>输出规范</h2><span class="hint">SRT 是默认路径 · 美化被降级为可选</span></div>
+  <div class="g2 rv">
+    <div class="gcard">
+      <h3>SRT：逐条写回（默认路径）</h3>
+      <div class="code" style="margin-bottom:10px"><pre><span class="jm">1</span>
+<span class="jk">00:00:00,000 --> 00:00:16,800</span>
+校准后的字幕文本
+
+<span class="jm">2</span>
+<span class="jk">00:00:16,800 --> 00:00:22,559</span>
+下一条字幕</pre></div>
+      <ul>
+        <li>序号与时间轴 <b>"一个字都不改"</b>，只替换正文</li>
+        <li>超长一条可拆多条、<b>按文字长度比例切分时间段</b>；多条短句不合并</li>
+        <li>UTF-8 无 BOM · 条间空行 · 不加任何 Markdown 标记</li>
+      </ul>
+    </div>
+    <div class="gcard">
+      <h3>MD / TXT：结构原样保留</h3>
+      <ul>
+        <li>Markdown 标题 / 列表 / 代码块 / 引用结构原样，只校准文字</li>
+        <li>TXT 保持纯文本分段，不引入 Markdown 语法</li>
+        <li><b>美化规则仅在 MD/TXT 且用户明确要求时使用</b>：层级标题 · 术语首现加粗 · 列表化枚举 · 每段 3~8 句 · 引用块仅限金句 · 章节间分隔线</li>
+        <li>五月版"把字幕文档化成精美 Markdown"的整章输出规范在终版被删除——那个方向已被铁律否定</li>
+      </ul>
+    </div>
+  </div>
+  <div class="chips rv"><span>终版示例：<b>校准 video.srt → video_refined.srt · 翻译并校准 audio.srt → audio_refined.srt · "把这份字幕整理成文章" → 用户明确要求时才输出 .md</b></span></div>
+</div></section>
+
+<section id="legacy"><div class="wrap">
+  <div class="shead rv"><span class="no">07</span><h2>遗产与局限</h2><span class="hint">它定下的方向 · 它埋下的雷</span></div>
+  <div class="g2 rv">
+    <div class="gcard">
+      <h3>活到今天的遗产</h3>
+      <ul class="legacy">
+        <li><b>格式契约铁律</b>——"输出 = 输入 · 只改文字，不动结构" → preserve 模式逐字保留与 v2 结构守护体系的世界观起点</li>
+        <li><b>全文语义优先</b>——"基于全文主题校准，不孤立校对单句" → 各代"先理解完整句意"的源头</li>
+        <li><b>领域自适应</b>——视频类型检测换术语策略 → v2 术语探测 + style_note</li>
+        <li><b>分段 + 上下文衔接</b>——前段末 5 句 → v2 的 prev_batch_tail_translation</li>
+        <li><b>触发词路由</b>——16 个触发词让 skill 可被自然语言唤起</li>
+        <li><b>零依赖哲学</b>——"Claude 自身就是引擎" → 后续各代坚持纯标准库</li>
+      </ul>
+    </div>
+    <div class="gcard">
+      <h3>被后四代逐一修掉的雷</h3>
+      <ul class="limits">
+        <li><b>守护只存在于措辞里</b>——"一个字都不改"没有任何代码验证：模型若写坏条数或时间戳，无从发现 → 周末 Python 化（②~⑤代）解决的第一个问题</li>
+        <li><b>翻译是"顺手翻"</b>——无术语锁、无预算、无审校、无门禁 → 正是 v2 重建的主战场</li>
+        <li><b>规则硬编码在 prompt</b>——影视/医疗错字表写死在文档里，不可参数化、不可测试 → 后续移入 references 与代码参数</li>
+      </ul>
+    </div>
+  </div>
+  <div class="chips rv"><span>单文件时代小史：五月版"SRT → Markdown 文档化"（产物不可回灌播放器）→ 11/2 终版用铁律否定该方向——<b>六个月内纯靠 prompt 迭代，完成了一次重要自我纠错</b></span></div>
+</div></section>
+
+<section id="eras"><div class="wrap">
+  <div class="shead rv"><span class="no">08</span><h2>演化之路</h2><span class="hint">一个 skill 的六次形态变化 · Python 化全部发生在周末 24 小时内</span></div>
+  <div class="eras rv">
+    <div class="era now"><span class="ec">4/30 → 11/2</span><b>① 单文件时代</b><span>六个月纯提示词 · 终版 b810216</span></div>
+    <span class="arr">→</span>
+    <div class="era"><span class="ec">f12b50~1889969</span><b>② 案例扩充</b><span>references 拆分 · 词级时间戳</span></div>
+    <span class="arr">→</span>
+    <div class="era"><span class="ec">516924d~9157895</span><b>③ 逐块状态机</b><span>七命令 CLI · init/chunk/submit</span></div>
+    <span class="arr">→</span>
+    <div class="era"><span class="ec">1f09ea8</span><b>④ 薄文件层</b><span>Simplify · 三命令协议</span></div>
+    <span class="arr">→</span>
+    <div class="era"><span class="ec">d4950bf</span><b>⑤ 排时引擎</b><span>semantic_timing · 信达雅审校</span></div>
+    <span class="arr">→</span>
+    <div class="era" style="border-color:rgba(56,217,240,.4)"><span class="ec">v2 重建</span><b>批次管线</b><span>评审中 · 需求文档 v0.3</span></div>
+  </div>
+  <div class="hand rv">
+    <h3>→ 三页一套，对照着看</h3>
+    <p>①代看"从哪来"（纯提示词的朴素与风险），⑤代看"现在在哪"（协议与引擎），v2 蓝图看"到哪去"（批次管线与门禁）。</p>
+    <a class="btn" href="text-refine_v3_架构.html">⑤代 现行架构解剖 →</a>
+    <a class="btn" href="text-refine_v2_蓝图.html" style="background:var(--py);color:#06222a">v2 重建蓝图 →</a>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <span>text-refine ①代 单 SKILL.md 解剖 · 终版 commit b810216（2026-11-02）· 单文件时代 4/30~11/2</span>
+  <span><a href="text-refine_v3_架构.html">v3 现行架构</a> · <a href="text-refine_v2_蓝图.html">v2 重建蓝图</a> · <a href="text-refine_v2_完整技术需求文档.md">v2 需求文档</a></span>
+</div></footer>
+
+<script>
+(function(){
+  var els=document.querySelectorAll('.rv');
+  if(!('IntersectionObserver' in window)||window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    els.forEach(function(e){e.classList.add('on')});return;
+  }
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){if(en.isIntersecting){en.target.classList.add('on');io.unobserve(en.target)}});
+  },{threshold:.08});
+  els.forEach(function(e){io.observe(e)});
+})();
+</script>
+</body>
+</html>
