@@ -7,10 +7,13 @@ Markdown 链接地址与行内代码保护、重新分段的时间边界与源�
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
-from srt_struct import SrtEntry, SrtFormatError, parse_timestamp
+from srt_struct import SrtEntry, SrtFormatError, parse_timestamp, render_srt
 from textblocks import TextBlock, extract_inline_code, extract_link_targets, is_protected
 
 _TAG_RE = re.compile(r"<[^>\n]+>")
@@ -303,3 +306,165 @@ def submit_chunk_resegment(
     if issues:
         raise SubmitError(issues)
     return new_entries
+
+
+# =====================================================================
+# 全量校验、组装与可靠发布（需求文档 §9.3、§10.1、§11）
+# =====================================================================
+
+@dataclass
+class ValidationReport:
+    """机器可读的校验结果：blockers 非空 = 不得发布成品。"""
+
+    blockers: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return not self.blockers
+
+    def to_dict(self) -> dict:
+        return {"ok": self.ok, "blockers": self.blockers, "warnings": self.warnings}
+
+
+def format_timestamp(total_ms: int) -> str:
+    ms = total_ms % 1000
+    seconds = total_ms // 1000
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def _validate_coverage(expected_ids: list[str], coverage: dict[str, int], report: ValidationReport) -> None:
+    missing = [sid for sid in expected_ids if coverage.get(sid, 0) == 0]
+    duplicated = [sid for sid in expected_ids if coverage.get(sid, 0) > 1]
+    if missing:
+        report.blockers.append(f"覆盖缺失（不得发布）: {', '.join(missing)}")
+    if duplicated:
+        report.blockers.append(f"跨块重复覆盖: {', '.join(duplicated)}")
+
+
+def validate_full_srt(entries: list[SrtEntry], chunk_results: list[tuple[ChunkDef, dict]]) -> ValidationReport:
+    """全量确定性校验：逐块重跑提交校验 + 全文件覆盖恰好一次。"""
+    report = ValidationReport()
+    coverage: dict[str, int] = {}
+    for chunk, payload in chunk_results:
+        try:
+            mapping = submit_chunk_srt(entries, chunk, payload)
+        except SubmitError as e:
+            report.blockers.extend(f"[{chunk.chunk_id}] {issue}" for issue in e.issues)
+            continue
+        for sid in mapping:
+            coverage[sid] = coverage.get(sid, 0) + 1
+    _validate_coverage([e.entry_id for e in entries], coverage, report)
+    return report
+
+
+def validate_full_text(blocks: list[TextBlock], chunk_results: list[tuple[ChunkDef, dict]]) -> ValidationReport:
+    report = ValidationReport()
+    coverage: dict[str, int] = {}
+    for chunk, payload in chunk_results:
+        try:
+            mapping = submit_chunk_text(blocks, chunk, payload)
+        except SubmitError as e:
+            report.blockers.extend(f"[{chunk.chunk_id}] {issue}" for issue in e.issues)
+            continue
+        for sid in mapping:
+            coverage[sid] = coverage.get(sid, 0) + 1
+    _validate_coverage(
+        [b.block_id for b in blocks if not is_protected(b)], coverage, report
+    )
+    return report
+
+
+def load_chunk_results(state, working_dir: Path) -> tuple[list[tuple[ChunkDef, dict]], list[str]]:
+    """从工作目录读取全部 validated 块的结果文件，并复核 sha（防篡改/损坏）。"""
+    loaded: list[tuple[ChunkDef, dict]] = []
+    issues: list[str] = []
+    for c in state.chunks:
+        if c.status != "validated":
+            continue
+        path = Path(c.result_path) if c.result_path else working_dir / "chunks" / f"{c.chunk_id}.result.json"
+        if not path.exists():
+            issues.append(f"块 {c.chunk_id} 结果文件缺失: {path}")
+            continue
+        raw = path.read_bytes()
+        actual = result_sha(raw)
+        if c.result_sha256 and actual != c.result_sha256:
+            issues.append(
+                f"块 {c.chunk_id} 结果文件内容与提交时不一致（sha 不符），需重新提交该块"
+            )
+            continue
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            issues.append(f"块 {c.chunk_id} 结果文件损坏: {e}")
+            continue
+        loaded.append((ChunkDef(c.chunk_id, c.first, c.last), payload))
+    return loaded, issues
+
+
+def assemble_srt(entries: list[SrtEntry], results: dict[str, str]) -> str:
+    return render_srt(entries, results)
+
+
+def assemble_resegment(entries: list[SrtEntry], new_entries: list["NewEntry"]) -> str:
+    """重新分段输出：连续新序号 1..N，按时间排序，标准时间轴行。"""
+    known = {e.entry_id for e in entries}
+    for n in new_entries:
+        for sid in n.source_ids:
+            if sid not in known:
+                raise SubmitError([f"未知 source_id: {sid}"])
+    ordered = sorted(new_entries, key=lambda n: n.start_ms)
+    blocks = [
+        f"{i}\n{format_timestamp(n.start_ms)} --> {format_timestamp(n.end_ms)}\n{n.text}"
+        for i, n in enumerate(ordered, start=1)
+    ]
+    return "\n\n".join(blocks) + "\n"
+
+
+def assemble_text(blocks: list[TextBlock], results: dict[str, str]) -> str:
+    """文本块组装：可编辑块换新正文（保留尾部空行分隔），其余逐字节原样。"""
+    parts: list[str] = []
+    for b in blocks:
+        if b.block_id in results:
+            if is_protected(b):
+                raise SubmitError([f"受保护块 {b.block_id} 不可替换"])
+            parts.append(results[b.block_id] + b.tail)
+        else:
+            parts.append(b.raw)
+    return "".join(parts)
+
+
+def atomic_write(path: Path, content: str) -> None:
+    """同目录 tmp + fsync + os.replace；失败清理 tmp，绝不留半成品。"""
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def publish(output_path: Path, content: str, overwrite: bool = False) -> tuple[Path, bool]:
+    """发布成品：默认不覆盖已有文件，取带序号新名；返回 (实际路径, 是否新建)。"""
+    path = Path(output_path)
+    if path.exists() and not overwrite:
+        stem, suffix = path.stem, path.suffix
+        n = 2
+        while True:
+            candidate = path.with_name(f"{stem}_{n}{suffix}")
+            if not candidate.exists():
+                path = candidate
+                break
+            n += 1
+    created = not path.exists()
+    atomic_write(path, content)
+    return path, created
