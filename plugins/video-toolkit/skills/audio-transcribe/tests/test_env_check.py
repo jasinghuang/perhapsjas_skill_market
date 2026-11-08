@@ -12,6 +12,12 @@ def fake_platform(monkeypatch, system, machine, release="6.1.0"):
     monkeypatch.setattr(env_check.platform, "release", lambda: release)
 
 
+def no_blockers(monkeypatch):
+    """Keep needs_setup tests hermetic: real uv/python probes never run."""
+    monkeypatch.setattr(env_check, "bootstrap_blockers", lambda: [])
+    monkeypatch.setattr(env_check, "find_uv", lambda *a: None)
+
+
 # --- WSL / Rosetta ---------------------------------------------------------------
 
 def test_wsl_detected_from_release(monkeypatch):
@@ -46,8 +52,18 @@ def test_apple_silicon_ready_when_mlx_importable(monkeypatch):
 
 def test_apple_silicon_needs_setup_when_missing(monkeypatch):
     fake_platform(monkeypatch, "Darwin", "arm64")
+    no_blockers(monkeypatch)
     monkeypatch.setattr(env_check, "_import_ok", lambda module, python=None: False)
     assert env_check._local_support_status("Darwin", "arm64") == "needs_setup"
+
+
+@pytest.mark.parametrize("system,machine", [("Windows", "AMD64"), ("Darwin", "arm64"), ("Linux", "x86_64")])
+def test_cold_machine_without_uv_or_python_reports_blocked(monkeypatch, system, machine):
+    fake_platform(monkeypatch, system, machine)
+    monkeypatch.setattr(env_check, "_import_ok", lambda module, python=None: False)
+    monkeypatch.setattr(env_check, "_torch_cuda_ok", lambda python=None: None)
+    monkeypatch.setattr(env_check, "bootstrap_blockers", lambda: ["no uv and no Python 3.10-3.12 discovered"])
+    assert env_check._local_support_status(system, machine) == "blocked_missing_uv"
 
 
 def test_intel_mac_unsupported(monkeypatch):
@@ -57,6 +73,7 @@ def test_intel_mac_unsupported(monkeypatch):
 
 def test_windows_amd64_status_matrix(monkeypatch):
     fake_platform(monkeypatch, "Windows", "AMD64")
+    no_blockers(monkeypatch)
     monkeypatch.setattr(env_check, "_import_ok", lambda module, python=None: True)
     monkeypatch.setattr(env_check, "_torch_cuda_ok", lambda python=None: True)
     assert env_check._local_support_status("Windows", "AMD64") == "ready"
@@ -120,12 +137,25 @@ def test_probe_qwen_torch_cpu_validated(monkeypatch):
 
 def test_probe_qwen_torch_missing_qwen_asr(monkeypatch):
     fake_platform(monkeypatch, "Windows", "AMD64")
+    no_blockers(monkeypatch)
     monkeypatch.setattr(env_check, "_import_ok",
                         lambda module, python=None: module != env_check.QWEN_TORCH_IMPORT)
     monkeypatch.setattr(env_check, "_torch_cuda_ok", lambda python=None: True)
     report = env_check.probe_backend("qwen")
     assert report["status"] == "needs_setup"
     assert any("qwen_asr" in c for c in report["checks"])
+
+
+def test_probe_qwen_blocked_reports_actionable_fix(monkeypatch):
+    fake_platform(monkeypatch, "Windows", "AMD64")
+    monkeypatch.setattr(env_check, "_import_ok", lambda module, python=None: False)
+    monkeypatch.setattr(env_check, "bootstrap_blockers", lambda: [
+        "no uv and no Python 3.10-3.12 discovered — run.py cannot create its managed venv",
+        "fix: `pip install uv` is enough",
+    ])
+    report = env_check.probe_backend("qwen")
+    assert report["status"] == "blocked_missing_uv"
+    assert any("pip install uv" in c for c in report["checks"])
 
 
 def test_probe_unknown_provider_raises():
@@ -137,6 +167,7 @@ def test_probe_unknown_provider_raises():
 
 def test_detect_environment_shape(monkeypatch):
     fake_platform(monkeypatch, "Windows", "AMD64", release="10")
+    no_blockers(monkeypatch)
     monkeypatch.setattr(env_check, "_import_ok", lambda module, python=None: True)
     monkeypatch.setattr(env_check, "_torch_cuda_ok", lambda python=None: True)
     monkeypatch.setattr(env_check, "_available_memory", lambda: 16.0)
@@ -147,6 +178,13 @@ def test_detect_environment_shape(monkeypatch):
     assert env["architecture"] == "AMD64"
     assert env["local_support_status"] == "ready"
     assert env["available_memory_gb"] == 16.0
+    # Bootstrap preflight rides along with check_local (doc §4, 2026-11-08 postmortem)
+    assert env["uv_available"] is False and env["setup_blockers"] == []
+
+
+def test_detect_environment_skips_preflight_without_check_local():
+    env = env_check.detect_environment()
+    assert "setup_blockers" not in env and "uv_available" not in env
 
 
 def test_format_env_line_mac(monkeypatch):
@@ -166,6 +204,13 @@ def test_format_env_line_wsl():
     env = {"os": "Linux", "architecture": "x86_64", "is_wsl": True, "is_rosetta": False,
            "local_support_status": "ready"}
     assert "WSL" in env_check.format_env_line(env)
+
+
+def test_format_env_line_blocked_status_is_actionable():
+    env = {"os": "Windows", "architecture": "AMD64", "is_wsl": False, "is_rosetta": False,
+           "local_support_status": "blocked_missing_uv"}
+    line = env_check.format_env_line(env)
+    assert "pip install uv" in line
 
 
 def test_generic_detection_never_imports_local_packages(monkeypatch):

@@ -103,10 +103,18 @@ def _ensure_isolated_env() -> None:
             return
 
     try:
-        os.execv(
-            str(venv_py),
-            [str(venv_py), str(Path(__file__).resolve()), *sys.argv[1:]],
-        )
+        script_argv = [str(Path(__file__).resolve()), *sys.argv[1:]]
+        if sys.platform == 'win32':
+            # Windows 的 os.execv 拼 command line 时不给参数加引号，含空格的
+            # 参数会在子进程裂开（--output "E:\AI 分享会" → "E:\AI" + 多余的
+            # URL）。subprocess 列表形式按 MS 规则转义，用它转发并回传退出码。
+            proc = subprocess.Popen([str(venv_py), *script_argv])
+            try:
+                sys.exit(proc.wait())
+            except KeyboardInterrupt:
+                # Ctrl-C 同时送达父子进程；子进程自行退出，这里只等它结束
+                sys.exit(proc.wait())
+        os.execv(str(venv_py), [str(venv_py), *script_argv])
     except OSError as e:
         _log(f"⚠ 无法进入独立环境: {e}")
         _log("  继续使用系统 Python；自动更新将不可用")

@@ -16,10 +16,16 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from bootstrap import bootstrap_blockers, find_uv
 from media import has_ffmpeg
 
 QWEN_MLX_IMPORT = "mlx_qwen3_asr"
 QWEN_TORCH_IMPORT = "qwen_asr"
+
+
+def _blocked_or(default: str) -> str:
+    """'blocked_missing_uv' when run.py cannot even build its venv (doc §4)."""
+    return "blocked_missing_uv" if bootstrap_blockers() else default
 
 
 def _import_ok(module: str, python: Optional[str] = None) -> bool:
@@ -124,14 +130,14 @@ def _local_support_status(system: str, machine: str, python: Optional[str] = Non
     """ready / needs_setup / unsupported / unverified for the local Qwen route."""
     if system == "Darwin":
         if machine == "arm64":
-            return "ready" if _import_ok(QWEN_MLX_IMPORT, python) else "needs_setup"
+            return "ready" if _import_ok(QWEN_MLX_IMPORT, python) else _blocked_or("needs_setup")
         return "unsupported"  # Intel Mac: no MLX, no CUDA (doc §2)
 
     if system == "Windows":
         if machine == "AMD64":
             cuda = _torch_cuda_ok(python)
             if cuda is None or not _import_ok(QWEN_TORCH_IMPORT, python):
-                return "needs_setup"  # torch/qwen_asr not installed yet
+                return _blocked_or("needs_setup")  # torch/qwen_asr not installed yet
             # CPU FP32 mode passed end-to-end validation (zh+en short samples,
             # 2026-11-08, RTX 4070 Ti machine forced to cpu) — slow but open.
             return "ready"
@@ -141,7 +147,7 @@ def _local_support_status(system: str, machine: str, python: Optional[str] = Non
         # Includes WSL — flagged separately; extension validation, not native Windows.
         cuda = _torch_cuda_ok(python)
         if cuda is None or not _import_ok(QWEN_TORCH_IMPORT, python):
-            return "needs_setup"
+            return _blocked_or("needs_setup")
         return "ready"
 
     return "unverified"
@@ -151,7 +157,7 @@ def detect_environment(python: Optional[str] = None, check_local: bool = False) 
     system = platform.system()
     machine = platform.machine()
     memory = _available_memory()
-    return {
+    env = {
         "os": system,
         "architecture": machine,
         "python_version": platform.python_version(),
@@ -166,6 +172,19 @@ def detect_environment(python: Optional[str] = None, check_local: bool = False) 
         "local_support_status": _local_support_status(system, machine, python) if check_local else (
             "unsupported" if system == "Darwin" and machine != "arm64" else "not_checked"),
     }
+    if check_local:
+        # Bootstrap preflight so blockers surface before media is downloaded.
+        env["uv_available"] = bool(find_uv())
+        env["setup_blockers"] = bootstrap_blockers()
+    return env
+
+
+def _mark_setup(report: dict, *checks: str) -> dict:
+    """needs_setup, or blocked_missing_uv with actionable fixes, for a cold machine."""
+    report["status"] = _blocked_or("needs_setup")
+    report["checks"].extend(checks)
+    report["checks"].extend(bootstrap_blockers())
+    return report
 
 
 def probe_backend(provider: str, python: Optional[str] = None) -> dict:
@@ -186,22 +205,19 @@ def probe_backend(provider: str, python: Optional[str] = None) -> dict:
 
         if report["route"] == "mlx":
             ok = _import_ok(QWEN_MLX_IMPORT, python)
-            report["status"] = "ready" if ok else "needs_setup"
-            report["checks"].append(
-                f"import {QWEN_MLX_IMPORT}: {'ok' if ok else 'missing (run.py will install mlx-qwen3-asr)'}"
-            )
+            if ok:
+                report["status"] = "ready"
+                report["checks"].append(f"import {QWEN_MLX_IMPORT}: ok")
+            else:
+                _mark_setup(report, f"import {QWEN_MLX_IMPORT}: missing (run.py will install mlx-qwen3-asr)")
             return report
 
         # torch route (Windows/Linux/WSL): doc §6 steps 1–5.
         if not _import_ok(QWEN_TORCH_IMPORT, python):
-            report["status"] = "needs_setup"
-            report["checks"].append("import qwen_asr: missing (run.py will install it)")
-            return report
+            return _mark_setup(report, "import qwen_asr: missing (run.py will install it)")
         torch_cuda = _torch_cuda_ok(python)
         if torch_cuda is None:
-            report["status"] = "needs_setup"
-            report["checks"].append("import torch: missing (run.py will install it)")
-            return report
+            return _mark_setup(report, "import torch: missing (run.py will install it)")
         report["checks"].append("import torch + qwen_asr: ok")
         if torch_cuda:
             report["status"] = "ready"
@@ -249,6 +265,11 @@ def _gpu_name() -> str:
     return ""
 
 
+STATUS_LABELS = {
+    "blocked_missing_uv": "缺少前置（无 uv 且无 Python 3.10–3.12；pip install uv 即可，uv 会自行管理 Python 3.12）",
+}
+
+
 def format_env_line(env: dict) -> str:
     """One-line summary for the agent to relay to the user (doc §3)."""
     os_name = {"Darwin": "macOS", "Windows": "Windows", "Linux": "Linux"}.get(env["os"], env["os"])
@@ -257,7 +278,8 @@ def format_env_line(env: dict) -> str:
         arch = "Apple Silicon (Rosetta / Intel Python)"
     if env["is_wsl"]:
         os_name += " (WSL)"
-    return f"检测到当前环境为 {os_name}，{arch}，本地 Qwen 路线状态：{env['local_support_status']}"
+    status = STATUS_LABELS.get(env["local_support_status"], env["local_support_status"])
+    return f"检测到当前环境为 {os_name}，{arch}，本地 Qwen 路线状态：{status}"
 
 
 if __name__ == "__main__":

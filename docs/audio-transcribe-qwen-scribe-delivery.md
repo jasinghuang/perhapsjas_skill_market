@@ -97,6 +97,7 @@ python run.py video.mp4 --provider qwen --device cpu
 | P06 | Intel Mac 拒绝 MLX | ⏳ 单测覆盖（unsupported + Rosetta 检测），待实机抽查 |
 | P07 | Scribe 真实调用 | ⏳ 无凭证环境仅验证：缺 key 前置失败、不联网、不泄 key。请求/重试/过滤逻辑 13 个单测覆盖。**真实计费调用待有凭证时验收** |
 | P08 | 断网缓存 | ✅ 模型缓存后不再联网（HuggingFace 本地快照读取 revision）；分块缓存命中时不重算 |
+| **P09** | 真实 YouTube 音频实跑 + 安装引导 | ✅ 2026-11-08 复盘：687s 媒体 224s（约 3 倍速）完整交付；前两次失败（缺 uv 发现途径、Git Bash PATH 坑）驱动 §7 优化，已复验 `python -m uv` 自动发现 |
 
 ### 功能与异常验收
 
@@ -141,3 +142,25 @@ python run.py video.mp4 --provider qwen --device cpu
 - Mac 全路线（P01-P03/P06）与 Scribe 真实计费调用（P07）**未实机验证**，
   状态在 `references/` 中如实标注，不写成已支持。
 - Mac 6bit 权重未实测，不因体积小而承诺开放（doc §14）。
+
+## 7. 2026-11-08 Windows 实跑复盘：安装引导优化
+
+来源：`audio-transcribe-skill-优化建议.md`（Windows 11 + Git Bash + RTX 4070 Ti，
+系统仅 Python 3.14.2，无 uv／无 3.12）。三次尝试中前两次失败的根因与修复：
+
+| 复盘问题 | 修复 |
+| --- | --- |
+| `--detect-env` 不预检 uv／Python 前置，正式转录才 bail out（用户已投入下载成本） | detect（指定 qwen）新增 `uv_available`／`setup_blockers` 输出；冷机状态置 `blocked_missing_uv` 并附修复方法 |
+| uv 只认 PATH；`pip install uv` 落在用户 Scripts 目录必然漏判 | 新增 `bootstrap.py`：`--uv-path`／`AUDIO_TRANSCRIBE_UV` → PATH → userscripts 目录 → `python -m uv`（当前解释器 + PATH python 双探测，检测跑在专属 venv 内也能发现） |
+| 报错 `Install Python 3.12 or uv` 说重了（实测只装 uv 即可） | 阻塞报错改为可操作文案：`pip install uv` 无需改 PATH、uv 自管 Python 3.12，附官方脚本与装 3.12 两条替代路径 |
+| 首跑 torch cu130 约 1.7 GiB 无提示 | 安装前打印一次性下载体量提示；无 N 卡自动装 CPU 小体积版并说明推理更慢 |
+| Git Bash 中 `$APPDATA` 直拼 PATH 因反斜杠＋`C:` 冒号失效 | references/windows-torch.md 记录 POSIX 形式写法（`/c/Users/...`） |
+
+实现：新增 `bootstrap.py`（uv／Python 发现与阻塞判定单一事实源，run.py 与 env_check 共用）；
+run.py 拆出 `parse_uv_path`（launcher 专用参数，转发前剥离）；Windows 候选 Python 补充
+`py -0p` 枚举（兼容含空格路径，如 `C:\Program Files\Python312`）。
+测试 183 个全过（新增 bootstrap 12 个、launcher/env_check 阻塞态若干；顺手修复
+`test_multipart_sanitizes_filename` 在 NTFS 上因文件名含引号无法创建的存量失败）。
+本机复验：`find_uv` 正确返回 `['C:\\Python314\\python.exe', '-m', 'uv']`，
+`--detect-env --provider qwen` 在专属 venv 内报告 `uv_available: true`。
+仍待 Mac／Scribe 实机；本轮全部未 commit。

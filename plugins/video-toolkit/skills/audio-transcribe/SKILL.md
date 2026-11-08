@@ -54,7 +54,8 @@ python <skill目录>/run.py "a.mp4" "b.mp4" --provider qwen --formats srt --outp
 | `--audio-track` | ffprobe 的实际 stream index；默认第一条音轨。用户语种/声道意图有歧义时用控件选 |
 | `--device` | Windows/Torch：auto、cpu、cuda:0；无 CUDA 为 FP32 慢速兼容路线 |
 | `--diarize` | Scribe 可选说话人分离，不默认开启；可能影响费用 |
-| `--detect-env` | 只读检测，不安装；指定 qwen 时优先检查已有专属解释器 |
+| `--detect-env` | 只读检测，不安装；指定 qwen 时优先用已有专属解释器，并预检 uv／Python 前置条件 |
+| `--uv-path` | 启动器专用：显式指定 uv 可执行文件；也可用 `AUDIO_TRANSCRIBE_UV` 环境变量 |
 | `--no-progress` | 关闭动态进度行，仍报告阶段 |
 
 - `<stem>.srt`：UTF-8 无 BOM，序号连续，`HH:MM:SS,mmm`，正文单行，时间合法且不重叠。
@@ -70,9 +71,14 @@ python <skill目录>/run.py "a.mp4" "b.mp4" --provider qwen --formats srt --outp
 ## 环境、缓存与排障
 
 `run.py` 仅在应用缓存中的专属 venv 安装固定版本；不修改系统 Python，不自动安装驱动。
+uv 的发现不依赖 PATH：`pip install uv` 即可被 `python -m uv` 自动调起，也可用
+`--uv-path`／`AUDIO_TRANSCRIBE_UV` 显式指定；无 uv 时回退本机 3.10–3.12 建 venv。
+`--detect-env` 发现既无 uv 也无兼容 Python 时报告 `blocked_missing_uv` 及修复方法，
+此时不投入下载媒体等前置成本，先让用户 `pip install uv`（uv 会自行管理 Python 3.12）。
 Mac 固定 `mlx-community/Qwen3-ASR-1.7B-8bit` 识别，使用独立的
 `Qwen/Qwen3-ForcedAligner-0.6B` 对齐时间；不提供识别权重精度切换。
-Scribe 使用标准库，不安装 MLX／Torch。首次下载耗时应与常规推理耗时区分。
+Scribe 使用标准库，不安装 MLX／Torch。首次下载耗时应与常规推理耗时区分；
+有 N 卡时首次需下载约 1.7 GiB CUDA 版 torch（安装前提示），无 N 卡自动装小体积 CPU 版。
 素材目录不创建工作文件夹；成功清理临时音频，原始结果缓存供重新导出复用。
 缓存包含源内容摘要、音轨、模型版本、语言及推理参数。失败保留内部进度：
 Torch 可恢复已完成分块；MLX 仅完整结果可复用，中断的推理需重跑，不能承诺分块续传。

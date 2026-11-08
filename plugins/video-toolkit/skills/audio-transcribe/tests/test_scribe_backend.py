@@ -228,9 +228,20 @@ def test_diarize_flag_forwarded(audio_file, monkeypatch):
 
 def test_multipart_sanitizes_filename(tmp_path):
     from backends.scribe_backend import _multipart
-    path = tmp_path / 'weird "name".mp3'
-    path.write_bytes(b"12345678")
-    body = _multipart({"model_id": "scribe_v2"}, "file", path, "bound123")
+    real = tmp_path / "weird name.mp3"  # legal on every filesystem
+    real.write_bytes(b"12345678")
+
+    class WeirdNamePath:  # NTFS forbids '"' in filenames; emulate it for the header path
+        name = 'weird "name".mp3'
+        suffix = ".mp3"
+
+        def stat(self):
+            return real.stat()
+
+        def open(self, *args, **kwargs):
+            return real.open(*args, **kwargs)
+
+    body = _multipart({"model_id": "scribe_v2"}, "file", WeirdNamePath(), "bound123")
     data = b"".join(body)
     assert b'filename="weird _name_.mp3"' in data
     assert body.length == len(data)
