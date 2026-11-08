@@ -125,3 +125,31 @@ def test_load_cues_includes_malformed_block_warnings(tmp_path: Path):
     cues, warnings = load_cues(srt)
     assert len(cues) == 1
     assert any("第 2 块" in warning for warning in warnings)
+
+
+# --- format_timestamp / write_srt ---
+
+from srt_parse import Cue as _Cue, format_timestamp, parse_srt, write_srt
+
+
+def test_format_timestamp_uses_comma_millis():
+    assert format_timestamp(0.0) == "00:00:00,000"
+    assert format_timestamp(2.5) == "00:00:02,500"
+    assert format_timestamp(3661.5) == "01:01:01,500"
+    assert format_timestamp(-1.0) == "00:00:00,000"
+
+
+def test_write_srt_roundtrip_renumbers_and_keeps_timings(tmp_path):
+    cues = [
+        _Cue(7, 1.0, 2.5, "你好，世界。", 1.0, 3.0),
+        _Cue(9, 3.0, 4.0, "第二句。", 3.0, 4.0),
+    ]
+    path = tmp_path / "out.dub.srt"
+    write_srt(cues, path)
+    parsed = parse_srt(path)
+    assert [s.index for s in parsed] == [1, 2]
+    assert parsed[0].start == 1.0 and parsed[0].end == 2.5
+    assert parsed[0].text == "你好，世界。"
+    content = path.read_text(encoding="utf-8")
+    assert not content.startswith("\ufeff")  # UTF-8 无 BOM
+    assert "00:00:01,000 --> 00:00:02,500" in content

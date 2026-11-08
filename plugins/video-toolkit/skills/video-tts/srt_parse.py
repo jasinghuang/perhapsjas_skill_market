@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 _TIMESTAMP_RE = re.compile(
     r"^(?P<sign>-)?(?P<hours>\d+):(?P<minutes>\d{1,2}):(?P<seconds>\d{1,2})"
@@ -231,3 +232,27 @@ def load_cues(
         previous_end = end
 
     return cues, warnings
+
+
+def format_timestamp(seconds: float) -> str:
+    """把秒格式化成 SRT 时间戳 `HH:MM:SS,mmm`（负数按 0 处理）。"""
+    millis = int(round(max(0.0, seconds) * 1000))
+    hours, millis = divmod(millis, 3_600_000)
+    minutes, millis = divmod(millis, 60_000)
+    secs, millis = divmod(millis, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
+def write_srt(cues: Sequence[Subtitle | Cue], path: Path) -> None:
+    """把条目写成标准 SRT：序号重排为 1..N，UTF-8 无 BOM。
+
+    时间戳用 `format_timestamp`（逗号毫秒）；文本单行（`normalize_text()`
+    归一过的 Cue 文本本就无换行）；条与条之间空一行，文件以单个换行结尾。
+    """
+    blocks = [
+        f"{number}\n"
+        f"{format_timestamp(cue.start)} --> {format_timestamp(cue.end)}\n"
+        f"{cue.text}\n"
+        for number, cue in enumerate(cues, start=1)
+    ]
+    path.write_text("\n".join(blocks), encoding="utf-8")

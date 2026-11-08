@@ -46,7 +46,7 @@ from providers import (
 )
 from providers.base import Voice
 from merge_plan import load_merge_plan
-from srt_parse import Cue, SRTError, load_cues
+from srt_parse import Cue, SRTError, load_cues, write_srt
 from track_build import write_wav
 
 PLAN_PREVIEW = 10
@@ -574,13 +574,22 @@ def _run(args: argparse.Namespace) -> int:
     if not cues:
         raise SRTError(f"{srt}: no cues found")
 
+    original_count = len(cues)
     if args.merge_plan:
-        original_count = len(cues)
         try:
             cues = load_merge_plan(Path(args.merge_plan), cues)
         except ValueError as exc:
             _fail(str(exc))
         print(f"合并: {original_count} 条 → {len(cues)} 组")
+
+    # 输出路径提前解析：语义合并生效时写块级 SRT（dry-run 也会写，
+    # 用于检查半句切断），不合并不写。
+    out_prefix, video_out = _resolve_outputs(args, video, srt)
+    if args.merge_plan:
+        dub_srt_path = _with_suffix(out_prefix, ".dub.srt")
+        dub_srt_path.parent.mkdir(parents=True, exist_ok=True)
+        write_srt(cues, dub_srt_path)
+        print(f"块级字幕: {dub_srt_path}")
 
     if video_duration is not None:
         total_duration = video_duration
@@ -632,7 +641,6 @@ def _run(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    out_prefix, video_out = _resolve_outputs(args, video, srt)
     track_path = _with_suffix(out_prefix, ".dub.wav")
     track_path.parent.mkdir(parents=True, exist_ok=True)
 

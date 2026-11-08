@@ -128,3 +128,34 @@ def test_hook_restored_when_transcribe_raises(monkeypatch):
     except RuntimeError:
         pass
     assert tqdm_module.tqdm is original
+
+
+def test_segment_times_follow_word_boundaries(monkeypatch):
+    # Token-level timestamps pin the first segment of a window to its start
+    # when it opens on music; word boundaries must win.
+    class FakeWhisper:
+        @staticmethod
+        def transcribe(path, **kwargs):
+            return {
+                "language": "en",
+                "segments": [
+                    {
+                        "start": 0.0,
+                        "end": 10.12,
+                        "text": " Hey there",
+                        "words": [
+                            {"start": 3.74, "end": 5.0, "word": " Hey"},
+                            {"start": 5.0, "end": 10.06, "word": " there"},
+                        ],
+                    }
+                ],
+            }
+
+    monkeypatch.setitem(sys.modules, "mlx_whisper", FakeWhisper)
+
+    from backends.mlx_backend import MLXBackend
+
+    backend = MLXBackend()
+    backend._repo = "fake"
+    result = backend.transcribe("x.mp4", on_progress=None)
+    assert result["segments"][0] == {"start": 3.74, "end": 10.06, "text": "Hey there"}

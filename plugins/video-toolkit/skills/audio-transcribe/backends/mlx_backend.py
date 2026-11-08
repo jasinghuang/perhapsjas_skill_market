@@ -160,6 +160,7 @@ class MLXBackend(TranscriptionBackend):
                 str(audio_path),
                 path_or_hf_repo=self._repo,
                 language=whisper_language,
+                word_timestamps=True,
                 verbose=False,
             )
         finally:
@@ -171,10 +172,19 @@ class MLXBackend(TranscriptionBackend):
 
         detected_lang = result.get("language", "unknown")
 
+        # Prefer word-level boundaries: the token-level segment timestamps pin the
+        # first segment of each 30s window to the window start when the window
+        # opens on music/silence, which makes subtitles show up seconds early.
         segments = []
         for seg in result["segments"]:
             text = seg["text"].strip()
-            if text:
-                segments.append({"start": seg["start"], "end": seg["end"], "text": text})
+            if not text:
+                continue
+            words = seg.get("words") or []
+            if words:
+                start, end = words[0]["start"], words[-1]["end"]
+            else:
+                start, end = seg["start"], seg["end"]
+            segments.append({"start": start, "end": end, "text": text})
 
         return {"segments": segments, "language": detected_lang}

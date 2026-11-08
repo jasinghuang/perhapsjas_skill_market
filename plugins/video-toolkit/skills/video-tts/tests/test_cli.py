@@ -588,3 +588,77 @@ def test_hotfix_rejects_local_and_qwen_tts(tmp_path, capsys):
         with pytest.raises(SystemExit):
             validate_args(args)
         assert "hotfix" in capsys.readouterr().err.lower()
+
+
+# --- M21: 语义合并的块级字幕（.dub.srt）落盘 ---
+
+from srt_parse import parse_srt
+
+
+def _patch_dub_run(monkeypatch):
+    monkeypatch.setattr(skill_main, "_require_binary", lambda name: None)
+    monkeypatch.setattr(
+        skill_main, "get_provider", lambda *args, **kwargs: _FakeProvider()
+    )
+
+
+_DUB_BODY = (
+    "1\n00:00:00,000 --> 00:00:01,000\n你好，\n\n"
+    "2\n00:00:01,100 --> 00:00:02,000\n世界。\n\n"
+    "3\n00:00:02,100 --> 00:00:03,000\n新段落。\n\n"
+    "4\n00:00:05,000 --> 00:00:06,000\n长停顿后。\n\n"
+)
+
+
+def _write_plan(tmp_path, groups):
+    plan = tmp_path / "plan.json"
+    plan.write_text(json.dumps({"groups": groups}), encoding="utf-8")
+    return plan
+
+
+def test_merge_plan_writes_dub_srt(tmp_path, capsys, monkeypatch):
+    srt = _write_srt(tmp_path, body=_DUB_BODY)
+    plan = _write_plan(tmp_path, [[1, 2, 3], [4]])
+    _patch_dub_run(monkeypatch)
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--merge-plan", str(plan),
+        "--out", str(tmp_path / "out"), "--no-cache",
+    ])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "合并: 4 条 → 2 组" in captured.out
+    assert "块级字幕:" in captured.out
+    parsed = parse_srt(tmp_path / "out.dub.srt")
+    assert len(parsed) == 2
+    assert parsed[0].text == "你好，世界。新段落。"
+    assert parsed[0].start == 0.0 and parsed[0].end == 3.0
+    assert parsed[1].text == "长停顿后。"
+    assert (tmp_path / "out.dub.wav").is_file()
+
+
+def test_merge_plan_dry_run_writes_dub_srt(tmp_path, capsys):
+    srt = _write_srt(tmp_path, body=_DUB_BODY)
+    plan = _write_plan(tmp_path, [[1, 2, 3], [4]])
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--merge-plan", str(plan),
+        "--out", str(tmp_path / "out"), "--dry-run",
+    ])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "合并: 4 条 → 2 组" in captured.out
+    assert "块级字幕:" in captured.out
+    assert (tmp_path / "out.dub.srt").is_file()
+
+
+def test_without_merge_plan_no_dub_srt(tmp_path, capsys, monkeypatch):
+    srt = _write_srt(tmp_path)
+    _patch_dub_run(monkeypatch)
+    code = skill_main.main([
+        "--srt", str(srt), "--provider", "local", "--voice", "Serena",
+        "--out", str(tmp_path / "out"), "--no-cache",
+    ])
+    assert code == 0
+    assert "块级字幕:" not in capsys.readouterr().out
+    assert not (tmp_path / "out.dub.srt").exists()
