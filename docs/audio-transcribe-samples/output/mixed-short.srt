@@ -1,0 +1,26 @@
+1
+00:00:00,160 --> 00:00:04,240
+这个项目使用Quan 3 ASR模型做本地转写，
+
+2
+00:00:04,560 --> 00:00:07,840
+同时支持Eleven Labs的Scrub在线接口。
+
+3
+00:00:08,480 --> 00:00:14,480
+We compared transcription quality between
+local GPU inference and cloud APIs.测
+
+4
+00:00:14,480 --> 00:00:18,800
+试覆盖了中文、英文以及code switching混合场
+景，
+
+5
+00:00:19,200 --> 00:00:21,600
+结果显示准确率令人满意。
+
+6
+00:00:22,240 --> 00:00:27,760
+They exported SRT files past timeline
+validation without any overlapping entries

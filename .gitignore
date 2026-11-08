@@ -18,3 +18,9 @@ beautiful-html-templates/
 # 设计钩子本地状态（config.json 的 narrow ignore + hook 缓存——工具态，非模板内容；
 # scaffold 另有 rm -rf .impeccable 防止它随整目录拷贝进新项目）
 .impeccable/
+
+# audio-transcribe 验收临时工作区（精选样例在 docs/audio-transcribe-samples/）
+.p04-acceptance/
+
+# ZCode 会话内部文件
+.zcode/

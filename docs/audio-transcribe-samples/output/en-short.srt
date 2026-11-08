@@ -1,0 +1,39 @@
+1
+00:00:00,240 --> 00:00:02,720
+Hello everyone and welcome to this episode
+
+2
+00:00:03,600 --> 00:00:07,760
+Today we are talking about the latest
+advances in automatic speech recognition
+
+3
+00:00:08,640 --> 00:00:11,600
+Open source models have improved
+dramatically in recent years
+
+4
+00:00:11,680 --> 00:00:13,440
+and modern systems handle accents
+
+5
+00:00:13,600 --> 00:00:16,880
+background noise and mixed language
+content surprisingly well
+
+6
+00:00:17,760 --> 00:00:18,960
+In this demonstration
+
+7
+00:00:19,040 --> 00:00:22,720
+you will see wordlevel timestamps that can
+ be exported directly as subtitle
+
+8
+00:00:22,720 --> 00:00:23,280
+files
+
+9
+00:00:24,240 --> 00:00:26,320
+Thanks for watching and see you next time

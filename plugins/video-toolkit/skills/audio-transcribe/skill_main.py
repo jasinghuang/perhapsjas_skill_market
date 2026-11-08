@@ -1,36 +1,52 @@
 #!/usr/bin/env python3
 """
-Audio Transcriber — cross-platform
-Mac: MLX-Whisper (Apple Silicon) | Windows: Faster-Whisper (CUDA / CPU)
+Audio Transcriber — unified file transcription.
+
+Provider choice is explicit (doc §3): `--provider qwen` (local Qwen3-ASR-1.7B,
+recommended) or `--provider scribe` (Elevenabs Scribe V2 online). Missing
+provider is an error, never a silent default — and never an automatic online
+upload. Every job produces TXT + JSON + SRT (SRT only with real alignment).
 """
 
+import argparse
 import json
-import platform
+import os
 import sys
+import time
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Optional
 
-from backends import get_backend
-from progress import ProgressReporter
+SKILL_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SKILL_DIR))
 
-CONFIG_FILE = Path(__file__).parent / "config.json"
+from backends import get_provider_backend, normalize_provider  # noqa: E402
+from backends.scribe_backend import ScribeError  # noqa: E402
+from progress import ProgressReporter  # noqa: E402
+from results import build_result, validate_result  # noqa: E402
+from subtitles import (  # noqa: E402
+    build_entries,
+    entries_to_srt,
+    finalize_entries,
+    validate_srt,
+    DEFAULT_CONFIG as SUBTITLE_DEFAULTS,
+)
 
-DEFAULT_MODEL = "large-v3-turbo" if platform.system() == "Darwin" else "medium"
+FORMATS = ("txt", "json", "srt")
+STAGES = ("环境检查", "准备", "转写", "对齐", "导出", "校验")
+
+
+def stage(name: str) -> None:
+    print(f"[{name}]", flush=True)
 
 
 def load_config() -> dict:
-    if CONFIG_FILE.exists():
+    config_file = SKILL_DIR / "config.json"
+    if config_file.exists():
         try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
+            return json.loads(config_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
             pass
-    return {
-        "model": DEFAULT_MODEL,
-        "language": "auto",
-        "output_format": "md",
-        "keep_timestamps": False,
-    }
+    return {}
 
 
 def convert_to_simplified_chinese(text: str) -> str:
@@ -41,309 +57,340 @@ def convert_to_simplified_chinese(text: str) -> str:
         return text
 
 
-def format_timestamp(seconds: float) -> str:
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = seconds % 60
-    milliseconds = int((secs - int(secs)) * 1000)
-    return f"{hours:02d}:{minutes:02d}:{int(secs):02d},{milliseconds:03d}"
-
-
-def segments_to_srt(segments: List[Dict]) -> str:
-    lines = []
-    for i, seg in enumerate(segments, 1):
-        lines.append(str(i))
-        lines.append(f"{format_timestamp(seg['start'])} --> {format_timestamp(seg['end'])}")
-        lines.append(seg["text"])
-        lines.append("")
-    return "\n".join(lines)
-
-
-def merge_segments_to_paragraphs(segments: List[Dict], gap_threshold: float = 2.0) -> List[Dict]:
-    paragraphs = []
-    current_texts = []
-    current_start = None
-    current_end = None
-
-    for seg in segments:
-        if current_end is not None and seg["start"] - current_end >= gap_threshold:
-            paragraphs.append(
-                {"start": current_start, "end": current_end, "text": "".join(current_texts)}
-            )
-            current_texts = []
-            current_start = None
-
-        if current_start is None:
-            current_start = seg["start"]
-        current_end = seg["end"]
-        current_texts.append(seg["text"])
-
-    if current_texts:
-        paragraphs.append(
-            {"start": current_start, "end": current_end, "text": "".join(current_texts)}
-        )
-
-    return paragraphs
-
-
-def segments_to_md(
-    segments: List[Dict],
-    title: str,
-    model_size: str,
-    language: str,
-    keep_timestamps: bool,
-    backend_name: str,
-) -> str:
-    from datetime import datetime
-
-    if not keep_timestamps:
-        segments = merge_segments_to_paragraphs(segments)
-
-    md = [f"# {title}\n"]
-    md.append("---\n")
-    md.append("## Meta\n")
-    md.append(f"- **Transcriber**: {backend_name}")
-    md.append(f"- **Model**: {model_size}")
-    md.append(f"- **Language**: {language}")
-    md.append(f"- **Time**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    md.append(f"- **Segments**: {len(segments)}")
-    md.append(f"- **Timestamps**: {'kept' if keep_timestamps else 'removed'}")
-    md.append("- **Calibration**: uncalibrated (may contain ASR errors)\n")
-    md.append("> Suggest using `text-refine` skill for calibration.\n")
-    md.append("---\n")
-
-    for seg in segments:
-        if keep_timestamps:
-            md.append(f"**[{format_timestamp(seg['start'])} - {format_timestamp(seg['end'])}]**\n")
-        md.append(f"{seg['text']}\n")
-        if keep_timestamps:
-            md.append("---\n")
-
-    return "\n".join(md)
-
-
-def transcribe(
-    video_path: Path,
-    output_path: Optional[Path] = None,
-    output_dir: Optional[Path] = None,
-    model_size: str = None,
-    language: str = "auto",
-    output_format: str = "md",
-    keep_timestamps: bool = False,
-    keep_context: bool = False,
-    show_progress: bool = True,
-) -> Path:
-    if model_size is None:
-        model_size = DEFAULT_MODEL
-
-    video_path = Path(video_path).expanduser()
-    if not video_path.exists():
-        raise FileNotFoundError(f"File not found: {video_path}")
-
-    if output_path is not None:
-        output_path = Path(output_path).expanduser()
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-    else:
-        if output_dir is None:
-            output_dir = video_path.parent
-        else:
-            output_dir = Path(output_dir).expanduser()
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-    backend = get_backend()
-    backend.load_model(model_size)
-
-    reporter = ProgressReporter() if show_progress else None
-
-    print(f"Transcribing: {video_path.name}")
-    result = backend.transcribe(
-        str(video_path),
-        language=language,
-        on_progress=reporter.update if reporter else None,
-        condition_on_previous_text=keep_context,
-    )
-    if reporter is not None:
-        reporter.finish()
-
-    detected_lang = result.get("language", "unknown")
-    print(f"  Detected language: {detected_lang}")
-
-    segments = result["segments"]
-
-    # Apply zhconv for Chinese
-    if detected_lang in ("zh", "chinese"):
-        for seg in segments:
+def _apply_zhconv(result: dict) -> None:
+    if (result.get("language") or "").lower() not in ("zh", "chinese"):
+        return
+    if result.get("text"):
+        result["text"] = convert_to_simplified_chinese(result["text"])
+    for unit in result.get("words") or []:
+        if unit.get("text"):
+            unit["text"] = convert_to_simplified_chinese(unit["text"])
+    for seg in result.get("segments") or []:
+        if seg.get("text"):
             seg["text"] = convert_to_simplified_chinese(seg["text"])
 
-    base_name = video_path.stem
-    backend_name = type(backend).__name__
 
-    if output_path is None:
-        suffix = {"srt": ".srt", "md": ".md", "json": ".json"}.get(output_format)
-        if suffix is None:
-            raise ValueError(f"Unknown format: {output_format}")
-        output_path = output_dir / f"{base_name}{suffix}"
+def _paragraph_text(result: dict, paragraph_gap: float = 2.0) -> str:
+    """TXT body: the raw transcription verbatim (doc §9 — no rewriting, no
+    summarizing); falls back to joined segments only when raw text is absent."""
+    raw = result.get("text") or ""
+    if raw.strip():
+        return raw.strip()
+    segments = result.get("segments") or []
+    if not segments:
+        return raw
+    paragraphs = []
+    current: List[str] = []
+    last_end = None
+    for seg in segments:
+        if last_end is not None and seg["start"] - last_end >= paragraph_gap:
+            paragraphs.append("".join(current))
+            current = []
+        current.append(seg["text"])
+        last_end = seg["end"]
+    if current:
+        paragraphs.append("".join(current))
+    return "\n\n".join(paragraphs)
 
-    if output_format == "srt":
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(segments_to_srt(segments))
-    elif output_format == "md":
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(
-                segments_to_md(segments, base_name, model_size, detected_lang, keep_timestamps, backend_name)
+
+def atomic_write(path: Path, content: str) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def transcribe_one(
+    backend,
+    input_path: Path,
+    output_dir: Path,
+    formats: List[str],
+    language: str,
+    options: dict,
+    show_progress: bool,
+    output_stem: Optional[str] = None,
+) -> dict:
+    """Run one file through probe→transcribe→export→validate. Returns summary."""
+    started = time.monotonic()
+
+    import media as media_mod
+
+    stage("准备")
+    probe = backend.probe()
+    if probe.get("status") == "unsupported":
+        raise RuntimeError("本地路线在当前环境不受支持: " + "; ".join(probe["checks"]))
+    if probe.get("status") == "needs_setup":
+        if any("ELEVENLABS_API_KEY" in c for c in probe["checks"]):
+            raise RuntimeError(
+                "缺少在线转写凭证: " + "; ".join(probe["checks"])
+                + "。配置方法见 references/scribe.md；密钥不会出现在日志或产物中。"
             )
-    elif output_format == "json":
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-    else:
-        raise ValueError(f"Unknown format: {output_format}")
-
-    print(f"  Saved: {output_path}")
-    return output_path
-
-
-if __name__ == "__main__":
-    import argparse
-
-    config = load_config()
-
-    parser = argparse.ArgumentParser(
-        description="Transcribe audio/video (auto-detect Mac/Windows backend)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python skill_main.py video.mp4
-  python skill_main.py video.mp4 --output result.srt
-  python skill_main.py a.mp4 b.mp4 --format srt --output ~/subtitles
-  python skill_main.py video.mp4 --model large-v3 --language zh
-        """,
-    )
-
-    parser.add_argument("input", nargs="+", type=str, help="One or more video/audio file paths")
-    parser.add_argument(
-        "--output",
-        "-o",
-        type=str,
-        help="Output file (single input) or directory (multiple inputs). "
-        "A .srt/.md/.json suffix also selects the format.",
-    )
-    parser.add_argument(
-        "--model",
-        "-m",
-        default=config.get("model", DEFAULT_MODEL),
-        help=f"Model name (default: {config.get('model', DEFAULT_MODEL)})",
-    )
-    parser.add_argument(
-        "--language",
-        "-l",
-        type=str,
-        default=config.get("language", "auto"),
-        help="Language code (auto/zh/en/ko/ja/etc)",
-    )
-    parser.add_argument(
-        "--format",
-        "-f",
-        choices=["srt", "md", "json"],
-        default=None,
-        help="Output format (default: md, or inferred from --output suffix)",
-    )
-    parser.add_argument(
-        "--keep-timestamps",
-        "-t",
-        action="store_true",
-        default=config.get("keep_timestamps", False),
-        help="Keep timestamps in markdown output",
-    )
-    parser.add_argument(
-        "--keep-context",
-        action="store_true",
-        default=False,
-        help="Let each 30s window condition on the previous window's text "
-        "(default off: hallucinated context over music/silence can cascade "
-        "into repetition loops and degrade later windows)",
-    )
-    parser.add_argument(
-        "--no-progress",
-        action="store_true",
-        help="Disable live transcription progress lines",
-    )
-
-    args = parser.parse_args()
-
-    # Format precedence: explicit flag > config file > --output suffix > md
-    output_format = args.format
-    if output_format is None and CONFIG_FILE.exists():
-        output_format = config.get("output_format")
-    if output_format is None and args.output and len(args.input) == 1:
-        output_format = {".srt": "srt", ".md": "md", ".json": "json"}.get(
-            Path(args.output).suffix.lower()
+        raise RuntimeError(
+            "所选路线依赖未就绪（请通过 run.py 运行以自动安装）: " + "; ".join(probe["checks"])
         )
-    output_format = output_format or "md"
+    if probe.get("status") == "unverified":
+        print("  注意: " + "; ".join(probe["checks"]))
 
-    # Check dependencies via backend
-    backend = get_backend()
-    if not backend.check_dependencies():
-        print("\nRun this skill through run.py so it can find or install the right interpreter:")
-        print(f"  python3 {Path(__file__).parent / 'run.py'} <input> ...")
-        sys.exit(1)
+    media_info = media_mod.probe_media(input_path)
+    print(f"  媒体时长 {media_info['duration']:.1f}s，音轨 {len(media_info['audio_streams'])} 条")
 
-    # --output is a file for one input and a directory for several inputs
-    # (or whenever it already points at an existing directory).
-    out_arg = Path(args.output).expanduser() if args.output else None
-    single_output_path = None
-    output_dir = None
+    work_dir = output_dir / f".{input_path.stem}.chunks"
 
-    if out_arg is not None and len(args.input) > 1:
-        if out_arg.suffix.lower() in (".srt", ".md", ".json") and not out_arg.is_dir():
-            print(f"Error: --output looks like a file, but {len(args.input)} inputs were given.")
-            print("Use a directory: --output ~/subtitles")
-            sys.exit(1)
-        output_dir = out_arg
-        output_dir.mkdir(parents=True, exist_ok=True)
-    elif out_arg is not None:
-        if out_arg.is_dir():
-            output_dir = out_arg
-        else:
-            single_output_path = out_arg
+    reporter = ProgressReporter() if show_progress else None
+    result = backend.transcribe(
+        str(input_path),
+        language=language,
+        options={**options, "media_info": media_info, "work_dir": work_dir},
+        on_stage=stage,
+        on_progress=reporter.update if reporter else None,
+    )
+    if reporter:
+        reporter.finish()
+
+    stage("导出")
+    _apply_zhconv(result)
+
+    words = result.get("words") or []
+    can_srt = result.get("status") == "complete" and bool(words)
+    if can_srt:
+        subtitle_cfg = {**SUBTITLE_DEFAULTS, **(options.get("subtitles") or {})}
+        entries = build_entries(words, subtitle_cfg)
+        entries, timeline_warnings = finalize_entries(entries, result.get("duration_seconds"))
+        result["warnings"].extend(timeline_warnings)
+        srt_text = entries_to_srt(entries)
+        result["segments"] = [
+            {"start": e["start"], "end": e["end"], "text": e["text"], "speaker_id": None}
+            for e in entries
+        ]
+    else:
+        srt_text = None
+        if result.get("status") == "partial":
+            result["warnings"].append("SRT 未导出：对齐未完成（partial）")
+
+    stem = output_stem or input_path.stem
+    products = {}
+    if "txt" in formats:
+        path = output_dir / f"{stem}.txt"
+        atomic_write(path, _paragraph_text(result))
+        products["txt"] = path
+    if "json" in formats:
+        path = output_dir / f"{stem}.json"
+        atomic_write(path, json.dumps(result, ensure_ascii=False, indent=2))
+        products["json"] = path
+    if "srt" in formats and srt_text is not None:
+        path = output_dir / f"{stem}.srt"
+        atomic_write(path, srt_text)
+        products["srt"] = path
+
+    stage("校验")
+    issues = validate_result(result)
+    if "json" in products:
+        if issues:
+            result["warnings"].extend(issues)
+            atomic_write(products["json"], json.dumps(result, ensure_ascii=False, indent=2))
+    if "srt" in products:
+        srt_issues = validate_srt(products["srt"].read_text(encoding="utf-8"), result.get("duration_seconds"))
+        if srt_issues:
+            result["warnings"].extend(srt_issues)
+            print("  SRT 校验问题: " + "; ".join(srt_issues))
+
+    if result.get("status") == "complete" and work_dir.exists():
+        # Success: drop work/cache files; failures keep them for resume (doc §12).
+        import shutil
+        shutil.rmtree(work_dir, ignore_errors=True)
+
+    elapsed = time.monotonic() - started
+    return {
+        "input": str(input_path),
+        "status": result["status"],
+        "provider": result["provider"],
+        "backend": result["backend"],
+        "model_id": result["model_id"],
+        "duration": result.get("duration_seconds"),
+        "elapsed": elapsed,
+        "products": {k: str(v) for k, v in products.items()},
+        "warnings": result.get("warnings") or [],
+    }
+
+
+def run_detect_env(provider: Optional[str]) -> int:
+    import env_check
+
+    env = env_check.detect_environment()
+    print(env_check.format_env_line(env))
+    print(json.dumps(env, ensure_ascii=False, indent=2))
+    if provider:
+        try:
+            normalized = normalize_provider(provider)
+            print(json.dumps(env_check.probe_backend(normalized), ensure_ascii=False, indent=2))
+        except ValueError as exc:
+            print(f"Error: {exc}")
+            return 2
+    return 0
+
+
+def parse_args(argv=None) -> argparse.Namespace:
+    config = load_config()
+    parser = argparse.ArgumentParser(
+        description="Transcribe audio/video via Qwen3-ASR-1.7B (local) or Scribe V2 (online)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python run.py video.mp4 --provider qwen\n"
+            "  python run.py video.mp4 --provider scribe --language zh\n"
+            "  python run.py a.mp4 b.mp4 --provider qwen --formats srt --output ~/subtitles\n"
+            "  python run.py --detect-env --provider qwen"
+        ),
+    )
+    parser.add_argument("input", nargs="*", help="One or more audio/video files")
+    parser.add_argument("--provider", help="qwen (local, recommended) or scribe (online). Required.")
+    parser.add_argument("--language", "-l", default=config.get("language", "auto"),
+                        help="Language code: auto/zh/en/ja/ko/... (default: auto)")
+    parser.add_argument("--formats", default=",".join(config.get("formats", FORMATS)),
+                        help=f"Comma-separated outputs among {FORMATS} (default: all three)")
+    parser.add_argument("--output", "-o", help="Output directory (default: alongside each input)")
+    parser.add_argument("--device", default="auto", help="auto / cpu / cuda:0 (qwen torch route)")
+    parser.add_argument("--precision", default="8bit", choices=["8bit", "bf16", "6bit"],
+                        help="Mac MLX weight precision (advanced; default: 8bit)")
+    parser.add_argument("--diarize", action="store_true",
+                        help="Speaker diarization (scribe only; may add cost)")
+    parser.add_argument("--audio-track", type=int, default=None,
+                        help="Audio stream index when a file has several tracks")
+    parser.add_argument("--detect-env", action="store_true",
+                        help="Print environment/backend detection and exit (never installs)")
+    parser.add_argument("--no-progress", action="store_true", help="Disable live progress lines")
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    args = parse_args(argv)
+
+    if args.detect_env:
+        return run_detect_env(args.provider)
+
+    if not args.input:
+        print("Error: no input files.")
+        return 2
+
+    if not args.provider:
+        print(
+            "Error: 转写方式（--provider）未指定。\n"
+            "  1. qwen   — 本地 Qwen3-ASR-1.7B（推荐，Mac 用 MLX / Windows 用 CUDA）\n"
+            "  2. scribe — ElevenLabs Scribe V2 在线（需 API 凭证，按量计费）\n"
+            "非交互调用必须显式传入 --provider；不会默认触发在线上传。"
+        )
+        return 2
+
+    try:
+        provider = normalize_provider(args.provider)
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return 2
+
+    formats = [f.strip().lower() for f in args.formats.split(",") if f.strip()]
+    invalid = [f for f in formats if f not in FORMATS]
+    if invalid or not formats:
+        print(f"Error: --formats 只支持 {FORMATS}，收到: {invalid or '空'}")
+        return 2
+
+    inputs = [Path(p).expanduser() for p in args.input]
+    for path in inputs:
+        if not path.is_file():
+            print(f"Error: file not found: {path}")
+            return 2
+
+    output_dir = Path(args.output).expanduser() if args.output else None
+    if output_dir is not None and output_dir.is_file():
+        print(f"Error: --output 现在是输出目录（产物为 <stem>.txt/.json/.srt 三件套），"
+              f"但给定路径已是文件: {output_dir}")
+        return 2
 
     print(f"\n{'=' * 60}")
-    print(f"Audio Transcriber ({'Mac / MLX-Whisper' if platform.system() == 'Darwin' else 'Win / Faster-Whisper'})")
+    print(f"Audio Transcriber — provider: {provider}")
     print(f"{'=' * 60}")
-    print(f"  Inputs: {len(args.input)}")
-    for item in args.input:
-        print(f"    - {item}")
-    print(f"  Model: {args.model}")
+    print(f"  Inputs: {len(inputs)}")
+    for path in inputs:
+        print(f"    - {path}")
     print(f"  Language: {args.language}")
-    print(f"  Format: {output_format}")
-    print(f"  Timestamps: {'Yes' if args.keep_timestamps else 'No'}")
+    print(f"  Formats: {', '.join(formats)}")
+    if args.diarize:
+        print("  Diarize: on (scribe)")
     print(f"{'=' * 60}\n")
 
+    stage("环境检查")
+    import env_check
+
+    env = env_check.detect_environment()
+    print("  " + env_check.format_env_line(env))
+
+    try:
+        backend = get_provider_backend(
+            provider, {"precision": args.precision, "device": args.device}
+        )
+    except Exception as exc:
+        print(f"Error: {exc}")
+        return 1
+    options = {"diarize": args.diarize, "audio_track": args.audio_track}
+
+    summaries = []
     failures = []
-    for index, item in enumerate(args.input, 1):
-        if len(args.input) > 1:
-            print(f"[{index}/{len(args.input)}] {item}")
-        try:
-            result_path = transcribe(
-                video_path=item,
-                output_path=single_output_path,
-                output_dir=output_dir,
-                model_size=args.model,
-                language=args.language,
-                output_format=output_format,
-                keep_timestamps=args.keep_timestamps,
-                keep_context=args.keep_context,
-                show_progress=not args.no_progress,
-            )
-            print(f"  Done: {result_path}")
-        except Exception as e:
-            failures.append((item, str(e)))
-            print(f"  Error: {e}")
+    # Same-stem inputs (a.mp4 + a.mp3) would overwrite each other's trio —
+    # deduplicate output stems up front (doc §10).
+    claimed: dict = {}
+    stem_overrides: dict = {}
+    for path in inputs:
+        base_dir = output_dir if output_dir is not None else path.parent
+        key = (str(base_dir).lower(), path.stem.lower())
+        claimed[key] = claimed.get(key, 0) + 1
+        if claimed[key] > 1:
+            stem_overrides[str(path)] = f"{path.stem}-{claimed[key]}"
+
+    try:
+        for index, path in enumerate(inputs, 1):
+            if len(inputs) > 1:
+                print(f"\n[{index}/{len(inputs)}] {path}")
+            per_output = output_dir if output_dir is not None else path.parent
+            per_output.mkdir(parents=True, exist_ok=True)
+            try:
+                summary = transcribe_one(
+                    backend, path, per_output, formats, args.language, options,
+                    show_progress=not args.no_progress,
+                    output_stem=stem_overrides.get(str(path)),
+                )
+                summaries.append(summary)
+                print(f"  Done: {summary['status']} in {summary['elapsed']:.1f}s")
+                for kind, product in summary["products"].items():
+                    print(f"    {kind}: {product}")
+                for warning in summary["warnings"]:
+                    print(f"    warning: {warning}")
+            except KeyboardInterrupt:
+                print("\n已取消：停止后续任务；已完成分块缓存已保留，可重新运行续传。")
+                return 130
+            except ScribeError as exc:
+                failures.append((str(path), f"[{exc.kind}] {exc}"))
+                print(f"  Error: [{exc.kind}] {exc}")
+            except Exception as exc:
+                failures.append((str(path), str(exc)))
+                print(f"  Error: {exc}")
+    finally:
+        pass
 
     print(f"\n{'=' * 60}")
+    for summary in summaries:
+        available = ", ".join(sorted(summary["products"])) or "无（对齐失败或无语音）"
+        print(
+            f"  {Path(summary['input']).name}: {summary['status']} | "
+            f"{summary['provider']}/{summary['model_id']} ({summary['backend']}) | "
+            f"媒体 {summary['duration']:.1f}s，耗时 {summary['elapsed']:.1f}s | 产物: {available}"
+        )
     if failures:
         print(f"Finished with {len(failures)} failure(s):")
         for item, message in failures:
             print(f"  - {item}: {message}")
-        sys.exit(1)
-    print(f"All done! {len(args.input)} file(s) transcribed.")
+        return 1
+    print(f"All done! {len(summaries)} file(s) transcribed.")
     print(f"{'=' * 60}\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -225,7 +225,7 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/video-downloader/skill_main.py --cookies-fro
 
 ```
 1. video-downloader → 检测元数据/字幕 → 用户确认 → 下载视频（可选字幕）
-2. audio-transcribe → 视频没有可用字幕时，转录为字幕 (SRT/MD)
+2. audio-transcribe → 视频没有可用字幕时，转录为字幕 (TXT/JSON/SRT)
 3. text-refine      → 校准/翻译字幕
 ```
 

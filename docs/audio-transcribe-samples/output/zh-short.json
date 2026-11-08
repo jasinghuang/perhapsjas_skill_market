@@ -1,0 +1,1116 @@
+{
+  "schema_version": 1,
+  "job_id": "7d6bcaf8f927",
+  "status": "complete",
+  "provider": "qwen",
+  "backend": "torch",
+  "model_id": "Qwen/Qwen3-ASR-1.7B",
+  "model_revision": "7278e1e70fe206f11671096ffdd38061171dd6e5",
+  "weight_precision": "bf16-fp16-cpu",
+  "compute_dtype": "bfloat16",
+  "language": "zh",
+  "duration_seconds": 34.944,
+  "text": "大家好，欢迎来到本期节目。今天我们聊一聊人工智能语音识别技术的最新进展。近年来，开源语音识别模型的质量有了显著提升，特别是中文识别的准确率已经接近人类水平。我们测试的这款模型支持中文和英文的混合识别，也能处理带口音的发音。在接下来的演示中，你会看到转写结果带有精确到词的时间戳，可以直接生成字幕文件。感谢收看，我们下期再见。",
+  "words": [
+    {
+      "start": 0.16,
+      "end": 0.24,
+      "text": "大",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 0.24,
+      "end": 0.4,
+      "text": "家",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 0.4,
+      "end": 0.8,
+      "text": "好",
+      "speaker_id": null,
+      "tail": "，"
+    },
+    {
+      "start": 1.04,
+      "end": 1.28,
+      "text": "欢",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 1.28,
+      "end": 1.44,
+      "text": "迎",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 1.44,
+      "end": 1.6,
+      "text": "来",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 1.6,
+      "end": 1.76,
+      "text": "到",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 1.76,
+      "end": 1.92,
+      "text": "本",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 1.92,
+      "end": 2.08,
+      "text": "期",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 2.08,
+      "end": 2.32,
+      "text": "节",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 2.32,
+      "end": 2.56,
+      "text": "目",
+      "speaker_id": null,
+      "tail": "。"
+    },
+    {
+      "start": 3.12,
+      "end": 3.36,
+      "text": "今",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 3.36,
+      "end": 3.6,
+      "text": "天",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 3.6,
+      "end": 3.68,
+      "text": "我",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 3.68,
+      "end": 3.76,
+      "text": "们",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 3.76,
+      "end": 4.0,
+      "text": "聊",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 4.0,
+      "end": 4.08,
+      "text": "一",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 4.08,
+      "end": 4.48,
+      "text": "聊",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 4.48,
+      "end": 4.72,
+      "text": "人",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 4.72,
+      "end": 4.88,
+      "text": "工",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 4.88,
+      "end": 5.04,
+      "text": "智",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 5.04,
+      "end": 5.2,
+      "text": "能",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 5.2,
+      "end": 5.28,
+      "text": "语",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 5.28,
+      "end": 5.6,
+      "text": "音",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 5.6,
+      "end": 5.84,
+      "text": "识",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 5.84,
+      "end": 6.0,
+      "text": "别",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 6.0,
+      "end": 6.16,
+      "text": "技",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 6.16,
+      "end": 6.4,
+      "text": "术",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 6.4,
+      "end": 6.48,
+      "text": "的",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 6.48,
+      "end": 6.64,
+      "text": "最",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 6.72,
+      "end": 6.88,
+      "text": "新",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 6.88,
+      "end": 7.12,
+      "text": "进",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 7.12,
+      "end": 7.44,
+      "text": "展",
+      "speaker_id": null,
+      "tail": "。"
+    },
+    {
+      "start": 8.0,
+      "end": 8.16,
+      "text": "近",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 8.16,
+      "end": 8.32,
+      "text": "年",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 8.32,
+      "end": 8.64,
+      "text": "来",
+      "speaker_id": null,
+      "tail": "，"
+    },
+    {
+      "start": 8.96,
+      "end": 9.12,
+      "text": "开",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 9.12,
+      "end": 9.36,
+      "text": "源",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 9.36,
+      "end": 9.44,
+      "text": "语",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 9.44,
+      "end": 9.68,
+      "text": "音",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 9.68,
+      "end": 9.92,
+      "text": "识",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 9.92,
+      "end": 10.08,
+      "text": "别",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 10.08,
+      "end": 10.24,
+      "text": "模",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 10.24,
+      "end": 10.4,
+      "text": "型",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 10.4,
+      "end": 10.56,
+      "text": "的",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 10.56,
+      "end": 10.72,
+      "text": "质",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 10.72,
+      "end": 11.04,
+      "text": "量",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 11.2,
+      "end": 11.28,
+      "text": "有",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 11.28,
+      "end": 11.36,
+      "text": "了",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 11.36,
+      "end": 11.6,
+      "text": "显",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 11.6,
+      "end": 11.76,
+      "text": "著",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 11.76,
+      "end": 12.0,
+      "text": "提",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 12.0,
+      "end": 12.32,
+      "text": "升",
+      "speaker_id": null,
+      "tail": "，"
+    },
+    {
+      "start": 12.56,
+      "end": 12.72,
+      "text": "特",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 12.72,
+      "end": 12.88,
+      "text": "别",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 12.88,
+      "end": 13.12,
+      "text": "是",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 13.12,
+      "end": 13.36,
+      "text": "中",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 13.36,
+      "end": 13.52,
+      "text": "文",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 13.52,
+      "end": 13.68,
+      "text": "识",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 13.68,
+      "end": 13.84,
+      "text": "别",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 13.84,
+      "end": 13.92,
+      "text": "的",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 13.92,
+      "end": 14.16,
+      "text": "准",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 14.16,
+      "end": 14.4,
+      "text": "确",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 14.4,
+      "end": 14.72,
+      "text": "率",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 14.8,
+      "end": 14.88,
+      "text": "已",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 14.88,
+      "end": 15.04,
+      "text": "经",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 15.04,
+      "end": 15.28,
+      "text": "接",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 15.28,
+      "end": 15.52,
+      "text": "近",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 15.52,
+      "end": 15.68,
+      "text": "人",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 15.68,
+      "end": 15.84,
+      "text": "类",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 15.84,
+      "end": 16.0,
+      "text": "水",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 16.0,
+      "end": 16.4,
+      "text": "平",
+      "speaker_id": null,
+      "tail": "。"
+    },
+    {
+      "start": 17.04,
+      "end": 17.04,
+      "text": "我",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 17.04,
+      "end": 17.2,
+      "text": "们",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 17.2,
+      "end": 17.44,
+      "text": "测",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 17.44,
+      "end": 17.6,
+      "text": "试",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 17.6,
+      "end": 17.76,
+      "text": "的",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 17.76,
+      "end": 17.84,
+      "text": "这",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 17.84,
+      "end": 18.08,
+      "text": "款",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 18.08,
+      "end": 18.24,
+      "text": "模",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 18.24,
+      "end": 18.64,
+      "text": "型",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 18.72,
+      "end": 18.88,
+      "text": "支",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 18.88,
+      "end": 19.2,
+      "text": "持",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 19.2,
+      "end": 19.44,
+      "text": "中",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 19.44,
+      "end": 19.6,
+      "text": "文",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 19.6,
+      "end": 19.76,
+      "text": "和",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 19.76,
+      "end": 20.0,
+      "text": "英",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 20.0,
+      "end": 20.16,
+      "text": "文",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 20.16,
+      "end": 20.24,
+      "text": "的",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 20.24,
+      "end": 20.4,
+      "text": "混",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 20.4,
+      "end": 20.64,
+      "text": "合",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 20.64,
+      "end": 20.8,
+      "text": "识",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 20.8,
+      "end": 21.2,
+      "text": "别",
+      "speaker_id": null,
+      "tail": "，"
+    },
+    {
+      "start": 21.44,
+      "end": 21.6,
+      "text": "也",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 21.6,
+      "end": 21.68,
+      "text": "能",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 21.68,
+      "end": 21.92,
+      "text": "处",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 21.92,
+      "end": 22.16,
+      "text": "理",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 22.16,
+      "end": 22.4,
+      "text": "带",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 22.4,
+      "end": 22.56,
+      "text": "口",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 22.56,
+      "end": 22.72,
+      "text": "音",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 22.72,
+      "end": 22.8,
+      "text": "的",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 22.8,
+      "end": 23.04,
+      "text": "发",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 23.04,
+      "end": 23.28,
+      "text": "音",
+      "speaker_id": null,
+      "tail": "。"
+    },
+    {
+      "start": 23.92,
+      "end": 24.08,
+      "text": "在",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 24.08,
+      "end": 24.24,
+      "text": "接",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 24.24,
+      "end": 24.4,
+      "text": "下",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 24.4,
+      "end": 24.56,
+      "text": "来",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 24.56,
+      "end": 24.64,
+      "text": "的",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 24.64,
+      "end": 24.8,
+      "text": "演",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 24.8,
+      "end": 24.96,
+      "text": "示",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 24.96,
+      "end": 25.28,
+      "text": "中",
+      "speaker_id": null,
+      "tail": "，"
+    },
+    {
+      "start": 25.6,
+      "end": 25.68,
+      "text": "你",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 25.68,
+      "end": 25.84,
+      "text": "会",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 25.84,
+      "end": 26.08,
+      "text": "看",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 26.08,
+      "end": 26.4,
+      "text": "到",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 26.48,
+      "end": 26.64,
+      "text": "转",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 26.64,
+      "end": 26.88,
+      "text": "写",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 26.88,
+      "end": 27.12,
+      "text": "结",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 27.12,
+      "end": 27.44,
+      "text": "果",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 27.52,
+      "end": 27.68,
+      "text": "带",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 27.68,
+      "end": 27.84,
+      "text": "有",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 27.84,
+      "end": 28.0,
+      "text": "精",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 28.0,
+      "end": 28.16,
+      "text": "确",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 28.16,
+      "end": 28.4,
+      "text": "到",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 28.4,
+      "end": 28.56,
+      "text": "词",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 28.56,
+      "end": 28.64,
+      "text": "的",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 28.64,
+      "end": 28.8,
+      "text": "时",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 28.8,
+      "end": 29.04,
+      "text": "间",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 29.04,
+      "end": 29.36,
+      "text": "戳",
+      "speaker_id": null,
+      "tail": "，"
+    },
+    {
+      "start": 29.68,
+      "end": 29.76,
+      "text": "可",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 29.76,
+      "end": 29.92,
+      "text": "以",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 29.92,
+      "end": 30.08,
+      "text": "直",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 30.08,
+      "end": 30.24,
+      "text": "接",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 30.24,
+      "end": 30.48,
+      "text": "生",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 30.48,
+      "end": 30.64,
+      "text": "成",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 30.64,
+      "end": 30.88,
+      "text": "字",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 30.88,
+      "end": 31.04,
+      "text": "幕",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 31.04,
+      "end": 31.28,
+      "text": "文",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 31.28,
+      "end": 31.52,
+      "text": "件",
+      "speaker_id": null,
+      "tail": "。"
+    },
+    {
+      "start": 32.16,
+      "end": 32.32,
+      "text": "感",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 32.32,
+      "end": 32.48,
+      "text": "谢",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 32.48,
+      "end": 32.72,
+      "text": "收",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 32.72,
+      "end": 33.04,
+      "text": "看",
+      "speaker_id": null,
+      "tail": "，"
+    },
+    {
+      "start": 33.36,
+      "end": 33.36,
+      "text": "我",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 33.36,
+      "end": 33.52,
+      "text": "们",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 33.52,
+      "end": 33.68,
+      "text": "下",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 33.68,
+      "end": 33.92,
+      "text": "期",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 33.92,
+      "end": 34.08,
+      "text": "再",
+      "speaker_id": null,
+      "tail": ""
+    },
+    {
+      "start": 34.08,
+      "end": 34.4,
+      "text": "见",
+      "speaker_id": null,
+      "tail": "。"
+    }
+  ],
+  "segments": [
+    {
+      "start": 0.16,
+      "end": 2.56,
+      "text": "大家好，欢迎来到本期节目。",
+      "speaker_id": null
+    },
+    {
+      "start": 3.12,
+      "end": 7.44,
+      "text": "今天我们聊一聊人工智能语音识别技术的最新进展。",
+      "speaker_id": null
+    },
+    {
+      "start": 8.0,
+      "end": 12.32,
+      "text": "近年来，开源语音识别模型的质量有了显著提升，",
+      "speaker_id": null
+    },
+    {
+      "start": 12.56,
+      "end": 16.4,
+      "text": "特别是中文识别的准确率已经接近人类水平。",
+      "speaker_id": null
+    },
+    {
+      "start": 17.04,
+      "end": 21.2,
+      "text": "我们测试的这款模型支持中文和英文的混合识别，",
+      "speaker_id": null
+    },
+    {
+      "start": 21.44,
+      "end": 23.28,
+      "text": "也能处理带口音的发音。",
+      "speaker_id": null
+    },
+    {
+      "start": 23.92,
+      "end": 29.36,
+      "text": "在接下来的演示中，你会看到转写结果带有精确到词的时间戳，",
+      "speaker_id": null
+    },
+    {
+      "start": 29.68,
+      "end": 31.52,
+      "text": "可以直接生成字幕文件。",
+      "speaker_id": null
+    },
+    {
+      "start": 32.16,
+      "end": 34.4,
+      "text": "感谢收看，我们下期再见。",
+      "speaker_id": null
+    }
+  ],
+  "warnings": []
+}
