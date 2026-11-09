@@ -283,9 +283,11 @@ description: >
 
 纯提示词不能像程序一样 100% 保证结构；有 Python 时用下面的物理校验补上，无 Python 时按上面的自检执行并说明。
 
-### 物理校验（有 Python 时推荐必做）
+### 物理校验（有 Python 时必须执行；不可用时报告未做）
 
-有 Python 时：先把候选稿写到临时文件（如 `{原文件名}_refined.tmp.srt`），运行下面的标准库脚本；校验通过后脚本会用 `os.replace` 把临时文件发布为最终文件，失败则不发布、修正后重跑。`final` 必须是按命名规则选好的、不覆盖源文件的路径。
+**仅适用于默认的“严格保留结构”模式**：条目数、序号、时间轴必须与源完全一致。用户明确授权“重新分段/拆条/重做时间轴”时，不能用本脚本的 strict 比较，也不要直接运行本脚本；按宽松检查项逐条核对：候选可解析、每条 `start < end`、无空正文、UTF-8 无 BOM、不覆盖源文件，并在报告中说明结构已改变。有 Python 时，宽松模式也应用脚本检查这些项，只是不做源/候选结构相等比较。
+
+严格模式下，有 Python 时：先把候选稿写到临时文件（如 `{原文件名}_refined.tmp.srt`），运行下面的标准库脚本；校验通过后脚本会用 `os.replace` 把临时文件发布为最终文件，失败则不发布、修正后重跑。`candidate` 必须是独立临时文件，不能等于 `source` 或 `final`；`final` 是首选路径，若已存在，脚本会自动改用 `_refined_2`、`_refined_3`…，并跳过 `source`/`candidate` 路径，绝不覆盖已有文件。脚本会拒绝路径重合、空文件/无有效 cue、起点晚于终点和非法时间数值；时间重叠、倒序或零时长只打印 `WARN`，不自动修正，交付时写入报告。序号行与时间轴行按原始文本逐字比较（含行首/行尾空白，行尾 CRLF/LF 归一化为 LF），不把序号转成整数。源文件允许 UTF-8/UTF-8 BOM；`candidate` 必须是 UTF-8 无 BOM，否则拒绝发布；GBK/UTF-16 不自动支持，先转成 UTF-8，不要改源文件。
 
 ```bash
 python3 - "源文件.srt" "候选稿.tmp.srt" "最终文件_refined.srt" <<'PY'
@@ -294,54 +296,153 @@ import re
 import sys
 from pathlib import Path
 
-CUE = re.compile(
-    r"(?m)^\s*(\d+)\s*\r?\n"
-    r"(\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3})\s*\r?\n"
-    r"(.*?)(?=\r?\n\s*\r?\n|\Z)",
-    re.S,
+TS_LINE = re.compile(
+    r"^\s*(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})\s*$"
 )
-TAG = re.compile(r"<[^>]+>|\{\\[^}]+\}|>>|\[[^\]]+\]")
+TOKEN = re.compile(r"</?(?:i|b|u|font)\b[^>]*>|<[^>]+>|\{\\[^}]+\}|>>|\[[^\]]+\]|（(?:笑声|掌声|音乐|欢呼|叹气|静默)）", re.I)
+SUPPORTED = re.compile(r"^</?(i|b|u|font)\b[^>]*>$", re.I)
+OPEN = re.compile(r"^<(i|b|u|font)\b[^>]*>$", re.I)
+CLOSE = re.compile(r"^</(i|b|u|font)\s*>$", re.I)
 
-def parse(path):
-    text = Path(path).read_text(encoding="utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
+def ts_to_ms(ts, path):
+    try:
+        h, m, s = ts.split(":")
+        sec, ms = s.split(",")
+        h, m, sec, ms = int(h), int(m), int(sec), int(ms)
+    except ValueError:
+        raise SystemExit(f"invalid timestamp in {path}: {ts}")
+    if m > 59 or sec > 59 or ms > 999:
+        raise SystemExit(f"invalid timestamp in {path}: {ts}")
+    return h * 3600000 + m * 60000 + sec * 1000 + ms
+
+def read_text(path, candidate=False):
+    raw = Path(path).read_bytes()
+    if candidate and raw.startswith(b"\xef\xbb\xbf"):
+        raise SystemExit(f"candidate has UTF-8 BOM: {path}; write it as UTF-8 without BOM")
+    try:
+        return raw.decode("utf-8" if candidate else "utf-8-sig")
+    except UnicodeDecodeError as e:
+        raise SystemExit(f"{path} is not UTF-8/UTF-8-BOM; convert to UTF-8 first ({e})")
+
+def check_pairs(tokens, path, cue):
+    stack = []
+    for token in tokens:
+        m = OPEN.match(token)
+        if m:
+            stack.append(m.group(1).lower())
+            continue
+        m = CLOSE.match(token)
+        if m:
+            name = m.group(1).lower()
+            if not stack or stack[-1] != name:
+                raise SystemExit(f"tag nesting mismatch in {path} at cue {cue}: {token!r}")
+            stack.pop()
+    if stack:
+        raise SystemExit(f"unclosed tag in {path} at cue {cue}: {stack}")
+
+def parse(path, warn=False, candidate=False):
+    text = read_text(path, candidate).replace("\r\n", "\n").replace("\r", "\n")
     blocks = [b for b in re.split(r"\n\s*\n", text) if b.strip()]
+    if not blocks:
+        raise SystemExit(f"no cues in {path}")
     cues = []
+    warnings = []
+    prev_start = prev_end = None
     for block in blocks:
-        m = CUE.match(block)
+        lines = block.split("\n")
+        if len(lines) < 2:
+            raise SystemExit(f"malformed block in {path}: {block[:60]!r}")
+        index_line, timestamp_line = lines[0], lines[1]
+        if not re.fullmatch(r"\s*\d+\s*", index_line):
+            raise SystemExit(f"invalid index line in {path}: {index_line!r}")
+        m = TS_LINE.match(timestamp_line)
         if not m:
-            raise SystemExit(f"unparsed block in {path}: {block[:60]!r}")
-        body = re.sub(r"[ \t]*\n[ \t]*", " ", m.group(3).strip())
-        cues.append((int(m.group(1)), m.group(2), body))
+            raise SystemExit(f"invalid timestamp line in {path}: {timestamp_line!r}")
+        idx_text = index_line.strip()
+        start_ms, end_ms = ts_to_ms(m.group(1), path), ts_to_ms(m.group(2), path)
+        if start_ms > end_ms:
+            raise SystemExit(f"invalid time range in {path} at cue {idx_text}: {timestamp_line!r}")
+        if start_ms == end_ms:
+            warnings.append(f"cue {idx_text} has zero duration")
+        if prev_start is not None:
+            if start_ms < prev_start:
+                warnings.append(f"cue {idx_text} starts before previous cue")
+            if start_ms < prev_end:
+                warnings.append(f"cue {idx_text} overlaps previous cue")
+        prev_start, prev_end = start_ms, end_ms
+        body = "\n".join(lines[2:]).strip()
+        body = re.sub(r"[ \t]*\n[ \t]*", " ", body)
+        cues.append((index_line, timestamp_line, body))
     if len(cues) != len(blocks):
         raise SystemExit(f"block/cue mismatch in {path}: {len(blocks)} vs {len(cues)}")
+    if warn:
+        for w in warnings:
+            print(f"WARN {path}: {w}", file=sys.stderr)
     return cues
+
+def next_available(path, forbidden):
+    if path.is_dir():
+        raise SystemExit(f"final is a directory: {path}")
+    if not path.exists() and path not in forbidden:
+        return path
+    stem, suffix = path.stem, path.suffix
+    m = re.match(r"^(.*)_(\d+)$", stem)
+    if m:
+        base, n = m.group(1), int(m.group(2)) + 1
+    else:
+        base, n = stem, 2
+    while True:
+        candidate = path.with_name(f"{base}_{n}{suffix}")
+        if candidate not in forbidden and not candidate.exists():
+            return candidate
+        n += 1
 
 if len(sys.argv) != 4:
     raise SystemExit("usage: validate_srt.py <source.srt> <candidate.srt> <final.srt>")
 
 src, candidate, final = sys.argv[1], sys.argv[2], sys.argv[3]
-if os.path.abspath(final) == os.path.abspath(src):
+src_p, cand_p, final_p = Path(src).resolve(), Path(candidate).resolve(), Path(final).resolve()
+if cand_p == src_p:
+    raise SystemExit("candidate must not be the source file")
+if final_p == src_p:
     raise SystemExit("final must not be the source file")
+if cand_p == final_p:
+    raise SystemExit("candidate and final must be different paths")
 
-a, b = parse(src), parse(candidate)
+final_p = next_available(final_p, {src_p, cand_p})
+
+a, b = parse(src, warn=True), parse(candidate, candidate=True)
 if len(a) != len(b):
     raise SystemExit(f"cue count: {len(a)} != {len(b)}")
 
+unsupported_tags = False
 for i, (x, y) in enumerate(zip(a, b), 1):
     if x[:2] != y[:2]:
         raise SystemExit(f"id/timestamp mismatch at cue {x[0]} (position {i})")
     if not y[2]:
         raise SystemExit(f"empty text at cue {y[0]}")
-    if sorted(TAG.findall(x[2])) != sorted(TAG.findall(y[2])):
-        raise SystemExit(f"protected tag mismatch at cue {y[0]}")
+    xt, yt = TOKEN.findall(x[2]), TOKEN.findall(y[2])
+    check_pairs(xt, src, x[0])
+    check_pairs(yt, candidate, y[0])
+    if xt != yt:
+        raise SystemExit(f"tag token/order mismatch at cue {y[0]}: {xt!r} != {yt!r}")
+    if any(t.startswith("<") and not SUPPORTED.match(t) for t in xt + yt):
+        unsupported_tags = True
 
-os.replace(candidate, final)
-print(f"PASS: {len(a)} cues, ids/timestamps identical, tags preserved -> {final}")
+if unsupported_tags:
+    print(f"WARN {src}: unsupported tag structure present; order compared, nesting not fully validated", file=sys.stderr)
+
+os.replace(candidate, final_p)
+print(f"PASS: {len(a)} cues, ids/timestamps identical, tags preserved -> {final_p}")
 PY
 ```
 
 - 这校验的是条数、序号、完整时间轴、空正文、受保护标签的物理一致性；不判断语义。
-- 宿主不支持 Python 时跳过本节，按上面的提示词自检执行，并在报告中说明"未做物理校验"。
+- 支持的成对标签：`i`、`b`、`u`、`font`；校验原始顺序、闭合和嵌套。`{\anX}`、`>>`、`[音乐]` 等按独立标记比较顺序，不作为 HTML 成对标签。
+- 脚本显式识别的独立标记：`{\anX}`、`>>`、`[...]`、`（笑声）` 等常见 SDH 标记；其他括号/说话人标记不在脚本校验范围，仍需模型自检。
+- 未知 `<...>` 标签只比较原文顺序，不校验嵌套；出现时脚本打印 `WARN`，报告注明“标签校验为部分覆盖”。
+- 标签顺序/嵌套校验只证明结构未被破坏，不能证明样式覆盖了语义上正确的译文片段；这部分仍由模型自检。
+- 严格模式有 Python 时本节必须执行；宿主不支持 Python 时，在报告中写“未做程序校验”，按提示词自检执行，不要声称物理结构已验证。
 
 ## 报告
 
