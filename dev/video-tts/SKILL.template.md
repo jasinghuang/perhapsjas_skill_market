@@ -11,16 +11,16 @@ description: >
 
 把文稿或 SRT 做成配音：普通旁白按自然时长；对齐配音按 SRT 时间窗放置语段、补静音，必要时（仅段内）在 1.20 倍以内加速。支持本地 Qwen3-TTS（Mac MLX / Windows NVIDIA torch）与 ElevenLabs，预设音色或参考音频克隆。
 
-**阅读范围**：只读前面的操作说明；末尾 runner 是固定代码，用 §5 的命令按标记提取，不需要逐行阅读、复制或重写。
+**文件形态**：本 skill 目录只有两个文件——`SKILL.md`（本业务说明）和同级 `runner.py`（固定执行脚本）。只读本文件；`runner.py` 只在系统上执行，不需要进入对话、复制或重写。
 
 **始终由当前 Agent 独立完成**：不创建子 Agent、不委派、不设置协作角色、不启用自动升级选项，也不建议用户切换协作模式。所有需要用户回答的事项必须使用 `AskUserQuestion`（其他宿主用等价的结构化输入控件）；普通消息只用于说明、试听和进度，不能用文字选项、编号或等待超时代替控件。已在本任务明确的选择不重复问；技术事实先通过检测、读取文档或验证解决。宿主没有控件时说明能力缺失，等待用户明确调整要求。
 
 ## 1. 先检测，再给选项
 
-每次任务新建独立目录，把 `runner.py` 和 `task.json` 放进去。用本文件路径提取 runner（见 §5），运行只读检测：
+每次任务新建独立目录，只放 `task.json`、`work/` 和交付物；不要复制 `runner.py`。runner 固定在 skill 目录，与 `SKILL.md` 同级。先运行只读检测：
 
 ```bash
-python "<任务目录>/runner.py" --detect
+python "<skill目录>/runner.py" --detect
 ```
 
 `--detect` 只报告能力，不安装、不下载、不合成。状态：`ready`（已验证可执行）、`needs_setup`（适用但需装依赖/首次下载）、`unsupported`（硬件/平台不支持，不作为选项推荐）、`unknown`（探测失败，不能当作可用）。把结论转述给用户，不贴原始 JSON。
@@ -146,16 +146,17 @@ runner 只接受 `task.json` 路径；正文、参数、路径全部走 JSON，�
 - `segments`：顺序固定、`id` 唯一、`text` 非空。普通旁白时间字段为 `null`；对齐必须有限、非负、`end>start`、起点严格递增。runner 按下一段起点/媒体末尾算窗口，不盲信自报时长。`source_indices`/`original_text` 可选。
 - 对齐窗口：非最后一段到“下一段起点 − safety_gap”；有视频时最后一段到视频结尾；只给 SRT 时到最后一段 `end_sec`。源 `end` 越过下一段起点记 warning；零/负窗口合成前报错。
 
-## 5. 提取 runner 并执行
+## 5. 执行 runner
 
-`SKILL.md` 末尾包含完整 runner。**不要手抄/改写/省略**；用标准库命令原样提取：
+`runner.py` 与 `SKILL.md` 同级，直接调用；**不要阅读、手抄、改写或复制到任务目录**：
 
 ```bash
-python -c "import pathlib,sys; t=pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'); b=t.rsplit('<!-- runner:start -->',1)[1].rsplit('<!-- runner:end -->',1)[0]; lines=b.strip().splitlines(); code='\n'.join(lines[1:-1])+'\n'; f=open(sys.argv[2],'w',encoding='utf-8',newline='\n'); f.write(code); f.close()" "<本 SKILL.md 的实际路径>" "<任务目录>/runner.py"
+python "<skill目录>/runner.py" --check --task "<任务目录>/task.json"
+python "<skill目录>/runner.py" --task "<任务目录>/task.json"
 ```
 
 - 把命令里的 `python` 换成本机可用的 `python3`/`py -3`；路径带空格保留引号。不要复制多份 runner。
-- 先 `--check --task task.json`（只校验结构/输入，不加载模型、不联网、不合成），再 `--task task.json`。
+- `--check` 只校验结构/输入，不加载模型、不联网、不合成；通过后再 `--task`。
 - runner 只检查 `VIDEO_TTS_PYTHON`、专用 venv、当前解释器和 PATH；不广泛扫描其他环境。可用 `VIDEO_TTS_PYTHON` 指定已验证解释器。缺依赖时在用户目录（macOS `~/Library/Caches/video-toolkit/envs/`，Windows `%LOCALAPPDATA%\video-toolkit\envs/`）建专用 venv，绝不影响系统 Python；安装只发生在选定 provider 后。
 - 阶段日志：`[setup]`、`[download]`、`[load]`、`[synthesis]`、`[cache]`、`[fit]`、`[track]`、`[mux]`、`[verify]`、`[deliver]`、`[done]`；约 10 秒一次 `[heartbeat]`。转述当前阶段，不笼统说“处理中”。
 - 首次本地下载显示 HF 真实文件数/字节总量（拿不到写“体积未知”，不编造）；缓存齐全跳过下载。缓存完整性按权重索引核对全部分片和 tokenizer/speech_tokenizer 必要文件，缺片重新下载。
@@ -196,7 +197,3 @@ python -c "import pathlib,sys; t=pathlib.Path(sys.argv[1]).read_text(encoding='u
 - Windows/在线实机验收状态以本次交付说明为准；未实测组合不描述为已验证。
 - 执行前：已 `--detect`；mode/provider/音色/交付/在线授权/润色/覆盖已明确；task.json UTF-8 且模型 ID/路径有效；对齐覆盖全 SRT、窗口为正；`--check` 通过。
 - 执行后：只展示所选产物；音频 48kHz、视频音轨有效、字幕段级；退出码 0 才说完成；退出码 3 的 details 已用控件处理且未截断；克隆只建一次、key 未泄露；听感结论有真实音频依据。
-
-<!-- runner:start -->
-@@RUNNER_BLOCK@@
-<!-- runner:end -->

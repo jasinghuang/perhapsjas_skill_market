@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Build (or verify) the single-file video-tts SKILL.md.
+"""Build (or verify) the two-file video-tts skill package.
 
-The skill package must contain exactly one file: SKILL.md.  During development
-the runner is kept in runner.py so it can be tested, then embedded verbatim
-between the runner markers.  `--check` fails if the checked-in SKILL.md is out
-of date.
+Distribution contains exactly:
+    plugins/video-toolkit/skills/video-tts/SKILL.md   (business instructions)
+    plugins/video-toolkit/skills/video-tts/runner.py  (fixed executable)
+
+runner.py never needs to enter the model context.  `--check` fails if either
+checked-in file differs from the development sources.
 """
 
 from __future__ import annotations
@@ -13,37 +15,45 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-RUNNER = HERE / "runner.py"
+RUNNER_SOURCE = HERE / "runner.py"
 TEMPLATE = HERE / "SKILL.template.md"
-TARGET = HERE.parents[1] / "plugins" / "video-toolkit" / "skills" / "video-tts" / "SKILL.md"
+TARGET_DIR = HERE.parents[1] / "plugins" / "video-toolkit" / "skills" / "video-tts"
+TARGET_SKILL = TARGET_DIR / "SKILL.md"
+TARGET_RUNNER = TARGET_DIR / "runner.py"
 
 
-def render() -> str:
-    runner_text = RUNNER.read_text(encoding="utf-8").rstrip("\n")
+def render_skill() -> str:
     template = TEMPLATE.read_text(encoding="utf-8")
-    if template.count("@@RUNNER_BLOCK@@") != 1:
-        raise SystemExit("SKILL.template.md must contain exactly one @@RUNNER_BLOCK@@ placeholder")
-    if "```" in runner_text:
-        raise SystemExit("runner.py must not contain a triple-backtick fence")
-    block = "```python\n" + runner_text + "\n```"
-    return template.replace("@@RUNNER_BLOCK@@", block)
+    if "@@RUNNER_BLOCK@@" in template or "<!-- runner:" in template:
+        raise SystemExit("SKILL.template.md must not embed the runner")
+    return template
 
 
 def main(argv: list[str]) -> int:
-    expected = render()
+    expected_skill = render_skill()
+    expected_runner = RUNNER_SOURCE.read_text(encoding="utf-8")
     if "--check" in argv:
-        if not TARGET.is_file():
-            print(f"missing: {TARGET}")
+        problems = []
+        if not TARGET_SKILL.is_file():
+            problems.append(f"missing: {TARGET_SKILL}")
+        elif TARGET_SKILL.read_text(encoding="utf-8") != expected_skill:
+            problems.append(f"out of date: {TARGET_SKILL}")
+        if not TARGET_RUNNER.is_file():
+            problems.append(f"missing: {TARGET_RUNNER}")
+        elif TARGET_RUNNER.read_text(encoding="utf-8") != expected_runner:
+            problems.append(f"out of date: {TARGET_RUNNER}")
+        if problems:
+            print("\n".join(problems))
             return 1
-        current = TARGET.read_text(encoding="utf-8")
-        if current != expected:
-            print(f"out of date: {TARGET}")
-            return 1
-        print(f"up to date: {TARGET}")
+        print(f"up to date: {TARGET_SKILL}")
+        print(f"up to date: {TARGET_RUNNER}")
         return 0
-    TARGET.parent.mkdir(parents=True, exist_ok=True)
-    TARGET.write_text(expected, encoding="utf-8")
-    print(f"wrote {TARGET} ({len(expected.splitlines())} lines)")
+
+    TARGET_DIR.mkdir(parents=True, exist_ok=True)
+    TARGET_SKILL.write_text(expected_skill, encoding="utf-8")
+    TARGET_RUNNER.write_text(expected_runner, encoding="utf-8")
+    print(f"wrote {TARGET_SKILL} ({len(expected_skill.splitlines())} lines)")
+    print(f"wrote {TARGET_RUNNER} ({len(expected_runner.splitlines())} lines)")
     return 0
 
 
