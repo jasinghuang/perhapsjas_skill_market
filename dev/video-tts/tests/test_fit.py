@@ -27,7 +27,17 @@ def test_fit_accelerates_and_measures(r, tmp_path):
     assert overflow is None
     assert speed > 1.0
     assert speed <= 1.2
-    assert duration <= 1.8 + 1e-6
+    assert duration <= 1.8 + r.FIT_TOLERANCE
+    assert target.is_file()
+
+
+def test_fit_tolerates_millisecond_rounding(r, tmp_path):
+    target = tmp_path / "fit.wav"
+    output, duration, speed, overflow = r.fit_to_window(
+        tone(1.003), 48000, 1.0, 1.2, target
+    )
+    assert overflow is None
+    assert speed == 1.0
     assert target.is_file()
 
 

@@ -60,6 +60,7 @@ def test_mlx_preset_collects_all_chunks_and_validates_speaker(r, tmp_path, monke
     assert model.calls[0]["voice"] == "serena"
     assert model.calls[0]["instruct"] == "自然"
     assert model.calls[0]["split_pattern"] is None
+    assert model.calls[0]["max_tokens"] >= 128
 
 
 def test_mlx_rejects_unsupported_speaker(r, tmp_path, monkeypatch):

@@ -201,6 +201,9 @@ TASK_KEYS = {
 IO_CHUNK_SAMPLES = 1 << 18
 RETRY_ATTEMPTS = 3
 RETRY_DELAYS = (1.0, 2.0)
+# atempo/sample rounding may leave a few milliseconds; the alignment builder
+# and mux verifier already tolerate this amount.
+FIT_TOLERANCE = 0.005
 
 FFMPEG = "ffmpeg"
 FFPROBE = "ffprobe"
@@ -2678,6 +2681,9 @@ class MLXAdapter(Adapter):
             "instruct": self.task.parameters.get("instruct") or None,
             "lang_code": self.task.language,
             "split_pattern": None,
+            # Bound generation even if the model degenerates into a repetition
+            # loop; ~5 tokens per input char is >2x the expected 12 Hz audio.
+            "max_tokens": max(128, int(len(text) * 5)),
         }
         if self.task.voice.source == "clone":
             kwargs["voice"] = None
@@ -3622,7 +3628,8 @@ def synthesize_segment(
                     ) from exc
 
             try:
-                with_retry(do_synthesis)
+                with Heartbeat("synthesis", f"segment {segment.id}"):
+                    with_retry(do_synthesis)
             except RunnerError as exc:
                 exc.segment_id = segment.id
                 raise
@@ -3688,7 +3695,7 @@ def fit_to_window(
             "window": window,
             "required_speed": None,
         }
-    if duration <= window:
+    if duration <= window + FIT_TOLERANCE:
         write_wav_float(target, pcm, sample_rate)
         return pcm, duration, 1.0, None
     required = duration / window
@@ -3703,7 +3710,7 @@ def fit_to_window(
     speed = min(required * 1.001, max_speed)
     output = change_speed(pcm, speed, sample_rate)
     actual = np.asarray(output).size / sample_rate
-    if actual > window:
+    if actual > window + FIT_TOLERANCE:
         correction = actual / window
         combined = speed * correction
         if combined > max_speed:
@@ -3717,7 +3724,7 @@ def fit_to_window(
         speed = combined
         output = change_speed(pcm, speed, sample_rate)
         actual = np.asarray(output).size / sample_rate
-        if actual > window:
+        if actual > window + FIT_TOLERANCE:
             return pcm, duration, 1.0, {
                 "reason": "overflow_after_remeasure",
                 "synth_duration": duration,
