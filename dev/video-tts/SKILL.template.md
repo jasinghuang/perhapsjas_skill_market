@@ -17,7 +17,16 @@ description: >
 
 ## 1. 先检测，再给选项
 
-每次任务新建独立目录，只放 `task.json`、`work/` 和交付物；不要复制 `runner.py`。runner 固定在 skill 目录，与 `SKILL.md` 同级。先运行只读检测：
+每次任务新建独立目录，只放 `task.json`、`work/` 和交付物；不要复制 `runner.py`。runner 固定在 skill 目录，与 `SKILL.md` 同级。
+
+**runner 路径解析（必须相对 skill 目录，不依赖当前工作目录）：**
+
+- Claude Code：`"${CLAUDE_PLUGIN_ROOT}/skills/video-tts/runner.py"`。
+- ZCode / 其他插件宿主：使用本次加载到的 `SKILL.md` 的**父目录**，拼 `runner.py`（插件缓存路径也可，如 `.../skills/video-tts/runner.py`）。
+- 宿主只给相对路径时，先按插件根或工作区解析成绝对路径；拿不到 skill 目录就停止并说明能力缺失，不要猜路径。
+- 运行前确认 `runner.py` 与 `SKILL.md` 同级且存在；缺失说明插件包不完整，停止并告知用户，不要回退旧缓存、复制或重建 runner。
+
+先运行只读检测：
 
 ```bash
 python "<skill目录>/runner.py" --detect
@@ -148,14 +157,21 @@ runner 只接受 `task.json` 路径；正文、参数、路径全部走 JSON，�
 
 ## 5. 执行 runner
 
-`runner.py` 与 `SKILL.md` 同级，直接调用；**不要阅读、手抄、改写或复制到任务目录**：
+`runner.py` 与 `SKILL.md` 同级；先按 §1 解析出 skill 目录的绝对路径，再调用。**不要阅读、手抄、改写或复制到任务目录**：
 
 ```bash
+# Claude Code 可直接用插件根环境变量
+python "${CLAUDE_PLUGIN_ROOT}/skills/video-tts/runner.py" --check --task "<任务目录>/task.json"
+python "${CLAUDE_PLUGIN_ROOT}/skills/video-tts/runner.py" --task "<任务目录>/task.json"
+
+# 其他宿主：<skill目录> 是本次加载的 SKILL.md 所在目录的绝对路径
 python "<skill目录>/runner.py" --check --task "<任务目录>/task.json"
 python "<skill目录>/runner.py" --task "<任务目录>/task.json"
 ```
 
+- 不要用当前工作目录拼 `runner.py`；`<skill目录>` 必须来自 skill 加载路径或插件根。
 - 把命令里的 `python` 换成本机可用的 `python3`/`py -3`；路径带空格保留引号。不要复制多份 runner。
+- 运行前先确认 `<skill目录>/runner.py` 存在；缺失就是插件包不完整，停止并报告，不要找旧缓存或重建。
 - `--check` 只校验结构/输入，不加载模型、不联网、不合成；通过后再 `--task`。
 - runner 只检查 `VIDEO_TTS_PYTHON`、专用 venv、当前解释器和 PATH；不广泛扫描其他环境。可用 `VIDEO_TTS_PYTHON` 指定已验证解释器。缺依赖时在用户目录（macOS `~/Library/Caches/video-toolkit/envs/`，Windows `%LOCALAPPDATA%\video-toolkit\envs/`）建专用 venv，绝不影响系统 Python；安装只发生在选定 provider 后。
 - 阶段日志：`[setup]`、`[download]`、`[load]`、`[synthesis]`、`[cache]`、`[fit]`、`[track]`、`[mux]`、`[verify]`、`[deliver]`、`[done]`；约 10 秒一次 `[heartbeat]`。转述当前阶段，不笼统说“处理中”。

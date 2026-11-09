@@ -26,6 +26,14 @@ def test_checked_in_runner_matches_source():
     assert RUNNER.read_text(encoding="utf-8") == DEV_RUNNER.read_text(encoding="utf-8")
 
 
+def test_skill_md_documents_runner_path_resolution():
+    text = SKILL.read_text(encoding="utf-8")
+    assert "CLAUDE_PLUGIN_ROOT" in text
+    assert "父目录" in text
+    assert "不要用当前工作目录" in text
+    assert "插件包不完整" in text
+
+
 def test_skill_md_does_not_embed_the_runner():
     text = SKILL.read_text(encoding="utf-8")
     assert "<!-- runner:" not in text
