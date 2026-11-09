@@ -30,7 +30,6 @@ than compressed into a one-file trick.
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import dataclasses
 import datetime as _dt
 import hashlib
@@ -147,6 +146,13 @@ LOCAL_VOICES = [
 ]
 
 ONLINE_OUTPUT_FORMATS = (
+    "mp3_22050_32",
+    "mp3_24000_48",
+    "mp3_44100_32",
+    "mp3_44100_64",
+    "mp3_44100_96",
+    "mp3_44100_128",
+    "mp3_44100_192",
     "wav_16000",
     "wav_22050",
     "wav_24000",
@@ -155,15 +161,12 @@ ONLINE_OUTPUT_FORMATS = (
     "wav_48000",
 )
 
-LOCAL_PARAMS = {"instruct", "temperature", "top_p", "top_k", "repetition_penalty", "seed"}
-TORCH_PARAMS = {"instruct", "temperature", "top_p", "top_k", "seed"}
+LOCAL_PARAMS = {"instruct"}
+TORCH_PARAMS = {"instruct"}
 ONLINE_PARAMS = {
     "voice_settings",
-    "seed",
     "output_format",
-    "online_concurrency",
     "remove_background_noise",
-    "apply_text_normalization",
 }
 
 TIMING_KEYS = {"max_speed", "safety_gap_sec", "pause_between_sec"}
@@ -176,10 +179,7 @@ OUTPUT_KEYS = {
     "audio_format",
     "sample_rate",
     "overwrite",
-    "narration_video_policy",
-    "mix_original",
 }
-MIX_KEYS = {"enabled", "volume_db"}
 SEGMENT_KEYS = {"id", "text", "start_sec", "end_sec", "source_indices", "original_text"}
 TASK_KEYS = {
     "schema_version",
@@ -452,11 +452,6 @@ def _same_executable(left: str, right: str) -> bool:
     )
 
 
-def _version_key(path: Path) -> Tuple[int, ...]:
-    parts = re.findall(r"\d+", path.name)
-    return tuple(int(part) for part in parts) or (0,)
-
-
 def candidate_interpreters(route: str) -> List[str]:
     found: List[str] = []
     seen: set = set()
@@ -475,37 +470,15 @@ def candidate_interpreters(route: str) -> List[str]:
         seen.add(path)
         found.append(path)
 
+    # Deliberately small: explicit override, dedicated venv, current
+    # interpreter, then PATH.  Broadly scanning Homebrew/pyenv/Program Files
+    # made behavior unpredictable and could silently pick an unrelated env.
     add(os.environ.get("VIDEO_TTS_PYTHON"))
     add(str(venv_python(route)))
     add(sys.executable)
-
-    for name in ("python3", "python"):
-        add(shutil.which(name))
-
-    system = platform.system()
-    if system == "Windows":
-        local = os.environ.get("LOCALAPPDATA")
-        if local:
-            base = Path(local) / "Programs" / "Python"
-            if base.is_dir():
-                for item in sorted(base.glob("Python3*/python.exe"), key=_version_key, reverse=True):
-                    add(str(item))
-        add(shutil.which("py"))
-    else:
-        for base in ("/opt/homebrew/bin", "/usr/local/bin"):
-            directory = Path(base)
-            if directory.is_dir():
-                for item in sorted(directory.glob("python3.*"), key=_version_key, reverse=True):
-                    if re.fullmatch(r"python3\.\d+", item.name):
-                        add(str(item))
-        pyenv = Path.home() / ".pyenv" / "versions"
-        if pyenv.is_dir():
-            for version_dir in sorted(pyenv.iterdir(), key=_version_key, reverse=True):
-                add(str(version_dir / "bin" / "python3"))
-                add(str(version_dir / "bin" / "python"))
-        add("/usr/bin/python3")
-
-    return found[:10]
+    add(shutil.which("python3"))
+    add(shutil.which("python"))
+    return found
 
 
 def run_probe(python: str, code: str, timeout: float = 60.0) -> Optional[subprocess.CompletedProcess]:
@@ -641,24 +614,60 @@ def _installer_prefix(python: str) -> List[str]:
     return [python, "-m", "pip", "install", "--disable-pip-version-check", "--no-input"]
 
 
-def driver_cuda_index() -> Optional[str]:
+def nvidia_smi_info() -> Dict[str, Any]:
+    """Return whether nvidia-smi exists, is usable, and its CUDA version."""
     try:
         result = subprocess.run(["nvidia-smi"], capture_output=True, timeout=15)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    output = _decode_bytes(result.stdout)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {
+            "present": False,
+            "usable": False,
+            "cuda_version": None,
+            "reason": f"nvidia-smi is unavailable: {exc}",
+        }
+    output = _decode_bytes(result.stdout) + "\n" + _decode_bytes(result.stderr)
+    if result.returncode != 0:
+        return {
+            "present": True,
+            "usable": False,
+            "cuda_version": None,
+            "reason": f"nvidia-smi failed (exit {result.returncode}): {output.strip()[:300]}",
+        }
+    if re.search(r"No devices were found|no NVIDIA GPU|not found", output, re.IGNORECASE):
+        return {
+            "present": True,
+            "usable": False,
+            "cuda_version": None,
+            "reason": "nvidia-smi reported no usable NVIDIA GPU.",
+        }
     match = re.search(r"CUDA(?:\s+UMD)?\s+Version:\s*(\d+)\.(\d+)", output)
-    if not match:
+    version = (int(match.group(1)), int(match.group(2))) if match else None
+    return {
+        "present": True,
+        "usable": True,
+        "cuda_version": version,
+        "reason": "",
+    }
+
+
+def driver_cuda_version() -> Optional[Tuple[int, int]]:
+    info = nvidia_smi_info()
+    return info.get("cuda_version") if info.get("usable") else None
+
+
+def driver_cuda_index() -> Optional[str]:
+    version = driver_cuda_version()
+    if version is None:
         return None
-    major, minor = int(match.group(1)), int(match.group(2))
+    major, minor = version
     if major >= 13:
         return "cu130"
     if major == 12 and minor >= 8:
         return "cu128"
-    if major == 12 and minor >= 6:
+    if major == 12:
+        # torch 2.10.0 ships cu126/cu128/cu130 (no cu124).  CUDA minor-version
+        # compatibility lets a cu126 wheel run on a 12.0-12.7 driver.
         return "cu126"
-    if major == 12 and minor >= 4:
-        return "cu124"
     return None
 
 
@@ -681,12 +690,22 @@ def install_route(route: str, python: str) -> None:
         "soundfile>=0.12,<1",
     ]
     if route == "torch":
+        info = nvidia_smi_info()
         index = driver_cuda_index()
         if index is None:
+            detail = info.get("reason") or "unknown driver CUDA version"
             raise SetupError(
-                "Could not determine the CUDA version from nvidia-smi. "
-                "Update the NVIDIA driver and retry, or use the ElevenLabs route. "
-                "This runner does not install an unavailable CUDA build."
+                f"Could not choose a supported CUDA torch build: {detail}. "
+                "torch 2.10.0 provides cu126/cu128/cu130; update the NVIDIA "
+                "driver to CUDA 12.6+ (or use the ElevenLabs route)."
+            )
+        version = info.get("cuda_version")
+        if version is not None and version < (12, 6):
+            log(
+                "setup",
+                f"Driver reports CUDA {version[0]}.{version[1]}; using cu126 via "
+                "CUDA minor-version compatibility. If installation or CUDA "
+                "verification fails, update the NVIDIA driver.",
             )
         _run_install(
             _installer_prefix(python)
@@ -788,6 +807,84 @@ def hf_hub_cache() -> Path:
     return Path.home() / ".cache" / "huggingface" / "hub"
 
 
+def _file_ok(path: Path) -> bool:
+    return path.is_file() and path.stat().st_size > 0
+
+
+def _weight_files_missing(directory: Path, prefix: str = "") -> List[str]:
+    """Return missing/empty weight shards for one model directory.
+
+    A `.index.json` is authoritative: every shard named by its `weight_map`
+    must exist with non-zero size.  Without an index, at least one weight file
+    must exist and every present weight file must be non-empty.
+    """
+    missing: List[str] = []
+    indexes = sorted(
+        list(directory.glob("*.safetensors.index.json"))
+        + list(directory.glob("*.bin.index.json"))
+    )
+    if indexes:
+        for index in indexes:
+            label = f"{prefix}{index.name}"
+            if not _file_ok(index):
+                missing.append(label)
+                continue
+            try:
+                data = _read_json(index)
+            except Exception:
+                missing.append(f"{label} (unreadable)")
+                continue
+            weight_map = data.get("weight_map") if isinstance(data, dict) else None
+            if not isinstance(weight_map, dict) or not weight_map:
+                missing.append(f"{label} (no weight_map)")
+                continue
+            for shard in sorted({str(value) for value in weight_map.values()}):
+                if not _file_ok(directory / shard):
+                    missing.append(f"{prefix}{shard}")
+    else:
+        weights = sorted(
+            list(directory.glob("*.safetensors")) + list(directory.glob("*.bin"))
+        )
+        if not weights:
+            missing.append(f"{prefix}weights/*.safetensors")
+        else:
+            for weight in weights:
+                if not _file_ok(weight):
+                    missing.append(f"{prefix}{weight.name}")
+    return missing
+
+
+def snapshot_complete(path: Path) -> Tuple[bool, List[str]]:
+    """Check a Hugging Face snapshot, including index-referenced shards."""
+    missing: List[str] = []
+    if not path.is_dir():
+        return False, [f"snapshot directory missing: {path}"]
+    for name in (
+        "config.json",
+        "tokenizer_config.json",
+        "preprocessor_config.json",
+        "generation_config.json",
+    ):
+        if not _file_ok(path / name):
+            missing.append(name)
+    tokenizer_json = path / "tokenizer.json"
+    if not _file_ok(tokenizer_json):
+        for name in ("vocab.json", "merges.txt"):
+            if not _file_ok(path / name):
+                missing.append(name)
+    missing.extend(_weight_files_missing(path))
+
+    speech = path / "speech_tokenizer"
+    if not speech.is_dir():
+        missing.append("speech_tokenizer/")
+    else:
+        for name in ("config.json", "preprocessor_config.json"):
+            if not _file_ok(speech / name):
+                missing.append(f"speech_tokenizer/{name}")
+        missing.extend(_weight_files_missing(speech, "speech_tokenizer/"))
+    return len(missing) == 0, missing
+
+
 def model_cache_path(model_id: str) -> Optional[Path]:
     folder = "models--" + model_id.replace("/", "--")
     root = hf_hub_cache() / folder
@@ -795,10 +892,8 @@ def model_cache_path(model_id: str) -> Optional[Path]:
     if not snapshots.is_dir():
         return None
     for snapshot in sorted(snapshots.iterdir(), key=lambda item: item.name):
-        if not (snapshot / "config.json").is_file():
-            continue
-        weights = list(snapshot.glob("*.safetensors")) + list(snapshot.glob("*.bin"))
-        if weights:
+        complete, _missing = snapshot_complete(snapshot)
+        if complete:
             return snapshot
     return None
 
@@ -848,17 +943,15 @@ def detect_local() -> Dict[str, Any]:
         "clone": {"model_id": clone_model, "cached": model_cache_path(clone_model) is not None},
     }
 
+    nvidia_usable = False
     if route == "torch":
-        try:
-            nvidia = subprocess.run(["nvidia-smi"], capture_output=True, timeout=10)
-            nvidia_present = nvidia.returncode == 0
-        except (OSError, subprocess.TimeoutExpired):
-            nvidia_present = False
-        if not nvidia_present:
+        info = nvidia_smi_info()
+        nvidia_usable = bool(info.get("usable"))
+        if not nvidia_usable:
             return {
                 "backend": "qwen_tts",
                 "status": "unsupported",
-                "reason": ["No usable NVIDIA GPU/driver detected (nvidia-smi failed)."],
+                "reason": [info.get("reason") or "No usable NVIDIA GPU/driver detected."],
                 "models": models,
                 "python": None,
             }
@@ -882,12 +975,30 @@ def detect_local() -> Dict[str, Any]:
             "python": python,
         }
 
-    unsupported = [item for item in problems if "Metal is unavailable" in item or "torch.cuda is unavailable" in item]
+    unsupported = [item for item in problems if "Metal is unavailable" in item]
     if unsupported:
         return {
             "backend": backend,
             "status": "unsupported",
             "reason": unsupported,
+            "models": models,
+            "python": None,
+        }
+    cuda_problems = [
+        item
+        for item in problems
+        if "torch.cuda is unavailable" in item or "CUDA tensor operation failed" in item
+    ]
+    if route == "torch" and nvidia_usable and cuda_problems:
+        return {
+            "backend": "qwen_tts",
+            "status": "needs_setup",
+            "reason": [
+                "NVIDIA GPU detected, but the current torch environment cannot "
+                "use CUDA (CPU build, wrong wheel, or driver mismatch). Selecting "
+                "the local route will create/repair a dedicated CUDA environment."
+            ]
+            + cuda_problems[:3],
             "models": models,
             "python": None,
         }
@@ -1082,8 +1193,6 @@ class OutputSpec:
     audio_format: str
     sample_rate: int
     overwrite: bool
-    narration_video_policy: str
-    mix_original: Dict[str, Any]
 
 
 @dataclasses.dataclass
@@ -1101,7 +1210,6 @@ class Segment:
 class Task:
     path: Path
     base: Path
-    raw: Dict[str, Any]
     mode: str
     provider: str
     backend: str
@@ -1223,25 +1331,6 @@ def _canonical_language(value: Any) -> str:
     return canonical
 
 
-def _probe_video_info(path: Path) -> Dict[str, Any]:
-    probe = ffprobe_json(path)
-    streams = probe.get("streams") or []
-    video = next((item for item in streams if item.get("codec_type") == "video"), None)
-    if video is None:
-        raise TaskError(f"No video stream found in {path}.")
-    duration = _stream_duration(video, probe)
-    if duration is None:
-        raise TaskError(f"Could not determine video duration for {path}.")
-    return {
-        "duration": duration,
-        "codec_name": str(video.get("codec_name") or ""),
-        "width": int(video.get("width") or 0),
-        "height": int(video.get("height") or 0),
-        "fps": str(video.get("r_frame_rate") or ""),
-        "has_audio": any(item.get("codec_type") == "audio" for item in streams),
-    }
-
-
 def _stream_duration(stream: Dict[str, Any], probe: Dict[str, Any]) -> Optional[float]:
     for raw in (stream.get("duration"), (probe.get("format") or {}).get("duration")):
         if raw is None:
@@ -1346,32 +1435,18 @@ def _validate_parameters(provider: str, backend: str, params: Any, source: str) 
             instruct = _string(instruct, "parameters.instruct", required=False, allow_empty=True)
             if source == "clone" and instruct and instruct.strip():
                 raise TaskError("parameters.instruct is only supported for preset voices.")
-        cleaned: Dict[str, Any] = {}
-        if instruct is not None:
-            cleaned["instruct"] = instruct
-        if params.get("temperature") is not None:
-            cleaned["temperature"] = _number(params["temperature"], "parameters.temperature", minimum=0.0, maximum=2.0)
-        if params.get("top_p") is not None:
-            cleaned["top_p"] = _number(params["top_p"], "parameters.top_p", minimum=0.0, maximum=1.0)
-        if params.get("top_k") is not None:
-            cleaned["top_k"] = _number(params["top_k"], "parameters.top_k", integer=True, minimum=0, maximum=1000)
-        if params.get("repetition_penalty") is not None:
-            if backend != "mlx_audio":
-                raise TaskError("parameters.repetition_penalty is not supported by the Windows torch adapter.")
-            cleaned["repetition_penalty"] = _number(
-                params["repetition_penalty"], "parameters.repetition_penalty", minimum=0.5, maximum=2.0
-            )
-        if params.get("seed") is not None:
-            cleaned["seed"] = _number(params["seed"], "parameters.seed", integer=True, minimum=0)
-        return cleaned
+        return {"instruct": instruct} if instruct is not None else {}
 
-    cleaned = {}
+    cleaned: Dict[str, Any] = {}
     settings = params.get("voice_settings")
     if settings is not None:
         if not isinstance(settings, dict):
             raise TaskError("parameters.voice_settings must be a JSON object.")
-        allowed_settings = {"stability", "similarity_boost", "style", "use_speaker_boost", "speed"}
-        _check_keys(settings, allowed_settings, "parameters.voice_settings")
+        _check_keys(
+            settings,
+            {"stability", "similarity_boost", "style", "use_speaker_boost"},
+            "parameters.voice_settings",
+        )
         cleaned_settings: Dict[str, Any] = {}
         for key in ("stability", "similarity_boost", "style"):
             if settings.get(key) is not None:
@@ -1382,15 +1457,7 @@ def _validate_parameters(provider: str, backend: str, params: Any, source: str) 
             cleaned_settings["use_speaker_boost"] = _bool(
                 settings["use_speaker_boost"], "parameters.voice_settings.use_speaker_boost"
             )
-        if settings.get("speed") is not None:
-            cleaned_settings["speed"] = _number(
-                settings["speed"], "parameters.voice_settings.speed", minimum=0.5, maximum=2.0
-            )
         cleaned["voice_settings"] = cleaned_settings
-    if params.get("seed") is not None:
-        cleaned["seed"] = _number(
-            params["seed"], "parameters.seed", integer=True, minimum=0, maximum=4294967295
-        )
     if params.get("output_format") is not None:
         value = _string(params["output_format"], "parameters.output_format")
         if value not in ONLINE_OUTPUT_FORMATS:
@@ -1398,19 +1465,10 @@ def _validate_parameters(provider: str, backend: str, params: Any, source: str) 
                 f"parameters.output_format must be one of {', '.join(ONLINE_OUTPUT_FORMATS)}."
             )
         cleaned["output_format"] = value
-    if params.get("online_concurrency") is not None:
-        cleaned["online_concurrency"] = _number(
-            params["online_concurrency"], "parameters.online_concurrency", integer=True, minimum=1, maximum=3
-        )
     if params.get("remove_background_noise") is not None:
         cleaned["remove_background_noise"] = _bool(
             params["remove_background_noise"], "parameters.remove_background_noise"
         )
-    if params.get("apply_text_normalization") is not None:
-        value = _string(params["apply_text_normalization"], "parameters.apply_text_normalization")
-        if value not in ("auto", "on", "off"):
-            raise TaskError("parameters.apply_text_normalization must be auto, on, or off.")
-        cleaned["apply_text_normalization"] = value
     return cleaned
 
 
@@ -1529,7 +1587,10 @@ def load_task(path: Any, *, require_media_tools: bool = False) -> Task:
         if ffprobe_path:
             global FFPROBE
             FFPROBE = ffprobe_path
-            video_info = _probe_video_info(video_path)
+            try:
+                video_info = probe_video(video_path)
+            except RunnerError as exc:
+                raise TaskError(f"input.video is not usable: {exc.message}") from exc
             video_duration = float(video_info["duration"])
         elif require_media_tools:
             raise TaskError("ffprobe is required to inspect input.video.")
@@ -1567,23 +1628,6 @@ def load_task(path: Any, *, require_media_tools: bool = False) -> Task:
     if sample_rate != SAMPLE_RATE:
         raise TaskError("First version exports 48 kHz audio only; output.sample_rate must be 48000.")
     overwrite = _bool(output_raw.get("overwrite"), "output.overwrite", default=False)
-    narration_policy = _string(
-        output_raw.get("narration_video_policy"),
-        "output.narration_video_policy",
-        required=False,
-        default="ask",
-    )
-    if narration_policy not in ("ask", "accelerate", "audio_only"):
-        raise TaskError("output.narration_video_policy must be ask, accelerate, or audio_only.")
-
-    mix_raw = _check_keys(_as_object(output_raw.get("mix_original"), "output.mix_original"), MIX_KEYS, "output.mix_original")
-    mix_enabled = _bool(mix_raw.get("enabled"), "output.mix_original.enabled", default=False)
-    mix_volume = _number(
-        mix_raw.get("volume_db"), "output.mix_original.volume_db", default=-18.0, minimum=-60.0, maximum=0.0
-    )
-    if mix_enabled and video_path is None:
-        raise TaskError("output.mix_original.enabled requires input.video.")
-    mix_original = {"enabled": mix_enabled, "volume_db": mix_volume}
 
     segments_raw = raw.get("segments")
     if not isinstance(segments_raw, list) or not segments_raw:
@@ -1684,7 +1728,6 @@ def load_task(path: Any, *, require_media_tools: bool = False) -> Task:
     return Task(
         path=task_path,
         base=base,
-        raw=raw,
         mode=mode,
         provider=provider,
         backend=backend,
@@ -1702,8 +1745,6 @@ def load_task(path: Any, *, require_media_tools: bool = False) -> Task:
             audio_format=audio_format,
             sample_rate=int(sample_rate),
             overwrite=overwrite,
-            narration_video_policy=narration_policy,
-            mix_original=mix_original,
         ),
         segments=segments,
         video_info=video_info,
@@ -1745,8 +1786,6 @@ def task_summary(task: Task) -> Dict[str, Any]:
             "audio_format": task.output.audio_format,
             "sample_rate": task.output.sample_rate,
             "overwrite": task.output.overwrite,
-            "narration_video_policy": task.output.narration_video_policy,
-            "mix_original": task.output.mix_original,
         },
         "allow_text_edits": task.allow_text_edits,
         "polish": {"attempt": task.polish.attempt, "max_attempts": task.polish.max_attempts},
@@ -2211,7 +2250,6 @@ def probe_video(path: Path) -> Dict[str, Any]:
     return {
         "duration": duration,
         "codec_name": str(video.get("codec_name") or ""),
-        "has_audio": any(item.get("codec_type") == "audio" for item in streams),
     }
 
 
@@ -2222,7 +2260,6 @@ def mux_video(
     video_info: Dict[str, Any],
     *,
     sample_rate: int = SAMPLE_RATE,
-    mix_original: Optional[Dict[str, Any]] = None,
 ) -> List[str]:
     warnings: List[str] = []
     target = Path(target)
@@ -2246,23 +2283,9 @@ def mux_video(
         "0:v:0",
         "-map_metadata",
         "0",
+        "-map",
+        "1:a:0",
     ]
-    mix = bool(mix_original and mix_original.get("enabled"))
-    if mix:
-        if not video_info.get("has_audio"):
-            warnings.append("mix_original was requested but the video has no original audio; replacing it instead.")
-            mix = False
-        else:
-            volume = float(mix_original.get("volume_db", -18.0))
-            command += [
-                "-filter_complex",
-                f"[0:a:0]volume={volume}dB[orig];[1:a:0][orig]"
-                "amix=inputs=2:duration=first:normalize=0[aout]",
-                "-map",
-                "[aout]",
-            ]
-    if not mix:
-        command += ["-map", "1:a:0"]
 
     codec = str(video_info.get("codec_name") or "")
     if codec in ("h264", "hevc"):
@@ -2363,12 +2386,25 @@ def ensure_model_cached(model_id: str) -> Path:
     try:
         cached = snapshot_download(model_id, local_files_only=True)
         path = Path(cached)
-        has_weights = any(path.glob("*.safetensors")) or any(path.glob("*.bin"))
-        if (path / "config.json").is_file() and has_weights:
+        complete, missing = snapshot_complete(path)
+        if complete:
             log("setup", f"Model cache found: {path}")
             return path
+        log(
+            "setup",
+            f"Model cache is incomplete ({len(missing)} missing/empty file(s)): "
+            + ", ".join(missing[:5])
+            + (" …" if len(missing) > 5 else ""),
+        )
+        fallback = model_cache_path(model_id)
+        if fallback is not None:
+            log("setup", f"Model cache found: {fallback}")
+            return fallback
     except Exception:
-        pass
+        fallback = model_cache_path(model_id)
+        if fallback is not None:
+            log("setup", f"Model cache found: {fallback}")
+            return fallback
 
     log("download", f"Downloading model weights... {model_id}")
     with Heartbeat("download", model_id):
@@ -2411,14 +2447,11 @@ def ensure_model_cached(model_id: str) -> Path:
             f"model files are still incomplete after download: {model_id}",
             stage="download",
         ) from exc
-    if not (path / "config.json").is_file():
+    complete, missing = snapshot_complete(path)
+    if not complete:
         raise RunnerError(
-            f"model snapshot is missing config.json: {path}",
-            stage="download",
-        )
-    if not (any(path.glob("*.safetensors")) or any(path.glob("*.bin"))):
-        raise RunnerError(
-            f"model snapshot has no weight files: {path}",
+            f"model snapshot is still incomplete after download: {path}; "
+            f"missing/empty: {', '.join(missing[:10])}",
             stage="download",
         )
     log("download", f"Download complete: {path}")
@@ -2432,9 +2465,7 @@ def ensure_model_cached(model_id: str) -> Path:
 
 class Result:
     def __init__(self, task: Task) -> None:
-        self.task = task
         self.path = task.base / "result.json"
-        self.lock = threading.Lock()
         self.started = time.monotonic()
         self.data: Dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
@@ -2479,71 +2510,60 @@ class Result:
         }
         self.save()
 
-    def _save_locked(self) -> None:
+    def save(self) -> None:
         self.data["elapsed_sec"] = round(time.monotonic() - self.started, 3)
         atomic_write_json(self.path, self.data)
 
-    def save(self) -> None:
-        with self.lock:
-            self._save_locked()
-
     def set(self, key: str, value: Any) -> None:
-        with self.lock:
-            self.data[key] = value
-            self._save_locked()
+        self.data[key] = value
+        self.save()
 
     def update_environment(self, values: Dict[str, Any]) -> None:
-        with self.lock:
-            self.data["environment"].update(values)
-            self._save_locked()
+        self.data["environment"].update(values)
+        self.save()
 
     def add_warning(self, message: str) -> None:
-        with self.lock:
-            if message not in self.data["warnings"]:
-                self.data["warnings"].append(message)
-                self._save_locked()
+        if message not in self.data["warnings"]:
+            self.data["warnings"].append(message)
+            self.save()
 
     def set_voice(self, **values: Any) -> None:
-        with self.lock:
-            self.data["voice"].update(values)
-            if any(
-                self.data["voice"].get(key) is not None
-                for key in ("voice_id", "requires_verification", "name")
-            ):
-                self.data["clone"] = {
-                    "voice_id": self.data["voice"].get("voice_id"),
-                    "requires_verification": self.data["voice"].get("requires_verification"),
-                    "name": self.data["voice"].get("name"),
-                }
-            self._save_locked()
+        self.data["voice"].update(values)
+        if any(
+            self.data["voice"].get(key) is not None
+            for key in ("voice_id", "requires_verification", "name")
+        ):
+            self.data["clone"] = {
+                "voice_id": self.data["voice"].get("voice_id"),
+                "requires_verification": self.data["voice"].get("requires_verification"),
+                "name": self.data["voice"].get("name"),
+            }
+        self.save()
 
     def set_segment(self, index: int, **values: Any) -> None:
-        with self.lock:
-            if 0 <= index < len(self.data["segments"]):
-                self.data["segments"][index].update(values)
-                self._save_locked()
+        if 0 <= index < len(self.data["segments"]):
+            self.data["segments"][index].update(values)
+            self.save()
 
     def add_output(self, kind: str, path: Path, duration: float, *, sample_rate: Optional[int] = None, note: Optional[str] = None) -> None:
-        with self.lock:
-            item = {
-                "kind": kind,
-                "path": str(Path(path).resolve()),
-                "duration_sec": round(float(duration), 3),
-            }
-            if sample_rate is not None:
-                item["sample_rate"] = int(sample_rate)
-            if note:
-                item["note"] = note
-            self.data["outputs"].append(item)
-            self._save_locked()
+        item = {
+            "kind": kind,
+            "path": str(Path(path).resolve()),
+            "duration_sec": round(float(duration), 3),
+        }
+        if sample_rate is not None:
+            item["sample_rate"] = int(sample_rate)
+        if note:
+            item["note"] = note
+        self.data["outputs"].append(item)
+        self.save()
 
     def set_status(self, status: str, exit_code: int, error: Optional[Dict[str, Any]] = None) -> None:
-        with self.lock:
-            self.data["status"] = status
-            self.data["exit_code"] = exit_code
-            self.data["error"] = error
-            self.data["finished_at"] = now_iso()
-            self._save_locked()
+        self.data["status"] = status
+        self.data["exit_code"] = exit_code
+        self.data["error"] = error
+        self.data["finished_at"] = now_iso()
+        self.save()
 
 
 # ---------------------------------------------------------------------------
@@ -2552,8 +2572,6 @@ class Result:
 
 
 class Adapter:
-    name = "base"
-
     def prepare(self, task: Optional[Task] = None, progress: Optional[Any] = None) -> None:
         raise NotImplementedError
 
@@ -2571,8 +2589,6 @@ class Adapter:
 
 
 class MLXAdapter(Adapter):
-    name = "mlx_audio"
-
     def __init__(self, task: Task, result: Result, model_loader: Optional[Any] = None) -> None:
         self.task = task
         self.result = result
@@ -2663,22 +2679,11 @@ class MLXAdapter(Adapter):
             "lang_code": self.task.language,
             "split_pattern": None,
         }
-        for key in ("temperature", "top_p", "top_k", "repetition_penalty"):
-            if self.task.parameters.get(key) is not None:
-                kwargs[key] = self.task.parameters[key]
         if self.task.voice.source == "clone":
             kwargs["voice"] = None
             kwargs["instruct"] = None
             kwargs["ref_audio"] = str(self.reference_audio)
             kwargs["ref_text"] = self.reference_text
-        seed = self.task.parameters.get("seed")
-        if seed is not None:
-            try:
-                import mlx.core as mx
-
-                mx.random.seed(int(seed))
-            except Exception as exc:
-                warn(f"could not set MLX random seed: {exc}")
 
         try:
             results = self.model.generate(**kwargs)
@@ -2764,8 +2769,6 @@ class MLXAdapter(Adapter):
 
 
 class QwenTorchAdapter(Adapter):
-    name = "qwen_tts"
-
     def __init__(
         self,
         task: Task,
@@ -2904,13 +2907,6 @@ class QwenTorchAdapter(Adapter):
         np = _np()
         if self.model is None:
             raise RunnerError("qwen-tts model is not loaded", stage="synthesis")
-        seed = self.task.parameters.get("seed")
-        if seed is not None:
-            self.torch_module.manual_seed(int(seed))
-        sampling: Dict[str, Any] = {}
-        for key in ("temperature", "top_p", "top_k"):
-            if self.task.parameters.get(key) is not None:
-                sampling[key] = self.task.parameters[key]
         try:
             if self.task.voice.source == "preset":
                 audios, rate = self.model.generate_custom_voice(
@@ -2918,14 +2914,12 @@ class QwenTorchAdapter(Adapter):
                     speaker=self.speaker,
                     language=self.task.language,
                     instruct=self.task.parameters.get("instruct") or None,
-                    **sampling,
                 )
             else:
                 audios, rate = self.model.generate_voice_clone(
                     text,
                     language=self.task.language,
                     voice_clone_prompt=self.clone_prompt,
-                    **sampling,
                 )
         except Exception as exc:
             message = str(exc)
@@ -2986,8 +2980,6 @@ class QwenTorchAdapter(Adapter):
 
 
 class ElevenLabsAdapter(Adapter):
-    name = "elevenlabs_http"
-
     def __init__(
         self,
         task: Task,
@@ -3002,12 +2994,13 @@ class ElevenLabsAdapter(Adapter):
         self.session_factory = session_factory
         self.api_key = api_key or os.environ.get("ELEVENLABS_API_KEY")
         self.base_url = (base_url or os.environ.get("ELEVENLABS_API_BASE") or "https://api.elevenlabs.io").rstrip("/")
-        self.sessions: Dict[int, Any] = {}
-        self.lock = threading.Lock()
+        self.session: Optional[Any] = None
         self.voice_id: Optional[str] = None
         self.voice_name: Optional[str] = None
         self.requires_verification: Optional[bool] = None
-        self.output_format = self.task.parameters.get("output_format", "wav_44100")
+        # MP3 128kbps/44.1kHz is broadly available; 44.1kHz WAV may require a
+        # Pro plan on ElevenLabs accounts.
+        self.output_format = self.task.parameters.get("output_format", "mp3_44100_128")
 
     def _requests(self):
         try:
@@ -3019,23 +3012,20 @@ class ElevenLabsAdapter(Adapter):
         return requests
 
     def _session(self):
-        requests = self._requests()
-        thread_id = threading.get_ident()
-        with self.lock:
-            session = self.sessions.get(thread_id)
-            if session is None:
-                if self.session_factory is not None:
-                    session = self.session_factory()
-                else:
-                    session = requests.Session()
-                session.headers.update(
-                    {
-                        "xi-api-key": self.api_key or "",
-                        "accept": "application/json",
-                    }
-                )
-                self.sessions[thread_id] = session
-            return session
+        if self.session is None:
+            requests = self._requests()
+            self.session = (
+                self.session_factory()
+                if self.session_factory is not None
+                else requests.Session()
+            )
+            self.session.headers.update(
+                {
+                    "xi-api-key": self.api_key or "",
+                    "accept": "application/json",
+                }
+            )
+        return self.session
 
     def _sanitize(self, text: str) -> str:
         if self.api_key:
@@ -3311,10 +3301,6 @@ class ElevenLabsAdapter(Adapter):
         settings = self.task.parameters.get("voice_settings")
         if settings:
             payload["voice_settings"] = settings
-        if self.task.parameters.get("seed") is not None:
-            payload["seed"] = self.task.parameters["seed"]
-        if self.task.parameters.get("apply_text_normalization"):
-            payload["apply_text_normalization"] = self.task.parameters["apply_text_normalization"]
         if self.task.model_id == "eleven_flash_v2_5" and self.task.language != "auto":
             iso = LANGUAGE_ISO.get(self.task.language)
             if iso:
@@ -3328,44 +3314,74 @@ class ElevenLabsAdapter(Adapter):
             headers={"accept": "audio/wav"},
         )
         content = response.content
-        if len(content) < 44 or content[:4] != b"RIFF":
+        if not content:
             raise RunnerError(
-                "ElevenLabs returned a response that is not a RIFF/WAV file; "
-                "not retrying automatically because the request may already be billed.",
+                "ElevenLabs returned an empty response; not retrying automatically "
+                "because the request may already be billed.",
                 stage="synthesis",
             )
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        is_wav = content[:4] == b"RIFF"
+        suffix = ".wav" if is_wav else ".mp3"
         fd, tmp_name = tempfile.mkstemp(
-            dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=".wav"
+            dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=suffix
         )
         os.close(fd)
+        decoded = Path(tmp_name + ".decoded.wav")
         try:
             with open(tmp_name, "wb") as handle:
                 handle.write(content)
-            samples, rate = read_wav(Path(tmp_name))
+            if is_wav:
+                samples, rate = read_wav(Path(tmp_name))
+            else:
+                command = [
+                    FFMPEG,
+                    "-y",
+                    "-v",
+                    "error",
+                    "-i",
+                    tmp_name,
+                    "-vn",
+                    "-ac",
+                    "1",
+                    str(decoded),
+                ]
+                try:
+                    result = subprocess.run(command, capture_output=True, timeout=300)
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    raise RunnerError(
+                        f"ElevenLabs audio could not be decoded: {exc}",
+                        stage="synthesis",
+                    ) from exc
+                if result.returncode != 0:
+                    raise RunnerError(
+                        "ElevenLabs returned audio that ffmpeg could not decode: "
+                        f"{_decode_bytes(result.stderr).strip()}",
+                        stage="synthesis",
+                    )
+                samples, rate = read_wav(decoded)
             validate_pcm(samples, rate)
-            os.replace(tmp_name, output_path)
+            write_wav_float(output_path, samples, rate)
         except RunnerError:
-            _unlink_quietly(tmp_name)
             raise
         except Exception as exc:
-            _unlink_quietly(tmp_name)
             raise RunnerError(
-                f"ElevenLabs returned an unreadable WAV: {exc}",
+                f"ElevenLabs returned unreadable audio: {exc}",
                 stage="synthesis",
             ) from exc
+        finally:
+            _unlink_quietly(tmp_name)
+            _unlink_quietly(decoded)
         return int(rate)
 
     def close(self) -> None:
-        with self.lock:
-            sessions = list(self.sessions.values())
-            self.sessions.clear()
-        for session in sessions:
+        if self.session is not None:
             try:
-                session.close()
+                self.session.close()
             except Exception:
                 pass
+            self.session = None
 
     def voice_identity(self) -> Dict[str, Any]:
         return {"voice_id": self.voice_id, "model_id": self.task.model_id}
@@ -3514,11 +3530,6 @@ def split_text(text: str, backend: str) -> List[str]:
 
 
 def cache_key(task: Task, voice_identity: Dict[str, Any], text: str) -> str:
-    parameters = {
-        key: value
-        for key, value in task.parameters.items()
-        if key != "online_concurrency"
-    }
     material = {
         "schema": SCHEMA_VERSION,
         "provider": task.provider,
@@ -3526,7 +3537,7 @@ def cache_key(task: Task, voice_identity: Dict[str, Any], text: str) -> str:
         "model_id": task.model_id,
         "language": task.language,
         "voice": voice_identity,
-        "parameters": parameters,
+        "parameters": task.parameters,
         "text": text,
     }
     payload = json.dumps(material, ensure_ascii=False, sort_keys=True, default=str)
@@ -3568,7 +3579,6 @@ def synthesize_segment(
     result: Result,
     index: int,
     segment: Segment,
-    stop: threading.Event,
 ) -> NativeSegment:
     chunks = split_text(segment.text, task.backend)
     if not chunks:
@@ -3577,50 +3587,46 @@ def synthesize_segment(
     paths: List[Path] = []
     cache_hits = 0
     for chunk_index, chunk in enumerate(chunks, start=1):
-        if stop.is_set():
-            raise RunnerError("synthesis cancelled", stage="synthesis", segment_id=segment.id)
         key = cache_key(task, identity, chunk)
         cache_path = task.work_dir / "segments" / f"{key}.wav"
         cached = _load_cached_audio(cache_path)
         if cached is not None:
             cache_hits += 1
             log("cache", f"segment {segment.id} chunk {chunk_index}/{len(chunks)}: cache hit")
-            paths.append(cache_path)
-            continue
-
-        log(
-            "synthesis",
-            f"Generating segment {segment.id} chunk {chunk_index}/{len(chunks)}...",
-        )
-
-        def do_synthesis() -> None:
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp_name = tempfile.mkstemp(
-                dir=str(cache_path.parent), prefix=f".{cache_path.name}.", suffix=".wav"
+        else:
+            log(
+                "synthesis",
+                f"Generating segment {segment.id} chunk {chunk_index}/{len(chunks)}...",
             )
-            os.close(fd)
-            try:
-                adapter.synthesize(chunk, Path(tmp_name))
-                pcm, sample_rate = read_wav(Path(tmp_name))
-                validate_pcm(pcm, sample_rate)
-                os.replace(tmp_name, cache_path)
-            except RunnerError:
-                _unlink_quietly(tmp_name)
-                raise
-            except Exception as exc:
-                _unlink_quietly(tmp_name)
-                raise RunnerError(
-                    f"invalid synthesized audio for segment {segment.id}: {exc}",
-                    stage="synthesis",
-                    segment_id=segment.id,
-                ) from exc
 
-        try:
-            with_retry(do_synthesis)
-        except RunnerError as exc:
-            exc.segment_id = segment.id
-            raise
-        log("synthesis", f"segment {segment.id} chunk {chunk_index}/{len(chunks)} done")
+            def do_synthesis() -> None:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                fd, tmp_name = tempfile.mkstemp(
+                    dir=str(cache_path.parent), prefix=f".{cache_path.name}.", suffix=".wav"
+                )
+                os.close(fd)
+                try:
+                    adapter.synthesize(chunk, Path(tmp_name))
+                    pcm, sample_rate = read_wav(Path(tmp_name))
+                    validate_pcm(pcm, sample_rate)
+                    os.replace(tmp_name, cache_path)
+                except RunnerError:
+                    _unlink_quietly(tmp_name)
+                    raise
+                except Exception as exc:
+                    _unlink_quietly(tmp_name)
+                    raise RunnerError(
+                        f"invalid synthesized audio for segment {segment.id}: {exc}",
+                        stage="synthesis",
+                        segment_id=segment.id,
+                    ) from exc
+
+            try:
+                with_retry(do_synthesis)
+            except RunnerError as exc:
+                exc.segment_id = segment.id
+                raise
+            log("synthesis", f"segment {segment.id} chunk {chunk_index}/{len(chunks)} done")
         paths.append(cache_path)
 
     rates = {wav_info(path)[1] for path in paths}
@@ -3658,41 +3664,12 @@ def synthesize_segment(
 
 
 def synthesize_all(task: Task, adapter: Adapter, result: Result) -> List[NativeSegment]:
-    segments = task.segments
-    results: List[Optional[NativeSegment]] = [None] * len(segments)
-    stop = threading.Event()
-
-    def work(index: int, segment: Segment) -> NativeSegment:
-        return synthesize_segment(task, adapter, result, index, segment, stop)
-
-    if task.provider == "elevenlabs":
-        workers = min(int(task.parameters.get("online_concurrency", 2)), len(segments))
-    else:
-        workers = 1
-    if workers <= 1:
-        for index, segment in enumerate(segments):
-            results[index] = work(index, segment)
-    else:
-        first_error: Optional[Tuple[int, BaseException]] = None
-        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {
-                pool.submit(work, index, segment): index
-                for index, segment in enumerate(segments)
-            }
-            for future in concurrent.futures.as_completed(futures):
-                index = futures[future]
-                try:
-                    results[index] = future.result()
-                except BaseException as exc:
-                    stop.set()
-                    if first_error is None or index < first_error[0]:
-                        first_error = (index, exc)
-        if first_error is not None:
-            raise first_error[1]
-    returned = [item for item in results if item is not None]
-    if len(returned) != len(segments):
-        raise RunnerError("not all segments were synthesized", stage="synthesis")
-    return [item for item in returned if item is not None]
+    # Local models are sequential; online synthesis is intentionally serial too
+    # (no thread pool, cancellation or in-flight cache races).
+    return [
+        synthesize_segment(task, adapter, result, index, segment)
+        for index, segment in enumerate(task.segments)
+    ]
 
 
 def fit_to_window(
@@ -4004,6 +3981,7 @@ def _subtitle_entries(
     track: TrackInfo, processed: Sequence[ProcessedSegment]
 ) -> List[Tuple[float, float, str]]:
     entries: List[Tuple[float, float, str]] = []
+    previous_end = -1.0
     for item in processed:
         if item.start_sec is None or item.end_sec is None:
             raise RunnerError(
@@ -4012,61 +3990,26 @@ def _subtitle_entries(
             )
         start = max(0.0, float(item.start_sec))
         end = min(float(item.end_sec), track.duration)
+        if start >= track.duration - 1e-6:
+            raise RunnerError(
+                f"segment {item.segment.id} subtitle starts at {start:.3f}s, "
+                f"beyond the delivered track {track.duration:.3f}s",
+                stage="subtitle",
+            )
         if end <= start:
             raise RunnerError(
                 f"segment {item.segment.id} has a non-positive subtitle interval",
                 stage="subtitle",
             )
+        if start < previous_end - 0.001:
+            raise RunnerError(
+                f"segment {item.segment.id} subtitle starts at {start:.3f}s, "
+                f"overlapping the previous cue ending at {previous_end:.3f}s",
+                stage="subtitle",
+            )
         entries.append((start, end, item.segment.text))
+        previous_end = end
     return entries
-
-
-def accelerate_track(task: Task, track: TrackInfo, target: float, result: Result) -> TrackInfo:
-    required = track.duration / target if target > 0 else float("inf")
-    if required > task.timing.max_speed:
-        raise ActionRequired(
-            f"Narration audio is {track.duration:.3f}s but the video is {target:.3f}s; "
-            f"fitting would require {required:.2f}x, above the configured "
-            f"{task.timing.max_speed:.2f}x limit. Choose a different option with the user.",
-            status="needs_action",
-            stage="video",
-            details={
-                "audio_duration": track.duration,
-                "video_duration": target,
-                "required_speed": required,
-                "max_speed": task.timing.max_speed,
-            },
-        )
-    pcm, sample_rate = read_wav(track.path)
-    # A small margin makes the measured output fit instead of landing a few
-    # milliseconds over the target; it is still capped by max_speed.
-    speed = min(max(required * 1.005, required + 0.001), task.timing.max_speed)
-    output = change_speed(pcm, speed, sample_rate)
-    actual = _np().asarray(output).size / sample_rate
-    # Sample rounding can leave a few milliseconds; do not call that a failure.
-    if actual > target + 0.02:
-        raise ActionRequired(
-            f"Narration audio still exceeds the video after acceleration "
-            f"({actual:.3f}s > {target:.3f}s). Choose another option with the user.",
-            status="needs_action",
-            stage="video",
-            details={
-                "audio_duration": track.duration,
-                "video_duration": target,
-                "measured_duration": actual,
-                "required_speed": required,
-                "applied_speed": speed,
-                "max_speed": task.timing.max_speed,
-            },
-        )
-    target_path = task.work_dir / "track_accelerated.wav"
-    write_wav_float(target_path, output, sample_rate)
-    result.add_warning(
-        f"narration accelerated by {speed:.3f}x to fit the video duration; "
-        "the standalone audio uses this accelerated track"
-    )
-    log("fit", f"Narration accelerated {speed:.3f}x: {track.duration:.3f}s -> {actual:.3f}s")
-    return TrackInfo(target_path, actual, sample_rate)
 
 
 def deliver(
@@ -4079,41 +4022,29 @@ def deliver(
     if "video" in deliver_kinds and task.mode == "narration":
         assert video_target is not None
         if track.duration > video_target + 0.005:
-            policy = task.output.narration_video_policy
-            required = track.duration / video_target
-            if policy == "ask":
-                raise ActionRequired(
-                    f"Narration audio is {track.duration:.3f}s but the video is "
-                    f"{video_target:.3f}s. Choose with the user: accelerate to fit "
-                    f"(requires {required:.2f}x, limit {task.timing.max_speed:.2f}x) "
-                    "or deliver audio only. The runner does not truncate content.",
-                    status="needs_action",
-                    stage="video",
-                    details={
-                        "audio_duration": track.duration,
-                        "video_duration": video_target,
-                        "required_speed": required,
-                        "max_speed": task.timing.max_speed,
-                        "track_path": str(track.path),
-                    },
-                )
-            if policy == "accelerate":
-                track = accelerate_track(task, track, video_target, result)
-            elif policy == "audio_only":
-                deliver_kinds = [kind for kind in deliver_kinds if kind != "video"]
-                if not deliver_kinds:
-                    raise TaskError(
-                        "narration_video_policy=audio_only removed the only selected "
-                        "deliverable; add audio or subtitle to output.deliver."
-                    )
-                result.add_warning(
-                    "video delivery skipped by narration_video_policy=audio_only; "
-                    "audio and/or subtitle are delivered instead"
-                )
-            else:
-                raise TaskError(f"unknown narration_video_policy: {policy!r}")
+            raise ActionRequired(
+                f"Narration audio is {track.duration:.3f}s but the video is "
+                f"{video_target:.3f}s. The runner keeps the natural audio and does "
+                "not accelerate or truncate it. Choose with the user: deliver "
+                "audio/subtitle only, or shorten/re-segment the narration text.",
+                status="needs_action",
+                stage="video",
+                details={
+                    "audio_duration": track.duration,
+                    "video_duration": video_target,
+                    "options": [
+                        "deliver audio/subtitle only (remove video from output.deliver)",
+                        "shorten or re-segment the narration text",
+                    ],
+                    "track_path": str(track.path),
+                },
+            )
 
     names = choose_output_names(task, deliver_kinds)
+    subtitle_entries: Optional[List[Tuple[float, float, str]]] = None
+    if "subtitle" in deliver_kinds:
+        # Validate the complete subtitle timeline before writing any output.
+        subtitle_entries = _subtitle_entries(track, processed)
 
     if "video" in deliver_kinds:
         assert task.input.video is not None and video_info is not None and video_target is not None
@@ -4130,19 +4061,12 @@ def deliver(
                 stage="video",
             )
         log("mux", f"Muxing {mux_source.name} into {names['video'].name}")
-        if task.output.mix_original.get("enabled") and video_info.get("has_audio"):
-            result.add_warning(
-                "original video audio was mixed in at "
-                f"{task.output.mix_original.get('volume_db')} dB; original voices "
-                "remain audible (this is not vocal separation)"
-            )
         mux_warnings = mux_video(
             task.input.video,
             mux_source,
             names["video"],
             video_info,
             sample_rate=SAMPLE_RATE,
-            mix_original=task.output.mix_original,
         )
         for message in mux_warnings:
             result.add_warning(message)
@@ -4155,15 +4079,18 @@ def deliver(
         log("deliver", f"Audio -> {names['audio']} ({duration:.3f}s)")
 
     if "subtitle" in deliver_kinds:
-        entries = _subtitle_entries(track, processed)
-        write_srt(names["subtitle"], entries)
+        assert subtitle_entries is not None
+        write_srt(names["subtitle"], subtitle_entries)
         result.add_output(
             "subtitle",
             names["subtitle"],
             track.duration,
             note="segment-level timestamps from actual synthesized audio",
         )
-        log("deliver", f"Subtitle -> {names['subtitle']} ({len(entries)} cues, segment-level)")
+        log(
+            "deliver",
+            f"Subtitle -> {names['subtitle']} ({len(subtitle_entries)} cues, segment-level)",
+        )
 
 
 # ---------------------------------------------------------------------------

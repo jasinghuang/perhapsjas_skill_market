@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 
 import pytest
 import requests
@@ -94,10 +96,45 @@ def test_prepare_and_synthesize_multilingual(r, tmp_path):
     method, url, kwargs = session.calls[-1]
     assert method == "POST"
     assert url.endswith("/v1/text-to-speech/voice-123")
-    assert kwargs["params"]["output_format"] == "wav_44100"
+    assert kwargs["params"]["output_format"] == "mp3_44100_128"
     assert kwargs["json"]["text"] == "在线测试。"
     assert kwargs["json"]["model_id"] == "eleven_multilingual_v2"
     assert "language_code" not in kwargs["json"]
+
+
+def test_mp3_response_is_decoded_to_native_wav(r, tmp_path):
+    if not shutil.which("ffmpeg"):
+        pytest.skip("ffmpeg unavailable")
+    mp3 = tmp_path / "sample.mp3"
+    subprocess.run(
+        [
+            r.FFMPEG,
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=44100:duration=0.5",
+            str(mp3),
+        ],
+        check=True,
+    )
+    task = _online_task(tmp_path, r, parameters={"output_format": "mp3_44100_128"})
+    session = FakeSession(
+        [
+            _models("eleven_multilingual_v2", "eleven_flash_v2_5"),
+            FakeResponse(json_data={"voice_id": "voice-123", "name": "Test Voice"}),
+            FakeResponse(content=mp3.read_bytes()),
+        ]
+    )
+    adapter = _adapter(r, task, session)
+    adapter.prepare()
+    output = tmp_path / "decoded.wav"
+    assert adapter.synthesize("MP3 解码测试。", output) == 44100
+    pcm, rate = r.read_wav(output)
+    assert rate == 44100
+    assert pcm.size / rate == pytest.approx(0.5, abs=0.1)
 
 
 def test_flash_uses_language_code(r, tmp_path):

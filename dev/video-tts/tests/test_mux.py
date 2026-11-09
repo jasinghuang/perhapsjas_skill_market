@@ -41,7 +41,6 @@ def test_probe_video(r, tmp_path):
     info = r.probe_video(video)
     assert info["duration"] == pytest.approx(2.0, abs=0.1)
     assert info["codec_name"] == "h264"
-    assert info["has_audio"] is True
 
 
 def test_mux_replaces_original_audio(r, tmp_path):
@@ -71,26 +70,6 @@ def test_mux_accepts_padded_track(r, tmp_path):
         s for s in r.ffprobe_json(target)["streams"] if s["codec_type"] == "audio"
     ][0]
     assert float(audio["duration"]) == pytest.approx(2.0, abs=0.1)
-
-
-def test_mux_mix_original_keeps_one_audio_stream(r, tmp_path):
-    video = make_video(r, tmp_path / "input.mp4", 2.0)
-    track = write_tone(tmp_path / "track.wav", 2.0, 48000)
-    info = r.probe_video(video)
-    target = tmp_path / "mix.mp4"
-    warnings = r.mux_video(
-        video,
-        track,
-        target,
-        info,
-        mix_original={"enabled": True, "volume_db": -20},
-    )
-    audios = [
-        s for s in r.ffprobe_json(target)["streams"] if s["codec_type"] == "audio"
-    ]
-    assert len(audios) == 1
-    assert audios[0]["codec_name"] == "aac"
-    assert warnings == []
 
 
 def test_verify_mux_detects_wrong_duration(r, tmp_path):

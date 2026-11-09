@@ -130,6 +130,57 @@ def test_run_task_aligned_needs_polish(r, tmp_path, monkeypatch):
     assert payload["status"] == "needs_polish"
 
 
+def test_narration_longer_than_video_stops_without_truncation(r, tmp_path, monkeypatch):
+    if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
+        pytest.skip("ffmpeg/ffprobe unavailable")
+    video = tmp_path / "input.mp4"
+    subprocess.run(
+        [
+            r.FFMPEG,
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=160x120:rate=24:duration=8",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=48000:duration=8",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+            str(video),
+        ],
+        check=True,
+    )
+    segments = [
+        {"id": index, "text": f"第{index}段。", "start_sec": None, "end_sec": None}
+        for index in range(1, 13)
+    ]
+    path = write_task(
+        tmp_path,
+        base_task(
+            input={"srt": None, "video": "input.mp4"},
+            output={"deliver": ["audio", "video", "subtitle"]},
+            segments=segments,
+        ),
+    )
+    task = r.load_task(path)
+    assert _run_fake(r, task, monkeypatch, FakeAdapter(seconds=0.5)) == 3
+    payload = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
+    assert payload["status"] == "needs_action"
+    details = payload["error"]["details"]
+    assert details["audio_duration"] > details["video_duration"]
+    assert "deliver audio/subtitle only" in details["options"][0]
+    assert not (tmp_path / "output").exists()
+
+
 def test_run_task_narration_video_pads_tail(r, tmp_path, monkeypatch):
     if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
         pytest.skip("ffmpeg/ffprobe unavailable")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,37 +26,174 @@ def test_venv_python_is_not_collapsed_to_base_interpreter(r, tmp_path, monkeypat
     assert r._same_executable(str(link), sys.executable) is False
 
 
-def test_model_cache_path_requires_weights(r, tmp_path, monkeypatch):
-    hub = tmp_path / "hub"
-    monkeypatch.setenv("HF_HOME", str(tmp_path))
+def _make_snapshot(hub, shards=("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors")):
     snapshot = hub / "models--org--name" / "snapshots" / "abc"
     snapshot.mkdir(parents=True)
-    (snapshot / "config.json").write_text("{}", encoding="utf-8")
-    assert r.model_cache_path("org/name") is None
-    (snapshot / "model.safetensors").write_bytes(b"weights")
+    for name in (
+        "config.json",
+        "tokenizer_config.json",
+        "preprocessor_config.json",
+        "generation_config.json",
+        "vocab.json",
+        "merges.txt",
+    ):
+        (snapshot / name).write_text("{}", encoding="utf-8")
+    (snapshot / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": {f"w{index}": shard for index, shard in enumerate(shards)}}),
+        encoding="utf-8",
+    )
+    for shard in shards:
+        (snapshot / shard).write_bytes(b"weights")
+    speech = snapshot / "speech_tokenizer"
+    speech.mkdir()
+    (speech / "config.json").write_text("{}", encoding="utf-8")
+    (speech / "preprocessor_config.json").write_text("{}", encoding="utf-8")
+    (speech / "model.safetensors").write_bytes(b"speech")
+    return snapshot
+
+
+def test_model_cache_path_requires_all_indexed_shards(r, tmp_path, monkeypatch):
+    hub = tmp_path / "hub"
+    monkeypatch.setenv("HF_HOME", str(tmp_path))
+    snapshot = _make_snapshot(hub)
+    complete, missing = r.snapshot_complete(snapshot)
+    assert complete is True
+    assert missing == []
     assert r.model_cache_path("org/name") == snapshot
+
+    (snapshot / "model-00002-of-00002.safetensors").unlink()
+    complete, missing = r.snapshot_complete(snapshot)
+    assert complete is False
+    assert "model-00002-of-00002.safetensors" in missing
+    assert r.model_cache_path("org/name") is None
+
+
+def test_ensure_model_cached_rejects_incomplete_snapshot_after_download(
+    r, tmp_path, monkeypatch
+):
+    import huggingface_hub
+
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    (snapshot / "config.json").write_text("{}", encoding="utf-8")
+
+    def fake_snapshot_download(model_id, **kwargs):
+        return str(snapshot)
+
+    class FakeApi:
+        def model_info(self, model_id, files_metadata=False):
+            return SimpleNamespace(siblings=[])
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", fake_snapshot_download)
+    monkeypatch.setattr(huggingface_hub, "HfApi", FakeApi)
+    with pytest.raises(r.RunnerError, match="incomplete after download"):
+        r.ensure_model_cached("org/name")
+
+
+def test_snapshot_completeness_checks_speech_tokenizer_weights(r, tmp_path, monkeypatch):
+    hub = tmp_path / "hub"
+    monkeypatch.setenv("HF_HOME", str(tmp_path))
+    snapshot = _make_snapshot(hub)
+    (snapshot / "speech_tokenizer" / "model.safetensors").unlink()
+    complete, missing = r.snapshot_complete(snapshot)
+    assert complete is False
+    assert "speech_tokenizer/weights/*.safetensors" in missing
+
+
+def _nvidia_result(stdout, returncode=0):
+    return SimpleNamespace(stdout=stdout, stderr=b"", returncode=returncode)
 
 
 def test_driver_cuda_index(monkeypatch, r):
-    def fake_run(command, **kwargs):
-        return SimpleNamespace(stdout=b"| NVIDIA-SMI 610.88   Driver Version: 610.88   CUDA Version: 12.8 |\n")
-
-    monkeypatch.setattr(r.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        r.subprocess,
+        "run",
+        lambda command, **kwargs: _nvidia_result(
+            b"| NVIDIA-SMI 610.88   Driver Version: 610.88   CUDA Version: 12.8 |\n"
+        ),
+    )
     assert r.driver_cuda_index() == "cu128"
 
     monkeypatch.setattr(
         r.subprocess,
         "run",
-        lambda command, **kwargs: SimpleNamespace(stdout=b"CUDA UMD Version: 13.1\n"),
+        lambda command, **kwargs: _nvidia_result(b"CUDA UMD Version: 13.1\n"),
     )
     assert r.driver_cuda_index() == "cu130"
+
+    # torch 2.10.0 does not ship cu124; a 12.0-12.7 driver uses cu126 via
+    # CUDA minor-version compatibility.
+    monkeypatch.setattr(
+        r.subprocess,
+        "run",
+        lambda command, **kwargs: _nvidia_result(b"CUDA Version: 12.2\n"),
+    )
+    assert r.driver_cuda_index() == "cu126"
 
     monkeypatch.setattr(
         r.subprocess,
         "run",
-        lambda command, **kwargs: SimpleNamespace(stdout=b"CUDA Version: 12.2\n"),
+        lambda command, **kwargs: _nvidia_result(b"CUDA Version: 11.8\n"),
     )
     assert r.driver_cuda_index() is None
+
+
+def test_nvidia_smi_no_devices(monkeypatch, r):
+    monkeypatch.setattr(
+        r.subprocess,
+        "run",
+        lambda command, **kwargs: _nvidia_result(
+            b"NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver\n",
+            returncode=1,
+        ),
+    )
+    info = r.nvidia_smi_info()
+    assert info["present"] is True
+    assert info["usable"] is False
+    assert "exit 1" in info["reason"]
+
+
+def test_detect_local_cpu_torch_is_needs_setup(monkeypatch, r):
+    monkeypatch.setattr(r.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(r.platform, "machine", lambda: "AMD64")
+    monkeypatch.setattr(
+        r,
+        "nvidia_smi_info",
+        lambda: {
+            "present": True,
+            "usable": True,
+            "cuda_version": (12, 8),
+            "reason": "",
+        },
+    )
+    monkeypatch.setattr(
+        r,
+        "find_working_interpreter",
+        lambda route, timeout=45: (None, ["C:/Python/python.exe: torch.cuda is unavailable"]),
+    )
+    monkeypatch.setattr(r, "model_cache_path", lambda model_id: None)
+    info = r.detect_local()
+    assert info["status"] == "needs_setup"
+    assert info["backend"] == "qwen_tts"
+    assert any("NVIDIA GPU detected" in reason for reason in info["reason"])
+
+
+def test_detect_local_without_nvidia_is_unsupported(monkeypatch, r):
+    monkeypatch.setattr(r.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(r.platform, "machine", lambda: "AMD64")
+    monkeypatch.setattr(
+        r,
+        "nvidia_smi_info",
+        lambda: {
+            "present": False,
+            "usable": False,
+            "cuda_version": None,
+            "reason": "nvidia-smi is unavailable",
+        },
+    )
+    monkeypatch.setattr(r, "model_cache_path", lambda model_id: None)
+    info = r.detect_local()
+    assert info["status"] == "unsupported"
 
 
 def test_detect_local_ready(monkeypatch, r, tmp_path):

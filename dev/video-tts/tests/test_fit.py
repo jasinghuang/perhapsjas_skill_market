@@ -58,12 +58,12 @@ def test_split_text_preserves_content(r):
     assert "".join(chunks) == text
 
 
-def test_cache_key_ignores_concurrency(r, tmp_path):
+def test_cache_key_changes_with_voice_parameters(r, tmp_path):
     from helpers import base_task, write_task
 
     task = r.load_task(write_task(tmp_path, base_task(parameters={"instruct": "自然"})))
     identity = {"speaker": "serena"}
     key1 = r.cache_key(task, identity, "测试")
-    task.parameters["online_concurrency"] = 3
+    task.parameters["instruct"] = "平静"
     key2 = r.cache_key(task, identity, "测试")
-    assert key1 == key2
+    assert key1 != key2

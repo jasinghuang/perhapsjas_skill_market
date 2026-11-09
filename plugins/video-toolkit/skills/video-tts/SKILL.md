@@ -9,88 +9,80 @@ description: >
 
 # video-tts
 
-把文稿或 SRT 字幕做成配音：普通旁白按自然朗读时长输出；对齐配音按 SRT 时间窗放置语段、补静音，必要时在 1.20 倍以内加速。支持本地 Qwen3-TTS（Mac MLX / Windows NVIDIA torch）与 ElevenLabs 在线，支持预设音色和参考音频克隆。
+把文稿或 SRT 做成配音：普通旁白按自然时长；对齐配音按 SRT 时间窗放置语段、补静音，必要时（仅段内）在 1.20 倍以内加速。支持本地 Qwen3-TTS（Mac MLX / Windows NVIDIA torch）与 ElevenLabs，预设音色或参考音频克隆。
 
-**始终由当前 Agent 独立完成**：不创建子 Agent、不委派、不设置协作角色、不启用自动升级选项，也不建议用户切换协作模式。所有需要用户回答的事项必须使用 `AskUserQuestion`（其他宿主用等价的结构化输入控件）；普通消息只用于说明、展示试听和报告进度，**不能**用文字列选项、回复编号或自由文本问答代替控件，也不能用猜测、推荐值或等待超时代替答案。已在本任务明确指定的选择视为已决定，不重复询问；未明确的必须问。技术事实优先通过检测、读取文档或验证解决，只有确需用户回答的部分才提问。宿主没有控件时说明能力缺失，等待用户明确调整要求，不擅自替用户选择。
+**阅读范围**：只读前面的操作说明；末尾 runner 是固定代码，用 §5 的命令按标记提取，不需要逐行阅读、复制或重写。
+
+**始终由当前 Agent 独立完成**：不创建子 Agent、不委派、不设置协作角色、不启用自动升级选项，也不建议用户切换协作模式。所有需要用户回答的事项必须使用 `AskUserQuestion`（其他宿主用等价的结构化输入控件）；普通消息只用于说明、试听和进度，不能用文字选项、编号或等待超时代替控件。已在本任务明确的选择不重复问；技术事实先通过检测、读取文档或验证解决。宿主没有控件时说明能力缺失，等待用户明确调整要求。
 
 ## 1. 先检测，再给选项
 
-每次任务先新建独立目录（例如 `video-tts-task-20261109-2130/`），把 `runner.py` 和 `task.json` 放进去。用本文件路径提取 runner（见 §5），然后运行只读检测：
+每次任务新建独立目录，把 `runner.py` 和 `task.json` 放进去。用本文件路径提取 runner（见 §5），运行只读检测：
 
 ```bash
 python "<任务目录>/runner.py" --detect
 ```
 
-`--detect` 输出 JSON，只报告能力，不安装、不下载、不合成。把其中文结论转述给用户，不要贴原始 JSON。状态含义：
-
-- `ready`：依赖、硬件和后端 API 已验证，可执行。
-- `needs_setup`：路线适用，但还需要安装依赖或首次下载模型；用户选定后可以自动准备。
-- `unsupported`：当前硬件/平台不支持，说明原因，不作为可选项推荐。
-- `unknown`：探测失败，说明原因；**不能**当作已验证可用。
-
-平台与固定模型：
+`--detect` 只报告能力，不安装、不下载、不合成。状态：`ready`（已验证可执行）、`needs_setup`（适用但需装依赖/首次下载）、`unsupported`（硬件/平台不支持，不作为选项推荐）、`unknown`（探测失败，不能当作可用）。把结论转述给用户，不贴原始 JSON。
 
 | 平台/路线 | 预设音色 | 参考克隆 | 验证重点 |
 | --- | --- | --- | --- |
-| Apple Silicon macOS | `mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` | `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16` | 原生 arm64 Python、Metal、`mlx_audio` API |
-| Windows x64 + NVIDIA | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | 驱动/CUDA wheel、真实张量运算、`qwen_tts` API |
-| ElevenLabs | 所选声音的 `voice_id` | 所选/新建的 `voice_id` | 鉴权、模型可用性、账户音色、克隆能力 |
+| Apple Silicon macOS | `mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` | `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16` | arm64、Metal、`mlx_audio` API |
+| Windows x64 + NVIDIA | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | CUDA wheel、真实张量运算、`qwen_tts` API |
+| ElevenLabs | 账户可访问的 `voice_id` | 已有/新建的 `voice_id` | 鉴权、模型、音色、克隆能力 |
 
 固定规则：
 
-- 本地 **CustomVoice 只做预设音色，Base 只做参考克隆**，不能互相替代；不自动换 0.6B、量化版本、VoiceDesign 或在线。
-- Mac 主实现使用 `mlx-audio`；不要混用 `odiak/Qwen3-TTS-MLX` 的依赖、模型格式或参数名，也不自动安装该实验分支。
-- Windows 使用官方 `qwen_tts.Qwen3TTSModel`：预设用 `generate_custom_voice`，克隆用 `create_voice_clone_prompt` 一次并复用 `generate_voice_clone`；参数名是 `speaker`/`language`，不是 MLX 的 `voice`/`lang_code`。
-- ElevenLabs 的 `model_id` 与 `voice_id` 是独立字段；已有音色和已创建的克隆都通过可访问的 `voice_id` 合成。克隆不是一个额外的 TTS 模型 ID。
-- 在线模型只列 `eleven_multilingual_v2`（质量优先）与 `eleven_flash_v2_5`（低延迟；可使用 `language_code`）。不把它们称作“最新旗舰”，运行前核对账户是否可用。
-- 密钥只从环境读取：ElevenLabs 用 `ELEVENLABS_API_KEY`。不把密钥写入 `task.json`、脚本、日志、`result.json` 或聊天；不因为检测到密钥就自动选择在线。
-- 只读检测与列音色用标准库 GET（避免为展示选项先安装依赖）；正式的在线合成/克隆统一用 `requests`，不引入 ElevenLabs SDK。
+- 本地 CustomVoice 只做预设，Base 只做克隆，不能互相替代；不自动换 0.6B、量化、VoiceDesign 或在线。
+- Mac 用 `mlx-audio`；不混用 `odiak/Qwen3-TTS-MLX` 的依赖、模型格式或参数名。
+- Windows 用官方 `qwen_tts.Qwen3TTSModel`：预设 `generate_custom_voice`；克隆先 `create_voice_clone_prompt` 一次，再复用 `generate_voice_clone`；参数名是 `speaker`/`language`。
+- ElevenLabs 的 `model_id` 与 `voice_id` 独立；在线模型只用 `eleven_multilingual_v2`（质量）或 `eleven_flash_v2_5`（低延迟；可用 `language_code`）。
+- 密钥只从环境读 `ELEVENLABS_API_KEY`；不写入 task/脚本/日志/result，不打印，不因检测到密钥自动选在线。
+- 只读检测和列音色用标准库 GET；合成/克隆用 `requests`，不引入 ElevenLabs SDK。
 
 ## 2. 需要用户决定的事项
 
-以下内容只要未在本任务明确，就必须用控件收集；互相不依赖的可以放在同一批，后续选项依赖前一项时分批展示：
+未在本任务明确的事项用控件收集；互不依赖的可同批，依赖前一项的分批展示。
 
-1. **mode**：普通旁白（文稿/从 SRT 提取正文，按自然时长）或对齐配音（SRT/视频时间轴）。用户已明确指定时直接采用；含义不清才问。普通旁白即使提供视频，也不自动改成对齐配音。
-2. **provider**：展示 ready 和可安装路线，区分联网、鉴权、本地资源需求；unsupported 不展示为可选。只有一条可用路线时，也用一个二选一控件确认（执行 / 暂不执行）。已安装环境、检测到的 API Key 或历史偏好只能作为推荐值，不能代替本次 provider 选择。
-3. **音色来源**：预设音色或参考克隆；只展示所选后端支持的来源。
+1. **mode**：普通旁白（文稿/从 SRT 提取正文，自然时长）或对齐配音（SRT/视频时间轴）。用户已明确就直接用；含义不清才问。普通旁白即使有视频，也不自动改成对齐配音。
+2. **provider**：展示 ready 和可安装路线，说明联网/鉴权/本地资源；unsupported 不作为可选。只有一条路时也用二选一确认（执行/暂不执行）。已装环境、API Key、历史偏好只作推荐值，不能代替本次选择。
+3. **音色来源**：预设或克隆，只展示所选后端支持的。
 4. **声音设置**：
-   - 本地预设：从 `--list-voices --provider local` 的音色目录选 `speaker`（缓存时读模型配置，未缓存时用模型卡列表；加载模型时 runner 仍会按真实 `supported_speakers` 校验）；语气/风格用 `parameters.instruct`（仅预设）。
-   - 本地克隆：指定参考音频，并提供**与录音对应的准确参考文本**；参考音频必须可解码且有人声。
-   - 在线预设/已有克隆：选择账户可访问的 `voice_id`；可用 `--list-voices --provider elevenlabs` 列出（GET，不合成、不计费）。音色很多时先按名称/类别筛选，再给 2–4 个候选；控件自动提供“其他”输入，不要把十几个音色塞进一次问答。
-   - 在线新建克隆：提供参考录音；`reference_text` 不强制。创建前说明会上传录音并可能产生账户费用。
-   - 在线模型：`eleven_multilingual_v2` 或 `eleven_flash_v2_5`；不可用时用控件改选，不自动换。
-   - 语气/voice settings 按能力展示；不支持的参数不要放进 `task.json`。
-5. **交付格式**（多选）：独立音频、成片、字幕。不能提供当前输入无法生成的成品：没有视频就不提供成片；只提供音频时不要声称会生成视频。成片的音轨默认替换原声；如果用户要保留原视频声音，再用控件确认是否压低混入（说明原有人声也会保留，不是人声分离）。
-6. **在线授权**：选定在线后，说明文本/参考音频会上传到 ElevenLabs、按账户费率计费；同一批已明确授权不重复确认。改变服务、模型或扩大处理范围时重新收集授权。
-7. **是否允许润色**：对齐配音在超长时可能需要精简；默认不允许。允许时最多额外合成两次，且只改溢出的语段。
-8. **覆盖已有文件**：默认同名自动编号，不覆盖素材；用户要求覆盖时用控件确认，同一任务已明确的不重复问。
-9. **失败后的处理**：重试、修复环境、改参数、换音色/模型、停止；按控件选择执行，不自行换 provider。
+   - 本地预设：从 `--list-voices --provider local` 选 `speaker`（缓存时读模型配置，未缓存时用模型卡列表；加载时仍按真实 `supported_speakers` 校验）；语气用 `parameters.instruct`（仅预设）。
+   - 本地克隆：参考音频 + **与录音对应的准确参考文本**；参考音频必须可解码且有人声。
+   - 在线预设/已有克隆：选账户可访问的 `voice_id`；`--list-voices --provider elevenlabs` 可列出（GET，不合成、不计费）。音色多时先筛选，再给 2–4 个候选。
+   - 在线新建克隆：提供参考录音，`reference_text` 不强制；创建前说明会上传录音并可能计费。
+   - 在线模型：`eleven_multilingual_v2` 或 `eleven_flash_v2_5`；不可用用控件改选，不自动换。
+5. **交付格式**（多选）：独立音频、成片、字幕。没有视频不提供成片；只提供音频时不声称会生成视频。成片默认替换原声（本版不做原声压低混入）。
+6. **在线授权**：说明文本/参考音频会上传 ElevenLabs、按账户费率计费；同一批已授权不重复确认，改变服务/模型/范围时重新收集。
+7. **是否允许润色**：对齐超长时默认不允许；允许时最多额外合成两次，只改溢出语段。
+8. **覆盖已有文件**：默认自动编号；要覆盖用控件确认，同一任务不重复问。
+9. **失败后的处理**：重试、修复环境、改参数、换音色/模型或停止；按控件执行，不自行换 provider。
 
-试听：用户要求时，做一个只含一句试听文本的 preview 任务，`output.deliver=["audio"]`，输出到独立目录；试听后用控件选择采用、换音色/语气或重试。preview 任务与正式任务尽量放在**同一任务目录**（不同 `task.json` 文件名），这样 `clone.json` 会自动复用；如果分目录，必须读取 preview 的 `result.json`/`clone.json`，把 `voice_id` 写入正式任务，正式任务用 `voice.source="clone"` + 该 `voice_id`、`reference_audio=null`，**绝不重复创建**。
+试听：用户要求时做只含一句的 preview 任务，`output.deliver=["audio"]`。preview 与正式任务尽量放同一任务目录（不同 `task.json` 文件名），复用 `clone.json`；分目录则把 preview 的 `voice_id` 写入正式任务，正式任务用 `voice.source="clone"` + 该 `voice_id`、`reference_audio=null`，不重复创建。
 
 ## 3. 读取与语义分段
 
 ### 3.1 普通旁白
 
-- 输入可以是文稿，也可以从 SRT 提取正文；先完整读完再分段。
-- 按句意、段落和朗读节奏组织语段；不要求固定条数、固定时长或必须先补齐句末标点。
-- 默认保留原文信息：不遗漏、不重复、不重排。不要借“分段”改写、精简或纠正内容；字幕纠错/翻译先交给 `text-refine`，除非用户明确要求并授权。
-- 段间停顿由 `timing.pause_between_sec` 控制（默认 0.30 秒）；runner 内部只对超长文本做引擎级切块（本地 280 字符、在线 2000 字符），不改文字。
+- 输入可以是文稿或 SRT 正文；先读完再分段。
+- 按句意、段落和朗读节奏组织；不要求固定条数、固定时长或先补句末标点。
+- 保留原文：不遗漏、不重复、不重排；不借分段改写/精简/纠错。字幕纠错/翻译先交给 `text-refine`，除非用户明确授权。
+- 段间停顿由 `timing.pause_between_sec` 控制（默认 0.30s）；runner 只对超长文本做引擎级切块（本地 280 字符、在线 2000 字符），不改文字。
 
 ### 3.2 对齐配音
 
-- 读完整条 SRT，把碎片字幕合并为自然语段；语段可以不同于最终显示字幕的分段。
-- 每条语段保留来源条目：`source_indices` 写原始 SRT 序号（可选但推荐）；`start_sec` 取该组第一条的起点，`end_sec` 取该组最后一条的终点。
-- 覆盖全部条目、顺序递增、恰好一次；不遗漏、不重复、不重排。
-- 合并以完整语义优先；句末标点、组时长、条目数量只作辅助，不设固定门槛。无标点字幕可以工作，不要为了凑格式先补标点。
-- 中文直接拼接；ASCII 单词边界需要空格时补一个空格；不要凭空加原文没有的标点。
-- 组内文本与源字幕不一致（授权润色除外）必须先说明；runner 不会替你检查语义覆盖。
-- 时间轴重叠、零/负窗口、起点不递增：在 `--check` 前修正，或让 runner 在合成前报错。不要靠截断或让语音互相覆盖“解决”。
-- 读取 SRT 时兼容 UTF-8 BOM；遇到其他编码，先识别并转换，或向用户确认，不能静默丢字或换编码。任务里的正文统一写 UTF-8 `task.json`。
+- 读完整条 SRT，把碎片字幕合并为自然语段；语段可以不同于最终字幕的分段。
+- 每段保留来源：`source_indices` 写原始 SRT 序号（可选但推荐）；`start_sec` 取首条起点，`end_sec` 取末条终点。
+- 覆盖全部条目、顺序递增、恰好一次；语义完整优先，句末标点/时长/条数只作辅助；无标点字幕也能工作。
+- 中文直接拼接；ASCII 单词边界需要时补空格；不凭空加标点。
+- 组内文本与源字幕不一致（授权润色除外）必须先说明；runner 不检查语义覆盖。
+- 时间轴重叠、零/负窗口、起点不递增：先修正或让 runner 在合成前报错；不要靠截断或重叠解决。
+- 读取 SRT 兼容 UTF-8 BOM；其他编码先识别转换或询问，不能静默丢字/换编码。task.json 统一 UTF-8。
 
 ## 4. task.json：唯一任务入口
 
-runner 只接受 `task.json` 路径；正文、参数、路径全部通过 JSON 传递，不从命令行读正文，不把正文插入 Python 源码。用宿主语言的 JSON 序列化生成文件：正文里的双引号、换行、反斜杠由序列化器转义，不要手写拼接。文件使用 UTF-8；不允许注释、尾逗号、NaN 或 Infinity。相对路径一律相对 `task.json` 所在目录。
+runner 只接受 `task.json` 路径；正文、参数、路径全部走 JSON，不从命令行读正文，不插入源码。用 JSON 序列化生成，正文中的引号/换行/反斜杠由序列化器转义。文件 UTF-8，不允许注释、尾逗号、NaN/Infinity。相对路径相对 task.json 所在目录。
 
 ### 4.1 完整示例（Mac 本地预设、普通旁白）
 
@@ -120,9 +112,7 @@ runner 只接受 `task.json` 路径；正文、参数、路径全部通过 JSON 
     "deliver": ["audio", "subtitle"],
     "audio_format": "wav",
     "sample_rate": 48000,
-    "overwrite": false,
-    "narration_video_policy": "ask",
-    "mix_original": {"enabled": false, "volume_db": -18}
+    "overwrite": false
   },
   "segments": [
     {"id": 1, "text": "第一段旁白。", "start_sec": null, "end_sec": null},
@@ -131,182 +121,81 @@ runner 只接受 `task.json` 路径；正文、参数、路径全部通过 JSON 
 }
 ```
 
-### 4.2 对齐配音示例
+### 4.2 路线差异
 
-```json
-{
-  "schema_version": 1,
-  "mode": "aligned",
-  "provider": "local",
-  "backend": "mlx_audio",
-  "model_id": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
-  "language": "Chinese",
-  "voice": {
-    "source": "clone",
-    "speaker": null,
-    "voice_id": null,
-    "reference_audio": "reference/voice.wav",
-    "reference_text": "参考录音里实际说出的文字。",
-    "name": null
-  },
-  "parameters": {},
-  "timing": {"max_speed": 1.2, "safety_gap_sec": 0.1, "pause_between_sec": 0.3},
-  "allow_text_edits": false,
-  "polish": {"attempt": 0, "max_attempts": 2},
-  "input": {"srt": "input.srt", "video": "input.mp4"},
-  "output": {
-    "directory": "output",
-    "deliver": ["audio", "video", "subtitle"],
-    "audio_format": "wav",
-    "sample_rate": 48000,
-    "overwrite": false,
-    "narration_video_policy": "ask",
-    "mix_original": {"enabled": false, "volume_db": -18}
-  },
-  "segments": [
-    {"id": 1, "text": "第一组完整语意。", "start_sec": 0.5, "end_sec": 3.2, "source_indices": [1, 2, 3]},
-    {"id": 2, "text": "第二组完整语意。", "start_sec": 3.5, "end_sec": 7.0, "source_indices": [4, 5]}
-  ]
-}
-```
+- **对齐配音**：`mode="aligned"`；`input.srt` 必填，`input.video` 可选；`segments` 的 `start_sec`/`end_sec` 必填，`source_indices` 可选。
+- **本地克隆**：`model_id` 换成 Base；`voice.source="clone"`，填 `reference_audio` + `reference_text`，`speaker`/`voice_id` 为 `null`；`parameters` 置 `{}`。
+- **Windows**：`backend="qwen_tts"`；模型 ID 换 `Qwen/...-CustomVoice` 或 `Qwen/...-Base`；其余相同。
+- **ElevenLabs**：`provider="elevenlabs"`、`backend="elevenlabs_http"`；`voice.voice_id` 必填（新建克隆时为 `null` + `reference_audio`）；`parameters` 可用 `voice_settings`/`output_format`/`remove_background_noise`；`voice_id` 与 `model_id` 分开。
 
-### 4.3 在线示例
+### 4.3 字段规则
 
-```json
-{
-  "schema_version": 1,
-  "mode": "narration",
-  "provider": "elevenlabs",
-  "backend": "elevenlabs_http",
-  "model_id": "eleven_multilingual_v2",
-  "language": "Chinese",
-  "voice": {
-    "source": "preset",
-    "speaker": null,
-    "voice_id": "<账户中可访问的 voice_id>",
-    "reference_audio": null,
-    "reference_text": null,
-    "name": null
-  },
-  "parameters": {
-    "voice_settings": {"stability": 0.5, "similarity_boost": 0.75, "style": 0.0, "use_speaker_boost": true},
-    "output_format": "wav_44100",
-    "online_concurrency": 2
-  },
-  "timing": {"max_speed": 1.2, "safety_gap_sec": 0.1, "pause_between_sec": 0.3},
-  "allow_text_edits": false,
-  "polish": {"attempt": 0, "max_attempts": 2},
-  "input": {"srt": null, "video": null},
-  "output": {
-    "directory": "output",
-    "deliver": ["audio"],
-    "audio_format": "wav",
-    "sample_rate": 48000,
-    "overwrite": false,
-    "narration_video_policy": "ask",
-    "mix_original": {"enabled": false, "volume_db": -18}
-  },
-  "segments": [{"id": 1, "text": "在线旁白测试。", "start_sec": null, "end_sec": null}]
-}
-```
-
-### 4.4 字段规则
-
-- `mode`：`narration` 或 `aligned`。
-- `provider`：`local` 或 `elevenlabs`。`backend`：本地 `mlx_audio` / `qwen_tts`（由平台路由写入）；在线固定 `elevenlabs_http`。
-- `model_id` 必须与后端和音色来源精确匹配的固定 ID（见 §1）；不要写 0.6B、量化、VoiceDesign、百炼模型。
-- `language`：本地用 Qwen3-TTS 语言名（`Chinese`、`English`、`Japanese`、`Korean`、`German`、`French`、`Russian`、`Portuguese`、`Spanish`、`Italian`、`Beijing_dialect`、`Sichuan_dialect` 或 `auto`）；在线写语言名或 `auto`。runner 规范化为小写；不支持的值在合成前报错。
-- `voice.source`：`preset` 或 `clone`。
-  - 本地预设：`speaker` 必填；`voice_id`/`reference_*` 必须为 `null`。
-  - 本地克隆：`reference_audio` + `reference_text` 必填；`speaker`/`voice_id` 必须为 `null`。
-  - 在线预设/已有克隆：`voice_id` 必填；`reference_*` 为 `null`。已有克隆可带 `reference_audio`，runner 会警告并**不上传**。
-  - 在线新建克隆：`voice_id` 为 `null`，`reference_audio` 必填，`reference_text` 可为 `null`；可给 `name`（否则默认按参考音频内容生成稳定名称）。runner 会在任务目录写 `clone.json`，重跑时按参考音频内容哈希 + 名称复用同一 `voice_id`，避免重复创建。
-- `parameters` 只接受所选 adapter 支持的字段，未知字段合成前报错：
-  - 本地 MLX：`instruct`（仅预设）、`temperature`、`top_p`、`top_k`、`repetition_penalty`、`seed`。
-  - 本地 torch：`instruct`（仅预设）、`temperature`、`top_p`、`top_k`、`seed`。
-  - 在线：`voice_settings`（`stability`、`similarity_boost`、`style`、`use_speaker_boost`、`speed`）、`seed`、`output_format`（`wav_16000`…`wav_48000`）、`online_concurrency`（1–3）、`remove_background_noise`、`apply_text_normalization`（`auto`/`on`/`off`）。
-- `timing.max_speed`：首版不超过 `1.20`；`safety_gap_sec` 默认 `0.10`；`pause_between_sec` 仅普通旁白使用，默认 `0.30`。
-- `allow_text_edits`：只有用户明确允许润色时为 `true`。`polish.attempt` 从 0 开始，每次润色重跑 +1，`max_attempts` 最多 `2`。
-- `input.srt`：对齐模式必填；普通旁白可选（用于命名/追溯）。`input.video`：要出成片、或对齐模式要按视频结尾计算最后窗口时必填。
-- `output.deliver`：`audio`/`video`/`subtitle` 多选；`video` 需要 `input.video`。首版 `audio_format` 只能是 `wav`，`sample_rate` 只能是 `48000`。
-- `output.narration_video_policy`：普通旁白音频长于视频时使用；`ask`（默认，先停下让用户选）、`accelerate`（整轨加速到视频长度，超过 `max_speed` 仍停下）、`audio_only`（只交付音频/字幕）。
-- `output.mix_original`：默认关闭；开启时把原视频声音压低后混入，**原有人声也会保留**，不是人声分离。没有视频时不能开启。
-- `segments`：顺序固定，`id` 唯一，`text` 非空。普通旁白的时间字段必须为 `null`；对齐必须 `start_sec`/`end_sec` 有限、非负、`end > start`、起点严格递增。runner 根据下一段起点和媒体末尾计算窗口，不盲信自报时长。`source_indices` 和 `original_text` 可选。
-- 对齐模式窗口：非最后一段到“下一段起点 − `safety_gap_sec`”；有视频时最后一段到视频结尾；只给 SRT 时最后一段到自身 `end_sec`。源 `end` 越过下一段起点会记 warning，但窗口仍按下一段起点；零/负窗口在合成前报错。
+- `mode`：`narration`/`aligned`。`provider`：`local`/`elevenlabs`。`backend`：本地 `mlx_audio`/`qwen_tts`；在线固定 `elevenlabs_http`。
+- `model_id` 必须与后端和音色来源精确匹配（见 §1）；不写 0.6B、量化、VoiceDesign、百炼模型。
+- `language`：本地用 Qwen3-TTS 语言名（`Chinese`…`Italian`、`Beijing_dialect`、`Sichuan_dialect`、`auto`）；在线用语言名或 `auto`。runner 规范化为小写，不支持则在合成前报错。
+- `voice.source`：
+  - 本地预设：`speaker` 必填，`voice_id`/`reference_*` 为 `null`。
+  - 本地克隆：`reference_audio` + `reference_text` 必填，`speaker`/`voice_id` 为 `null`。
+  - 在线预设/已有克隆：`voice_id` 必填，`reference_*` 为 `null`；已有克隆带参考音频会警告且不上传。
+  - 在线新建克隆：`voice_id=null`，`reference_audio` 必填，`reference_text` 可为 `null`，`name` 可选；runner 写 `clone.json`，重跑按参考内容哈希 + 名称复用，避免重复创建。
+- `parameters`：本地只允许 `instruct`（仅预设）；在线只允许 `voice_settings`（`stability`/`similarity_boost`/`style`/`use_speaker_boost`）、`output_format`（默认 `mp3_44100_128`；也可 `mp3_22050_32`…`mp3_44100_192` 或 `wav_16000`…`wav_48000`；44.1kHz WAV/高码率格式可能需要 Pro+，被拒时用控件改选）、`remove_background_noise`。未知字段在合成前报错；采样参数用内部默认值。
+- `timing.max_speed`≤`1.20`（仅对齐段内加速）；`safety_gap_sec` 默认 `0.10`；`pause_between_sec` 仅普通旁白，默认 `0.30`。
+- `allow_text_edits`：只有用户明确允许润色时为 `true`。`polish.attempt` 从 0 开始，每次重跑 +1，`max_attempts`≤2。
+- `input.srt`：对齐必填；普通旁白可选（命名/追溯）。`input.video`：出成片或对齐要按视频结尾算最后窗口时必填。
+- `output.deliver`：`audio`/`video`/`subtitle` 多选；`video` 需要 `input.video`。`audio_format` 只能 `wav`，`sample_rate` 只能 `48000`；`overwrite` 默认 false。
+- `segments`：顺序固定、`id` 唯一、`text` 非空。普通旁白时间字段为 `null`；对齐必须有限、非负、`end>start`、起点严格递增。runner 按下一段起点/媒体末尾算窗口，不盲信自报时长。`source_indices`/`original_text` 可选。
+- 对齐窗口：非最后一段到“下一段起点 − safety_gap”；有视频时最后一段到视频结尾；只给 SRT 时到最后一段 `end_sec`。源 `end` 越过下一段起点记 warning；零/负窗口合成前报错。
 
 ## 5. 提取 runner 并执行
 
-`SKILL.md` 末尾包含完整、自包含的 runner。**不要手抄、不要改写、不要省略**；每次用下面这条标准库命令原样提取到任务目录：
+`SKILL.md` 末尾包含完整 runner。**不要手抄/改写/省略**；用标准库命令原样提取：
 
 ```bash
 python -c "import pathlib,sys; t=pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'); b=t.rsplit('<!-- runner:start -->',1)[1].rsplit('<!-- runner:end -->',1)[0]; lines=b.strip().splitlines(); code='\n'.join(lines[1:-1])+'\n'; f=open(sys.argv[2],'w',encoding='utf-8',newline='\n'); f.write(code); f.close()" "<本 SKILL.md 的实际路径>" "<任务目录>/runner.py"
 ```
 
-- 命令中的 `python` 换成本机可用的 `python3` 或 `py -3`；路径带空格时保留引号。不要把 runner 复制成多个版本。
-- 提取后先跑 `--check --task task.json`，只做结构与输入校验，不加载模型、不联网、不合成。字段错误必须在合成前修正。
-- 再跑 `--task task.json`。runner 按所选路线复用已有环境，或在用户目录（macOS `~/Library/Caches/video-toolkit/envs/`，Windows `%LOCALAPPDATA%\video-toolkit\envs/`）创建专用 venv 安装；**绝不影响系统 Python**。安装只发生在用户已选定 provider 之后。
-- runner 代码较长，是因为它包含跨平台自举、下载/加载阶段、三条 adapter、克隆复用、时间适配、拼轨、混流与成片校验；不要因为长度删减分支或改成省略核心逻辑的“精简版”。
-- 下载/加载/合成阶段会打印 `[setup]`、`[download]`、`[load]`、`[synthesis]`、`[cache]`、`[fit]`、`[track]`、`[mux]`、`[verify]`、`[deliver]`、`[done]`；约每 10 秒一次 `[heartbeat]`。把当前阶段转述给用户，不要把所有阶段笼统说成“处理中”。
-- 首次本地模型下载会显示 HF 真实文件数/字节总量（拿不到时写“体积未知”，不编造百分比或磁盘估算）；缓存齐全时跳过下载，不能仍声称在下载。
-- 退出码：
-  - `0`：完成（含已记录的加速/补静音警告）。
-  - `1`：运行失败；已完成片段保留在任务目录，按错误阶段修复后可重跑。
-  - `2`：task/输入非法；看 stderr 或 `--check` 的错误字段。
-  - `3`：需要用户决策；读 `result.json` 的 `error.details`，用控件选择后改 `task.json` 重跑。
+- 把命令里的 `python` 换成本机可用的 `python3`/`py -3`；路径带空格保留引号。不要复制多份 runner。
+- 先 `--check --task task.json`（只校验结构/输入，不加载模型、不联网、不合成），再 `--task task.json`。
+- runner 只检查 `VIDEO_TTS_PYTHON`、专用 venv、当前解释器和 PATH；不广泛扫描其他环境。可用 `VIDEO_TTS_PYTHON` 指定已验证解释器。缺依赖时在用户目录（macOS `~/Library/Caches/video-toolkit/envs/`，Windows `%LOCALAPPDATA%\video-toolkit\envs/`）建专用 venv，绝不影响系统 Python；安装只发生在选定 provider 后。
+- 阶段日志：`[setup]`、`[download]`、`[load]`、`[synthesis]`、`[cache]`、`[fit]`、`[track]`、`[mux]`、`[verify]`、`[deliver]`、`[done]`；约 10 秒一次 `[heartbeat]`。转述当前阶段，不笼统说“处理中”。
+- 首次本地下载显示 HF 真实文件数/字节总量（拿不到写“体积未知”，不编造）；缓存齐全跳过下载。缓存完整性按权重索引核对全部分片和 tokenizer/speech_tokenizer 必要文件，缺片重新下载。
+- 在线合成串行提交（不启用并发），相同正文/音色/参数命中任务内缓存；不引入线程池或并发参数。
+- 退出码：`0` 完成；`1` 运行失败（已完成片段保留）；`2` task/输入非法；`3` 需要用户决策（读 `result.json` 的 `error.details`，用控件选择后改 task 重跑）。
 
 ## 6. 处理退出码 3
 
-`result.json` 的 `status` 与 `error.details` 是决策依据；不要自行猜测或截断：
-
-- `needs_polish`：只精简 `details.overflow` 列出的语段；保留数字、专名、条件和关键步骤；把原句写入该段 `original_text`，改 `text`，`polish.attempt += 1`，重跑。未变语段会复用缓存。`polish.attempt` 达到 `max_attempts` 后不能再自动润色。
-- `overflow`：不能再自动润色；用控件让用户选：调整合并/时间轴、允许润色、改 `max_speed`（仍 ≤1.20）、换音色/路线或停止。**任何情况下都不截断语音凑时长。**
-- `needs_action`（普通旁白长于视频）：让用户选“加速到视频长度（若所需倍率 ≤ `max_speed`）”或“只交付音频/字幕”。选加速后把 `output.narration_video_policy` 改为 `accelerate` 重跑；选只交付改 `audio_only`（若 `deliver` 只有 `video`，先补 `audio`/`subtitle`）。不默认截断。
-- 在线克隆 `requires_verification=true`：`voice_id` 已写入 `result.json` 和任务目录的 `clone.json`；让用户完成 ElevenLabs 验证，然后正式任务用该 `voice_id`、`reference_audio=null`，不要重复创建。任务目录的 `clone.json` 按参考音频内容哈希 + 名称复用已创建克隆；要新建克隆请改 `voice.name` 或删除该文件，不要盲目重跑。
+- `needs_polish`：只精简 `details.overflow` 列出的语段；保留数字/专名/条件/关键步骤；原句写 `original_text`，改 `text`，`polish.attempt += 1` 重跑；未变语段复用缓存。达到 `max_attempts` 后不再自动润色。
+- `overflow`：不能再自动润色；用控件选调整合并/时间轴、允许润色、改 `max_speed`（≤1.20）、换音色/路线或停止。**不截断语音凑时长。**
+- `needs_action`（普通旁白长于视频）：runner 保留自然音轨，不自动加速/截断；让用户选“只交付音频/字幕（从 deliver 去掉 video）”或“精简/重新分段旁白文本”。不得用截断或重叠掩盖。
+- 在线克隆 `requires_verification=true`：`voice_id` 已写入 `result.json`/`clone.json`；完成 ElevenLabs 验证后用该 `voice_id`、`reference_audio=null`，不重复创建；要新建克隆改 `voice.name` 或删 `clone.json`。
 - 模型/音色不可用：用 `--list-voices` 或 `result.json` 的 `available_models` 让用户改选；不自动改模型或换 provider。
 
 ## 7. 交付与复核
 
-- 只交付用户选中的产物；内部 `work/`、逐段音频、中间轨不作为成品展示。默认同名自动编号 `_2`、`_3`；`overwrite=true` 才覆盖，且永不覆盖输入素材。
-- 独立音频是 48 kHz WAV，经过真实重采样；成片 MP4 默认替换原声。只有显式开启 `mix_original` 才压低混入原声，并提示原人声仍保留。H.264/HEVC 视频流直接复制；其他编码重编码 H.264 时说明原因。成片必须验证视频流、音轨和两条流的时长，失败不标记完成。
-- 字幕按实际合成音频时间输出，粒度是**语段级**，不是句内或字级；不要声称逐字对齐。合并组的时间不等于原字幕每一条的时间。
-- 复核至少覆盖：正文覆盖/顺序、时间边界、实际音频时长、超长加速/改写、视频/音频流是否有效。**听感（发音、断句、跨段音色、音量）必须基于真实音频**；结构检查、时长或电平合格不能替代试听。把成品路径和试听建议交给用户，用户要求调整时用控件确认音色/参数/文本，再重跑。
-- 报告实际产物、模型/后端、音色来源、总时长、加速段、润色前后文本（若有）、克隆 `voice_id`/验证状态和仍存在的警告；不要生成无关的详细报告文件。
+- 只交付所选产物；内部 `work/`/逐段音频/中间轨不展示。默认同名自动编号 `_2`/`_3`；`overwrite=true` 才覆盖，且永不覆盖输入。
+- 独立音频 48kHz WAV（真实重采样）；成片 MP4 替换原声。H.264/HEVC 直接复制，其他编码重编码 H.264 时说明；成片验证视频流、音轨和两条流时长，失败不标记完成。
+- 字幕按实际合成音频时间输出，粒度是**语段级**，不冒充句内/字级；合并组时间不等于原字幕每条时间。
+- 复核正文覆盖/顺序、时间边界、实际音频时长、超长加速/改写、视频/音频流。**听感（发音、断句、跨段音色、音量）必须基于真实音频**；结构/时长/电平合格不能替代试听。把成品路径交给用户，调整用控件确认后重跑。
+- 报告所选产物、模型/后端、音色来源、总时长、加速段、润色前后文本（若有）、克隆 `voice_id`/验证状态和警告；不生成无关报告文件。
 
 ## 8. 常见失败与排障
 
-- **缺依赖/首次安装**：runner 只在用户选定路线后创建专用 venv；失败时保留环境并给出实际命令。不要把包装进系统 Python，不使用 `--break-system-packages`。
-- **模型下载失败**：检查网络；gated 仓库需要 `HF_TOKEN` 或 `huggingface-cli login`；保留已下载缓存，重跑续用。下载、加载、显存、推理错误是不同阶段，分别报告。
-- **CUDA/显存**：`torch.cuda` 不可用或显存不足时，关闭占显存程序后重试；不自动换 0.6B、CPU 或在线。
-- **缺 Python 3.9+**：runner 需要能运行 `venv` 的 Python；缺时先用控件确认，再按平台安装（macOS `brew install python`，Windows `winget install Python.Python.3`），不要用系统旧 Python 硬装，也不要绕过权限。
-- **ffmpeg/ffprobe**：两者都要有；macOS `brew install ffmpeg`，Windows `winget install ffmpeg`。只有 ffmpeg 不够。缺工具时先用控件向用户确认，再按平台安装；不要绕过权限，也不要伪造 ffprobe。
-- **ElevenLabs**：401/403 修 key；402 查额度/账单；422 看请求字段；429/5xx 在有限预算内退避重试；读超时/连接中断按“提交状态未知”处理，不盲目重交（可能重复计费）；克隆创建超时先查音色列表，避免重复创建。
-- **对齐超长**：先加速（≤1.20），再润色（最多 2 次），仍不行由用户选调整分段/时间轴/停止；不默认截断。
-- **普通旁白长于视频**：按 §6 让用户选加速或只交付音频；独立音频默认保持自然时长，只有用户选择加速时才使用加速轨。
-- **输出已存在**：默认自动编号；要覆盖必须经控件确认，且 runner 会拒绝覆盖输入。
+- **缺依赖/首次安装**：只在选定路线后建专用 venv；失败保留环境并给实际命令；不装系统 Python，不用 `--break-system-packages`。
+- **模型下载/缓存**：检查网络；gated 仓库需 `HF_TOKEN`/`huggingface-cli login`；保留缓存续用。下载、加载、显存、推理错误分阶段报告；缓存按索引分片校验，缺片重新下载。
+- **Windows NVIDIA**：有 NVIDIA 但当前是 CPU 版 torch → `needs_setup`，选中本地会准备 CUDA 环境；wheel 只用 `cu126`/`cu128`/`cu130`（torch 2.10.0 无 cu124），驱动低于 12.6 用 cu126 的 minor-version compatibility，失败则更新驱动。显存不足关闭占显存程序；不自动换 0.6B/CPU/在线。
+- **缺 Python 3.9+**：先控件确认再按平台安装（macOS `brew install python`，Windows `winget install Python.Python.3`）；不用旧系统 Python 硬装。
+- **ffmpeg/ffprobe**：两者都要；macOS `brew install ffmpeg`，Windows `winget install ffmpeg`；缺时控件确认后安装，不伪造 ffprobe。
+- **ElevenLabs**：401/403 修 key；402 查额度/账单；422 看字段（也可能是 WAV 格式超出套餐，默认 `mp3_44100_128`）；429/5xx 有限退避重试；读超时/连接中断按提交状态未知处理，不盲目重交；克隆超时先查音色列表。
+- **对齐超长**：先 ≤1.20 加速，再润色（最多 2 次），仍不行由用户选调整分段/时间轴/停止；不默认截断。
+- **普通旁白长于视频**：按 §6 保留自然音轨，让用户选只交付音频或精简/重分段；不自动加速。
+- **输出已存在**：默认自动编号；覆盖需控件确认，runner 拒绝覆盖输入。
 
-## 9. 首版边界
+## 9. 边界与自检
 
-- 不做文字描述设计音色（VoiceDesign）；不接入百炼、Edge TTS 或其他云服务；不因环境里有别的密钥而切换路线。
-- 不做跨任务音频缓存、人声分离、独立 BGM 混入、词级/字级字幕、复杂 Job Manifest 状态机或多级报告。
-- 不创建子 Agent，不设置协作角色，不建议用户切换协作模式。
-- 模型与库版本的 Windows/在线实机验收状态以本次交付说明为准；未实测的组合不得描述为已验证。
-
-## 10. 自检清单
-
-执行前：
-
-- [ ] 已用 `--detect` 检测，未安装未选路线的依赖。
-- [ ] mode、provider、音色来源、具体音色/参考、交付格式、在线授权、是否允许润色、覆盖策略都已明确；未明确的用控件问过。
-- [ ] `task.json` 是 UTF-8、无注释/尾逗号/NaN；模型 ID 与后端/来源匹配；相对路径相对任务目录。
-- [ ] 对齐段落覆盖全部 SRT 条目、顺序正确、窗口为正；普通旁白时间字段为 null。
-- [ ] `--check` 通过。
-
-执行后：
-
-- [ ] 只展示所选产物；音频 48 kHz、视频音轨有效；字幕是段级。
-- [ ] 退出码 0 才说完成；退出码 3 的 details 已用控件处理，未截断内容。
-- [ ] 克隆只创建一次；已有 `voice_id` 不重复上传；密钥未出现在任何文件/日志。
-- [ ] 听感结论有真实音频依据；结构/时长检查没有被说成听审。
+- 不做 VoiceDesign、百炼、Edge TTS、跨任务缓存、人声分离、BGM 混入、词级字幕、复杂 Job Manifest；不创建子 Agent/协作模式。
+- Windows/在线实机验收状态以本次交付说明为准；未实测组合不描述为已验证。
+- 执行前：已 `--detect`；mode/provider/音色/交付/在线授权/润色/覆盖已明确；task.json UTF-8 且模型 ID/路径有效；对齐覆盖全 SRT、窗口为正；`--check` 通过。
+- 执行后：只展示所选产物；音频 48kHz、视频音轨有效、字幕段级；退出码 0 才说完成；退出码 3 的 details 已用控件处理且未截断；克隆只建一次、key 未泄露；听感结论有真实音频依据。
 
 <!-- runner:start -->
 ```python
@@ -342,7 +231,6 @@ than compressed into a one-file trick.
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import dataclasses
 import datetime as _dt
 import hashlib
@@ -459,6 +347,13 @@ LOCAL_VOICES = [
 ]
 
 ONLINE_OUTPUT_FORMATS = (
+    "mp3_22050_32",
+    "mp3_24000_48",
+    "mp3_44100_32",
+    "mp3_44100_64",
+    "mp3_44100_96",
+    "mp3_44100_128",
+    "mp3_44100_192",
     "wav_16000",
     "wav_22050",
     "wav_24000",
@@ -467,15 +362,12 @@ ONLINE_OUTPUT_FORMATS = (
     "wav_48000",
 )
 
-LOCAL_PARAMS = {"instruct", "temperature", "top_p", "top_k", "repetition_penalty", "seed"}
-TORCH_PARAMS = {"instruct", "temperature", "top_p", "top_k", "seed"}
+LOCAL_PARAMS = {"instruct"}
+TORCH_PARAMS = {"instruct"}
 ONLINE_PARAMS = {
     "voice_settings",
-    "seed",
     "output_format",
-    "online_concurrency",
     "remove_background_noise",
-    "apply_text_normalization",
 }
 
 TIMING_KEYS = {"max_speed", "safety_gap_sec", "pause_between_sec"}
@@ -488,10 +380,7 @@ OUTPUT_KEYS = {
     "audio_format",
     "sample_rate",
     "overwrite",
-    "narration_video_policy",
-    "mix_original",
 }
-MIX_KEYS = {"enabled", "volume_db"}
 SEGMENT_KEYS = {"id", "text", "start_sec", "end_sec", "source_indices", "original_text"}
 TASK_KEYS = {
     "schema_version",
@@ -764,11 +653,6 @@ def _same_executable(left: str, right: str) -> bool:
     )
 
 
-def _version_key(path: Path) -> Tuple[int, ...]:
-    parts = re.findall(r"\d+", path.name)
-    return tuple(int(part) for part in parts) or (0,)
-
-
 def candidate_interpreters(route: str) -> List[str]:
     found: List[str] = []
     seen: set = set()
@@ -787,37 +671,15 @@ def candidate_interpreters(route: str) -> List[str]:
         seen.add(path)
         found.append(path)
 
+    # Deliberately small: explicit override, dedicated venv, current
+    # interpreter, then PATH.  Broadly scanning Homebrew/pyenv/Program Files
+    # made behavior unpredictable and could silently pick an unrelated env.
     add(os.environ.get("VIDEO_TTS_PYTHON"))
     add(str(venv_python(route)))
     add(sys.executable)
-
-    for name in ("python3", "python"):
-        add(shutil.which(name))
-
-    system = platform.system()
-    if system == "Windows":
-        local = os.environ.get("LOCALAPPDATA")
-        if local:
-            base = Path(local) / "Programs" / "Python"
-            if base.is_dir():
-                for item in sorted(base.glob("Python3*/python.exe"), key=_version_key, reverse=True):
-                    add(str(item))
-        add(shutil.which("py"))
-    else:
-        for base in ("/opt/homebrew/bin", "/usr/local/bin"):
-            directory = Path(base)
-            if directory.is_dir():
-                for item in sorted(directory.glob("python3.*"), key=_version_key, reverse=True):
-                    if re.fullmatch(r"python3\.\d+", item.name):
-                        add(str(item))
-        pyenv = Path.home() / ".pyenv" / "versions"
-        if pyenv.is_dir():
-            for version_dir in sorted(pyenv.iterdir(), key=_version_key, reverse=True):
-                add(str(version_dir / "bin" / "python3"))
-                add(str(version_dir / "bin" / "python"))
-        add("/usr/bin/python3")
-
-    return found[:10]
+    add(shutil.which("python3"))
+    add(shutil.which("python"))
+    return found
 
 
 def run_probe(python: str, code: str, timeout: float = 60.0) -> Optional[subprocess.CompletedProcess]:
@@ -953,24 +815,60 @@ def _installer_prefix(python: str) -> List[str]:
     return [python, "-m", "pip", "install", "--disable-pip-version-check", "--no-input"]
 
 
-def driver_cuda_index() -> Optional[str]:
+def nvidia_smi_info() -> Dict[str, Any]:
+    """Return whether nvidia-smi exists, is usable, and its CUDA version."""
     try:
         result = subprocess.run(["nvidia-smi"], capture_output=True, timeout=15)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    output = _decode_bytes(result.stdout)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {
+            "present": False,
+            "usable": False,
+            "cuda_version": None,
+            "reason": f"nvidia-smi is unavailable: {exc}",
+        }
+    output = _decode_bytes(result.stdout) + "\n" + _decode_bytes(result.stderr)
+    if result.returncode != 0:
+        return {
+            "present": True,
+            "usable": False,
+            "cuda_version": None,
+            "reason": f"nvidia-smi failed (exit {result.returncode}): {output.strip()[:300]}",
+        }
+    if re.search(r"No devices were found|no NVIDIA GPU|not found", output, re.IGNORECASE):
+        return {
+            "present": True,
+            "usable": False,
+            "cuda_version": None,
+            "reason": "nvidia-smi reported no usable NVIDIA GPU.",
+        }
     match = re.search(r"CUDA(?:\s+UMD)?\s+Version:\s*(\d+)\.(\d+)", output)
-    if not match:
+    version = (int(match.group(1)), int(match.group(2))) if match else None
+    return {
+        "present": True,
+        "usable": True,
+        "cuda_version": version,
+        "reason": "",
+    }
+
+
+def driver_cuda_version() -> Optional[Tuple[int, int]]:
+    info = nvidia_smi_info()
+    return info.get("cuda_version") if info.get("usable") else None
+
+
+def driver_cuda_index() -> Optional[str]:
+    version = driver_cuda_version()
+    if version is None:
         return None
-    major, minor = int(match.group(1)), int(match.group(2))
+    major, minor = version
     if major >= 13:
         return "cu130"
     if major == 12 and minor >= 8:
         return "cu128"
-    if major == 12 and minor >= 6:
+    if major == 12:
+        # torch 2.10.0 ships cu126/cu128/cu130 (no cu124).  CUDA minor-version
+        # compatibility lets a cu126 wheel run on a 12.0-12.7 driver.
         return "cu126"
-    if major == 12 and minor >= 4:
-        return "cu124"
     return None
 
 
@@ -993,12 +891,22 @@ def install_route(route: str, python: str) -> None:
         "soundfile>=0.12,<1",
     ]
     if route == "torch":
+        info = nvidia_smi_info()
         index = driver_cuda_index()
         if index is None:
+            detail = info.get("reason") or "unknown driver CUDA version"
             raise SetupError(
-                "Could not determine the CUDA version from nvidia-smi. "
-                "Update the NVIDIA driver and retry, or use the ElevenLabs route. "
-                "This runner does not install an unavailable CUDA build."
+                f"Could not choose a supported CUDA torch build: {detail}. "
+                "torch 2.10.0 provides cu126/cu128/cu130; update the NVIDIA "
+                "driver to CUDA 12.6+ (or use the ElevenLabs route)."
+            )
+        version = info.get("cuda_version")
+        if version is not None and version < (12, 6):
+            log(
+                "setup",
+                f"Driver reports CUDA {version[0]}.{version[1]}; using cu126 via "
+                "CUDA minor-version compatibility. If installation or CUDA "
+                "verification fails, update the NVIDIA driver.",
             )
         _run_install(
             _installer_prefix(python)
@@ -1100,6 +1008,84 @@ def hf_hub_cache() -> Path:
     return Path.home() / ".cache" / "huggingface" / "hub"
 
 
+def _file_ok(path: Path) -> bool:
+    return path.is_file() and path.stat().st_size > 0
+
+
+def _weight_files_missing(directory: Path, prefix: str = "") -> List[str]:
+    """Return missing/empty weight shards for one model directory.
+
+    A `.index.json` is authoritative: every shard named by its `weight_map`
+    must exist with non-zero size.  Without an index, at least one weight file
+    must exist and every present weight file must be non-empty.
+    """
+    missing: List[str] = []
+    indexes = sorted(
+        list(directory.glob("*.safetensors.index.json"))
+        + list(directory.glob("*.bin.index.json"))
+    )
+    if indexes:
+        for index in indexes:
+            label = f"{prefix}{index.name}"
+            if not _file_ok(index):
+                missing.append(label)
+                continue
+            try:
+                data = _read_json(index)
+            except Exception:
+                missing.append(f"{label} (unreadable)")
+                continue
+            weight_map = data.get("weight_map") if isinstance(data, dict) else None
+            if not isinstance(weight_map, dict) or not weight_map:
+                missing.append(f"{label} (no weight_map)")
+                continue
+            for shard in sorted({str(value) for value in weight_map.values()}):
+                if not _file_ok(directory / shard):
+                    missing.append(f"{prefix}{shard}")
+    else:
+        weights = sorted(
+            list(directory.glob("*.safetensors")) + list(directory.glob("*.bin"))
+        )
+        if not weights:
+            missing.append(f"{prefix}weights/*.safetensors")
+        else:
+            for weight in weights:
+                if not _file_ok(weight):
+                    missing.append(f"{prefix}{weight.name}")
+    return missing
+
+
+def snapshot_complete(path: Path) -> Tuple[bool, List[str]]:
+    """Check a Hugging Face snapshot, including index-referenced shards."""
+    missing: List[str] = []
+    if not path.is_dir():
+        return False, [f"snapshot directory missing: {path}"]
+    for name in (
+        "config.json",
+        "tokenizer_config.json",
+        "preprocessor_config.json",
+        "generation_config.json",
+    ):
+        if not _file_ok(path / name):
+            missing.append(name)
+    tokenizer_json = path / "tokenizer.json"
+    if not _file_ok(tokenizer_json):
+        for name in ("vocab.json", "merges.txt"):
+            if not _file_ok(path / name):
+                missing.append(name)
+    missing.extend(_weight_files_missing(path))
+
+    speech = path / "speech_tokenizer"
+    if not speech.is_dir():
+        missing.append("speech_tokenizer/")
+    else:
+        for name in ("config.json", "preprocessor_config.json"):
+            if not _file_ok(speech / name):
+                missing.append(f"speech_tokenizer/{name}")
+        missing.extend(_weight_files_missing(speech, "speech_tokenizer/"))
+    return len(missing) == 0, missing
+
+
 def model_cache_path(model_id: str) -> Optional[Path]:
     folder = "models--" + model_id.replace("/", "--")
     root = hf_hub_cache() / folder
@@ -1107,10 +1093,8 @@ def model_cache_path(model_id: str) -> Optional[Path]:
     if not snapshots.is_dir():
         return None
     for snapshot in sorted(snapshots.iterdir(), key=lambda item: item.name):
-        if not (snapshot / "config.json").is_file():
-            continue
-        weights = list(snapshot.glob("*.safetensors")) + list(snapshot.glob("*.bin"))
-        if weights:
+        complete, _missing = snapshot_complete(snapshot)
+        if complete:
             return snapshot
     return None
 
@@ -1160,17 +1144,15 @@ def detect_local() -> Dict[str, Any]:
         "clone": {"model_id": clone_model, "cached": model_cache_path(clone_model) is not None},
     }
 
+    nvidia_usable = False
     if route == "torch":
-        try:
-            nvidia = subprocess.run(["nvidia-smi"], capture_output=True, timeout=10)
-            nvidia_present = nvidia.returncode == 0
-        except (OSError, subprocess.TimeoutExpired):
-            nvidia_present = False
-        if not nvidia_present:
+        info = nvidia_smi_info()
+        nvidia_usable = bool(info.get("usable"))
+        if not nvidia_usable:
             return {
                 "backend": "qwen_tts",
                 "status": "unsupported",
-                "reason": ["No usable NVIDIA GPU/driver detected (nvidia-smi failed)."],
+                "reason": [info.get("reason") or "No usable NVIDIA GPU/driver detected."],
                 "models": models,
                 "python": None,
             }
@@ -1194,12 +1176,30 @@ def detect_local() -> Dict[str, Any]:
             "python": python,
         }
 
-    unsupported = [item for item in problems if "Metal is unavailable" in item or "torch.cuda is unavailable" in item]
+    unsupported = [item for item in problems if "Metal is unavailable" in item]
     if unsupported:
         return {
             "backend": backend,
             "status": "unsupported",
             "reason": unsupported,
+            "models": models,
+            "python": None,
+        }
+    cuda_problems = [
+        item
+        for item in problems
+        if "torch.cuda is unavailable" in item or "CUDA tensor operation failed" in item
+    ]
+    if route == "torch" and nvidia_usable and cuda_problems:
+        return {
+            "backend": "qwen_tts",
+            "status": "needs_setup",
+            "reason": [
+                "NVIDIA GPU detected, but the current torch environment cannot "
+                "use CUDA (CPU build, wrong wheel, or driver mismatch). Selecting "
+                "the local route will create/repair a dedicated CUDA environment."
+            ]
+            + cuda_problems[:3],
             "models": models,
             "python": None,
         }
@@ -1394,8 +1394,6 @@ class OutputSpec:
     audio_format: str
     sample_rate: int
     overwrite: bool
-    narration_video_policy: str
-    mix_original: Dict[str, Any]
 
 
 @dataclasses.dataclass
@@ -1413,7 +1411,6 @@ class Segment:
 class Task:
     path: Path
     base: Path
-    raw: Dict[str, Any]
     mode: str
     provider: str
     backend: str
@@ -1535,25 +1532,6 @@ def _canonical_language(value: Any) -> str:
     return canonical
 
 
-def _probe_video_info(path: Path) -> Dict[str, Any]:
-    probe = ffprobe_json(path)
-    streams = probe.get("streams") or []
-    video = next((item for item in streams if item.get("codec_type") == "video"), None)
-    if video is None:
-        raise TaskError(f"No video stream found in {path}.")
-    duration = _stream_duration(video, probe)
-    if duration is None:
-        raise TaskError(f"Could not determine video duration for {path}.")
-    return {
-        "duration": duration,
-        "codec_name": str(video.get("codec_name") or ""),
-        "width": int(video.get("width") or 0),
-        "height": int(video.get("height") or 0),
-        "fps": str(video.get("r_frame_rate") or ""),
-        "has_audio": any(item.get("codec_type") == "audio" for item in streams),
-    }
-
-
 def _stream_duration(stream: Dict[str, Any], probe: Dict[str, Any]) -> Optional[float]:
     for raw in (stream.get("duration"), (probe.get("format") or {}).get("duration")):
         if raw is None:
@@ -1658,32 +1636,18 @@ def _validate_parameters(provider: str, backend: str, params: Any, source: str) 
             instruct = _string(instruct, "parameters.instruct", required=False, allow_empty=True)
             if source == "clone" and instruct and instruct.strip():
                 raise TaskError("parameters.instruct is only supported for preset voices.")
-        cleaned: Dict[str, Any] = {}
-        if instruct is not None:
-            cleaned["instruct"] = instruct
-        if params.get("temperature") is not None:
-            cleaned["temperature"] = _number(params["temperature"], "parameters.temperature", minimum=0.0, maximum=2.0)
-        if params.get("top_p") is not None:
-            cleaned["top_p"] = _number(params["top_p"], "parameters.top_p", minimum=0.0, maximum=1.0)
-        if params.get("top_k") is not None:
-            cleaned["top_k"] = _number(params["top_k"], "parameters.top_k", integer=True, minimum=0, maximum=1000)
-        if params.get("repetition_penalty") is not None:
-            if backend != "mlx_audio":
-                raise TaskError("parameters.repetition_penalty is not supported by the Windows torch adapter.")
-            cleaned["repetition_penalty"] = _number(
-                params["repetition_penalty"], "parameters.repetition_penalty", minimum=0.5, maximum=2.0
-            )
-        if params.get("seed") is not None:
-            cleaned["seed"] = _number(params["seed"], "parameters.seed", integer=True, minimum=0)
-        return cleaned
+        return {"instruct": instruct} if instruct is not None else {}
 
-    cleaned = {}
+    cleaned: Dict[str, Any] = {}
     settings = params.get("voice_settings")
     if settings is not None:
         if not isinstance(settings, dict):
             raise TaskError("parameters.voice_settings must be a JSON object.")
-        allowed_settings = {"stability", "similarity_boost", "style", "use_speaker_boost", "speed"}
-        _check_keys(settings, allowed_settings, "parameters.voice_settings")
+        _check_keys(
+            settings,
+            {"stability", "similarity_boost", "style", "use_speaker_boost"},
+            "parameters.voice_settings",
+        )
         cleaned_settings: Dict[str, Any] = {}
         for key in ("stability", "similarity_boost", "style"):
             if settings.get(key) is not None:
@@ -1694,15 +1658,7 @@ def _validate_parameters(provider: str, backend: str, params: Any, source: str) 
             cleaned_settings["use_speaker_boost"] = _bool(
                 settings["use_speaker_boost"], "parameters.voice_settings.use_speaker_boost"
             )
-        if settings.get("speed") is not None:
-            cleaned_settings["speed"] = _number(
-                settings["speed"], "parameters.voice_settings.speed", minimum=0.5, maximum=2.0
-            )
         cleaned["voice_settings"] = cleaned_settings
-    if params.get("seed") is not None:
-        cleaned["seed"] = _number(
-            params["seed"], "parameters.seed", integer=True, minimum=0, maximum=4294967295
-        )
     if params.get("output_format") is not None:
         value = _string(params["output_format"], "parameters.output_format")
         if value not in ONLINE_OUTPUT_FORMATS:
@@ -1710,19 +1666,10 @@ def _validate_parameters(provider: str, backend: str, params: Any, source: str) 
                 f"parameters.output_format must be one of {', '.join(ONLINE_OUTPUT_FORMATS)}."
             )
         cleaned["output_format"] = value
-    if params.get("online_concurrency") is not None:
-        cleaned["online_concurrency"] = _number(
-            params["online_concurrency"], "parameters.online_concurrency", integer=True, minimum=1, maximum=3
-        )
     if params.get("remove_background_noise") is not None:
         cleaned["remove_background_noise"] = _bool(
             params["remove_background_noise"], "parameters.remove_background_noise"
         )
-    if params.get("apply_text_normalization") is not None:
-        value = _string(params["apply_text_normalization"], "parameters.apply_text_normalization")
-        if value not in ("auto", "on", "off"):
-            raise TaskError("parameters.apply_text_normalization must be auto, on, or off.")
-        cleaned["apply_text_normalization"] = value
     return cleaned
 
 
@@ -1841,7 +1788,10 @@ def load_task(path: Any, *, require_media_tools: bool = False) -> Task:
         if ffprobe_path:
             global FFPROBE
             FFPROBE = ffprobe_path
-            video_info = _probe_video_info(video_path)
+            try:
+                video_info = probe_video(video_path)
+            except RunnerError as exc:
+                raise TaskError(f"input.video is not usable: {exc.message}") from exc
             video_duration = float(video_info["duration"])
         elif require_media_tools:
             raise TaskError("ffprobe is required to inspect input.video.")
@@ -1879,23 +1829,6 @@ def load_task(path: Any, *, require_media_tools: bool = False) -> Task:
     if sample_rate != SAMPLE_RATE:
         raise TaskError("First version exports 48 kHz audio only; output.sample_rate must be 48000.")
     overwrite = _bool(output_raw.get("overwrite"), "output.overwrite", default=False)
-    narration_policy = _string(
-        output_raw.get("narration_video_policy"),
-        "output.narration_video_policy",
-        required=False,
-        default="ask",
-    )
-    if narration_policy not in ("ask", "accelerate", "audio_only"):
-        raise TaskError("output.narration_video_policy must be ask, accelerate, or audio_only.")
-
-    mix_raw = _check_keys(_as_object(output_raw.get("mix_original"), "output.mix_original"), MIX_KEYS, "output.mix_original")
-    mix_enabled = _bool(mix_raw.get("enabled"), "output.mix_original.enabled", default=False)
-    mix_volume = _number(
-        mix_raw.get("volume_db"), "output.mix_original.volume_db", default=-18.0, minimum=-60.0, maximum=0.0
-    )
-    if mix_enabled and video_path is None:
-        raise TaskError("output.mix_original.enabled requires input.video.")
-    mix_original = {"enabled": mix_enabled, "volume_db": mix_volume}
 
     segments_raw = raw.get("segments")
     if not isinstance(segments_raw, list) or not segments_raw:
@@ -1996,7 +1929,6 @@ def load_task(path: Any, *, require_media_tools: bool = False) -> Task:
     return Task(
         path=task_path,
         base=base,
-        raw=raw,
         mode=mode,
         provider=provider,
         backend=backend,
@@ -2014,8 +1946,6 @@ def load_task(path: Any, *, require_media_tools: bool = False) -> Task:
             audio_format=audio_format,
             sample_rate=int(sample_rate),
             overwrite=overwrite,
-            narration_video_policy=narration_policy,
-            mix_original=mix_original,
         ),
         segments=segments,
         video_info=video_info,
@@ -2057,8 +1987,6 @@ def task_summary(task: Task) -> Dict[str, Any]:
             "audio_format": task.output.audio_format,
             "sample_rate": task.output.sample_rate,
             "overwrite": task.output.overwrite,
-            "narration_video_policy": task.output.narration_video_policy,
-            "mix_original": task.output.mix_original,
         },
         "allow_text_edits": task.allow_text_edits,
         "polish": {"attempt": task.polish.attempt, "max_attempts": task.polish.max_attempts},
@@ -2523,7 +2451,6 @@ def probe_video(path: Path) -> Dict[str, Any]:
     return {
         "duration": duration,
         "codec_name": str(video.get("codec_name") or ""),
-        "has_audio": any(item.get("codec_type") == "audio" for item in streams),
     }
 
 
@@ -2534,7 +2461,6 @@ def mux_video(
     video_info: Dict[str, Any],
     *,
     sample_rate: int = SAMPLE_RATE,
-    mix_original: Optional[Dict[str, Any]] = None,
 ) -> List[str]:
     warnings: List[str] = []
     target = Path(target)
@@ -2558,23 +2484,9 @@ def mux_video(
         "0:v:0",
         "-map_metadata",
         "0",
+        "-map",
+        "1:a:0",
     ]
-    mix = bool(mix_original and mix_original.get("enabled"))
-    if mix:
-        if not video_info.get("has_audio"):
-            warnings.append("mix_original was requested but the video has no original audio; replacing it instead.")
-            mix = False
-        else:
-            volume = float(mix_original.get("volume_db", -18.0))
-            command += [
-                "-filter_complex",
-                f"[0:a:0]volume={volume}dB[orig];[1:a:0][orig]"
-                "amix=inputs=2:duration=first:normalize=0[aout]",
-                "-map",
-                "[aout]",
-            ]
-    if not mix:
-        command += ["-map", "1:a:0"]
 
     codec = str(video_info.get("codec_name") or "")
     if codec in ("h264", "hevc"):
@@ -2675,12 +2587,25 @@ def ensure_model_cached(model_id: str) -> Path:
     try:
         cached = snapshot_download(model_id, local_files_only=True)
         path = Path(cached)
-        has_weights = any(path.glob("*.safetensors")) or any(path.glob("*.bin"))
-        if (path / "config.json").is_file() and has_weights:
+        complete, missing = snapshot_complete(path)
+        if complete:
             log("setup", f"Model cache found: {path}")
             return path
+        log(
+            "setup",
+            f"Model cache is incomplete ({len(missing)} missing/empty file(s)): "
+            + ", ".join(missing[:5])
+            + (" …" if len(missing) > 5 else ""),
+        )
+        fallback = model_cache_path(model_id)
+        if fallback is not None:
+            log("setup", f"Model cache found: {fallback}")
+            return fallback
     except Exception:
-        pass
+        fallback = model_cache_path(model_id)
+        if fallback is not None:
+            log("setup", f"Model cache found: {fallback}")
+            return fallback
 
     log("download", f"Downloading model weights... {model_id}")
     with Heartbeat("download", model_id):
@@ -2723,14 +2648,11 @@ def ensure_model_cached(model_id: str) -> Path:
             f"model files are still incomplete after download: {model_id}",
             stage="download",
         ) from exc
-    if not (path / "config.json").is_file():
+    complete, missing = snapshot_complete(path)
+    if not complete:
         raise RunnerError(
-            f"model snapshot is missing config.json: {path}",
-            stage="download",
-        )
-    if not (any(path.glob("*.safetensors")) or any(path.glob("*.bin"))):
-        raise RunnerError(
-            f"model snapshot has no weight files: {path}",
+            f"model snapshot is still incomplete after download: {path}; "
+            f"missing/empty: {', '.join(missing[:10])}",
             stage="download",
         )
     log("download", f"Download complete: {path}")
@@ -2744,9 +2666,7 @@ def ensure_model_cached(model_id: str) -> Path:
 
 class Result:
     def __init__(self, task: Task) -> None:
-        self.task = task
         self.path = task.base / "result.json"
-        self.lock = threading.Lock()
         self.started = time.monotonic()
         self.data: Dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
@@ -2791,71 +2711,60 @@ class Result:
         }
         self.save()
 
-    def _save_locked(self) -> None:
+    def save(self) -> None:
         self.data["elapsed_sec"] = round(time.monotonic() - self.started, 3)
         atomic_write_json(self.path, self.data)
 
-    def save(self) -> None:
-        with self.lock:
-            self._save_locked()
-
     def set(self, key: str, value: Any) -> None:
-        with self.lock:
-            self.data[key] = value
-            self._save_locked()
+        self.data[key] = value
+        self.save()
 
     def update_environment(self, values: Dict[str, Any]) -> None:
-        with self.lock:
-            self.data["environment"].update(values)
-            self._save_locked()
+        self.data["environment"].update(values)
+        self.save()
 
     def add_warning(self, message: str) -> None:
-        with self.lock:
-            if message not in self.data["warnings"]:
-                self.data["warnings"].append(message)
-                self._save_locked()
+        if message not in self.data["warnings"]:
+            self.data["warnings"].append(message)
+            self.save()
 
     def set_voice(self, **values: Any) -> None:
-        with self.lock:
-            self.data["voice"].update(values)
-            if any(
-                self.data["voice"].get(key) is not None
-                for key in ("voice_id", "requires_verification", "name")
-            ):
-                self.data["clone"] = {
-                    "voice_id": self.data["voice"].get("voice_id"),
-                    "requires_verification": self.data["voice"].get("requires_verification"),
-                    "name": self.data["voice"].get("name"),
-                }
-            self._save_locked()
+        self.data["voice"].update(values)
+        if any(
+            self.data["voice"].get(key) is not None
+            for key in ("voice_id", "requires_verification", "name")
+        ):
+            self.data["clone"] = {
+                "voice_id": self.data["voice"].get("voice_id"),
+                "requires_verification": self.data["voice"].get("requires_verification"),
+                "name": self.data["voice"].get("name"),
+            }
+        self.save()
 
     def set_segment(self, index: int, **values: Any) -> None:
-        with self.lock:
-            if 0 <= index < len(self.data["segments"]):
-                self.data["segments"][index].update(values)
-                self._save_locked()
+        if 0 <= index < len(self.data["segments"]):
+            self.data["segments"][index].update(values)
+            self.save()
 
     def add_output(self, kind: str, path: Path, duration: float, *, sample_rate: Optional[int] = None, note: Optional[str] = None) -> None:
-        with self.lock:
-            item = {
-                "kind": kind,
-                "path": str(Path(path).resolve()),
-                "duration_sec": round(float(duration), 3),
-            }
-            if sample_rate is not None:
-                item["sample_rate"] = int(sample_rate)
-            if note:
-                item["note"] = note
-            self.data["outputs"].append(item)
-            self._save_locked()
+        item = {
+            "kind": kind,
+            "path": str(Path(path).resolve()),
+            "duration_sec": round(float(duration), 3),
+        }
+        if sample_rate is not None:
+            item["sample_rate"] = int(sample_rate)
+        if note:
+            item["note"] = note
+        self.data["outputs"].append(item)
+        self.save()
 
     def set_status(self, status: str, exit_code: int, error: Optional[Dict[str, Any]] = None) -> None:
-        with self.lock:
-            self.data["status"] = status
-            self.data["exit_code"] = exit_code
-            self.data["error"] = error
-            self.data["finished_at"] = now_iso()
-            self._save_locked()
+        self.data["status"] = status
+        self.data["exit_code"] = exit_code
+        self.data["error"] = error
+        self.data["finished_at"] = now_iso()
+        self.save()
 
 
 # ---------------------------------------------------------------------------
@@ -2864,8 +2773,6 @@ class Result:
 
 
 class Adapter:
-    name = "base"
-
     def prepare(self, task: Optional[Task] = None, progress: Optional[Any] = None) -> None:
         raise NotImplementedError
 
@@ -2883,8 +2790,6 @@ class Adapter:
 
 
 class MLXAdapter(Adapter):
-    name = "mlx_audio"
-
     def __init__(self, task: Task, result: Result, model_loader: Optional[Any] = None) -> None:
         self.task = task
         self.result = result
@@ -2975,22 +2880,11 @@ class MLXAdapter(Adapter):
             "lang_code": self.task.language,
             "split_pattern": None,
         }
-        for key in ("temperature", "top_p", "top_k", "repetition_penalty"):
-            if self.task.parameters.get(key) is not None:
-                kwargs[key] = self.task.parameters[key]
         if self.task.voice.source == "clone":
             kwargs["voice"] = None
             kwargs["instruct"] = None
             kwargs["ref_audio"] = str(self.reference_audio)
             kwargs["ref_text"] = self.reference_text
-        seed = self.task.parameters.get("seed")
-        if seed is not None:
-            try:
-                import mlx.core as mx
-
-                mx.random.seed(int(seed))
-            except Exception as exc:
-                warn(f"could not set MLX random seed: {exc}")
 
         try:
             results = self.model.generate(**kwargs)
@@ -3076,8 +2970,6 @@ class MLXAdapter(Adapter):
 
 
 class QwenTorchAdapter(Adapter):
-    name = "qwen_tts"
-
     def __init__(
         self,
         task: Task,
@@ -3216,13 +3108,6 @@ class QwenTorchAdapter(Adapter):
         np = _np()
         if self.model is None:
             raise RunnerError("qwen-tts model is not loaded", stage="synthesis")
-        seed = self.task.parameters.get("seed")
-        if seed is not None:
-            self.torch_module.manual_seed(int(seed))
-        sampling: Dict[str, Any] = {}
-        for key in ("temperature", "top_p", "top_k"):
-            if self.task.parameters.get(key) is not None:
-                sampling[key] = self.task.parameters[key]
         try:
             if self.task.voice.source == "preset":
                 audios, rate = self.model.generate_custom_voice(
@@ -3230,14 +3115,12 @@ class QwenTorchAdapter(Adapter):
                     speaker=self.speaker,
                     language=self.task.language,
                     instruct=self.task.parameters.get("instruct") or None,
-                    **sampling,
                 )
             else:
                 audios, rate = self.model.generate_voice_clone(
                     text,
                     language=self.task.language,
                     voice_clone_prompt=self.clone_prompt,
-                    **sampling,
                 )
         except Exception as exc:
             message = str(exc)
@@ -3298,8 +3181,6 @@ class QwenTorchAdapter(Adapter):
 
 
 class ElevenLabsAdapter(Adapter):
-    name = "elevenlabs_http"
-
     def __init__(
         self,
         task: Task,
@@ -3314,12 +3195,13 @@ class ElevenLabsAdapter(Adapter):
         self.session_factory = session_factory
         self.api_key = api_key or os.environ.get("ELEVENLABS_API_KEY")
         self.base_url = (base_url or os.environ.get("ELEVENLABS_API_BASE") or "https://api.elevenlabs.io").rstrip("/")
-        self.sessions: Dict[int, Any] = {}
-        self.lock = threading.Lock()
+        self.session: Optional[Any] = None
         self.voice_id: Optional[str] = None
         self.voice_name: Optional[str] = None
         self.requires_verification: Optional[bool] = None
-        self.output_format = self.task.parameters.get("output_format", "wav_44100")
+        # MP3 128kbps/44.1kHz is broadly available; 44.1kHz WAV may require a
+        # Pro plan on ElevenLabs accounts.
+        self.output_format = self.task.parameters.get("output_format", "mp3_44100_128")
 
     def _requests(self):
         try:
@@ -3331,23 +3213,20 @@ class ElevenLabsAdapter(Adapter):
         return requests
 
     def _session(self):
-        requests = self._requests()
-        thread_id = threading.get_ident()
-        with self.lock:
-            session = self.sessions.get(thread_id)
-            if session is None:
-                if self.session_factory is not None:
-                    session = self.session_factory()
-                else:
-                    session = requests.Session()
-                session.headers.update(
-                    {
-                        "xi-api-key": self.api_key or "",
-                        "accept": "application/json",
-                    }
-                )
-                self.sessions[thread_id] = session
-            return session
+        if self.session is None:
+            requests = self._requests()
+            self.session = (
+                self.session_factory()
+                if self.session_factory is not None
+                else requests.Session()
+            )
+            self.session.headers.update(
+                {
+                    "xi-api-key": self.api_key or "",
+                    "accept": "application/json",
+                }
+            )
+        return self.session
 
     def _sanitize(self, text: str) -> str:
         if self.api_key:
@@ -3623,10 +3502,6 @@ class ElevenLabsAdapter(Adapter):
         settings = self.task.parameters.get("voice_settings")
         if settings:
             payload["voice_settings"] = settings
-        if self.task.parameters.get("seed") is not None:
-            payload["seed"] = self.task.parameters["seed"]
-        if self.task.parameters.get("apply_text_normalization"):
-            payload["apply_text_normalization"] = self.task.parameters["apply_text_normalization"]
         if self.task.model_id == "eleven_flash_v2_5" and self.task.language != "auto":
             iso = LANGUAGE_ISO.get(self.task.language)
             if iso:
@@ -3640,44 +3515,74 @@ class ElevenLabsAdapter(Adapter):
             headers={"accept": "audio/wav"},
         )
         content = response.content
-        if len(content) < 44 or content[:4] != b"RIFF":
+        if not content:
             raise RunnerError(
-                "ElevenLabs returned a response that is not a RIFF/WAV file; "
-                "not retrying automatically because the request may already be billed.",
+                "ElevenLabs returned an empty response; not retrying automatically "
+                "because the request may already be billed.",
                 stage="synthesis",
             )
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        is_wav = content[:4] == b"RIFF"
+        suffix = ".wav" if is_wav else ".mp3"
         fd, tmp_name = tempfile.mkstemp(
-            dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=".wav"
+            dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=suffix
         )
         os.close(fd)
+        decoded = Path(tmp_name + ".decoded.wav")
         try:
             with open(tmp_name, "wb") as handle:
                 handle.write(content)
-            samples, rate = read_wav(Path(tmp_name))
+            if is_wav:
+                samples, rate = read_wav(Path(tmp_name))
+            else:
+                command = [
+                    FFMPEG,
+                    "-y",
+                    "-v",
+                    "error",
+                    "-i",
+                    tmp_name,
+                    "-vn",
+                    "-ac",
+                    "1",
+                    str(decoded),
+                ]
+                try:
+                    result = subprocess.run(command, capture_output=True, timeout=300)
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    raise RunnerError(
+                        f"ElevenLabs audio could not be decoded: {exc}",
+                        stage="synthesis",
+                    ) from exc
+                if result.returncode != 0:
+                    raise RunnerError(
+                        "ElevenLabs returned audio that ffmpeg could not decode: "
+                        f"{_decode_bytes(result.stderr).strip()}",
+                        stage="synthesis",
+                    )
+                samples, rate = read_wav(decoded)
             validate_pcm(samples, rate)
-            os.replace(tmp_name, output_path)
+            write_wav_float(output_path, samples, rate)
         except RunnerError:
-            _unlink_quietly(tmp_name)
             raise
         except Exception as exc:
-            _unlink_quietly(tmp_name)
             raise RunnerError(
-                f"ElevenLabs returned an unreadable WAV: {exc}",
+                f"ElevenLabs returned unreadable audio: {exc}",
                 stage="synthesis",
             ) from exc
+        finally:
+            _unlink_quietly(tmp_name)
+            _unlink_quietly(decoded)
         return int(rate)
 
     def close(self) -> None:
-        with self.lock:
-            sessions = list(self.sessions.values())
-            self.sessions.clear()
-        for session in sessions:
+        if self.session is not None:
             try:
-                session.close()
+                self.session.close()
             except Exception:
                 pass
+            self.session = None
 
     def voice_identity(self) -> Dict[str, Any]:
         return {"voice_id": self.voice_id, "model_id": self.task.model_id}
@@ -3826,11 +3731,6 @@ def split_text(text: str, backend: str) -> List[str]:
 
 
 def cache_key(task: Task, voice_identity: Dict[str, Any], text: str) -> str:
-    parameters = {
-        key: value
-        for key, value in task.parameters.items()
-        if key != "online_concurrency"
-    }
     material = {
         "schema": SCHEMA_VERSION,
         "provider": task.provider,
@@ -3838,7 +3738,7 @@ def cache_key(task: Task, voice_identity: Dict[str, Any], text: str) -> str:
         "model_id": task.model_id,
         "language": task.language,
         "voice": voice_identity,
-        "parameters": parameters,
+        "parameters": task.parameters,
         "text": text,
     }
     payload = json.dumps(material, ensure_ascii=False, sort_keys=True, default=str)
@@ -3880,7 +3780,6 @@ def synthesize_segment(
     result: Result,
     index: int,
     segment: Segment,
-    stop: threading.Event,
 ) -> NativeSegment:
     chunks = split_text(segment.text, task.backend)
     if not chunks:
@@ -3889,50 +3788,46 @@ def synthesize_segment(
     paths: List[Path] = []
     cache_hits = 0
     for chunk_index, chunk in enumerate(chunks, start=1):
-        if stop.is_set():
-            raise RunnerError("synthesis cancelled", stage="synthesis", segment_id=segment.id)
         key = cache_key(task, identity, chunk)
         cache_path = task.work_dir / "segments" / f"{key}.wav"
         cached = _load_cached_audio(cache_path)
         if cached is not None:
             cache_hits += 1
             log("cache", f"segment {segment.id} chunk {chunk_index}/{len(chunks)}: cache hit")
-            paths.append(cache_path)
-            continue
-
-        log(
-            "synthesis",
-            f"Generating segment {segment.id} chunk {chunk_index}/{len(chunks)}...",
-        )
-
-        def do_synthesis() -> None:
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp_name = tempfile.mkstemp(
-                dir=str(cache_path.parent), prefix=f".{cache_path.name}.", suffix=".wav"
+        else:
+            log(
+                "synthesis",
+                f"Generating segment {segment.id} chunk {chunk_index}/{len(chunks)}...",
             )
-            os.close(fd)
-            try:
-                adapter.synthesize(chunk, Path(tmp_name))
-                pcm, sample_rate = read_wav(Path(tmp_name))
-                validate_pcm(pcm, sample_rate)
-                os.replace(tmp_name, cache_path)
-            except RunnerError:
-                _unlink_quietly(tmp_name)
-                raise
-            except Exception as exc:
-                _unlink_quietly(tmp_name)
-                raise RunnerError(
-                    f"invalid synthesized audio for segment {segment.id}: {exc}",
-                    stage="synthesis",
-                    segment_id=segment.id,
-                ) from exc
 
-        try:
-            with_retry(do_synthesis)
-        except RunnerError as exc:
-            exc.segment_id = segment.id
-            raise
-        log("synthesis", f"segment {segment.id} chunk {chunk_index}/{len(chunks)} done")
+            def do_synthesis() -> None:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                fd, tmp_name = tempfile.mkstemp(
+                    dir=str(cache_path.parent), prefix=f".{cache_path.name}.", suffix=".wav"
+                )
+                os.close(fd)
+                try:
+                    adapter.synthesize(chunk, Path(tmp_name))
+                    pcm, sample_rate = read_wav(Path(tmp_name))
+                    validate_pcm(pcm, sample_rate)
+                    os.replace(tmp_name, cache_path)
+                except RunnerError:
+                    _unlink_quietly(tmp_name)
+                    raise
+                except Exception as exc:
+                    _unlink_quietly(tmp_name)
+                    raise RunnerError(
+                        f"invalid synthesized audio for segment {segment.id}: {exc}",
+                        stage="synthesis",
+                        segment_id=segment.id,
+                    ) from exc
+
+            try:
+                with_retry(do_synthesis)
+            except RunnerError as exc:
+                exc.segment_id = segment.id
+                raise
+            log("synthesis", f"segment {segment.id} chunk {chunk_index}/{len(chunks)} done")
         paths.append(cache_path)
 
     rates = {wav_info(path)[1] for path in paths}
@@ -3970,41 +3865,12 @@ def synthesize_segment(
 
 
 def synthesize_all(task: Task, adapter: Adapter, result: Result) -> List[NativeSegment]:
-    segments = task.segments
-    results: List[Optional[NativeSegment]] = [None] * len(segments)
-    stop = threading.Event()
-
-    def work(index: int, segment: Segment) -> NativeSegment:
-        return synthesize_segment(task, adapter, result, index, segment, stop)
-
-    if task.provider == "elevenlabs":
-        workers = min(int(task.parameters.get("online_concurrency", 2)), len(segments))
-    else:
-        workers = 1
-    if workers <= 1:
-        for index, segment in enumerate(segments):
-            results[index] = work(index, segment)
-    else:
-        first_error: Optional[Tuple[int, BaseException]] = None
-        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {
-                pool.submit(work, index, segment): index
-                for index, segment in enumerate(segments)
-            }
-            for future in concurrent.futures.as_completed(futures):
-                index = futures[future]
-                try:
-                    results[index] = future.result()
-                except BaseException as exc:
-                    stop.set()
-                    if first_error is None or index < first_error[0]:
-                        first_error = (index, exc)
-        if first_error is not None:
-            raise first_error[1]
-    returned = [item for item in results if item is not None]
-    if len(returned) != len(segments):
-        raise RunnerError("not all segments were synthesized", stage="synthesis")
-    return [item for item in returned if item is not None]
+    # Local models are sequential; online synthesis is intentionally serial too
+    # (no thread pool, cancellation or in-flight cache races).
+    return [
+        synthesize_segment(task, adapter, result, index, segment)
+        for index, segment in enumerate(task.segments)
+    ]
 
 
 def fit_to_window(
@@ -4316,6 +4182,7 @@ def _subtitle_entries(
     track: TrackInfo, processed: Sequence[ProcessedSegment]
 ) -> List[Tuple[float, float, str]]:
     entries: List[Tuple[float, float, str]] = []
+    previous_end = -1.0
     for item in processed:
         if item.start_sec is None or item.end_sec is None:
             raise RunnerError(
@@ -4324,61 +4191,26 @@ def _subtitle_entries(
             )
         start = max(0.0, float(item.start_sec))
         end = min(float(item.end_sec), track.duration)
+        if start >= track.duration - 1e-6:
+            raise RunnerError(
+                f"segment {item.segment.id} subtitle starts at {start:.3f}s, "
+                f"beyond the delivered track {track.duration:.3f}s",
+                stage="subtitle",
+            )
         if end <= start:
             raise RunnerError(
                 f"segment {item.segment.id} has a non-positive subtitle interval",
                 stage="subtitle",
             )
+        if start < previous_end - 0.001:
+            raise RunnerError(
+                f"segment {item.segment.id} subtitle starts at {start:.3f}s, "
+                f"overlapping the previous cue ending at {previous_end:.3f}s",
+                stage="subtitle",
+            )
         entries.append((start, end, item.segment.text))
+        previous_end = end
     return entries
-
-
-def accelerate_track(task: Task, track: TrackInfo, target: float, result: Result) -> TrackInfo:
-    required = track.duration / target if target > 0 else float("inf")
-    if required > task.timing.max_speed:
-        raise ActionRequired(
-            f"Narration audio is {track.duration:.3f}s but the video is {target:.3f}s; "
-            f"fitting would require {required:.2f}x, above the configured "
-            f"{task.timing.max_speed:.2f}x limit. Choose a different option with the user.",
-            status="needs_action",
-            stage="video",
-            details={
-                "audio_duration": track.duration,
-                "video_duration": target,
-                "required_speed": required,
-                "max_speed": task.timing.max_speed,
-            },
-        )
-    pcm, sample_rate = read_wav(track.path)
-    # A small margin makes the measured output fit instead of landing a few
-    # milliseconds over the target; it is still capped by max_speed.
-    speed = min(max(required * 1.005, required + 0.001), task.timing.max_speed)
-    output = change_speed(pcm, speed, sample_rate)
-    actual = _np().asarray(output).size / sample_rate
-    # Sample rounding can leave a few milliseconds; do not call that a failure.
-    if actual > target + 0.02:
-        raise ActionRequired(
-            f"Narration audio still exceeds the video after acceleration "
-            f"({actual:.3f}s > {target:.3f}s). Choose another option with the user.",
-            status="needs_action",
-            stage="video",
-            details={
-                "audio_duration": track.duration,
-                "video_duration": target,
-                "measured_duration": actual,
-                "required_speed": required,
-                "applied_speed": speed,
-                "max_speed": task.timing.max_speed,
-            },
-        )
-    target_path = task.work_dir / "track_accelerated.wav"
-    write_wav_float(target_path, output, sample_rate)
-    result.add_warning(
-        f"narration accelerated by {speed:.3f}x to fit the video duration; "
-        "the standalone audio uses this accelerated track"
-    )
-    log("fit", f"Narration accelerated {speed:.3f}x: {track.duration:.3f}s -> {actual:.3f}s")
-    return TrackInfo(target_path, actual, sample_rate)
 
 
 def deliver(
@@ -4391,41 +4223,29 @@ def deliver(
     if "video" in deliver_kinds and task.mode == "narration":
         assert video_target is not None
         if track.duration > video_target + 0.005:
-            policy = task.output.narration_video_policy
-            required = track.duration / video_target
-            if policy == "ask":
-                raise ActionRequired(
-                    f"Narration audio is {track.duration:.3f}s but the video is "
-                    f"{video_target:.3f}s. Choose with the user: accelerate to fit "
-                    f"(requires {required:.2f}x, limit {task.timing.max_speed:.2f}x) "
-                    "or deliver audio only. The runner does not truncate content.",
-                    status="needs_action",
-                    stage="video",
-                    details={
-                        "audio_duration": track.duration,
-                        "video_duration": video_target,
-                        "required_speed": required,
-                        "max_speed": task.timing.max_speed,
-                        "track_path": str(track.path),
-                    },
-                )
-            if policy == "accelerate":
-                track = accelerate_track(task, track, video_target, result)
-            elif policy == "audio_only":
-                deliver_kinds = [kind for kind in deliver_kinds if kind != "video"]
-                if not deliver_kinds:
-                    raise TaskError(
-                        "narration_video_policy=audio_only removed the only selected "
-                        "deliverable; add audio or subtitle to output.deliver."
-                    )
-                result.add_warning(
-                    "video delivery skipped by narration_video_policy=audio_only; "
-                    "audio and/or subtitle are delivered instead"
-                )
-            else:
-                raise TaskError(f"unknown narration_video_policy: {policy!r}")
+            raise ActionRequired(
+                f"Narration audio is {track.duration:.3f}s but the video is "
+                f"{video_target:.3f}s. The runner keeps the natural audio and does "
+                "not accelerate or truncate it. Choose with the user: deliver "
+                "audio/subtitle only, or shorten/re-segment the narration text.",
+                status="needs_action",
+                stage="video",
+                details={
+                    "audio_duration": track.duration,
+                    "video_duration": video_target,
+                    "options": [
+                        "deliver audio/subtitle only (remove video from output.deliver)",
+                        "shorten or re-segment the narration text",
+                    ],
+                    "track_path": str(track.path),
+                },
+            )
 
     names = choose_output_names(task, deliver_kinds)
+    subtitle_entries: Optional[List[Tuple[float, float, str]]] = None
+    if "subtitle" in deliver_kinds:
+        # Validate the complete subtitle timeline before writing any output.
+        subtitle_entries = _subtitle_entries(track, processed)
 
     if "video" in deliver_kinds:
         assert task.input.video is not None and video_info is not None and video_target is not None
@@ -4442,19 +4262,12 @@ def deliver(
                 stage="video",
             )
         log("mux", f"Muxing {mux_source.name} into {names['video'].name}")
-        if task.output.mix_original.get("enabled") and video_info.get("has_audio"):
-            result.add_warning(
-                "original video audio was mixed in at "
-                f"{task.output.mix_original.get('volume_db')} dB; original voices "
-                "remain audible (this is not vocal separation)"
-            )
         mux_warnings = mux_video(
             task.input.video,
             mux_source,
             names["video"],
             video_info,
             sample_rate=SAMPLE_RATE,
-            mix_original=task.output.mix_original,
         )
         for message in mux_warnings:
             result.add_warning(message)
@@ -4467,15 +4280,18 @@ def deliver(
         log("deliver", f"Audio -> {names['audio']} ({duration:.3f}s)")
 
     if "subtitle" in deliver_kinds:
-        entries = _subtitle_entries(track, processed)
-        write_srt(names["subtitle"], entries)
+        assert subtitle_entries is not None
+        write_srt(names["subtitle"], subtitle_entries)
         result.add_output(
             "subtitle",
             names["subtitle"],
             track.duration,
             note="segment-level timestamps from actual synthesized audio",
         )
-        log("deliver", f"Subtitle -> {names['subtitle']} ({len(entries)} cues, segment-level)")
+        log(
+            "deliver",
+            f"Subtitle -> {names['subtitle']} ({len(subtitle_entries)} cues, segment-level)",
+        )
 
 
 # ---------------------------------------------------------------------------

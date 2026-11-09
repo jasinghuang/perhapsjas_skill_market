@@ -44,8 +44,6 @@ def base_task(**overrides: Any) -> Dict[str, Any]:
             "audio_format": "wav",
             "sample_rate": 48000,
             "overwrite": False,
-            "narration_video_policy": "ask",
-            "mix_original": {"enabled": False, "volume_db": -18},
         },
         "segments": [
             {"id": 1, "text": "这是一句测试。", "start_sec": None, "end_sec": None}
