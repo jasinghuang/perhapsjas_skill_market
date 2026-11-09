@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "video-toolkit",
-      "description": "视频内容一站工具：video-downloader (Bilibili/YouTube下载) + audio-transcribe (跨平台转录) + text-refine (校对/翻译) + video-tts (SRT 配音)",
+      "description": "视频内容一站工具：video-downloader (Bilibili/YouTube下载) + audio-transcribe (跨平台转录) + text-refine (校对/翻译) + video-tts (文稿/SRT 配音：本地 Qwen3-TTS + ElevenLabs)",
       "source": "./plugins/video-toolkit",
       "strict": false,
       "skills": [

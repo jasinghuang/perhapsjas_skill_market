@@ -1,3 +1,0 @@
-# video-tts 在线 provider 依赖（macOS / Windows 通用；HTTP 兜底用）
--r requirements-base.txt
-requests>=2.31,<3

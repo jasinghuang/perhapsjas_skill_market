@@ -1,4 +1,0 @@
-# video-tts 基础依赖（所有 provider 共用）
-# 测试基线：Python 3.14 / macOS arm64
-numpy>=1.26,<3
-soundfile>=0.12,<1
