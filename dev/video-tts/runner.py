@@ -1956,14 +1956,26 @@ def trim_silence(pcm: Any, sample_rate: int) -> Any:
     active = np.flatnonzero(rms > threshold)
     if active.size == 0:
         raise RunnerError("synthesized audio contains only silence", stage="audio")
-    first = max(0, (int(active[0]) - 1) * frame)
+    # Reference cloning can emit a low-level hiss/music bed for ~0.1-0.3s
+    # before speech.  The normal threshold treats it as active; gate the lead-in
+    # up to the first genuinely strong window (with a 10ms margin for attacks).
+    strong_threshold = max(0.05, peak * 0.30)
+    strong = np.flatnonzero(rms > strong_threshold)
+    first_active = int(strong[0]) if strong.size else int(active[0])
+    first = max(0, (first_active - 1) * frame)
     last = min(samples.size, (int(active[-1]) + 2) * frame)
-    trimmed = np.array(samples[first:last], dtype=np.float32, copy=True)
-    fade = min(int(sample_rate * 0.01), trimmed.size // 2)
-    if fade > 0:
-        ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)
-        trimmed[:fade] *= ramp
-        trimmed[-fade:] *= ramp[::-1]
+    # Keep the leading time but replace the gated noise with silence.  Slicing
+    # it off would move speech earlier and break aligned timing.
+    trimmed = np.array(samples[:last], dtype=np.float32, copy=True)
+    if first > 0:
+        trimmed[:first] = 0.0
+    onset_fade = min(int(sample_rate * 0.01), trimmed.size - first)
+    if onset_fade > 0:
+        ramp = np.linspace(0.0, 1.0, onset_fade, dtype=np.float32)
+        trimmed[first : first + onset_fade] *= ramp
+    tail_fade = min(int(sample_rate * 0.01), trimmed.size // 2)
+    if tail_fade > 0:
+        trimmed[-tail_fade:] *= np.linspace(1.0, 0.0, tail_fade, dtype=np.float32)
     return trimmed
 
 

@@ -32,6 +32,21 @@ def test_trim_silence_keeps_audio_and_removes_edges(r, tmp_path):
     assert np.max(np.abs(trimmed)) > 0.05
 
 
+def test_trim_silence_gates_low_level_lead_noise(r):
+    sample_rate = 24000
+    noise_t = np.arange(int(0.3 * sample_rate), dtype=np.float32) / sample_rate
+    lead = (0.04 * np.sin(2 * np.pi * 1000 * noise_t)).astype(np.float32)
+    tone_t = np.arange(int(1.0 * sample_rate), dtype=np.float32) / sample_rate
+    tone = (0.2 * np.sin(2 * np.pi * 440 * tone_t)).astype(np.float32)
+    pcm = np.concatenate(
+        [lead, tone, np.zeros(int(0.2 * sample_rate), dtype=np.float32)]
+    )
+    trimmed = r.trim_silence(pcm, sample_rate)
+    assert trimmed.size < pcm.size - int(0.1 * sample_rate)
+    head = trimmed[: int(0.01 * sample_rate)]
+    assert float(np.sqrt(np.mean(head**2))) < 0.03
+
+
 def test_resample_24k_to_48k(r):
     sample_rate = 24000
     frames = 12000
