@@ -1,0 +1,3 @@
+interface:
+  display_name: "oscar-performance"
+  short_description: "从剧本理解到表演设计、场景耦合、四层提示词编译与自检，编写/修订/诊断 AI 视频表演提示词"
