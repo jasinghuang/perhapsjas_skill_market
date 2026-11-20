@@ -6,6 +6,13 @@
 - 用户已授权提交、推送本次修订、更新本地插件缓存，并在用户项目中优化原 11 秒提示词；用户项目文稿不提交到市场仓库。
 - 本机更新顺序：Codex `plugin marketplace upgrade perhapsjas_skill_market` 后 `plugin add video-toolkit@perhapsjas_skill_market`；Claude Code 先 `plugin marketplace update perhapsjas_skill_market` 后 `plugin update video-toolkit@perhapsjas_skill_market`。命令参数以本机帮助为准。
 
+## 2026-11-20：仓库 README 与市场来源格式
+
+- 根目录新增 `README.md`：介绍现有 video-toolkit 的五个 skill、Codex 桌面与 CLI / Claude Code 安装、使用示例、依赖路线及市场/安装缓存更新顺序。
+- 添加市场窗口填写仓库根来源 `https://github.com/jasinghuang/perhapsjas_skill_market.git`；不带 `.git` 的 HTTPS 地址和 GitHub `owner/repo` 简写均受支持。Git 引用可留空走默认分支，新添加时也可填 main；本仓库稀疏路径留空。
+- 灰色 `plugins/codex` 是窗口占位示例，不是本仓库路径。不能把插件目录路径或 `SKILL.md` 页面当作 Git 仓库来源。
+- README 维护时以 `.claude-plugin/marketplace.json` 和各 `SKILL.md` 为准；不把市场、插件、skill 混为单个安装单位，不把安装插件描述成已下载全部模型。
+
 ## 2026-11-20：添加市场后看不到 oscar-performance
 
 - `oscar-performance` 已在 GitHub `main` 的 `772ecec` 提交中发布，并收录在 `video-toolkit` 插件下；市场列表显示的安装单位是 `video-toolkit`。
