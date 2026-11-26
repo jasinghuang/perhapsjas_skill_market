@@ -7,6 +7,12 @@
 - 发布版本：skill v1.6 / 市场 v3.2.1。市场从远程 main 分发；安装是否生效需核对各客户端缓存中的版本和文件内容。
 - 入口：[SKILL.md](SKILL.md)。导航：[README.md](README.md)。方法说明：[方法论.md](方法论.md)。
 
+## 2026-11-26 README 安装与使用说明
+
+- README 补齐 Codex 桌面端、Codex CLI、Claude Code 的市场添加及插件安装方法；明确安装单位为 `video-toolkit`，不是单个 skill。
+- 增加创作、修订、诊断与局部替换示例，概述 v1.6 的逐拍处理与最终正文验收，并补更新顺序和常见排查。
+- 保留文件导航及验证边界；本次仅更新文档，方法版本仍为1.6。安装来源使用仓库根地址，Git 引用和稀疏路径留空；不要复制 skill 子目录页面作为市场来源。
+
 ## 用户已确认的核心决策
 
 1. 新建自包含的编写型 skill `oscar-performance`；不引用、不依赖 `video-performance`，旧 skill 未来可删除。
