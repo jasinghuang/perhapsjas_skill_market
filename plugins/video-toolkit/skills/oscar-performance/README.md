@@ -8,9 +8,45 @@
 
 ## 安装
 
-**先添加市场，再安装 `video-toolkit`。** `oscar-performance` 是插件内的 skill，市场中显示的安装条目为 `video-toolkit`。
+可选择单独安装 `oscar-performance`，或通过市场安装包含它的 `video-toolkit` 插件。单独安装只加载这个 skill；市场安装同时提供插件中的其他 skill。
 
-### Codex 桌面端
+### 方式一：单独安装 oscar-performance
+
+Skill 目录地址：
+
+```text
+https://github.com/jasinghuang/perhapsjas_skill_market/tree/main/plugins/video-toolkit/skills/oscar-performance
+```
+
+**在 Codex 中使用安装器**，把下面这段话发给 Codex：
+
+```text
+使用 $skill-installer，只安装下面目录中的 oscar-performance，保留完整支持文件：
+https://github.com/jasinghuang/perhapsjas_skill_market/tree/main/plugins/video-toolkit/skills/oscar-performance
+```
+
+内置安装器默认使用 `$CODEX_HOME/skills`；未设置 `CODEX_HOME` 时为 `~/.codex/skills`，并会报告实际安装目录。已有同名目录时会停止覆盖，更新时以报告的实际位置为准。
+
+**手动安装到 Codex 或 Claude Code：**
+
+1. [下载仓库 ZIP](https://github.com/jasinghuang/perhapsjas_skill_market/archive/refs/heads/main.zip) 并解压，也可以从已有仓库副本取文件。
+2. 找到 `plugins/video-toolkit/skills/oscar-performance/`，将**整个目录**复制到下表中所选位置，保留 `SKILL.md`、`references/` 和其他随附文件。所选位置中的 `SKILL.md` 应直接位于 `oscar-performance/` 内，不能再嵌套一层同名目录。
+3. 新建聊天或重启客户端，使其重新加载本地 skill。
+
+| 客户端 | 所有项目可用的个人目录 | 仅当前项目可用的目录 |
+| --- | --- | --- |
+| Codex | `~/.agents/skills/oscar-performance/` | `<项目根目录>/.agents/skills/oscar-performance/` |
+| Claude Code | `~/.claude/skills/oscar-performance/` | `<项目根目录>/.claude/skills/oscar-performance/` |
+
+`~` 表示用户主目录，Windows 对应 `%USERPROFILE%`。目录规则见 [Codex 官方说明](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills) 和 [Claude Code 官方说明](https://code.claude.com/docs/en/skills#choose-where-skills-load)。手动安装到已有同名目录前，先备份自己的修改，再替换整个目录。
+
+单独安装不需要添加插件市场。此处的 GitHub 子目录地址用于安装 skill；下面添加市场时使用的是仓库根地址。通常选择一种安装方式即可，避免多个同名副本分别维护。
+
+### 方式二：通过市场安装 video-toolkit
+
+先添加市场，再安装 `video-toolkit`。`oscar-performance` 是插件内的 skill，市场中显示的安装条目为 `video-toolkit`。
+
+**Codex 桌面端**
 
 打开“添加插件市场”，填写：
 
@@ -24,14 +60,14 @@
 
 添加后，在 `perhapsjas_skill_market` 市场安装 `video-toolkit`，再新建聊天使用 `oscar-performance`。来源格式详见 [OpenAI 官方说明](https://developers.openai.com/plugins/build/plugins#add-a-marketplace-from-the-cli)。
 
-### Codex CLI
+**Codex CLI**
 
 ```bash
 codex plugin marketplace add https://github.com/jasinghuang/perhapsjas_skill_market.git
 codex plugin add video-toolkit@perhapsjas_skill_market
 ```
 
-### Claude Code
+**Claude Code**
 
 在 Claude Code 中执行：
 
@@ -44,7 +80,7 @@ codex plugin add video-toolkit@perhapsjas_skill_market
 
 ## 快速开始
 
-在 Codex 中可以用 `$oscar-performance` 显式调用；在 Claude Code 中也可以直接说明“使用 video-toolkit 中的 oscar-performance”，并附上文本或文件路径。
+在 Codex 中可以用 `$oscar-performance` 显式调用；Claude Code 单独安装后可用 `/oscar-performance`，通过插件安装后可用 `/video-toolkit:oscar-performance`。也可以直接说明“使用 oscar-performance”，并附上文本或文件路径。
 
 ### 从剧本创作
 
@@ -98,6 +134,14 @@ codex plugin add video-toolkit@perhapsjas_skill_market
 
 ## 更新与排查
 
+### 单独安装的更新
+
+从同一个 GitHub skill 目录获取新版，备份自己的修改后，替换实际安装位置中的整个 `oscar-performance/` 目录，再重新加载会话。使用安装器安装时以它报告的路径为准，不要另建一个同名副本。
+
+单独复制的 skill 不由插件市场管理；下面的插件更新命令不会更新该副本。
+
+### 市场插件的更新
+
 Codex 先刷新市场，再更新插件：
 
 ```bash
@@ -118,7 +162,7 @@ claude plugin update video-toolkit@perhapsjas_skill_market
 - **已添加市场但无法使用**：确认插件已安装、已启用；在 Codex 可运行 `codex plugin list --marketplace perhapsjas_skill_market --available --json` 查看状态。
 - **更新后仍用旧内容**：依次刷新市场、更新插件、重新加载会话；仅拉取仓库代码不会自动更新已安装缓存。已添加的市场保持原 Git 引用，刷新时使用更新命令。
 
-其他 skill 与完整市场说明见 [仓库 README](../../../../README.md)。
+其他 skill 与完整市场说明见 [仓库 README](https://github.com/jasinghuang/perhapsjas_skill_market#readme)。
 
 ## 文件导航
 
